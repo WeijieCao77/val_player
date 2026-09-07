@@ -330,7 +330,7 @@ export function doTransfer(
     // Keep the promise here rather than at the next weekly tick — an AI club
     // that sold on a Monday played the week's fixture with four.
     if (from.id !== state.myTeam && from.roster.length < 5) {
-      const pool = Object.values(state.players).filter((x) => !x.teamId && x.id !== p.id && !x.retiring)
+      const pool = Object.values(state.players).filter((x) => !x.teamId && x.id !== p.id && !x.retiring && x.id !== state.me?.id)
       // fielding five outranks the import rule, so an illegal cover is the
       // last resort rather than a forbidden one
       const cover = (pool.filter((x) => !importBlock(state, from.id, x)).length ? pool.filter((x) => !importBlock(state, from.id, x)) : pool)

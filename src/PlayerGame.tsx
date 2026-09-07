@@ -162,7 +162,7 @@ export default function PlayerGame() {
               <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
             </div>
           ) : (
-            <div className="chip" title="没有队伍"><b>{me.phase === 'free' ? '自由人' : '自由身'}</b> <span className="muted">{ladderLabel(me.pre.ladder)}</span></div>
+            <div className="chip" title="没有队伍"><b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b> {me.phase !== 'retired' && <span className="muted">{ladderLabel(me.pre.ladder)}</span>}</div>
           )}
           <div className="chip">{dateLabel(game)}</div>
           <div className="chip">{stageName(game.stage)}</div>
