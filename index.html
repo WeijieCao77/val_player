@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#121c27" />
+    <!-- The ground the page is drawn on, read before anything paints so a
+         light page never flashes dark on its way in. Same key ui/theme.ts
+         owns; this is only the first read. -->
+    <script>
+      try {
+        var t = localStorage.getItem('valmgr.theme');
+        if (t === 'light' || t === 'cream') {
+          document.documentElement.dataset.theme = t;
+          document.querySelector('meta[name="theme-color"]')
+            .setAttribute('content', t === 'light' ? '#e6eaf0' : '#e9e1d0');
+        }
+      } catch (e) {}
+    </script>
+    <title>无畏契约选手生涯模拟器 · demo</title>
+    <meta name="description" content="无畏契约（VALORANT）选手生涯模拟器：你是一名新人选手，在真实 VCT 世界里争首发、打比赛。" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,274 @@
+import { MatchSim } from '../match'
+import type { Side } from '../match'
+import { Rng, clamp, hashStr } from '../rng'
+import { commitFixture, fixtureRng } from '../season'
+import { ratingOf } from '../player'
+import type { Fixture, GameState, MapLine } from '../types'
+import { eligibleNodes, nodeChance, NODE_SWING } from './nodes'
+import type { NodeCtx, NodeDef } from './nodes'
+import type { MeMatchRecord, NodeLogEntry } from './types'
+import { afterMyMatch, refreshMyRounds } from './coach'
+import { pushLog } from './log'
+
+export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
+
+/** at most this many calls a map, and never two within this many rounds */
+const NODES_PER_MAP = 3
+const NODE_GAP = 4
+
+/**
+ * Chance of taking a map from a score, given a per-round chance. Overtime is
+ * approximated as "two in a row before they get two in a row".
+ */
+export function mapWinProb(mine: number, theirs: number, p: number): number {
+  const memo = new Map<string, number>()
+  const q = (p * p) / (p * p + (1 - p) * (1 - p))
+  const f = (m: number, t: number): number => {
+    if (m >= 13 && m - t >= 2) return 1
+    if (t >= 13 && t - m >= 2) return 0
+    if (m >= 12 && t >= 12) return q
+    const k = `${m}:${t}`
+    const hit = memo.get(k)
+    if (hit !== undefined) return hit
+    const v = p * f(m + 1, t) + (1 - p) * f(m, t + 1)
+    memo.set(k, v)
+    return v
+  }
+  return f(mine, theirs)
+}
+
+/**
+ * One of my club's matches, driven a round at a time so the UI can stop on a
+ * decision. The engine's MatchSim does all the playing; this only decides when
+ * to ask me something and what my answer does to the next few rounds.
+ *
+ * 快进 and 托管 run the identical path with the steady option chosen for me.
+ */
+export class MeMatch {
+  readonly sim: MatchSim
+  readonly side: Side | null
+  readonly fixture: Fixture
+  readonly state: GameState
+  /** whether I was in the five when the first map began */
+  started = false
+  pending: { node: NodeDef; ctx: NodeCtx } | null = null
+  nodes: NodeLogEntry[] = []
+  private seen = new Set<string>()
+  private perMap = 0
+  private lastNodeRound = -99
+  private nodeRng: Rng
+  private finished: MeMatchRecord | null = null
+  private mapStarted = false
+
+  constructor(state: GameState, fixture: Fixture) {
+    this.state = state
+    this.fixture = fixture
+    this.sim = new MatchSim(state, fixture.teamA, fixture.teamB, fixture.bo, fixtureRng(state, fixture), fixture.scrim)
+    this.side = this.sim.sideOf(state.myTeam)
+    this.nodeRng = new Rng(hashStr(`node:${state.seed}:${state.year}:${fixture.id}`))
+  }
+
+  get map() { return this.sim.current }
+  get mineIsA(): boolean { return this.side === 'a' }
+  get done(): boolean { return this.finished !== null }
+  get me() { return this.state.players[this.state.me!.id] }
+
+  get myMaps(): number { return this.mineIsA ? this.sim.wonA : this.sim.wonB }
+  get theirMaps(): number { return this.mineIsA ? this.sim.wonB : this.sim.wonA }
+  get myRounds(): number { const m = this.map; return m ? (this.mineIsA ? m.a : m.b) : 0 }
+  get theirRounds(): number { const m = this.map; return m ? (this.mineIsA ? m.b : m.a) : 0 }
+
+  /** am I on the floor for the map in progress */
+  get playing(): boolean {
+    const m = this.map
+    if (!m || !this.side) return false
+    const five = this.mineIsA ? m.A.players : m.B.players
+    return five.some((p) => p.id === this.state.me!.id)
+  }
+
+  /** the round-win estimate for my side, right now */
+  roundProb(): number {
+    const m = this.map
+    if (!m || !this.side) return 0.5
+    const pa = m.roundEstimate()
+    return this.mineIsA ? pa : 1 - pa
+  }
+
+  /** my side's chance of taking the map in progress */
+  winProb(): number {
+    const m = this.map
+    if (!m || !this.side) return 0.5
+    if (m.over) return (this.mineIsA ? m.a > m.b : m.b > m.a) ? 1 : 0
+    return mapWinProb(this.myRounds, this.theirRounds, this.roundProb())
+  }
+
+  private ctxOf(): NodeCtx {
+    const m = this.map!
+    const mine = this.myRounds
+    const theirs = this.theirRounds
+    const r = m.round + 1
+    const comp = this.state.comps[this.fixture.comp]
+    return {
+      round: r, mine, theirs, lead: mine - theirs,
+      pistol: r === 1 || r === 13, half: r <= 12 ? 1 : r <= 24 ? 2 : 3, ot: r >= 25,
+      mapPoint: mine === 12 && theirs < 12 ? 'mine' : theirs === 12 && mine < 12 ? 'theirs' : null,
+      mapIndex: this.sim.mapIndex,
+      seriesMine: this.myMaps, seriesTheirs: this.theirMaps, need: this.sim.need,
+      isIntl: !comp?.region, role: this.me.role, form: this.me.form,
+    }
+  }
+
+  /** Advance one beat. 'node' means a decision is waiting on choose(). */
+  step(): StepKind {
+    if (this.finished) return 'done'
+    if (this.pending) return 'node'
+    const m = this.sim.current
+    if (!m) {
+      if (!this.sim.nextMap()) { this.finishInternal(); return 'done' }
+      this.perMap = 0
+      this.lastNodeRound = -99
+      if (!this.mapStarted) {
+        this.mapStarted = true
+        this.started = this.playing
+      }
+      return 'map-start'
+    }
+    if (m.over) {
+      this.sim.closeMap()
+      if (this.sim.decided) { this.finishInternal(); return 'done' }
+      return 'map-end'
+    }
+    // a decision only when the map is still in the balance — nobody needs to
+    // be asked anything at 12-2
+    const open = this.winProb()
+    if (this.playing && this.side && this.perMap < NODES_PER_MAP && m.round - this.lastNodeRound >= NODE_GAP &&
+        open > 0.06 && open < 0.94) {
+      const c = this.ctxOf()
+      const pool = eligibleNodes(c, this.seen)
+      const chance = c.pistol || c.mapPoint || c.ot ? 0.6 : 0.28
+      if (pool.length && this.nodeRng.chance(chance)) {
+        const node = pool[this.nodeRng.int(0, pool.length - 1)]
+        this.pending = { node, ctx: c }
+        this.seen.add(node.id)
+        this.perMap++
+        this.lastNodeRound = m.round
+        return 'node'
+      }
+    }
+    m.playRound()
+    return 'round'
+  }
+
+  /** Answer the waiting decision. */
+  choose(i: number): NodeLogEntry {
+    const pend = this.pending
+    if (!pend) throw new Error('no decision pending')
+    const m = this.map!
+    const opt = pend.node.a[i] ?? pend.node.a[pend.node.rec]
+    const p = nodeChance(this.state, opt)
+    const ok = this.nodeRng.chance(p)
+    const before = this.winProb()
+    const side = this.side!
+    if (ok) {
+      m.nudge[side] += opt.risk * NODE_SWING
+      if (!m.calls[side]) m.calls[side] = { kind: 'focus', playerId: this.state.me!.id, roundsLeft: 3 }
+    } else {
+      m.nudge[side] -= opt.risk * NODE_SWING * 0.8
+    }
+    const after = this.winProb()
+    const entry: NodeLogEntry = {
+      map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
+      p: Math.round(p * 100), ok, before: Math.round(before * 100), after: Math.round(after * 100),
+    }
+    this.nodes.push(entry)
+    this.pending = null
+    return entry
+  }
+
+  /** Everything left, with the steady option taken at every decision. */
+  runOut(): MeMatchRecord {
+    let guard = 0
+    while (!this.finished && guard++ < 400) {
+      const k = this.step()
+      if (k === 'node') this.choose(this.pending!.node.rec)
+    }
+    return this.finished!
+  }
+
+  get record(): MeMatchRecord | null { return this.finished }
+
+  private finishInternal(): void {
+    if (this.finished) return
+    const state = this.state
+    const me = state.me!
+    const f = this.fixture
+    const result = this.sim.finish()
+    const mineIds = (this.mineIsA ? result.lineups?.a : result.lineups?.b) ?? []
+    const started = mineIds.includes(me.id)
+    const won = this.mineIsA ? result.mapsWonA > result.mapsWonB : result.mapsWonB > result.mapsWonA
+
+    const sum: MapLine = { kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0, clutches: 0, rounds: 0, acs: 0 }
+    const acsBy: Record<string, { d: number; r: number }> = {}
+    for (const ms of result.maps) {
+      for (const [pid, l] of Object.entries(ms.lines)) {
+        if (!mineIds.includes(pid)) continue
+        const t = (acsBy[pid] ??= { d: 0, r: 0 })
+        t.d += l.damage
+        t.r += l.rounds
+        if (pid === me.id) {
+          sum.kills += l.kills; sum.deaths += l.deaths; sum.assists += l.assists
+          sum.damage += l.damage; sum.firstKills += l.firstKills; sum.firstDeaths += l.firstDeaths
+          sum.clutches += l.clutches; sum.rounds += l.rounds
+        }
+      }
+    }
+    const order = Object.entries(acsBy)
+      .map(([pid, t]) => ({ pid, acs: t.r ? (t.d / t.r) * 1.45 : 0 }))
+      .sort((a, b) => b.acs - a.acs)
+    const rank = started ? order.findIndex((x) => x.pid === me.id) + 1 : 0
+    const acs = sum.rounds ? (sum.damage / sum.rounds) * 1.45 : 0
+    const rating = started ? ratingOf(sum) : 0
+
+    const notes: string[] = []
+    commitFixture(state, f, result, notes)
+    me.weekNotes.push(...notes)
+
+    const opp = state.teams[this.mineIsA ? f.teamB : f.teamA]
+    const comp = state.comps[f.comp]
+    const score = this.mineIsA ? `${result.mapsWonA}-${result.mapsWonB}` : `${result.mapsWonB}-${result.mapsWonA}`
+    const rec: MeMatchRecord = {
+      fixtureId: f.id, day: state.day, year: state.year,
+      comp: comp?.name ?? f.comp, label: f.label.replace(/^(KO|SW):\d+:/, ''),
+      opp: opp?.name ?? '?', oppTag: opp?.tag ?? '?',
+      started, won, score, maps: result.maps.length,
+      rounds: sum.rounds, kills: sum.kills, deaths: sum.deaths, assists: sum.assists,
+      firstKills: sum.firstKills, clutches: sum.clutches,
+      acs: Math.round(acs), rating: Math.round(rating * 100) / 100,
+      mvp: result.mvp === me.id, carried: started && !won && rank === 1,
+      nodes: this.nodes.slice(), rank,
+    }
+    this.finished = rec
+    if (f.comp !== 'scrim') {
+      me.matches.push(rec)
+      if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
+      me.seasonStart.matches++
+      if (started) {
+        me.seasonStart.starts++
+        me.seasonStart.acsSum += rec.acs
+        if (won) me.seasonStart.wins++
+      }
+      me.heat += started ? (won ? 7 : -2.5) : (won ? 3 : -1)
+      if (started) {
+        me.tilt = clamp(me.tilt + (won ? -6 : rank >= 5 ? 14 : 8), 0, 100)
+        if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)
+      }
+      const line = started
+        ? `${rec.comp} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
+        : `${rec.comp} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} —— 你在替补席看完了这场。`
+      pushLog(state, 'match', line)
+      afterMyMatch(state, rec)
+    }
+    me.pendingFixture = undefined
+    refreshMyRounds(state)
+  }
+}

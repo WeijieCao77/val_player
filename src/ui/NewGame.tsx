@@ -1,0 +1,432 @@
+import { useMemo, useState } from 'react'
+import { RULESET_CN, currentRuleset } from '../engine/ruleset'
+import { ask } from './confirm'
+import { createNewGame, WORLD_PLAYERS } from '../engine/world'
+import { WORLD_TEAMS } from '../engine/teams'
+import { setupSeason } from '../engine/season'
+import { importSave, listSaves, loadGame, protectAutosaveFrom } from '../engine/save'
+import { track } from '../engine/telemetry'
+import { hashStr } from '../engine/rng'
+import {
+  AGE_MAX, AGE_MIN, POINT_STEP, SKILL_CN, SKILL_HINT, SKILL_MAX, TALENT_POINTS,
+  ageBand, canManage, createManager, dealOrigins, spendPoint,
+} from '../engine/manager'
+import type { ManagerOrigin } from '../engine/manager'
+import { REGION_CN, REGIONS } from '../engine/types'
+import type { GameState, Region } from '../engine/types'
+import { freeTeamChoice, readProfile } from '../engine/profile'
+import { money, OvrBadge, Bar, Crest } from './common'
+import Credit from './Credit'
+import ThemeToggle from './ThemeToggle'
+
+export default function NewGame({ onHome,
+  onStart, canContinue, onContinue,
+}: { onHome: () => void; onStart: (g: GameState) => void; canContinue: boolean; onContinue: () => void }) {
+  const [name, setName] = useState('')
+  const [age, setAge] = useState(24)
+  const [originKey, setOriginKey] = useState<string | null>(null)
+  const [region, setRegion] = useState<Region>('China')
+  const [teamId, setTeamId] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [importLimit, setImportLimit] = useState(false)
+
+  // the three on offer are dealt from the eight, and stay fixed for this run
+  const [dealSeed] = useState(() => (hashStr(String(Date.now())) >>> 0))
+  const offered = useMemo(() => dealOrigins(dealSeed, 3), [dealSeed])
+  const origin = offered.find((o) => o.key === originKey) ?? null
+  const [spent, setSpent] = useState<Record<string, number>>({})
+
+  const manager = useMemo(
+    () => {
+      if (!origin) return null
+      const m = createManager(name, age, origin.key)
+      // replay the allocation on top of a fresh manager, so it survives the memo
+      for (const [k, n] of Object.entries(spent)) {
+        for (let i = 0; i < n; i++) spendPoint(m, k as never, 1)
+      }
+      return m
+    },
+    [name, age, origin, spent],
+  )
+  const band = ageBand(age)
+
+  const squadStrength = useMemo(() => {
+    const by: Record<string, number> = {}
+    for (const t of WORLD_TEAMS) {
+      const s = WORLD_PLAYERS.filter((p) => p.teamId === t.id)
+        .sort((a, b) => b.overall - a.overall).slice(0, 5)
+      by[t.id] = s.length ? Math.round(s.reduce((n, p) => n + p.overall, 0) / s.length) : 0
+    }
+    return by
+  }, [])
+
+  // the strongest three in each league are never on offer at the start
+  const lockedTop = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of REGIONS) {
+      WORLD_TEAMS.filter((t) => t.region === r && t.tier === 1)
+        .sort((a, b) => b.rating - a.rating).slice(0, 3)
+        .forEach((t) => set.add(t.id))
+    }
+    return set
+  }, [])
+
+  const byTier = useMemo(() => {
+    const inRegion = WORLD_TEAMS.filter((t) => t.region === region)
+      .sort((a, b) => (squadStrength[b.id] ?? 0) - (squadStrength[a.id] ?? 0))
+    return {
+      1: inRegion.filter((t) => t.tier === 1),
+      2: inRegion.filter((t) => t.tier === 2),
+    }
+  }, [region, squadStrength])
+
+  // Earned once, good forever: a three-peat, a ten-year run or reputation 90
+  // on THIS account opens every club — the reputation gate and the locked top
+  // three alike. Read at mount; nothing here changes it mid-screen.
+  const veteran = useMemo(() => freeTeamChoice(readProfile()), [])
+
+  const available = (t: (typeof WORLD_TEAMS)[number]) =>
+    !!manager && (veteran || canManage(manager.reputation, t.reputation, lockedTop.has(t.id)))
+
+  const selected = teamId ? WORLD_TEAMS.find((t) => t.id === teamId) : null
+
+  const begin = () => {
+    if (!manager) return setErr('请先选择一个出身。')
+    if (!teamId) return setErr('请先选择一支战队。')
+    const g = createNewGame(teamId, manager.name, undefined, manager)
+    g.importLimit = importLimit
+    setupSeason(g)
+    track('career_start', {
+      club: selected?.tag ?? null,
+      tier: selected?.tier === 1 ? 'VCT' : 'CHAL',
+      region: selected?.region ?? null,
+      origin: originKey,
+      age,
+    })
+    onStart(g)
+  }
+
+  const onImport = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const g = importSave(String(reader.result))
+        // the first commit will write this over the autosave — if the autosave
+        // holds a newer career, tuck it into a rescue slot first
+        const rescue = protectAutosaveFrom(g)
+        if (rescue?.failed) {
+          // Storage is full and the newer career cannot be backed up. Going
+          // ahead would destroy it silently, which is the one outcome nobody
+          // would choose if asked.
+          const ok = await ask(
+            `当前自动存档（${rescue.year} 年第 ${rescue.day} 天）比这份文件更新，`
+            + '但存储空间不足，无法先给它做备份。\n\n'
+            + '继续导入会永久覆盖它。建议先到「存档」页删掉一些旧存档再导入。\n\n仍要继续吗？',
+            '仍要导入',
+          )
+          if (!ok) return
+        }
+        onStart(g)
+        if (rescue?.slot) setErr(`原自动存档比导入的文件更新，已备份到「${rescue.slot}」，可在下方读取。`)
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '存档读取失败。')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  // Manual slots used to be write-only: the 存档 screen offered 保存 and 删除,
+  // and its footnote pointed here — where nothing listed them. A player whose
+  // autosave went stale could see their newer save in the list and had no
+  // button anywhere that would open it.
+  const slots = listSaves().filter((m) => m.slot !== 'autosave')
+
+  return (
+    <div className="newgame">
+      {/* The only way back. This screen renders outside the career shell, so
+          the wordmark in the top bar — which is the home link everywhere else
+          — is not on the page at all, and a player who opened /manager
+          directly had no route to the front page. */}
+      <div className="row" style={{ marginBottom: 14 }}>
+        <button className="ng-home" style={{ marginBottom: 0 }} onClick={onHome}>← 返回首页</button>
+        <div className="spacer" style={{ flex: 1 }} />
+        <ThemeToggle compact />
+      </div>
+      <h1>VCT<span className="r">电竞经理</span></h1>
+      <p className="muted" style={{ marginTop: 0, marginBottom: 24 }}>
+        无畏契约电竞经理 · 执掌一支战队，征战 VCT 四大赛区与次级联赛
+      </p>
+
+      <div className="row wrap" style={{ marginBottom: 20 }}>
+        {canContinue && <button className="primary" onClick={onContinue}>继续上次存档</button>}
+        <label>
+          <span className="tag" style={{ cursor: 'pointer', padding: '7px 14px' }}>导入存档文件</span>
+          <input type="file" accept=".json" style={{ display: 'none' }}
+            onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
+        </label>
+      </div>
+
+      {/* ---------------------------------------------------------- 1 你是谁 */}
+      {slots.length > 0 && (
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <div className="panel-head"><h2>手动存档</h2></div>
+          <div className="panel-body" style={{ paddingTop: 8 }}>
+            {slots.slice(0, 6).map((m) => (
+              <div key={m.slot} className="row wrap" style={{ gap: 8, padding: '5px 0', alignItems: 'center' }}>
+                <b>{m.slot}</b>
+                <span className="small muted">{m.team} · {m.year} 年 D{m.day}</span>
+                <button className="sm right" onClick={() => {
+                  const g = loadGame(m.slot)
+                  if (g) onStart(g)
+                  else setErr(`存档「${m.slot}」已损坏，读不出来。`)
+                }}>
+                  读取
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="panel">
+        <div className="panel-head"><h2>1 · 你是谁</h2></div>
+        <div className="panel-body">
+          <div className="grid c2">
+            <div>
+              <label className="small muted">名字</label>
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="输入你的名字" maxLength={20} />
+            </div>
+            <div>
+              <label className="small muted">
+                年龄 · <b>{band.label}</b>
+              </label>
+              <div className="row" style={{ gap: 10 }}>
+                <input type="range" min={AGE_MIN} max={AGE_MAX} value={age}
+                  onChange={(e) => { setAge(Number(e.target.value)); setTeamId(null) }} />
+                <input type="number" min={AGE_MIN} max={AGE_MAX} value={age}
+                  style={{ width: 74 }}
+                  onChange={(e) => { setAge(Number(e.target.value) || AGE_MIN); setTeamId(null) }} />
+              </div>
+              <div className="tiny faint" style={{ marginTop: 4 }}>{band.note}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------- 2 出身 */}
+      <div className="panel">
+        <div className="panel-head">
+          <h2>2 · 出身（随机抽到 3 个，选 1 个）</h2>
+        </div>
+        <div className="panel-body">
+          <div className="grid c3">
+            {offered.map((o) => (
+              <OriginCard
+                key={o.key} origin={o}
+                selected={originKey === o.key}
+                onPick={() => { setOriginKey(o.key); setTeamId(null); setErr(null) }}
+              />
+            ))}
+          </div>
+          <p className="tiny faint" style={{ marginTop: 12, marginBottom: 0 }}>
+            每个出身都是 2 强 1 弱、幅度相同，没有强弱之分，差别只在你拿到哪些工具。
+            出身主要影响背景故事与起步声望。
+          </p>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------- 3 球队 */}
+      <div className="panel">
+        <div className="panel-head">
+          <h2>3 · 选择战队</h2>
+          {manager && (
+            <>
+              <div className="spacer" />
+              <span className="tag t1">声望 {manager.reputation}</span>
+            </>
+          )}
+        </div>
+        <div className="panel-body">
+          {!manager ? (
+            <div className="empty">先确定你的年龄与出身，才知道哪些俱乐部愿意请你。</div>
+          ) : (
+            <>
+              <div className="seg" style={{ marginBottom: 14 }}>
+                {REGIONS.map((r) => (
+                  <button key={r} className={region === r ? 'on' : ''}
+                    onClick={() => { setRegion(r); setTeamId(null) }}>{REGION_CN[r]}</button>
+                ))}
+              </div>
+              {([1, 2] as const).map((tier) => byTier[tier].length > 0 && (
+                <div key={tier} style={{ marginBottom: 16 }}>
+                  <div className="nav-group" style={{ padding: '0 0 7px' }}>
+                    {tier === 1
+                      ? `一级联赛 · VCT ${REGION_CN[region]}（${byTier[tier].length} 队）`
+                      : `次级联赛 · Challengers ${REGION_CN[region]}（${byTier[tier].length} 队）`}
+                    <span className="tiny faint" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}>
+                      {tier === 1
+                        ? 'Kickoff → Stage 1 → Stage 2，可争夺 Masters 与 Champions'
+                        : '两个赛段，冠军通过 Ascension 升入 VCT'}
+                    </span>
+                  </div>
+                  <div className="team-pick">
+                {byTier[tier].map((t) => {
+                  const ok = available(t)
+                  const top = lockedTop.has(t.id)
+                  return (
+                    <button key={t.id}
+                      className={`team-card${teamId === t.id ? ' sel' : ''}${ok ? '' : ' locked'}`}
+                      disabled={!ok}
+                      title={top ? '联赛顶尖球队，需要靠成绩解锁' : ok ? '' : '你的声望还不足以接手这支球队'}
+                      onClick={() => { setTeamId(t.id); setErr(null) }}>
+                      <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
+                        <div className="n" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <Crest id={t.id} size={22} />
+                          <span>{t.name}</span>
+                        </div>
+                        <span className={`tag ${t.tier === 1 ? 't1' : ''}`}>
+                          {t.tier === 1 ? 'VCT' : 'CHAL'}
+                        </span>
+                      </div>
+                      <div className="row small muted" style={{ gap: 8 }}>
+                        <OvrBadge value={squadStrength[t.id] ?? 0} />
+                        <span>{money(t.budget)}</span>
+                        {!ok && <span className="tiny">{top ? '🔒 顶级' : '🔒 声望不足'}</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+                  </div>
+                </div>
+              ))}
+              {veteran ? (
+                <p className="tiny" style={{ marginTop: 12, marginBottom: 0, color: 'var(--win)' }}>
+                  🏅 殿堂经理——你的账号有拿得出手的履历（三连霸／走完十年／声望 90 任一），
+                  从这里开始，任何俱乐部都愿意请你。
+                </p>
+              ) : (
+                <p className="tiny faint" style={{ marginTop: 12, marginBottom: 0 }}>
+                  声望决定哪些俱乐部愿意请你，每个赛区最强的三支球队开局锁定。
+                  在任意存档里做到<b>三连霸</b>、<b>走完十年</b>或<b>声望 90</b>，
+                  之后的新生涯就能不受限制、任选球队开局。
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {selected && manager && (
+        <div className="panel own">
+          <div className="panel-body">
+            <div className="row wrap" style={{ gap: 10 }}>
+              <b style={{ fontSize: 17 }}>{selected.name}</b>
+              <span className="tag">{REGION_CN[selected.region as Region]}</span>
+              <span className="tag">阵容强度 {squadStrength[selected.id]}</span>
+              <span className="tag">{manager.age} 岁 · {origin?.label}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {manager && (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>天赋点 · 剩余 {manager.points ?? 0} / {TALENT_POINTS}</h2>
+            {Object.keys(spent).length > 0 && (
+              <button className="sm ghost" onClick={() => setSpent({})}>重置</button>
+            )}
+          </div>
+          <div className="panel-body">
+            {currentRuleset() === 'vct-2026' && (
+              <p className="small" style={{ marginTop: 0, color: 'var(--warn)' }}>
+                <b>测试版 · {RULESET_CN['vct-2026']}</b>：Kickoff 抽签进十二队三败淘汰，Stage 1/2 抽 Alpha、Omega 两组，
+                Masters 瑞士轮逐轮抽签、赛区冠军自选八强对手，Champions 抽四档小组和八强。这里的存档和正式版分开，互不影响。
+              </p>
+            )}
+            <p className="small muted" style={{ marginTop: 0 }}>
+              每点 +{POINT_STEP}，上限 {SKILL_MAX}。<b>8 点不够样样精通</b>——
+              可以把两项拉满，也可以摊平但都不突出。出身决定你从哪开始，天赋决定你走向哪。
+            </p>
+            <div className="grid c2" style={{ gap: 10 }}>
+              {(Object.keys(SKILL_CN) as (keyof typeof SKILL_CN)[]).map((k) => {
+                const v = manager.skills[k]
+                const base = manager.baseSkills?.[k] ?? v
+                const added = spent[k] ?? 0
+                return (
+                  <div key={k} className="row" style={{ gap: 8, alignItems: 'center' }}>
+                    <span className="small" style={{ width: 52 }}>
+                      {SKILL_CN[k]}
+                      {base > 50 && <span className="tiny" style={{ color: 'var(--win)' }}> ▲</span>}
+                      {base < 50 && <span className="tiny" style={{ color: 'var(--accent)' }}> ▼</span>}
+                    </span>
+                    <button className="sm ghost" disabled={added <= 0}
+                      onClick={() => setSpent((x) => ({ ...x, [k]: (x[k] ?? 0) - 1 }))}>−</button>
+                    <Bar value={v} />
+                    <span className="mono small" style={{ width: 24 }}>{v}</span>
+                    <button className="sm" disabled={(manager.points ?? 0) <= 0 || v >= SKILL_MAX}
+                      onClick={() => setSpent((x) => ({ ...x, [k]: (x[k] ?? 0) + 1 }))}>+</button>
+                    <span className="tiny faint" style={{ flex: 1 }}>{SKILL_HINT[k]}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <label className="row small" style={{ gap: 8, marginTop: 16, cursor: 'pointer', alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={importLimit} style={{ width: 16, marginTop: 2 }}
+          onChange={(e) => setImportLimit(e.target.checked)} />
+        <span>
+          <b>限制外援</b>
+          <span className="muted">
+            {' '}— 每支俱乐部最多两名来自其他赛区的选手（按国籍判定，含替补）。
+            开启后 AI 俱乐部同样受限。已在阵容里的不受影响，只限新引进。
+          </span>
+        </span>
+      </label>
+
+      {err && <p className="neg small">{err}</p>}
+      <div style={{ marginTop: 14 }}>
+        <button className="primary" onClick={begin} disabled={!manager || !teamId}>
+          开始职业生涯 →
+        </button>
+      </div>
+
+      <div style={{ marginTop: 20 }}><Credit /></div>
+      <p className="tiny muted" style={{ marginTop: 12, lineHeight: 1.8 }}>
+        游戏内所有战队与选手均为真实人物。阵容、国籍、位置、照片、赛事名次与全部比赛数据取自
+        <b> vlr.gg</b>；真名、生日、教练、指挥、生涯队伍履历与部分选手照片取自 <b>Liquipedia</b>
+        （图片依 CC BY-SA 3.0 使用）；少量选手照片取自<b>号角 HOJO</b>（haojiao.cc）；英雄池取自真实出场记录。
+        八项能力值由这些真实数据按分位映射得出。合同、薪资与预算为游戏平衡所需的估算值。
+      </p>
+    </div>
+  )
+}
+
+function OriginCard({
+  origin, selected, onPick,
+}: { origin: ManagerOrigin; selected: boolean; onPick: () => void }) {
+  return (
+    <button className={`origin-card${selected ? ' sel' : ''}`} onClick={onPick}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <b style={{ fontSize: 15 }}>{origin.label}</b>
+        <span className="tiny faint">声望 {origin.repMod >= 0 ? '+' : ''}{origin.repMod}</span>
+      </div>
+      <p className="tiny muted" style={{ margin: '6px 0 10px', lineHeight: 1.6 }}>{origin.blurb}</p>
+      <div className="row wrap" style={{ gap: 4 }}>
+        {origin.strong.map((s) => (
+          <span key={s} className="trait" data-good="y" title={SKILL_HINT[s]}>{SKILL_CN[s]}</span>
+        ))}
+        <span className="trait" data-good="n" title={SKILL_HINT[origin.weak]}>{SKILL_CN[origin.weak]}</span>
+      </div>
+      {!!origin.startingFunds && (
+        <div className="tiny pos" style={{ marginTop: 8 }}>
+          自带启动资金 {money(origin.startingFunds)}
+        </div>
+      )}
+    </button>
+  )
+}

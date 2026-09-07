@@ -1,0 +1,74 @@
+/* ---- player-career layer: the bits the manager stylesheet has no word for ---- */
+
+.pinbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
+  padding: 6px 14px; background: var(--bg-rail); border-bottom: 1px solid var(--line);
+  font-size: var(--t-small); color: var(--muted);
+}
+.pinbar .pin { display: inline-flex; gap: 4px; align-items: baseline; white-space: nowrap; }
+.pinbar .pin b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 650; }
+.pinbar .pin.up b { color: var(--win); }
+.pinbar .pin.dn b { color: var(--loss); }
+.pinbar .sep { width: 1px; height: 14px; background: var(--line); }
+
+.act-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 1100px) { .act-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .act-grid { grid-template-columns: 1fr; } }
+.act-card {
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px;
+  background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; min-height: 96px;
+}
+.act-card.on { border-color: var(--accent-line); background: var(--accent-wash); }
+.act-card .t { display: flex; align-items: center; gap: 8px; font-weight: 650; }
+.act-card .t .tag { margin-left: auto; }
+.act-card .d { font-size: var(--t-small); color: var(--muted); flex: 1; }
+.act-card .c { display: flex; align-items: center; gap: 8px; }
+.act-card .c b { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+
+.winbar { position: relative; height: 10px; border-radius: 5px; background: var(--well); overflow: hidden; }
+.winbar > i { display: block; height: 100%; background: var(--win); transition: width .35s ease; }
+.winbar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.winbar-row .n { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 60px; text-align: right; }
+
+.node-box {
+  border: 1px solid var(--accent-line); background: var(--accent-wash); border-radius: var(--radius);
+  padding: 14px 16px; margin: 10px 0;
+}
+.node-box .q { font-size: var(--t-h2); font-weight: 650; margin: 0 0 4px; }
+.node-box .ctx { color: var(--muted); font-size: var(--t-small); margin: 0 0 12px; }
+.node-opt { display: grid; gap: 8px; }
+.node-opt button { text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px; }
+.node-opt button .m { font-size: var(--t-tiny); color: var(--muted); font-weight: 400; }
+.node-line { padding: 6px 10px; border-left: 2px solid var(--line-hi); margin: 6px 0; font-size: var(--t-small); }
+.node-line.ok { border-left-color: var(--win); }
+.node-line.bad { border-left-color: var(--loss); }
+
+.attr-row { display: grid; grid-template-columns: 56px 1fr 44px 70px; gap: 8px; align-items: center; padding: 4px 0; }
+.attr-row .k { color: var(--muted); font-size: var(--t-small); }
+.attr-row .v { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
+.attr-row .xp { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.diary { list-style: none; margin: 0; padding: 0; }
+.diary li { padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); display: flex; gap: 10px; }
+.diary li .when { color: var(--faint); font-variant-numeric: tabular-nums; min-width: 88px; }
+.diary li.good { color: var(--win); }
+.diary li.bad { color: var(--loss); }
+.diary li.match b { color: var(--text); }
+
+.advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
+.advance-me .hint { color: var(--muted); font-size: var(--t-small); }
+
+.newcareer { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+.newcareer h1 { margin: 0 0 4px; }
+.talent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+@media (max-width: 560px) { .talent-grid { grid-template-columns: 1fr; } }
+.talent-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 8px; align-items: center; }
+.talent-row .pips { display: flex; gap: 3px; }
+.talent-row .pips i { width: 12px; height: 12px; border-radius: 3px; background: var(--well); display: block; }
+.talent-row .pips i.on { background: var(--accent); }
+.club-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 720px) { .club-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.club-list button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding: 8px 10px; }
+.club-list button.on { border-color: var(--accent); background: var(--accent-wash); }
+.club-list button .r { margin-left: auto; color: var(--muted); font-size: var(--t-tiny); }

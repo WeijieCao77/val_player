@@ -1,0 +1,2223 @@
+import { Rng, clamp, hashStr } from './rng'
+import {
+  activePool, applyMatchStats, poolFor, poolPhaseOf, pruneMatchDetail, simulateMatch, stripRoundLogs,
+} from './match'
+import type { MatchResult } from './types'
+import {
+  CHAMP_POINTS, advanceBracket, applyResultToStandings, makeFixture, newStandings,
+  resetFixtureSeq, scheduleRegularSeason, sortStandings, startBracket, respaceRounds, groupTable, scheduleGroupSeason
+} from './league'
+import { awardPrize, weeklyFinance } from './finance'
+import { aiTransferTick, refreshListings, resolveDueOffers, resolveEnquiries } from './transfer'
+import { offerGigs, resolveSponsorTalks, runGigsToday, streamWeek, settleSponsorDemands, sponsorWorth } from './commercial'
+import { offerBundle, settleLeagueSeason, tickLeagueOffer } from './leagueShare'
+import { mapCn } from './content'
+import { FAM_MATCH, FAM_SCRIM, learnComp } from './comp'
+import { CHAMPIONS, endingsFor, FINAL_YEAR, MASTERS_1, MASTERS_2, MID_YEAR, tenureCn } from './endings'
+import { hostCity } from './hosts'
+import { applyMatchBonds } from './bonds'
+import { trustAfterMatch } from './trust'
+import { titleLoyalty } from './loyalty'
+import { resolveApproaches, resolveStaffOffers } from './staff'
+import { defaultContract, resolveApplications } from './career'
+import { applyMatchFatigue, drillTick, seasonRollover, weeklyTick } from './training'
+import { dailyLife, weeklyLife } from './life'
+import { autoStarters, ensureCaller } from './world'
+import { CHAMPIONS_2025, drawRules } from './ruleset'
+import {
+  createPlayoffPick, drawChampionsGroups, drawChampionsPlayoffs, drawKickoffBracket, drawStageGroups,
+  drawStageReshuffle, drawSwissRound, drawsOf, needsManager, nextPendingDraw, resetDrawSeq, resolvePicks, revealAll,
+} from './draw'
+import type { DrawEvent } from './draw'
+import { importBlock } from './imports'
+import { contractLength, expectedSalary } from './player'
+import { REGIONS } from './types'
+import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
+import { track } from './telemetry'
+import {
+  DOUBLE_8, GROUPS, advanceTemplate, championsGroups, championsSeeds, decided, doubleFor,
+  mastersSeeds, swissDone, swissNext, swissOutcome, templateDone, MASTERS_8, TRIPLE_12, TRIPLE_12_PLACES, STAGE_8, STAGE_8_PLACES, swissRoundOf, SWISS_ROUNDS, swissRecord
+} from './bracket'
+
+/**
+ * The year, in days.
+ *
+ * The calendar ran 336 days with one stage hard against the next: Kickoff's
+ * final on a Sunday, the Masters draw on Tuesday, Stage 1 opening the day
+ * after the Masters final. A manager wrote that it was 「拥挤」 — no time to
+ * do business between competitions — and the sport itself does not play
+ * like that. So the year is the whole year now, and the stages are shaped
+ * like the real ones: a league plays twice a week for five weeks, then a
+ * fortnight of playoffs, then three to four weeks off before the Masters,
+ * with the market open through the break that leads into it — and three
+ * weeks off after the Masters before the next league starts (see
+ * LEAGUE_DAYS, and keepBreaks for the rule that holds it whatever happens).
+ */
+export const SEASON_DAYS = 364
+
+/**
+ * The days each regional regular season is spread over.
+ *
+ * A Masters ends on day 92 and Masters II on 200 (Swiss round on the
+ * INTERNATIONAL_OPEN day, playoffs eight days later, a round every two
+ * days), so the leagues after them open on 112 and 220: twenty days off,
+ * about what the real circuit gives. Stage 1 used to open on 100 — eight
+ * days after the Masters final — and, before the year was the whole year,
+ * on 89, the day after it.
+ */
+export const LEAGUE_DAYS: Record<'kickoff' | 'stage1' | 'stage2' | 'challengers1' | 'challengers2', [number, number]> = {
+  kickoff: [24, 38],
+  stage1: [112, 147],
+  stage2: [220, 255],
+  challengers1: [28, 112],
+  challengers2: [216, 256],
+}
+
+/** Days between an international's last match and the next league's first. */
+export const BREAK_AFTER_INTERNATIONAL = 14
+
+export interface StageDef {
+  key: StageKey
+  name: string
+  start: number
+  end: number
+}
+
+export const STAGES: StageDef[] = [
+  { key: 'preseason', name: '季前准备', start: 0, end: 20 },
+  { key: 'kickoff', name: 'Kickoff', start: 21, end: 62 },
+  { key: 'masters1', name: 'Masters I', start: 63, end: 98 },
+  { key: 'stage1', name: 'Stage 1', start: 99, end: 164 },
+  { key: 'masters2', name: 'Masters II', start: 165, end: 214 },
+  { key: 'stage2', name: 'Stage 2', start: 215, end: 280 },
+  { key: 'champions', name: 'Champions', start: 281, end: 322 },
+  { key: 'offseason', name: '休赛期', start: 323, end: SEASON_DAYS - 1 },
+]
+
+/**
+ * The earliest day each international opens on — the Swiss round of a
+ * Masters, the groups of Champions. Each sits about a fortnight into its
+ * stage, so the stage begins with a break. The playoffs of a Masters start
+ * eight days after its Swiss round.
+ */
+export const INTERNATIONAL_OPEN: Record<'masters1' | 'masters2' | 'champions', number> = {
+  masters1: 76, masters2: 184, champions: 296,
+}
+
+export const stageAt = (day: number): StageKey =>
+  STAGES.find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
+
+export const stageName = (key: StageKey): string =>
+  STAGES.find((s) => s.key === key)?.name ??
+  ({ challengers1: 'Challengers 第一赛段', challengers2: 'Challengers 第二赛段', ascension: 'Ascension' } as Record<string, string>)[key] ??
+  key
+
+/** Display a day index as an in-fiction date. */
+export function dateLabel(state: GameState): string {
+  const d = new Date(Date.UTC(state.year, 0, 1))
+  d.setUTCDate(d.getUTCDate() + state.day)
+  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
+}
+
+export const compKey = (stage: string, region?: Region) => (region ? `${stage}:${region}` : stage)
+
+function makeComp(
+  state: GameState, stage: StageKey, name: string, teams: string[],
+  region?: Region, tier?: Tier,
+): Competition {
+  const comp: Competition = {
+    key: compKey(stage, region),
+    name,
+    region,
+    tier,
+    stage,
+    teams,
+    standings: newStandings(teams),
+    finished: [],
+  }
+  state.comps[comp.key] = comp
+  return comp
+}
+
+const tier1Of = (state: GameState, region: Region) =>
+  Object.values(state.teams)
+    .filter((t) => t.region === region && t.tier === 1)
+    .sort((a, b) => b.rating - a.rating)
+    .map((t) => t.id)
+
+const tier2Of = (state: GameState, region: Region) =>
+  Object.values(state.teams)
+    .filter((t) => t.region === region && t.tier === 2)
+    .sort((a, b) => b.rating - a.rating)
+    .map((t) => t.id)
+
+/** Build every fixture that can be known before a ball is thrown. */
+export function setupSeason(state: GameState, notes?: string[]): void {
+  state.managerContract ??= defaultContract(state)
+  resetFixtureSeq(0)
+  state.fixtures = []
+  state.comps = {}
+  const rng = new Rng(hashStr(`season:${state.seed}:${state.year}`))
+  resetDrawSeq(0)
+
+  for (const region of REGIONS) {
+    const t1 = tier1Of(state, region)
+    const t2 = tier2Of(state, region)
+
+    // ---- vct-2026: Kickoff drawn as a twelve-team triple elimination; the
+    // two stages are shells until their groups are drawn (see openStage1Draw)
+    if (drawRules(state) && t1.length === 12) {
+      const kc = makeComp(state, 'kickoff', `${region} Kickoff`, t1, region, 1)
+      openKickoffDraw(state, kc, false)
+      const s1 = makeComp(state, 'stage1', `VCT ${region} · Stage 1`, t1, region, 1)
+      s1.grouped = true
+      const s2 = makeComp(state, 'stage2', `VCT ${region} · Stage 2`, t1, region, 1)
+      s2.grouped = true
+      if (t2.length >= 2) {
+        const c1 = makeComp(state, 'challengers1', `Challengers ${region} · 第一赛段`, t2, region, 2)
+        state.fixtures.push(...scheduleRegularSeason(c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
+        const c2 = makeComp(state, 'challengers2', `Challengers ${region} · 第二赛段`, t2, region, 2)
+        state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
+      }
+      continue
+    }
+
+    // ---- Kickoff: a short group phase, then a top-four knockout.
+    // A bare bracket meant the very first fixture of a career was a
+    // quarter-final against a club you had never played, and the standings
+    // stayed empty all the way through because knockouts do not build a table.
+    const kc = makeComp(state, 'kickoff', `${region} Kickoff`, t1, region, 1)
+    state.fixtures.push(...scheduleRegularSeason(kc, 'kickoff', ...LEAGUE_DAYS.kickoff, 3, rng, '小组赛', 5))
+
+    // ---- Stage 1 & Stage 2: full round robin, playoffs seeded from the table
+    const s1 = makeComp(state, 'stage1', `VCT ${region} · Stage 1`, t1, region, 1)
+    state.fixtures.push(...scheduleRegularSeason(s1, 'stage1', ...LEAGUE_DAYS.stage1, 3, rng))
+
+    const s2 = makeComp(state, 'stage2', `VCT ${region} · Stage 2`, t1, region, 1)
+    state.fixtures.push(...scheduleRegularSeason(s2, 'stage2', ...LEAGUE_DAYS.stage2, 3, rng))
+
+    // ---- Challengers: two splits, running alongside the tier-1 calendar
+    // even a two-club Challengers league is playable now that small leagues cycle
+    if (t2.length >= 2) {
+      const c1 = makeComp(state, 'challengers1', `Challengers ${region} · 第一赛段`, t2, region, 2)
+      state.fixtures.push(...scheduleRegularSeason(c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
+
+      const c2 = makeComp(state, 'challengers2', `Challengers ${region} · 第二赛段`, t2, region, 2)
+      state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
+    }
+  }
+  seedMarket(state, notes)
+}
+
+export const PLAYOFF_CUT: Partial<Record<StageKey, number>> = {
+  kickoff: 4, stage1: 8, stage2: 8, challengers1: 4, challengers2: 4,
+}
+
+/** Days between two waves of a bracket, and before the first. */
+const WAVE_GAP = 2
+
+const byPoints = (state: GameState) => (x: string, y: string) =>
+  (state.teams[y]?.champPoints ?? 0) - (state.teams[x]?.champPoints ?? 0)
+  || (state.teams[y]?.rating ?? 0) - (state.teams[x]?.rating ?? 0)
+
+/**
+ * A Masters' twelve: each region's top three from the feeder stage. The four
+ * winners wait in the playoffs; the four seconds and four thirds play the
+ * Swiss, seeded so that round one crosses a second with a third.
+ */
+export function mastersField(state: GameState, feeder: StageKey): { byes: string[]; swiss: string[] } {
+  const byes: string[] = []
+  const seconds: string[] = []
+  const thirds: string[] = []
+  for (const region of REGIONS) {
+    const comp = state.comps[compKey(feeder, region)]
+    if (!comp?.finished.length) continue
+    const [a, b, c] = comp.finished
+    if (a) byes.push(a)
+    if (b) seconds.push(b)
+    if (c) thirds.push(c)
+  }
+  const cmp = byPoints(state)
+  return { byes: byes.sort(cmp), swiss: [...seconds.sort(cmp), ...thirds.sort(cmp)] }
+}
+
+/**
+ * Champions' sixteen, per region and best first: the Stage 2 playoff's top
+ * two go straight in, then the two highest on the season's points among the
+ * rest. Callable before Stage 2 ends — the qualification panel asks it who
+ * is on course.
+ */
+export function championsField(state: GameState): Record<Region, string[]> {
+  const out = {} as Record<Region, string[]>
+  for (const region of REGIONS) {
+    const s2 = state.comps[compKey('stage2', region)]
+    const direct = (s2?.finished ?? []).slice(0, 2)
+    const rest = Object.values(state.teams)
+      .filter((t) => t.region === region && t.tier === 1 && !direct.includes(t.id))
+      .map((t) => t.id)
+      .sort(byPoints(state))
+      .slice(0, 2)
+    out[region] = [...direct, ...rest]
+  }
+  return out
+}
+
+/** A Masters, opened on its Swiss round. */
+function createMasters(state: GameState, stage: StageKey, name: string, feeder: StageKey, day: number): void {
+  if (state.comps[stage]) return
+  const { byes, swiss } = mastersField(state, feeder)
+  if (byes.length + swiss.length < 8) return
+  const comp = makeComp(state, stage, name, [...byes, ...swiss])
+  comp.format = 'masters'
+  comp.byes = byes
+  comp.swissSeeds = swiss
+  comp.city = hostCity(state, stage as 'masters1' | 'masters2')
+  comp.plannedStart = day
+  if (drawRules(state)) openSwissDraw(state, comp, day, false)
+  else state.fixtures.push(...swissNext(state, comp, swiss, day))
+  state.news.push({
+    day: state.day, kind: 'league', important: true,
+    text: `${name}（${comp.city}）参赛名单出炉：${byes.map((t) => state.teams[t]?.name).join('、')} 作为赛区冠军直接进入季后赛；`
+      + `${swiss.map((t) => state.teams[t]?.name).join('、')} 先打瑞士轮。`,
+  })
+}
+
+/** Champions, opened on its four groups — one team from each region in
+ *  each, seed levels spread so no group holds two regional winners. */
+function createChampions(state: GameState, name: string, day: number): void {
+  if (state.comps.champions) return
+  const field = championsField(state)
+  const groups = GROUPS.map((_, i) =>
+    REGIONS.map((r, j) => field[r][(i + j) % 4]).filter((t): t is string => !!t))
+  const all = groups.flat()
+  if (all.length < 8) return
+  const comp = makeComp(state, 'champions', name, all)
+  comp.format = 'champions'
+  comp.city = hostCity(state, 'champions')
+  comp.plannedStart = day
+  if (drawRules(state) && all.length === 16) {
+    // four pots — the four regions' first seeds, seconds, first and second
+    // points qualifiers — drawn into A–D with one side per region per group;
+    // held first, the groups and their ties written when it is finished
+    const pots = [0, 1, 2, 3].map((k) => REGIONS.map((r) => field[r][k]).filter((t): t is string => !!t))
+    comp.seedPots = pots
+    holdDraw(state, drawChampionsGroups(state, comp, pots, day), false)
+    state.news.push({
+      day: state.day, kind: 'league', important: true,
+      text: `${name}（${comp.city}）参赛名单出炉，分组抽签待举行：${all.map((t) => state.teams[t]?.tag).join('、')}。`,
+    })
+    return
+  }
+  comp.groups = groups
+  state.fixtures.push(...advanceTemplate(state, comp, championsGroups(), null, all, day, 3, 0))
+  state.news.push({
+    day: state.day, kind: 'league', important: true,
+    text: `${name}（${comp.city}）分组出炉：`
+      + groups.map((g, i) => `${GROUPS[i]}组 ${g.map((t) => state.teams[t]?.name).join('、')}`).join('；') + '。',
+  })
+}
+
+/**
+ * Hand out the prizes when a competition ends.
+ *
+ * The board reacts to how we finished — a bottom-third finish at Masters costs
+ * 7 confidence — and that reaction used to happen off-screen: the only line
+ * written was who won the thing. Our own finish and what it cost now go into
+ * the turn's digest.
+ */
+export function settleCompetition(state: GameState, comp: Competition, notes: string[] = []): void {
+  if (comp.awarded || !comp.champion) return
+  comp.awarded = true
+
+  awardPrize(state, comp.stage, comp.finished)
+
+  const pts = CHAMP_POINTS[comp.stage]
+  if (pts) {
+    comp.finished.forEach((teamId, i) => {
+      const t = state.teams[teamId]
+      if (t && pts[i]) t.champPoints += pts[i]
+    })
+  }
+
+  const champ = state.teams[comp.champion]
+  state.news.push({
+    day: state.day, kind: 'league', important: true,
+    text: `🏆 ${champ?.name} 夺得 ${comp.name} 冠军！`,
+  })
+  // every man on the winning roster carries this title from now on — the
+  // farewell card reads it, and it is entirely a thing that happened here
+  for (const pid of champ?.roster ?? []) {
+    const winner = state.players[pid]
+    if (!winner) continue
+    winner.titles ??= []
+    winner.titles.push({ year: state.year, title: comp.name })
+    if (winner.titles.length > 40) winner.titles.splice(0, winner.titles.length - 40)
+  }
+
+  // Everyone who was in the room when it was won, at whichever club won it —
+  // a trophy is the shared history that loyalty is made of, and the AI's
+  // champions get to keep their core for the same reason ours do.
+  if (comp.champion) titleLoyalty(state, comp.champion, !comp.region)
+
+  if (comp.champion === state.myTeam) {
+    state.honours.push({ year: state.year, title: comp.name })
+    state.boardConfidence = clamp(state.boardConfidence + 14, 0, 100)
+    // A world title paints a target on the club. The league answers: harder
+    // training and hungrier recruitment everywhere else, so the second trophy
+    // has to be earned against a better world than the first.
+    if (!comp.region) {
+      state.rivalry = (state.rivalry ?? 0) + 1
+      state.news.push({
+        day: state.day, kind: 'league', important: true,
+        text: `🔥 ${champ?.name} 的 ${comp.name} 冠军震动了各赛区——多家俱乐部宣布加练备战，休赛期引援预计更加激进。`,
+      })
+    }
+    // winning is what actually makes your name
+    if (state.manager) {
+      const worth = comp.region ? TITLE_REP_WORTH.regional : TITLE_REP_WORTH.international
+      state.manager.reputation = clamp(state.manager.reputation + damped(state.manager.reputation, worth), 5, 96)
+    }
+    notes.push(`🏆 我们夺得 ${comp.name} 冠军！`)
+  }
+  // Sponsorship performance bonuses. Both screens have always printed
+  // "前 N 名另奖 $X" on every contract and the engine never read the field —
+  // the money simply did not exist. It does now: a regional stage we finish
+  // at or above the threshold pays that contract, once per season, so a good
+  // split is worth money and a sponsor is worth choosing for its terms.
+  // Regional only, or an international run would pay every contract twice.
+  if (comp.region && comp.finished.includes(state.myTeam)) {
+    const me = state.teams[state.myTeam]
+    const place = comp.finished.indexOf(state.myTeam) + 1
+    // the best regional finish of the season is what a `placing` clause reads
+    state.bestPlacing = Math.min(state.bestPlacing ?? 99, place)
+    for (const sp of me?.sponsors ?? []) {
+      if (sp.bonusPaidYear === state.year || place > sp.bonusPlacement || !sp.bonus) continue
+      sp.bonusPaidYear = state.year
+      state.finances.balance += sp.bonus
+      state.finances.log.push({
+        day: state.day, label: `赞助达标奖 · ${sp.name}（${comp.name} 第 ${place} 名）`, amount: sp.bonus,
+      })
+      notes.push(`💰 ${sp.name} 的达标奖金 $${sp.bonus.toLocaleString()} 到账——${comp.name} 第 ${place} 名，合同要求前 ${sp.bonusPlacement}。`)
+    }
+  }
+  if (comp.champion !== state.myTeam && comp.teams.includes(state.myTeam)) {
+    const place = comp.finished.indexOf(state.myTeam)
+    if (place >= 0) {
+      const share = place / Math.max(1, comp.finished.length - 1)
+      const swing = share < 0.34 ? 5 : share > 0.7 ? -7 : 0
+      state.boardConfidence = clamp(state.boardConfidence + swing, 0, 100)
+      const rank = `${comp.name} 第 ${place + 1} 名（共 ${comp.finished.length} 队）`
+      notes.push(
+        swing > 0 ? `🏅 ${rank}，董事会满意（信任 +${swing}）。`
+          : swing < 0 ? `📉 ${rank}，董事会不满（信任 ${swing}）。`
+            : `🏁 ${rank}。`,
+      )
+    }
+  }
+}
+
+// ---------------------------------------------------------------- vct-2026 draws
+
+/**
+ * A draw is held, then its ties are written.
+ *
+ * The event is created with its outcome locked the moment the field is
+ * known — but nothing goes into the fixture list until the draw is
+ * finished: watched to the last ball, skipped, or (the pick) chosen. Until
+ * then the schedule shows the round as 待定 vs 待定 and, if the draw is the
+ * manager's to hold, the clock waits for it: advanceDay hands back
+ * `pendingDraw` and the screen opens the ceremony, to be drawn ball by
+ * ball or skipped. A draw that is not his — another region's league, an
+ * international he is not in — is finished at once, in the background,
+ * and the news carries the result.
+ */
+function holdDraw(state: GameState, ev: DrawEvent, auto: boolean): void {
+  if (!auto && needsManager(state, ev)) {
+    state.pendingDrawId ??= ev.id
+    return
+  }
+  finishDraw(state, ev, true)
+}
+
+/**
+ * Finish a draw: every ball out, the ties written for its play day, the
+ * clock released. For the pick, the AI's choices are made and the
+ * manager's own is waited for unless `auto` hands it to the coaches.
+ * Returns false while the pick still waits on him.
+ */
+export function finishDraw(state: GameState, ev: DrawEvent, auto = false): boolean {
+  const comp = state.comps[ev.competitionKey]
+  if (!comp) return false
+  if (ev.kind === 'masters-playoff-pick' && ev.status !== 'complete') {
+    if (!resolvePicks(state, ev, comp, auto)) {
+      state.pendingDrawId = ev.id
+      return false
+    }
+  }
+  revealAll(ev)
+  consumeDraw(state, comp, ev)
+  if (state.pendingDrawId === ev.id) state.pendingDrawId = nextPendingDraw(state)
+  return true
+}
+
+/** The kept-for-compatibility name: the pick the manager was asked for. */
+export function settlePendingPick(state: GameState, auto = false): void {
+  const ev = (state.draws ?? []).find((d) => d.kind === 'masters-playoff-pick' && !d.consumed)
+  if (ev) finishDraw(state, ev, auto)
+}
+
+/** Write a finished draw's ties into the competition. */
+function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
+  if (ev.consumed) return
+  const mine = (ids: string[]) => ids.includes(state.myTeam)
+  switch (ev.kind) {
+    case 'kickoff-bracket': {
+      comp.seeds = ev.outcome.seeds
+      comp.byes = ev.pots[1]?.teams.slice()
+      comp.bracketStarted = true
+      state.fixtures.push(...advanceTemplate(state, comp, TRIPLE_12, TRIPLE_12_PLACES, comp.seeds ?? [], ev.playDay, 3))
+      state.news.push({
+        day: state.day, kind: 'league', important: mine(comp.teams),
+        text: `${comp.name} 抽签完成：${(comp.byes ?? []).map((t) => state.teams[t]?.name).join('、')} 轮空至胜者组第二轮，其余八队抽入首轮。`,
+      })
+      break
+    }
+    case 'stage1-groups':
+    case 'stage2-reshuffle': {
+      const groups = ev.outcome.groups ?? []
+      comp.groups = groups
+      comp.groupNames = ['Alpha', 'Omega']
+      const stage = comp.stage as 'stage1' | 'stage2'
+      const days = LEAGUE_DAYS[stage]
+      const rng = new Rng(hashStr(`season:${state.seed}:${state.year}:${comp.key}:groups`))
+      groups.forEach((g, i) => {
+        state.fixtures.push(...scheduleGroupSeason(comp, g, comp.groupNames![i], stage, days[0], days[1], 3, rng))
+      })
+      state.news.push({
+        day: state.day, kind: 'league', important: mine(comp.teams),
+        text: `${comp.name} 分组抽签完成——Alpha：${groups[0]?.map((t) => state.teams[t]?.tag).join('、')}；Omega：${groups[1]?.map((t) => state.teams[t]?.tag).join('、')}。`,
+      })
+      break
+    }
+    case 'masters-swiss': {
+      const round = Number(ev.phase?.match(/swiss-r(\d)/)?.[1] ?? 1)
+      state.fixtures.push(...(ev.outcome.pairs ?? []).map(([a, b]) =>
+        makeFixture(ev.playDay, comp.stage, comp.key, a, b, 3, `SW:${round}:瑞士轮 第${round}轮`)))
+      state.news.push({
+        day: state.day, kind: 'league', important: mine(comp.teams),
+        text: `${comp.name} 瑞士轮第 ${round} 轮抽签：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
+      })
+      break
+    }
+    case 'masters-playoff-pick': {
+      comp.seeds = (ev.outcome.pairs ?? []).flat()
+      comp.byes = undefined
+      comp.bracketStarted = true
+      state.fixtures.push(...advanceTemplate(state, comp, MASTERS_8, doubleFor(8).places, comp.seeds, ev.playDay, 3))
+      state.news.push({
+        day: state.day, kind: 'league', important: mine(comp.seeds),
+        text: `${comp.name} 八强对阵确定：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
+      })
+      break
+    }
+    case 'champions-groups': {
+      const groups = ev.outcome.groups ?? []
+      comp.groups = groups
+      comp.groupNames = ['A', 'B', 'C', 'D']
+      comp.teams = groups.flat()
+      state.fixtures.push(...advanceTemplate(state, comp, championsGroups(), null, comp.teams, ev.playDay, 3, 0))
+      state.news.push({
+        day: state.day, kind: 'league', important: true,
+        text: `${comp.name}（${comp.city}）分组抽签：`
+          + groups.map((g, i) => `${GROUPS[i]}组 ${g.map((t) => state.teams[t]?.name).join('、')}`).join('；') + '。',
+      })
+      break
+    }
+    case 'champions-playoffs': {
+      comp.seeds = (ev.outcome.pairs ?? []).flat()
+      comp.bracketStarted = true
+      state.fixtures.push(...advanceTemplate(state, comp, MASTERS_8, doubleFor(8).places, comp.seeds, ev.playDay, 3, championsGroups().length))
+      state.news.push({
+        day: state.day, kind: 'league', important: mine(comp.seeds),
+        text: `${comp.name} 八强抽签：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
+      })
+      break
+    }
+  }
+  ev.consumed = true
+}
+
+/**
+ * Kickoff's draw: last year's Champions sides sit out the opening round —
+ * in a career's first season, the real Champions 2025 field from the
+ * records — and the other eight are drawn into the four opening ties.
+ */
+function openKickoffDraw(state: GameState, comp: Competition, auto: boolean): void {
+  const t1 = comp.teams
+  const firstYear = !(state.lastChampionsTeams?.length)
+  const source = firstYear ? CHAMPIONS_2025 : state.lastChampionsTeams ?? []
+  const last = source.filter((id) => t1.includes(id)).slice(0, 4)
+  const byRep = t1.slice().sort((a, b) => (state.teams[b]?.reputation ?? 0) - (state.teams[a]?.reputation ?? 0))
+  const byes = last.slice()
+  for (const id of byRep) if (byes.length < 4 && !byes.includes(id)) byes.push(id)
+  const first = t1.filter((id) => !byes.includes(id))
+  comp.format = 'triple'
+  comp.plannedStart = LEAGUE_DAYS.kickoff[0]
+  const ev = drawKickoffBracket(state, comp, byes, first, LEAGUE_DAYS.kickoff[0])
+  ev.log.unshift(firstYear ? `轮空位给 2025 Champions 的参赛队：${last.map((t) => state.teams[t]?.tag).join('、')}` : `轮空位给上届 Champions 的参赛队：${last.map((t) => state.teams[t]?.tag).join('、')}`)
+  if (last.length < 4) ev.log.unshift(`上届 Champions 只有 ${last.length} 队仍在本赛区，其余轮空位按俱乐部声望补足`)
+  holdDraw(state, ev, auto)
+}
+
+/** Stage 1's groups, drawn from the Kickoff placings the day it ends. */
+function openStage1Draw(state: GameState, region: Region, placings: string[], auto: boolean): void {
+  const comp = state.comps[compKey('stage1', region)]
+  if (!comp || !comp.grouped || comp.groups || drawsOf(state, comp.key).length) return
+  const pots: string[][] = []
+  for (let i = 0; i + 1 < placings.length && pots.length < 6; i += 2) pots.push([placings[i], placings[i + 1]])
+  comp.seedPots = pots
+  comp.plannedStart = LEAGUE_DAYS.stage1[0]
+  holdDraw(state, drawStageGroups(state, comp, pots, LEAGUE_DAYS.stage1[0]), auto)
+}
+
+/** Stage 2's groups: Stage 1's reshuffled by the three swap pools. */
+function openStage2Draw(state: GameState, s1: Competition, auto: boolean): void {
+  if (!s1.region || !s1.groups) return
+  const comp = state.comps[compKey('stage2', s1.region)]
+  if (!comp || !comp.grouped || comp.groups || drawsOf(state, comp.key).length) return
+  const alpha = groupTable(s1, s1.groups[0])
+  const omega = groupTable(s1, s1.groups[1])
+  comp.seedPots = [[...alpha.slice(0, 2), ...omega.slice(0, 2)], [...alpha.slice(2, 4), ...omega.slice(2, 4)], [...alpha.slice(4, 6), ...omega.slice(4, 6)]]
+  comp.plannedStart = LEAGUE_DAYS.stage2[0]
+  holdDraw(state, drawStageReshuffle(state, comp, alpha, omega, LEAGUE_DAYS.stage2[0]), auto)
+}
+
+/**
+ * The next Swiss round of a Masters, drawn: round one crosses the second
+ * seeds with third seeds of other regions; two and three pair by record,
+ * three without a rematch. Nothing is written until the draw is finished.
+ */
+function openSwissDraw(state: GameState, comp: Competition, day: number, auto: boolean): void {
+  const sw = state.fixtures.filter((f) => f.comp === comp.key && f.label.startsWith('SW:'))
+  if (sw.some((f) => !f.played)) return
+  const round = sw.length ? Math.max(...sw.map(swissRoundOf)) : 0
+  if (round >= SWISS_ROUNDS) return
+  const swiss = comp.swissSeeds ?? []
+  const played = new Set<string>()
+  for (const f of sw) { played.add(`${f.teamA}|${f.teamB}`); played.add(`${f.teamB}|${f.teamA}`) }
+  let pools: { name: string; teams: string[] }[]
+  if (round === 0) {
+    pools = [{ name: '二号种子', teams: swiss.slice(0, 4) }, { name: '三号种子', teams: swiss.slice(4) }]
+  } else {
+    const rec = (id: string) => swissRecord(comp, id)
+    const alive = swiss.filter((id) => rec(id).w < 2 && rec(id).l < 2)
+    const keys = [...new Set(alive.map((id) => `${rec(id).w}-${rec(id).l}`))].sort()
+    pools = keys.map((k) => ({ name: `${k} 池`, teams: alive.filter((id) => `${rec(id).w}-${rec(id).l}` === k) }))
+  }
+  if (!pools.some((p) => p.teams.length >= 2)) return
+  holdDraw(state, drawSwissRound(state, comp, round + 1, pools, played, day), auto)
+}
+
+/** Move every running competition forward: RR → playoffs → next bracket wave. */
+function progressCompetitions(state: GameState, notes: string[] = [], autoPick = false): void {
+  for (const comp of Object.values(state.comps)) {
+    if (comp.champion) {
+      settleCompetition(state, comp, notes)
+      continue
+    }
+    const own = state.fixtures.filter((f) => f.comp === comp.key)
+    const ko = own.filter((f) => f.label.startsWith('KO:'))
+    const when = state.day + WAVE_GAP
+    // a draw not yet held: its ties are not written, and if it is the
+    // manager's the clock is waiting on him
+    if (drawsOf(state, comp.key).some((d) => !d.consumed)) continue
+
+    // ---- Masters: the Swiss round, then the eight-team double elimination
+    if (comp.format === 'masters') {
+      const swiss = comp.swissSeeds ?? []
+      if (!comp.bracketStarted && drawRules(state)) {
+        if (own.some((f) => f.label.startsWith('SW:') && !f.played)) continue
+        if (!swissDone(state, comp, swiss)) { openSwissDraw(state, comp, when, autoPick); continue }
+        const { through, out } = swissOutcome(comp, swiss)
+        comp.finished = out
+        const pick = createPlayoffPick(state, comp, comp.byes ?? [], through, when)
+        state.news.push({
+          day: state.day, kind: 'league', important: [...(comp.byes ?? []), ...through].includes(state.myTeam),
+          text: `${comp.name} 瑞士轮结束，${through.map((t) => state.teams[t]?.name).join('、')} 晋级。四个赛区冠军按抽出的顺序选择八强对手：${pick.pickOrder?.map((t) => state.teams[t]?.tag).join(' → ')}。`,
+        })
+        holdDraw(state, pick, autoPick)
+        continue
+      }
+      if (!comp.bracketStarted) {
+        const more = swissNext(state, comp, swiss, when)
+        if (more.length) { state.fixtures.push(...more); continue }
+        if (!swissDone(state, comp, swiss)) continue
+        const { through, out } = swissOutcome(comp, swiss)
+        comp.finished = out
+        comp.seeds = mastersSeeds(comp.byes ?? [], through)
+        comp.byes = undefined
+        comp.bracketStarted = true
+        state.fixtures.push(...advanceTemplate(state, comp, DOUBLE_8, doubleFor(8).places, comp.seeds, when, 3))
+        state.news.push({
+          day: state.day, kind: 'league', important: comp.seeds.includes(state.myTeam),
+          text: `${comp.name} 瑞士轮结束，${through.map((t) => state.teams[t]?.name).join('、')} 晋级季后赛。`,
+        })
+        continue
+      }
+      if (ko.every((f) => f.played)) {
+        state.fixtures.push(...advanceTemplate(state, comp, drawRules(state) ? MASTERS_8 : DOUBLE_8, doubleFor(8).places, comp.seeds ?? [], when, 3))
+        if (comp.champion) concludeStage(state, comp, notes)
+      }
+      continue
+    }
+
+    // ---- Kickoff under vct-2026: the triple elimination, wave by wave; the
+    // day it ends, the region's Stage 1 groups are drawn from its placings
+    if (comp.format === 'triple') {
+      if (!comp.seeds?.length) continue   // the draw has not been held
+      if (ko.every((f) => f.played)) {
+        state.fixtures.push(...advanceTemplate(state, comp, TRIPLE_12, TRIPLE_12_PLACES, comp.seeds, when, 3))
+        if (comp.champion) {
+          concludeStage(state, comp, notes)
+          if (comp.region) openStage1Draw(state, comp.region, comp.finished, autoPick)
+        }
+      }
+      continue
+    }
+
+    // ---- Champions: four GSL groups, then the same double elimination
+    if (comp.format === 'champions') {
+      const all = (comp.groups ?? []).flat()
+      const groupsT = championsGroups()
+      if (!comp.bracketStarted) {
+        const more = advanceTemplate(state, comp, groupsT, null, all, when, 3, 0)
+        if (more.length) { state.fixtures.push(...more); continue }
+        if (!templateDone(state, comp, groupsT, 0)) continue
+        const firsts: string[] = []
+        const seconds: string[] = []
+        const thirds: string[] = []
+        const fourths: string[] = []
+        for (const g of GROUPS) {
+          const top = decided(state, comp, `${g}组 胜者赛`)
+          const dec = decided(state, comp, `${g}组 决胜赛`)
+          const low = decided(state, comp, `${g}组 败者赛`)
+          if (top) firsts.push(top.w)
+          if (dec) { seconds.push(dec.w); thirds.push(dec.l) }
+          if (low) fourths.push(low.l)
+        }
+        comp.finished = [...thirds, ...fourths]
+        if (drawRules(state)) {
+          // drawn: each group winner against a runner-up from another group,
+          // a group's two sides in different halves — held, then written
+          const groupOf = (t: string) => (comp.groups ?? []).findIndex((g) => g.includes(t))
+          holdDraw(state, drawChampionsPlayoffs(state, comp, firsts, seconds, groupOf, when), autoPick)
+          continue
+        }
+        comp.seeds = championsSeeds(firsts, seconds)
+        comp.bracketStarted = true
+        state.fixtures.push(...advanceTemplate(state, comp, drawRules(state) ? MASTERS_8 : DOUBLE_8, doubleFor(8).places, comp.seeds, when, 3, groupsT.length))
+        state.news.push({
+          day: state.day, kind: 'league', important: comp.seeds.includes(state.myTeam),
+          text: `${comp.name} 小组赛结束，八强：${comp.seeds.map((t) => state.teams[t]?.name).join('、')}。`,
+        })
+        continue
+      }
+      if (ko.every((f) => f.played)) {
+        state.fixtures.push(...advanceTemplate(state, comp, drawRules(state) ? MASTERS_8 : DOUBLE_8, doubleFor(8).places, comp.seeds ?? [], when, 3, groupsT.length))
+        if (comp.champion) concludeStage(state, comp, notes)
+      }
+      continue
+    }
+
+    // ---- regional: the table, then a bracket
+    const rr = own.filter((f) => !f.label.startsWith('KO:'))
+    if (!comp.bracketStarted && comp.grouped && comp.groups) {
+      if (!rr.length || rr.some((f) => !f.played)) continue
+      // eight from the two tables: winners sit out the opening round,
+      // seconds and thirds cross groups in it, fourths start in the lower
+      const [alpha, omega] = comp.groups.map((g) => groupTable(comp, g))
+      const seeds = [alpha[0], omega[0], alpha[1], omega[1], alpha[2], omega[2], alpha[3], omega[3]].filter(Boolean)
+      comp.format = 'double'
+      comp.seeds = seeds
+      comp.bracketStarted = true
+      comp.finished = [alpha[4], omega[4], alpha[5], omega[5]].filter(Boolean)
+      state.fixtures.push(...advanceTemplate(state, comp, STAGE_8, STAGE_8_PLACES, seeds, when, 3))
+      state.news.push({
+        day: state.day, kind: 'league',
+        text: `${comp.name} 小组赛结束，季后赛八强：${seeds.map((s) => state.teams[s]?.name).join('、')}。`,
+        important: seeds.includes(state.myTeam),
+      })
+      continue
+    }
+    if (!comp.bracketStarted) {
+      if (!rr.length) continue
+      if (rr.some((f) => !f.played)) continue
+      const cut = PLAYOFF_CUT[comp.stage] ?? 8
+      const table = sortStandings(comp)
+      // VCT plays its playoffs double elimination — eight from a stage, four
+      // from Kickoff. A short league that cannot fill four falls back to the
+      // single bracket, as Challengers always does.
+      const double = comp.tier === 1 && table.length >= 4
+      const size = double ? (Math.min(cut, table.length) >= 8 ? 8 : 4) : Math.min(cut, table.length)
+      const seeds = table.slice(0, size)
+      // teams that missed the playoffs are already ranked, worst last
+      comp.finished = table.slice(seeds.length)
+      if (double) {
+        comp.format = 'double'
+        comp.seeds = seeds
+        comp.bracketStarted = true
+        const { template, places } = doubleFor(seeds.length)
+        state.fixtures.push(...advanceTemplate(state, comp, template, places, seeds, when, 3))
+      } else {
+        state.fixtures.push(...startBracket(comp, seeds, comp.stage, state.day + 4, 3))
+      }
+      state.news.push({
+        day: state.day, kind: 'league',
+        text: `${comp.name} 常规赛结束，季后赛名单：${seeds.map((s) => state.teams[s]?.name).join('、')}。`,
+        important: seeds.includes(state.myTeam),
+      })
+      continue
+    }
+
+    if (ko.length && ko.every((f) => f.played)) {
+      const next = comp.format === 'double'
+        ? (() => {
+          const { template, places } = comp.grouped ? { template: STAGE_8, places: STAGE_8_PLACES } : doubleFor((comp.seeds ?? []).length)
+          return advanceTemplate(state, comp, template, places, comp.seeds ?? [], when, 3)
+        })()
+        : advanceBracket(state, comp, state.day + 3, 3)
+      state.fixtures.push(...next)
+      if (comp.champion) {
+        concludeStage(state, comp, notes)
+        if (comp.grouped && comp.stage === 'stage1') openStage2Draw(state, comp, autoPick)
+      }
+    }
+  }
+
+  // international events unlock as their feeder stages conclude
+  const kickoffDone = REGIONS.every((r) => state.comps[compKey('kickoff', r)]?.champion)
+  if (kickoffDone) createMasters(state, 'masters1', MASTERS_1, 'kickoff', Math.max(state.day + 3, INTERNATIONAL_OPEN.masters1))
+
+  const s1Done = REGIONS.every((r) => state.comps[compKey('stage1', r)]?.champion)
+  if (s1Done) createMasters(state, 'masters2', MASTERS_2, 'stage1', Math.max(state.day + 3, INTERNATIONAL_OPEN.masters2))
+
+  const s2Done = REGIONS.every((r) => state.comps[compKey('stage2', r)]?.champion)
+  if (s2Done) createChampions(state, CHAMPIONS, Math.max(state.day + 4, INTERNATIONAL_OPEN.champions))
+}
+
+/**
+ * A league does not start on the heels of a Masters.
+ *
+ * The league's rounds are laid down on fixed days when the season is set
+ * up; a Masters is generated round by round as it is played, its Swiss
+ * round when every Kickoff has a champion and each later round when the
+ * one before is done. Nothing tied the two together. A manager's schedule
+ * read 「4/1 Masters I 败者组决赛」 over 「4/1 VCT China · Stage 1 第1轮」:
+ * his season had been set up on the old calendar, Stage 1 from day 89,
+ * and the Masters bracket had since grown into the shape it has now,
+ * ending on 92. Even a new season had only eight days between the two.
+ *
+ * So, every morning: if a Masters has a match scheduled — played or not —
+ * the league that follows it may not open within BREAK_AFTER_INTERNATIONAL
+ * days of the latest one, and its unplayed rounds are spread again from
+ * that day to the end of the league's window. LEAGUE_DAYS gives twenty
+ * days on a season set up today, so this fires only for a season set up
+ * before the calendar changed, and it repairs that one on the next 推进.
+ */
+function keepBreaks(state: GameState): void {
+  for (const [intl, next] of [['masters1', 'stage1'], ['masters2', 'stage2']] as const) {
+    const days = state.fixtures.filter((f) => f.comp === intl).map((f) => f.day)
+    if (!days.length) continue
+    const floor = Math.max(...days) + BREAK_AFTER_INTERNATIONAL
+    for (const region of REGIONS) {
+      const rr = state.fixtures.filter((f) =>
+        f.comp === compKey(next, region) && !f.played && !f.label.startsWith('KO:'))
+      if (!rr.length || Math.min(...rr.map((f) => f.day)) >= floor) continue
+      respaceRounds(rr, floor, Math.max(floor, LEAGUE_DAYS[next][1]))
+    }
+  }
+}
+
+/** A competition has just found its champion: report it, then pay out. */
+function concludeStage(state: GameState, comp: Competition, notes: string[]): void {
+  if (comp.teams.includes(state.myTeam)) {
+    track('stage_done', {
+      stage: comp.stage, day: state.day,
+      won: comp.champion === state.myTeam,
+      place: comp.finished.indexOf(state.myTeam) + 1,
+    })
+  }
+  settleCompetition(state, comp, notes)
+}
+
+/** Stages the board actually judges you on. */
+const JUDGED: StageKey[] = ['kickoff', 'stage1', 'stage2']
+
+/**
+ * The competition the managed club is actually in during a judged stage.
+ *
+ * A Challengers side does not play `stage1:China` — it plays two splits of its
+ * own that straddle the tier-1 calendar. The board was setting it a target on
+ * the VCT stage anyway and settleObjective then looked up a competition the
+ * club is not in, found no placing, and returned. So a tier-2 objective was
+ * text that could never be met: confidence could only fall, match by match,
+ * with no route back up. Any Questions Gaming improved from rating 62 to 69
+ * across three seasons and sat at 5% board confidence the whole way.
+ */
+function judgedCompKey(state: GameState, stage: StageKey): string | null {
+  const me = state.teams[state.myTeam]
+  if (!me) return null
+  if (me.tier === 1) return `${stage}:${me.region}`
+  // the two Challengers splits conclude around Stage 1 and Stage 2
+  if (stage === 'stage1') return `challengers1:${me.region}`
+  if (stage === 'stage2') return `challengers2:${me.region}`
+  return null   // Kickoff has no Challengers equivalent
+}
+
+/** Where in its own league does the club sit by strength? */
+function expectedPlace(state: GameState): { place: number; size: number } {
+  const me = state.teams[state.myTeam]
+  const peers = Object.values(state.teams)
+    .filter((t) => t.region === me.region && t.tier === me.tier)
+    .sort((a, b) => b.rating - a.rating)
+  return { place: peers.findIndex((t) => t.id === me.id) + 1, size: peers.length }
+}
+
+/**
+ * Ask the board what it wants from this stage.
+ *
+ * The target is pinned to the squad you actually have — a bottom side is asked
+ * to survive, a favourite to win it — so overachieving is possible from
+ * anywhere and the goal never reads as arbitrary.
+ */
+function setObjective(state: GameState, notes: string[]): void {
+  if (!JUDGED.includes(state.stage) || !judgedCompKey(state, state.stage)) {
+    state.objective = undefined
+    return
+  }
+  const { place, size } = expectedPlace(state)
+  // What the board asks for has to be reachable with the squad it gave you.
+  //
+  // It used to demand a 40% improvement on your expected finish every single
+  // stage — which for a club expected second meant "win it", forever. Measured
+  // over ten careers that got the manager sacked six times in three seasons
+  // while averaging third of twelve, which is not a failure by any reading.
+  //
+  // A favourite is asked to stay a favourite; everyone else is asked for a
+  // real but survivable step up. Beating the brief is still what moves your
+  // reputation, so there is no less to play for.
+  const target = place <= 2
+    ? clamp(place, 1, 2)
+    : clamp(Math.ceil(place * 0.75), 2, Math.max(1, size - 2))
+  const text =
+    target === 1 ? '董事会要求：拿下本赛段冠军。'
+      : target <= Math.ceil(size / 4) ? `董事会要求：本赛段进入前 ${target} 名。`
+        : target <= Math.ceil(size / 2) ? `董事会期望：本赛段打进前 ${target} 名（季后赛区）。`
+          : `董事会目标：本赛段不低于第 ${target} 名。`
+  state.objective = { stage: state.stage, placeAtLeast: target, text }
+  notes.push(text)
+  state.news.push({ day: state.day, kind: 'club', important: true, text })
+}
+
+/** Judge the stage that just ended, and move board confidence accordingly. */
+function settleObjective(state: GameState, endedStage: StageKey, notes: string[]): void {
+  const obj = state.objective
+  if (!obj || obj.settled || obj.stage !== endedStage) return
+  const key = judgedCompKey(state, endedStage)
+  const comp = key ? state.comps[key] : undefined
+  if (!comp) return
+
+  const order = comp.finished.length ? comp.finished : sortStandings(comp)
+  const place = order.indexOf(state.myTeam) + 1
+  if (place <= 0) return
+
+  obj.settled = true
+  obj.met = place <= obj.placeAtLeast
+  // Symmetric around the brief. It used to pay +6 for meeting the target and
+  // charge -8 for missing it by a single place, so a club landing on its brief
+  // about half the time drifted downward: 0.5*6 + 0.5*-8 = -1 a stage, on top
+  // of the -0.1 a .500 record already bleeds match by match. Doing exactly what
+  // was asked should not be a slow route to the sack, and it was — a squad
+  // trained from 75 to 80 got fired for finishing 8th while a squad left alone
+  // sat comfortably at 75% confidence.
+  const swing = obj.met
+    ? Math.min(16, 6 + (obj.placeAtLeast - place) * 3)
+    : -Math.min(18, 2 + (place - obj.placeAtLeast) * 3)
+  state.boardConfidence = clamp(state.boardConfidence + swing, 0, 100)
+  state.missedStreak = obj.met ? 0 : (state.missedStreak ?? 0) + 1
+  // beating the brief moves your standing; missing it costs you a little
+  if (state.manager) {
+    const growth = state.manager.growth
+    const raw = obj.met ? (1 + (obj.placeAtLeast - place) * 0.5) * growth : -1.5
+    const delta = raw > 0 ? damped(state.manager.reputation, raw) : raw
+    state.manager.reputation = clamp(state.manager.reputation + delta, 5, 96)
+  }
+
+  const msg = obj.met
+    ? `✅ 赛段目标达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会满意。`
+    : `❌ 赛段目标未达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会不满。`
+  notes.push(msg)
+  state.news.push({ day: state.day, kind: 'club', important: true, text: msg })
+
+  judgeTenure(state, place, obj.met, notes)
+}
+
+/**
+ * How much of the board's patience a manager has to win back.
+ *
+ * Deliberately above the 20% that issues a warning, and deliberately below the
+ * 45% the withdrawal used to want: a warning that cannot be worked off is not
+ * a warning, it is a permanent penalty on every contract talk and job offer.
+ * One good stage from the confidence floor gets close; two clears it.
+ */
+export const NOTICE_LIFT = 35
+
+/**
+ * What it will take to get the warning withdrawn, in the board's own terms.
+ *
+ * One sentence, shared by the news line, the agenda and the dashboard, because
+ * a warning that does not say how it comes off is the thing that was reported.
+ * It adapts: a manager warned for two missed briefs may already be well above
+ * the confidence bar, and telling him to climb back to 35% from 43% reads as
+ * nonsense.
+ */
+export function noticeHint(state: GameState): string {
+  return state.boardConfidence >= NOTICE_LIFT
+    ? '达成一个赛段目标就会撤回'
+    : `达成赛段目标、并把信任度拉回 ${NOTICE_LIFT}% 以上（现在 ${Math.round(state.boardConfidence)}%）就会撤回`
+}
+
+/**
+ * Whether the board keeps us.
+ *
+ * A career needs a way to end badly or its successes mean nothing. The board
+ * warns first — it never fires without having said so — and only acts on a
+ * stage boundary, where a verdict belongs.
+ *
+ * Everything here is judged against the brief the board actually set, which is
+ * the whole point of having one. It was not, and the group chat found both
+ * halves of that:
+ *
+ *   The warning was withdrawn only on a top-four finish. A mid-table club is
+ *   asked for top eight, so a manager could meet the brief four stages
+ *   running, watch confidence climb from 40% to 88%, and still be carrying a
+ *   warning that costs 45 points of odds on every renewal and job offer. It
+ *   never came off, and nothing on screen said what would take it off.
+ *
+ *   And the sack could fire on a stage that PASSED, because the confidence
+ *   floor did not ask. The manager was then told he had 「又交了一个不合格
+ *   的赛段」 about a stage he had just been congratulated for. The warning
+ *   says one more failed stage; only a failed stage may act on it.
+ *
+ * Exported so scripts/check_tenure.ts can put a board through every one of
+ * these paths without having to rig a season's standings to reach them.
+ */
+export function judgeTenure(
+  state: GameState, place: number, met: boolean, notes: string[],
+): void {
+  const club = state.teams[state.myTeam]?.name ?? '俱乐部'
+
+  const doomed = !met && (
+    state.boardConfidence <= 6 ||
+    (state.onNotice && (state.missedStreak ?? 0) >= 2) ||
+    (state.onNotice && state.boardConfidence <= 18))
+
+  if (doomed && state.onNotice) {
+    // Say what actually ended it. There are three routes here and the message
+    // only ever described one of them, so a manager fired on a confidence
+    // floor was told "连续 1 个赛段没有达成目标" — a sentence that reads as a
+    // mistake because a streak of one is not a streak.
+    const streak = state.missedStreak ?? 0
+    const conf = Math.round(state.boardConfidence)
+    const why = streak >= 2
+      ? `连续 ${streak} 个赛段没有达成目标，信任度已经跌到 ${conf}%。`
+      : `被警告之后又交了一个不合格的赛段（本赛段第 ${place} 名），信任度只剩 ${conf}%。`
+    state.gameOver = `${club} 董事会决定解除你的职务。${why}`
+    track('sacked', {
+      day: state.day, year: state.year, stage: state.stage,
+      seasons: state.year - 2026,
+      confidence: Math.round(state.boardConfidence),
+      honours: state.honours.length,
+    })
+    notes.push(`🚪 ${state.gameOver}`)
+    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+    return
+  }
+
+  if (!state.onNotice && (state.boardConfidence <= 20 || (state.missedStreak ?? 0) >= 2)) {
+    state.onNotice = true
+    // say what takes it off, or 「已被警告」 reads as a permanent mark
+    const warn = `⚠ 董事会正式警告：再有一个赛段交不出成绩，就会换人。`
+      + `（当前信任度 ${Math.round(state.boardConfidence)}%——${noticeHint(state)}）`
+    notes.push(warn)
+    state.news.push({ day: state.day, kind: 'club', important: true, text: warn })
+    return
+  }
+
+  // a good stage buys back some patience — measured against the brief, not
+  // against a placing the brief never asked for
+  if (state.onNotice && met && state.boardConfidence >= NOTICE_LIFT) {
+    state.onNotice = false
+    const ok = `董事会撤回了此前的警告（第 ${place} 名，达成目标；信任度 ${Math.round(state.boardConfidence)}%），你坐稳了位置。`
+    notes.push(ok)
+    state.news.push({ day: state.day, kind: 'club', important: true, text: ok })
+  }
+}
+
+/**
+ * Reputation gets harder to earn the more of it you have.
+ *
+ * Without this a manager who wins one season is already the biggest name in the
+ * sport, and every remaining season has nothing left to climb toward.
+ *
+ * Exported (with TITLE_REP_WORTH) so check_reachable.ts can extrapolate a
+ * winning career's reputation through the engine's own curve instead of
+ * restating these numbers — restated constants are exactly how the
+ * 'Champions' spelling bug survived every test it had.
+ */
+export function damped(current: number, gain: number): number {
+  return gain * clamp((96 - current) / 42, 0.12, 1)
+}
+
+/** What lifting a trophy is worth to the manager's own name. */
+export const TITLE_REP_WORTH = { regional: 2.5, international: 6 } as const
+
+/**
+ * Clubs coming after the manager.
+ *
+ * This is the reward for a career going well, and the only route to the jobs
+ * that were locked at creation: reputation earned by winning opens doors that
+ * choosing never could.
+ */
+function offerJobs(state: GameState, notes: string[]): void {
+  const m = state.manager
+  if (!m || state.gameOver) return
+  state.jobOffers = (state.jobOffers ?? []).filter((o) => o.expiresOn > state.day)
+
+  // a club will not poach a manager their own board just warned
+  if (state.onNotice) return
+  const rng = new Rng(hashStr(`jobs:${state.seed}:${state.year}:${state.day}`))
+  const here = state.teams[state.myTeam]
+  if (!here) return
+
+  const candidates = Object.values(state.teams).sort((a, b) => b.reputation - a.reputation)
+  for (const t of candidates) {
+    if (state.jobOffers.length >= 3) break     // an inbox, not a spreadsheet
+    if (t.id === state.myTeam) continue
+    if (t.reputation <= here.reputation) continue          // no sideways moves
+    if (state.jobOffers.some((o) => o.teamId === t.id)) continue
+    // they want someone they can justify hiring
+    const reach = m.reputation - t.reputation
+    if (reach < -6) continue
+    const chance = clamp(0.04 + reach * 0.01 + state.honours.length * 0.015, 0, 0.3)
+    if (!rng.chance(chance)) continue
+
+    state.jobOffers.push({
+      id: `J${t.id}_${state.day}`,
+      teamId: t.id,
+      day: state.day,
+      expiresOn: state.day + 30,
+      pitch: t.tier === 1
+        ? `${t.name} 希望你接手一线队，预算 ${Math.round(t.budget / 10000) / 100} 千万级别。`
+        : `${t.name} 想请你来重建队伍。`,
+    })
+    notes.push(`📩 ${t.name} 向你发出了执教邀请。`)
+    state.news.push({
+      day: state.day, kind: 'club', important: true,
+      text: `📩 ${t.name} 向你发出执教邀请（声望 ${t.reputation}）。`,
+    })
+  }
+}
+
+/** Take a job elsewhere. The career continues; the club does not. */
+export function acceptJob(state: GameState, offerId: string): string {
+  const offer = state.jobOffers?.find((o) => o.id === offerId)
+  const to = offer ? state.teams[offer.teamId] : null
+  if (!offer || !to) return '这份邀请已经失效。'
+  return moveToClub(state, to.id)
+}
+
+/**
+ * The five who actually played for this club in this fixture.
+ *
+ * `starters` is the intention; `result.lineups` is what happened. They differ
+ * whenever anyone was injured, and the post-match rewards were reading the
+ * intention — which is how a man who never left the physio room banked the
+ * win bonus.
+ */
+function played(
+  state: GameState, f: Fixture, teamId: string, result: MatchResult,
+): string[] {
+  const lineup = teamId === f.teamA ? result.lineups?.a : result.lineups?.b
+  return lineup ?? state.teams[teamId]?.starters ?? []
+}
+
+/** Take over at another club, however the job came about. */
+export function moveToClub(state: GameState, teamId: string): string {
+  const to = state.teams[teamId]
+  if (!to) return '找不到这支球队。'
+
+  const from = state.teams[state.myTeam]
+  state.tenures ??= []
+  const current = state.tenures.find((t) => t.teamId === state.myTeam && !t.toYear)
+  if (current) current.toYear = state.year
+  else state.tenures.push({ teamId: state.myTeam, fromYear: 2026, toYear: state.year })
+  state.tenures.push({ teamId: to.id, fromYear: state.year })
+
+  state.myTeam = to.id
+  state.startFacilities = to.facilities
+  state.startTier = to.tier
+  // The squad you inherited is the squad you inherited HERE. Left pointing at
+  // the old club's roster, every badge and ending built on it went wrong the
+  // moment you changed jobs: 「大换血」 and 「推倒重来」 fired for free because
+  // nobody on the new team was on that list, and 「一起走到最后」 became
+  // impossible for the same reason.
+  state.startingSquad = [...to.roster]
+  // a new squad, and their development starts being yours from today — the
+  // stars you walked in on are not something you built
+  for (const id of to.roster) {
+    const p = state.players[id]
+    if (p) p.arrivedOverall = p.overall
+  }
+  state.jobOffers = []
+  state.jobApplications = []
+  state.managerContract = undefined
+  state.boardConfidence = 62
+  state.onNotice = false
+  state.missedStreak = 0
+  state.objective = undefined
+  state.finances = { balance: to.budget, log: [] }
+  state.training = {}
+  state.drill = { kind: 'none' }
+  // ...and everything else that belonged to the old job. A drill lock left
+  // running greyed out the new club's training panel for up to a week; a pair
+  // drill kept coaching two players who now work somewhere else; and a bid
+  // left pending settled later at the OLD club, spending the new club's money
+  // to sign a player for the one you just left.
+  state.drillLock = undefined
+  state.duo = undefined
+  state.physioOn = {}
+  state.commercialDays = {}
+  for (const o of state.offers) {
+    if (o.status === 'pending' && (o.toTeam === from?.id || o.fromTeam === from?.id)) {
+      o.status = 'rejected'
+    }
+  }
+  state.enquiries = []
+  for (const pid of to.roster) state.training[pid] = 'rest'
+
+  state.managerContract = defaultContract(state)
+  state.news.push({
+    day: state.day, kind: 'club', important: true,
+    text: `你离开 ${from?.name} 出任 ${to.name} 的经理。`,
+  })
+  return `你已就任 ${to.name} 的经理。`
+}
+
+export interface DayReport {
+  day: number
+  stage: StageKey
+  stageChanged: boolean
+  playedMine: Fixture[]
+  notes: string[]
+  seasonEnded: boolean
+  /** set when the manager's own match was left for them to play */
+  pendingMine?: Fixture
+  /** a draw is waiting on the manager — to be held, skipped, or picked (vct-2026) */
+  pendingDraw?: string
+}
+
+export interface AdvanceOpts {
+  /** hand the manager's own fixture back unplayed so they can watch it */
+  deferMine?: boolean
+  /**
+   * Play scrims automatically instead of handing them over.
+   *
+   * A scrim booked for tomorrow used to halt a week-long turn on its first day,
+   * so the rest of the week — and everything scheduled inside it — never ran
+   * until the manager clicked through. Practice matches resolve themselves when
+   * a turn covers several days; the scoreboard is still there to open.
+   */
+  autoScrims?: boolean
+  /** a Masters pick that falls to the manager is made by the coaches (headless runs) */
+  autoResolveDrawDecisions?: boolean
+}
+
+/** Each fixture gets its own stream, so a result never depends on play order. */
+export const fixtureRng = (state: GameState, f: Fixture) =>
+  new Rng(hashStr(`match:${state.seed}:${state.year}:${f.id}`))
+
+export const isScrim = (f: Fixture) => f.comp === 'scrim'
+
+/** Apply a result the UI produced, then move the competition forward. */
+/**
+ * Record a played fixture.
+ *
+ * `notes` is the turn's digest when time is being advanced. Playing a match
+ * live goes through here too, and finishing one can conclude a competition —
+ * prize money, championship points and the board's reaction — so the caller is
+ * handed those lines rather than having them vanish.
+ */
+/**
+ * How far a practice match alone can take a map, and how soon it starts to
+ * teach less. Comfortable, not mastered.
+ */
+const SCRIM_MAP_CEIL = 80
+const SCRIM_MAP_TAPER = 25
+
+export function commitFixture(
+  state: GameState, f: Fixture, result: MatchResult, notes: string[] = [],
+): void {
+  const isMine = f.teamA === state.myTeam || f.teamB === state.myTeam
+  if (!isMine) stripRoundLogs(result)
+  f.result = result
+  f.played = true
+  const rng = fixtureRng(state, f)
+  // how the dressing room took it, for our club only
+  if (isMine) {
+    // This block used to declare its own `notes`, shadowing the digest passed
+    // in — so every dressing-room consequence of a defeat went to state.news
+    // and nowhere else. Measured from the digest, the game looked as though it
+    // had no dressing-room incidents at all; it had them, and never said so.
+    const room: string[] = []
+    const isA = f.teamA === state.myTeam
+    const won = (result.mapsWonA > result.mapsWonB) === isA
+    trustAfterMatch(state, won, (isA ? result.lineups?.a : result.lineups?.b) ?? [])
+    applyMatchBonds(state, result, state.myTeam, isA, rng, room)
+    for (const t of room) {
+      state.news.push({ day: state.day, kind: 'club', important: true, text: t })
+      notes.push(t)
+    }
+
+    // A club too short to field five sends out someone who is not fit. The
+    // engine has always done this rather than play 4v5; it never mentioned it.
+    const played = (isA ? result.lineups?.a : result.lineups?.b) ?? []
+    const hurt = played
+      .map((id) => state.players[id])
+      .filter((p) => p && p.injuredUntil > state.day)
+    for (const p of hurt) {
+      notes.push(`⚕️ 人手不够，带伤的 ${p.ign} 还是上了场（${p.injuryNote ?? '伤病'}）。`)
+    }
+    // Every map played on a sheet is a rehearsal of that sheet. A scrim
+    // teaches a little less than a fixture; both teach less than a week of
+    // 跑图 on the map. See engine/comp.ts.
+    const ours = new Set(played)
+    for (const m of result.maps) {
+      if (!m.agents) continue
+      const sheet = Object.fromEntries(Object.entries(m.agents).filter(([id]) => ours.has(id)))
+      if (Object.keys(sheet).length === 5) learnComp(state, m.map, sheet, isScrim(f) ? FAM_SCRIM : FAM_MATCH)
+    }
+  }
+  // scrims build form and cost condition but never enter the record books
+  if (isScrim(f)) {
+    applyMatchFatigue(state, f.teamA, result.maps.length, rng, notes, result.lineups?.a)
+    applyMatchFatigue(state, f.teamB, result.maps.length, rng, notes, result.lineups?.b)
+    const aWon = result.mapsWonA > result.mapsWonB
+    for (const [teamId, won] of [[f.teamA, aWon], [f.teamB, !aWon]] as [string, boolean][]) {
+      // whoever actually played, not whoever was nominally a starter: an
+      // injured man collected the win's morale from the treatment table while
+      // the substitute who played every map got nothing
+      for (const pid of played(state, f, teamId, result)) {
+        const p = state.players[pid]
+        if (!p) continue
+        // losing used to average +0.35 form, so a defeat made a player sharper
+        p.form = clamp(p.form + (won ? rng.range(0.4, 2.2) : -rng.range(0.4, 2.2)), 30, 99)
+        p.morale = clamp(p.morale + (won ? rng.range(0, 2) : -rng.range(0, 1.5)), 10, 100)
+      }
+    }
+    // Practising a map is the reason a scrim is booked on one, and until now
+    // it did nothing for that map at all — the panel said so because it was
+    // true. Both sides learn, win or lose, and less than a week of the 跑图
+    // drill: that costs a whole team-training slot and gives about +2, this
+    // costs a day and a squad's condition.
+    const scrimMap = f.scrim?.map
+    if (scrimMap) {
+      for (const teamId of [f.teamA, f.teamB]) {
+        const t = state.teams[teamId]
+        if (!t) continue
+        const before = t.mapPrefs[scrimMap] ?? 50
+        // Diminishing, and that is the whole balance of it. A flat gain let a
+        // manager book the same map every free day and reach the 95 ceiling
+        // inside one season — measured at 293 scrims and +50 — which would
+        // have made the 跑图 drill pointless. Practice matches take a map to
+        // comfortable; going past that is what the drill and real fixtures
+        // are for.
+        const room = clamp((SCRIM_MAP_CEIL - before) / SCRIM_MAP_TAPER, 0, 1)
+        t.mapPrefs[scrimMap] = clamp(before + rng.range(0.6, 1.0) * room, 0, 95)
+        if (teamId === state.myTeam && Math.round(t.mapPrefs[scrimMap]) > Math.round(before)) {
+          notes.push(`🗺 ${mapCn(scrimMap)} 熟练度提升到 ${Math.round(t.mapPrefs[scrimMap])}。`)
+        }
+      }
+    }
+    if (isMine) state.lastResults.push(f.id)
+    state.news.push({
+      day: state.day, kind: 'club',
+      text: `训练赛｜${state.teams[f.teamA]?.tag} ${result.mapsWonA}-${result.mapsWonB} ${state.teams[f.teamB]?.tag}`,
+    })
+    // The pre-match sheet is now shown for scrims too, so a scrim can leave
+    // one behind — and a leftover sheet outranks the plan on the 战术 screen
+    // for the next real match on that map. It belongs to the game it was
+    // made for, scrim or not.
+    state.agentPicks = undefined
+    return
+  }
+  applyMatchStats(state, result)
+  applyMatchFatigue(state, f.teamA, result.maps.length, rng, notes, result.lineups?.a)
+  applyMatchFatigue(state, f.teamB, result.maps.length, rng, notes, result.lineups?.b)
+
+  // A veto and an agent sheet belong to the match they were made for; leaving
+  // them behind would silently apply last week's plan to next week's opponent.
+  state.vetoPlan = undefined
+  state.agentPicks = undefined
+
+  const comp = state.comps[f.comp]
+  if (comp && !f.label.startsWith('KO:')) applyResultToStandings(comp, f)
+
+  const aWon = result.mapsWonA > result.mapsWonB
+  for (const [teamId, won] of [[f.teamA, aWon], [f.teamB, !aWon]] as [string, boolean][]) {
+    for (const pid of played(state, f, teamId, result)) {
+      const p = state.players[pid]
+      if (p) p.morale = clamp(p.morale + (won ? rng.range(1, 5) : -rng.range(1, 5)), 10, 100)
+    }
+  }
+
+  if (isMine) {
+    state.lastResults.push(f.id)
+    const mine = f.teamA === state.myTeam
+    const myWin = mine ? aWon : !aWon
+    state.boardConfidence = clamp(state.boardConfidence + (myWin ? 1.2 : -1.4), 0, 100)
+  }
+
+  state.news.push({
+    day: state.day,
+    kind: 'match',
+    // a scoreline is the densest thing in the feed; the tags are what people
+    // read anyway, and the competition name already says where it happened
+    text: `${comp?.name ?? f.comp}｜${state.teams[f.teamA]?.tag} ${result.mapsWonA}-${result.mapsWonB} ${state.teams[f.teamB]?.tag}`,
+    important: isMine,
+  })
+  progressCompetitions(state, notes)
+}
+
+export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport {
+  // A career that has ended does not keep going. The sack screen has no close
+  // button so a person cannot click past it, but nothing in the engine said so:
+  // driven any other way the clock ran on for another season and a half,
+  // collecting honours and a promotion for a manager who had been dismissed —
+  // and autosaving that state over the record of the career.
+  if (state.gameOver) {
+    return {
+      day: state.day, stage: state.stage, stageChanged: false,
+      playedMine: [], notes: [], seasonEnded: false,
+    }
+  }
+  // The five-year settlement is a question, and the clock waits for the
+  // answer. Without this, one more 推进 while the modal is up re-enters
+  // endSeason with the ask already marked done, and the off-season runs out
+  // from under the verdict being read.
+  if (state.midReview) {
+    return {
+      day: state.day, stage: state.stage, stageChanged: false,
+      playedMine: [], notes: [], seasonEnded: false,
+    }
+  }
+  // A draw that is the manager's to hold — reveal or skip, or the pick to
+  // make: the clock waits for it, as it does for the five-year verdict —
+  // unless a headless run has asked for every draw to be finished for him.
+  if (state.pendingDrawId) {
+    if (opts.autoResolveDrawDecisions) {
+      let guard = 0
+      while (state.pendingDrawId && guard++ < 20) {
+        const ev = (state.draws ?? []).find((d) => d.id === state.pendingDrawId)
+        if (!ev) { state.pendingDrawId = nextPendingDraw(state); continue }
+        finishDraw(state, ev, true)
+      }
+    }
+    if (state.pendingDrawId) {
+      return {
+        day: state.day, stage: state.stage, stageChanged: false,
+        playedMine: [], notes: [], seasonEnded: false, pendingDraw: state.pendingDrawId,
+      }
+    }
+  }
+  const rng = new Rng(hashStr(`day:${state.seed}:${state.year}:${state.day}`))
+  const prevStage = state.stage
+  state.day++
+  keepBreaks(state)
+  // the main caller has to be someone still here; a deputy steps up if not
+  ensureCaller(state, state.myTeam)
+
+  const notes: string[] = []
+  const playedMine: Fixture[] = []
+  state.lastResults = []
+
+  // Going down was announced; coming back never was. A player simply became
+  // selectable again at some point and you found out by opening the squad
+  // screen — which is precisely the day you would want to change your five.
+  for (const pid of state.teams[state.myTeam]?.roster ?? []) {
+    const p = state.players[pid]
+    if (p && p.injuredUntil === state.day) {
+      notes.push(`⚕️ ${p.ign} 已康复，可以重新出场。`)
+      p.injuryNote = undefined
+    }
+  }
+
+  dailyLife(state, notes)
+
+  state.stage = stageAt(state.day)
+  const stageChanged = state.stage !== prevStage
+  if (stageChanged) {
+    notes.push(`—— 进入 ${stageName(state.stage)} ——`)
+    // The pool rotates when a new window opens — say which maps moved, or a
+    // manager walks into a veto to find a map he trained all stage is gone.
+    const prevPool = activePool(state.seed + state.year, poolPhaseOf(prevStage))
+    const nowPool = poolFor(state)
+    const gone = prevPool.filter((m) => !nowPool.includes(m))
+    const fresh = nowPool.filter((m) => !prevPool.includes(m))
+    if (gone.length || fresh.length) {
+      const line = `🗺️ 图池轮换：${fresh.map(mapCn).join('、')} 加入，${gone.map(mapCn).join('、')} 移出。`
+      notes.push(line)
+      state.news.push({ day: state.day, kind: 'league', text: line })
+    }
+    settleObjective(state, prevStage, notes)
+    setObjective(state, notes)
+    offerJobs(state, notes)
+    // some years the league floats a themed capsule as Stage 1 opens —
+    // deterministic per save+year, so a reload does not conjure a new one
+    if (state.stage === 'stage1'
+      && ((hashStr(`bundle:${state.seed}:${state.year}`) >>> 4) % 100) < 60) {
+      offerBundle(state, notes)
+    }
+  }
+  tickLeagueOffer(state, notes)
+
+  // A club that lost a man yesterday must not walk out four-handed today.
+  //
+  // This backstop used to run in the weekly block, which is below the fixtures
+  // — so a side stripped by a transfer, a retirement or a release played every
+  // match until the next Sunday with whoever was left. Reproduced: take two
+  // players off a club on day 1 and it fields THREE for six days, and the
+  // group chat found it before this did — 「为什么四个人也能开比赛啊」, with a
+  // scoreboard showing three.
+  //
+  // Daily, and before a ball is kicked. It costs a length check per club on
+  // the days nothing is wrong, which is almost all of them.
+  ensureMinimumRosters(state, rng)
+
+  // ---- play today's matches
+  let pendingMine: Fixture | undefined
+  // Anything still unplayed from an earlier day is played now, oldest first.
+  // The filter used to be an exact `=== state.day`: a match handed to the
+  // manager to watch was written to the autosave as unplayed, and if the page
+  // vanished before the modal resolved (a phone reclaiming the tab), the day
+  // moved on and that fixture was never eligible again — the whole
+  // competition sat waiting for a result that could not arrive.
+  const today = state.fixtures
+    .filter((f) => f.day <= state.day && !f.played)
+    .sort((a, b) => a.day - b.day)
+  for (const f of today) {
+    const a = state.teams[f.teamA]
+    const b = state.teams[f.teamB]
+    if (!a || !b) {
+      f.played = true
+      continue
+    }
+    const isMine = f.teamA === state.myTeam || f.teamB === state.myTeam
+    if (isMine && opts.deferMine && !pendingMine && !(opts.autoScrims && isScrim(f))) {
+      // leave it for the manager to watch or skip
+      pendingMine = f
+      continue
+    }
+    const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim)
+    commitFixture(state, f, result, notes)
+    if (isMine) playedMine.push(f)
+  }
+
+  if (!pendingMine) progressCompetitions(state, notes, !!opts.autoResolveDrawDecisions)
+
+  // ---- commercial work booked for today, then any new approach
+  runGigsToday(state, notes)
+  offerGigs(state, rng, notes)
+  notes.push(...resolveSponsorTalks(state, rng))
+  drillTick(state, rng, notes)
+  pruneMatchDetail(state)
+
+  // ---- coaches and clubs answering today
+  notes.push(...resolveApproaches(state, rng))
+  notes.push(...resolveStaffOffers(state, rng))
+  notes.push(...resolveApplications(state, rng))
+
+  // ---- offers whose waiting period is up
+  notes.push(...resolveEnquiries(state, rng))
+  notes.push(...resolveDueOffers(state, rng))
+
+  // ---- weekly upkeep
+  if (state.day % 7 === 0) {
+    streamWeek(state, rng, notes)
+    notes.push(...weeklyTick(state, rng))
+    weeklyLife(state, rng, notes)
+    weeklyFinance(state)
+    aiTransferTick(state, rng, notes)
+    refreshListings(state, rng, notes)   // runs all year so stale listings expire
+  }
+
+  if (state.news.length > 400) state.news.splice(0, state.news.length - 400)
+
+  let seasonEnded = false
+  if (state.day >= SEASON_DAYS) {
+    notes.push(`—— ${state.year} 赛季结束 ——`)
+    endSeason(state, rng, notes)
+    seasonEnded = true
+  }
+
+  return { day: state.day, stage: state.stage, stageChanged, playedMine, notes, seasonEnded, pendingMine, pendingDraw: state.pendingDrawId }
+}
+
+/**
+ * Promotion, contracts, ageing, then a fresh calendar.
+ *
+ * `notes` is the turn's digest. The off-season is the single biggest thing
+ * that happens to a squad without the manager doing anything — players age,
+ * develop, decline, run down their deals and retire — and all of it used to
+ * happen in silence: seasonRollover built its 📈/📉 lines and the return value
+ * was dropped on the floor. Everything here that lands on the managed club
+ * goes into the digest, so the season turns over in front of you.
+ */
+/**
+ * The farewell itself: keep what is worth remembering, then let him go.
+ *
+ * The player object is deleted — that part has not changed — but a RetireNote
+ * survives him, holding what happened IN THIS SAVE: the clubs he served here
+ * (clubHist, resolved to names now, while the teams can still be asked) and
+ * the titles he lifted here. Nothing from the real-world record goes into the
+ * note — the card is a screenshot waiting to happen, and it must read as the
+ * game's own story. `star` marks the ones whose leaving is news to everybody.
+ *
+ * Returns the one-line form for the league-wide news digest; his own club and
+ * the stars still get their own line.
+ */
+function retirePlayer(state: GameState, p: Player, notes: string[]): string {
+  const t = p.teamId ? state.teams[p.teamId] : null
+  const mine = p.teamId === state.myTeam
+  const star = p.overall >= 80 || (p.career?.mvps ?? 0) >= 8
+  if (t) {
+    t.roster = t.roster.filter((id) => id !== p.id)
+    t.starters = t.starters.filter((id) => id !== p.id)
+  }
+  state.retireFeed ??= []
+  state.retireFeed.push({
+    id: p.id, ign: p.ign, age: p.age, year: state.year,
+    clubId: p.teamId, clubName: t?.name, overall: p.overall,
+    career: { ...p.career }, star,
+    stints: (p.clubHist ?? []).map((s) => ({
+      team: state.teams[s.team]?.name ?? s.team, from: s.from, to: s.to,
+    })),
+    titles: [...(p.titles ?? [])],
+  })
+  if (state.retireFeed.length > 24) state.retireFeed.splice(0, state.retireFeed.length - 24)
+  if (mine || star) {
+    state.news.push({
+      day: state.day, kind: 'player', important: mine,
+      text: `👋 ${p.ign} 正式挂上鼠标，结束了他的职业生涯——${p.age} 岁${t ? `，最后一站 ${t.name}` : ''}。`,
+    })
+  }
+  if (mine) notes.push(`👋 ${p.ign} 正式退役，${p.age} 岁。他的告别卡已经备好。`)
+  delete state.players[p.id]
+  return mine || star ? '' : `${p.ign}（${p.age} 岁${t ? `，${t.tag}` : ''}）`
+}
+
+/** What the manager puts on the table when a player announces retirement. */
+export type StayApproach = 'heart' | 'raise' | 'bench' | 'transfer' | 'accept'
+
+/**
+ * One conversation, eye to eye, about how his story ends.
+ *
+ * Five ways to have it: appeal to the heart (free, long odds), put money on
+ * the table (a 30% raise, the best odds), offer him the bench and the rookies
+ * (middle ground), agree to find him a last dance somewhere else (certain —
+ * he plays on, just not here), or accept it and give him the send-off he has
+ * earned. Whatever is chosen, it is chosen once: asking twice is not
+ * persuasion, it is pressure.
+ */
+export function persuadeStay(
+  state: GameState, playerId: string, approach: StayApproach = 'heart',
+): string {
+  const p = state.players[playerId]
+  if (!p) return '找不到这名选手。'
+  if (p.teamId !== state.myTeam) return '他不是你队里的人，这话轮不到你说。'
+  if (!p.retiring) return `${p.ign} 没打算退役。`
+  if (p.persuaded) return '你已经和他谈过了——他的决定应该被尊重。'
+  p.persuaded = true
+
+  const locker = state.manager?.skills.locker ?? 50
+  const nego = state.manager?.skills.negotiation ?? 50
+  const roll = ((hashStr(`stay:${state.seed}:${state.year}:${p.id}:${approach}`) >>> 6) % 1000) / 1000
+  const stays = (line: string) => {
+    p.retiring = false
+    state.news.push({ day: state.day, kind: 'player', important: true, text: `🤝 ${line}` })
+    return line
+  }
+
+  switch (approach) {
+    case 'raise': {
+      const odds = clamp(0.5 + (nego - 50) * 0.006 + (p.morale - 60) * 0.003, 0.2, 0.9)
+      if (roll < odds) {
+        p.salary = Math.round(p.salary * 1.3)
+        if (p.contract) p.contract.salary = p.salary
+        p.contractYears = Math.max(1, p.contractYears)
+        p.morale = clamp(p.morale + 8, 0, 100)
+        return stays(`${p.ign} 收下了那份加薪合同——再战一年，年薪 $${p.salary.toLocaleString()}。`)
+      }
+      return `${p.ign} 把合同推了回来："不是钱的事。" 他心意已决，赛季打完就走。`
+    }
+    case 'bench': {
+      const odds = clamp(0.42 + (locker - 50) * 0.007, 0.15, 0.8)
+      if (roll < odds) {
+        const t = state.teams[state.myTeam]
+        if (t) {
+          t.starters = t.starters.filter((id) => id !== p.id)
+          if (t.starters.length < 5) t.starters = autoStarters(state, state.myTeam)
+        }
+        p.morale = clamp(p.morale + 3, 0, 100)
+        return stays(`${p.ign} 同意退居替补，把经验留给年轻人——他还在更衣室里，这就够了。`)
+      }
+      return `${p.ign} 苦笑了一下："让我坐着看别人打？那还不如回家。" 他决定退役。`
+    }
+    case 'transfer': {
+      p.listed = true
+      p.listedOn = state.day
+      p.morale = clamp(p.morale + 4, 0, 100)
+      return stays(`${p.ign} 没想到你会成全他——他想换个环境打最后一舞，已挂牌，转会费能收回一点是一点。`)
+    }
+    case 'accept': {
+      p.morale = clamp(p.morale + 6, 0, 100)
+      state.news.push({
+        day: state.day, kind: 'player', important: true,
+        text: `🫡 俱乐部官宣：将在赛季末为 ${p.ign} 举办退役仪式。`,
+      })
+      return `你握了握他的手。俱乐部会在赛季末为 ${p.ign} 办一场配得上他生涯的退役仪式。`
+    }
+    default: {
+      const odds = clamp(0.3 + (locker - 50) * 0.008 + (p.morale - 60) * 0.004, 0.1, 0.8)
+      if (roll < odds) {
+        p.morale = clamp(p.morale + 6, 0, 100)
+        return stays(`${p.ign} 被你说动了——退役计划搁置，再战一年。`)
+      }
+      return `${p.ign} 听完摇了摇头——他心意已决，这个赛季打完就走。让他体面地离开吧。`
+    }
+  }
+}
+
+/**
+ * Take the five-year verdict and go: the career ends here, graded, with the
+ * squad that earned it still intact.
+ *
+ * The season was worked, so the year's salary is banked exactly as the finale
+ * path banks it — endSeason returned before its own tally line to get here.
+ */
+export function settleAtFive(state: GameState): void {
+  if (!state.midReview) return
+  state.midReview = false
+  state.midReviewDone = true
+  state.tally ??= { signed: 0, hired: 0, earned: 0, commercial: 0 }
+  state.tally.earned += state.managerContract?.salary ?? 0
+  const earned = endingsFor(state)
+  state.finished = true
+  state.gameOver = earned[0]
+    ? `${tenureCn(state.year)}年之约到期，你选择功成身退——${earned[0].title}`
+    : `${tenureCn(state.year)}年之约到期，你选择功成身退。`
+  state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+}
+
+/** Decline the settlement and play on: 2036 stays the hard end of the story. */
+export function continuePastFive(state: GameState): void {
+  if (!state.midReview) return
+  state.midReview = false
+  state.midReviewDone = true
+  state.news.push({
+    day: state.day, kind: 'club', important: true,
+    text: '你谢绝了功成身退的机会——这份工作干到 2036 年为止。',
+  })
+}
+
+function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
+  // The five-year settlement. BEFORE anything else touches the state, for the
+  // same reason the finale check below runs first: the verdict must judge the
+  // squad that played the season, not the one the off-season is about to
+  // dissolve. Nothing is decided here — the state freezes (advanceDay holds
+  // while midReview is up) until settleAtFive or continuePastFive answers,
+  // and on 继续 this function runs again with the ask marked done.
+  //
+  // `>=`, not `===`. The settlement shipped into a game people had already
+  // been playing for weeks, and a save that was in 2031 the day it landed
+  // would have matched 2030 exactly never — the one question the career is
+  // built around, silently unreachable for precisely the players who had
+  // played longest. Asked late is right; not asked at all is not.
+  if (state.year >= MID_YEAR && state.year < FINAL_YEAR && !state.midReviewDone) {
+    state.midReview = true
+    notes.push(`⏳ ${tenureCn(state.year)}年之期已到——是就此收官拿一个结局，还是继续带到 2036？`)
+    return
+  }
+
+  // The manager's own pay, banked. It had no destination at all before this —
+  // a number on the contract screen that nothing ever read — and it is the
+  // one figure in the game that belongs to the person rather than the club.
+  // Counted before the finale check, because the last season was worked.
+  state.tally ??= { signed: 0, hired: 0, earned: 0, commercial: 0 }
+  state.tally.earned += state.managerContract?.salary ?? 0
+
+  // Ten seasons is the whole story: 2036 is the last campaign played, and when
+  // it is settled the career ends on its own terms rather than running on until
+  // somebody is sacked.
+  //
+  // This has to come FIRST, before a single line of the off-season runs. The
+  // check used to sit at the bottom, and by the time it was reached every
+  // expiring contract had already been let go, the retirements had already
+  // happened and ensureMinimumRosters had reshuffled the league — so the
+  // endings were judging a squad that had just been dissolved. 「一起走到最后」
+  // was decided after the men in question had walked out the door on the same
+  // afternoon, and 「本土主义」 came free to anyone left with three players.
+  // There is no 2037 to prepare for, so none of that should happen at all: the
+  // record ends with the last season, and the last season's squad is the one
+  // that gets judged.
+  if (state.year >= FINAL_YEAR) {
+    const earned = endingsFor(state)
+    state.finished = true
+    state.gameOver = earned[0]
+      ? `十年任期结束——${earned[0].title}`
+      : '十年任期结束。'
+    notes.push(`🏁 ${state.gameOver}`)
+    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+    return
+  }
+
+  // ---- Ascension: each region's Challengers champion swaps with the weakest tier-1 side
+  for (const region of REGIONS) {
+    const chal = state.comps[compKey('challengers2', region)]
+    const promoted = chal?.champion ? state.teams[chal.champion] : null
+    if (!promoted) continue
+    const relegated = Object.values(state.teams)
+      .filter((t) => t.region === region && t.tier === 1)
+      .sort((a, b) => a.champPoints - b.champPoints || a.rating - b.rating)[0]
+    if (!relegated || relegated.id === promoted.id) continue
+
+    promoted.tier = 1
+    promoted.league = `VCT ${region}`
+    relegated.tier = 2
+    relegated.league = `Challengers ${region}`
+
+    // Sponsorship follows the league you play in. Without this a promoted club
+    // kept its Challengers deals and picked up VCT running costs the same
+    // week — M80 went up and was insolvent two seasons later no matter what
+    // the manager did. Going up is a windfall and coming down is a cliff, and
+    // both are things a manager should be told rather than discover.
+    const reprice = (t: Team, factor: number) => {
+      for (const sp of t.sponsors) {
+        sp.perSeason = Math.round(sp.perSeason * factor)
+        sp.bonus = Math.round(sp.bonus * factor)
+      }
+    }
+    // Priced off what a sponsorship in each league is actually worth rather
+    // than a flat guess. A flat 2.5x left promoted clubs structurally
+    // insolvent — around $700k of sponsorship against $926k of VCT running
+    // costs before a single wage — and 25 of 36 AI promotions measured over
+    // four seasons ended up in the red and out of the transfer market.
+    const step = sponsorWorth({ ...promoted, tier: 1 } as Team) /
+      Math.max(1, sponsorWorth({ ...promoted, tier: 2 } as Team))
+    reprice(promoted, step)
+    reprice(relegated, 1 / step)
+    if (promoted.id === state.myTeam) {
+      notes.push('💰 升入一级联赛后，赞助合同全部重新议价，收入大幅提高。')
+    }
+    if (relegated.id === state.myTeam) {
+      notes.push('📉 降级后赞助合同被重新议价，赛季收入大幅缩水——先把薪资压下来。')
+    }
+    state.news.push({
+      day: state.day, kind: 'league', important: true,
+      text: `🎫 ${promoted.name} 通过 Ascension 升入 VCT ${region}，${relegated.name} 降入次级联赛。`,
+    })
+    if (promoted.id === state.myTeam) state.honours.push({ year: state.year, title: `晋级 VCT ${region}` })
+    if (promoted.id === state.myTeam) notes.push(`🎫 我们通过 Ascension 升入 VCT ${region}。`)
+    if (relegated.id === state.myTeam) notes.push(`🎫 我们降入 Challengers ${region}。`)
+  }
+
+  // ---- contracts tick down; expiring players leave
+  const finalYear: string[] = []
+  const released: string[] = []
+  for (const p of Object.values(state.players)) {
+    if (!p.teamId) continue
+    const mine = p.teamId === state.myTeam
+    p.contractYears -= 1
+    // a deal running down is the thing a manager most needs warning about, and
+    // it happened silently: one year quietly became zero over the winter
+    if (mine && p.contractYears === 1) finalYear.push(p.ign)
+    if (p.contractYears <= 0) {
+      const team = state.teams[p.teamId]
+      // clubs usually renew players they still rate
+      const keep = p.overall >= (team?.rating ?? 60) - 6 && rng.chance(0.72)
+      if (keep && team && team.id !== state.myTeam) {
+        p.contractYears = contractLength(p, rng, team.roster.map((id) => state.players[id]))
+      } else if (team && team.id === state.myTeam) {
+        // One winter of grace, then he actually goes. It used to be an
+        // unlimited stay: the agenda warned every single day that he would
+        // leave if not renewed, and he never did — he simply drew wages
+        // forever on a contract that had run out.
+        if (p.expiredYear != null && p.expiredYear < state.year) {
+          team.roster = team.roster.filter((id) => id !== p.id)
+          team.starters = team.starters.filter((id) => id !== p.id)
+          p.teamId = null
+          p.expiredYear = undefined
+          state.news.push({
+            day: state.day, kind: 'club', important: true,
+            text: `👋 ${p.ign} 的合同到期满一年未续约，已经离队。`,
+          })
+          notes.push(`👋 ${p.ign} 合同到期一年未续，已自由转会离队。`)
+        } else {
+          p.expiredYear ??= state.year
+          state.news.push({
+            day: state.day, kind: 'club', important: true,
+            text: `⏳ ${p.ign} 的合同已到期，本赛季内必须续约，否则下个休赛期他会走。`,
+          })
+          notes.push(`⏳ ${p.ign} 的合同已到期——这是最后一个赛季，不续约他就走了。`)
+          p.contractYears = 0
+        }
+      } else if (team) {
+        team.roster = team.roster.filter((id) => id !== p.id)
+        team.starters = team.starters.filter((id) => id !== p.id)
+        p.teamId = null
+        // one batched line, not one per man: a winter shakes dozens loose
+        released.push(`${p.ign}（${team.tag}）`)
+      }
+    }
+  }
+
+  if (released.length) {
+    state.news.push({
+      day: state.day, kind: 'transfer',
+      text: `合同到期成为自由人：${released.slice(0, 8).join('、')}`
+        + (released.length > 8 ? ` 等 ${released.length} 人` : '') + '。',
+    })
+  }
+
+  if (finalYear.length) {
+    notes.push(`📋 合同进入最后一年：${finalYear.slice(0, 6).join('、')}`
+      + (finalYear.length > 6 ? ` 等 ${finalYear.length} 人` : ''))
+  }
+
+  track('season_done', {
+    year: state.year, seasons: state.year - 2026 + 1,
+    honours: state.honours.length,
+    confidence: Math.round(state.boardConfidence),
+  })
+  // clauses are judged on the season that just ended, before the counters reset
+  notes.push(...settleSponsorDemands(state))
+  // and so is the league's bundle money — champ points reset with the rollover
+  settleLeagueSeason(state, notes)
+  // and a new intake arrives, so a career that runs long still has somebody
+  // to sign and somebody to develop
+  state.seasonGigs = 0
+  state.bestPlacing = undefined
+  notes.push(...seasonRollover(state, rng))
+
+  // ---- the in-save CV: the season just played goes on every man's record
+  // before anyone leaves. Year granularity; doTransfer opens mid-season lines.
+  for (const p of Object.values(state.players)) {
+    if (!p.teamId) continue
+    p.clubHist ??= []
+    const last = p.clubHist[p.clubHist.length - 1]
+    if (last && last.team === p.teamId) last.to = state.year
+    else p.clubHist.push({ team: p.teamId, from: state.year, to: state.year })
+  }
+
+  // ---- retirements: a year's notice, then the farewell.
+  //
+  // Retiring used to be a deletion — the group chat's knight signed a
+  // four-year deal in the afternoon and was gone by New Year. Now a player
+  // ANNOUNCES a season ahead: the flag is public (squad tags, transfer
+  // screens), the manager gets one shot at talking his own man around
+  // (persuadeStay), and when the day actually comes there is a farewell
+  // record worth screenshotting instead of a one-line vanishing.
+  //
+  // First, those who said last winter this season would be their final one:
+  const departed: string[] = []
+  for (const p of Object.values(state.players)) {
+    if (p.retiring) {
+      const line = retirePlayer(state, p, notes)
+      if (line) departed.push(line)
+    }
+  }
+  // the rest of the league's farewells make the news too, one line for all
+  if (departed.length) {
+    state.news.push({
+      day: state.day, kind: 'player',
+      text: `👋 正式退役：${departed.slice(0, 8).join('、')}`
+        + (departed.length > 8 ? ` 等 ${departed.length} 人` : '') + '。',
+    })
+  }
+  // Then the next wave gives its notice. The age curve is the old instant
+  // one shifted a year younger, so careers end at the same ages they always
+  // did — announced at 33, gone at 34. A man who just signed a long deal
+  // signed it because he intends to play it.
+  const noticed: string[] = []
+  for (const p of Object.values(state.players)) {
+    if (p.retiring) continue
+    let announceP = p.age >= 33 ? 0.45 : p.age >= 31 ? 0.2 : p.age >= 29 ? 0.06 : 0
+    if (p.contractYears >= 3) announceP = 0
+    else if (p.contractYears === 2) announceP *= 0.5
+    if (announceP && rng.chance(announceP)) {
+      p.retiring = true
+      p.persuaded = false
+      const mine = p.teamId === state.myTeam
+      if (mine || p.overall >= 80) {
+        state.news.push({
+          day: state.day, kind: 'player', important: mine,
+          text: `📢 ${p.ign}（${p.age} 岁）宣布本赛季结束后退役。`,
+        })
+      } else if (p.teamId) {
+        const tag = state.teams[p.teamId]?.tag ?? ''
+        noticed.push(`${p.ign}（${tag}）`)
+      }
+      if (mine) {
+        notes.push(`📢 ${p.ign} 告诉你，这将是他的最后一个赛季——想留他，去他的资料页当面谈。`)
+      }
+    }
+  }
+  if (noticed.length) {
+    state.news.push({
+      day: state.day, kind: 'player',
+      text: `📢 宣布本赛季结束后退役：${noticed.slice(0, 8).join('、')}`
+        + (noticed.length > 8 ? ` 等 ${noticed.length} 人` : '') + '。',
+    })
+  }
+  ensureMinimumRosters(state, rng)
+
+  // ---- team ratings follow the squads they now have
+  for (const t of Object.values(state.teams)) {
+    const squad = t.roster.map((id) => state.players[id]).filter(Boolean)
+    if (squad.length) {
+      const top5 = squad.sort((a, b) => b!.overall - a!.overall).slice(0, 5)
+      t.rating = Math.round(top5.reduce((s, p) => s + p!.overall, 0) / top5.length)
+    }
+    t.champPoints = 0
+    t.seasonPrize = 0
+    // a new season, a new chance to hit the placement each contract asks for
+    for (const sp of t.sponsors) delete sp.bonusPaidYear
+    if (t.starters.length < 5) t.starters = autoStarters(state, t.id)
+  }
+
+  rebaseSeasonClock(state, state.day)
+
+  state.year += 1
+  state.day = 0
+  state.stage = 'preseason'
+  // next year's Kickoff byes are this year's Champions field; the draws of
+  // the year before last are let go so a save does not grow without bound
+  state.lastChampionsTeams = state.comps.champions?.teams ?? state.lastChampionsTeams
+  state.draws = (state.draws ?? []).filter((d) => d.year >= state.year - 1)
+  state.pendingDrawId = undefined
+  setupSeason(state, notes)
+}
+
+/**
+ * Shift every forward-looking timer back with the calendar.
+ *
+ * The rollover sets `day = 0`, but everything scheduled against the old
+ * calendar used to keep its absolute number — so a sponsor-pitch cooldown of
+ * "day + 14" written on day 310 became "324 days from now", a pending transfer
+ * bid was answered eleven months late, and an injury due to heal on day 340
+ * kept a player out for a second full season. A fourteen-day wait that spans
+ * New Year is still a fourteen-day wait.
+ *
+ * Deadlines are shifted, not clamped: a reply due on day 340 is due on day 4
+ * of the new season, and a record made on day 300 lands at -36, which keeps
+ * every "days since" comparison honest about how long ago it really was.
+ * History — news, activity, the finance log — is left alone: those entries
+ * describe last season and should not be re-dated into this one.
+ */
+function rebaseSeasonClock(state: GameState, shift: number): void {
+  if (shift <= 0) return
+  const move = (v: number | undefined): number | undefined =>
+    v == null ? v : v - shift
+
+  if (state.pitchCooldown != null) state.pitchCooldown = Math.max(0, state.pitchCooldown - shift)
+  if (state.drillLock != null) state.drillLock = Math.max(0, state.drillLock - shift)
+  // physio bookings live in the past; left unshifted, "day - last" went
+  // negative after the new year and locked the whole squad out of the physio
+  // room for a season ("理疗室不能点了")
+  if (state.physioOn) {
+    for (const k of Object.keys(state.physioOn)) state.physioOn[k] -= shift
+  }
+  // the turn budget re-mints itself whenever its day is in the future or past
+  state.actions = undefined
+
+  for (const p of Object.values(state.players)) {
+    if (p.injuredUntil > 0) p.injuredUntil = Math.max(0, p.injuredUntil - shift)
+    if (p.listedOn != null) p.listedOn = move(p.listedOn)
+    if (p.payAskedOn != null) p.payAskedOn = move(p.payAskedOn)
+    if (p.rumourOn != null) p.rumourOn = move(p.rumourOn)
+    if (p.stream) {
+      p.stream.since -= shift
+      p.stream.until -= shift
+    }
+  }
+
+  for (const o of state.offers) {
+    o.day -= shift
+    if (o.respondOn != null) o.respondOn -= shift
+  }
+  for (const e of state.enquiries ?? []) { e.day -= shift; e.replyOn -= shift }
+  for (const j of state.jobOffers ?? []) { j.day -= shift; j.expiresOn -= shift }
+  for (const a of state.jobApplications ?? []) { a.day -= shift; a.replyOn -= shift }
+  for (const o of state.staffOffers ?? []) { o.day -= shift; o.replyOn -= shift }
+  for (const a of state.staffApproaches ?? []) { a.day -= shift; a.replyOn -= shift }
+  for (const t of state.sponsorTalks ?? []) { t.day -= shift; t.replyOn -= shift }
+  for (const g of state.gigs ?? []) {
+    g.day -= shift
+    g.expiresOn -= shift
+    if (g.windowEnd != null) g.windowEnd -= shift
+  }
+  for (const v of state.ventures ?? []) v.day -= shift
+}
+
+/**
+ * Keep AI clubs at five players by signing from the free-agent pool.
+ *
+ * Every person in this game is a real player, so nothing is invented here: if
+ * the market is empty a club simply runs short and the shortage is reported,
+ * rather than conjuring a fictional prospect to paper over it.
+ */
+/** Give the market a starting state, so the first window is not empty. */
+export function seedMarket(state: GameState, notes?: string[]): void {
+  refreshListings(state, new Rng(hashStr(`market:${state.seed}:${state.year}`)), notes)
+}
+
+export function ensureMinimumRosters(state: GameState, rng: Rng): void {
+  const short: string[] = []
+  for (const team of Object.values(state.teams)) {
+    if (team.id === state.myTeam) continue
+    let guard = 0
+    while (team.roster.length < 5 && guard++ < 10) {
+      const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring)
+      // under the import rule a club refills from its own region first;
+      // fielding five still outranks the rule when the pool runs dry
+      const legal = free.filter((p) => !importBlock(state, team.id, p))
+      const target = (legal.length ? legal : free)
+        .sort(
+          (a, b) =>
+            b.overall + (b.region === team.region ? 6 : 0) -
+            (a.overall + (a.region === team.region ? 6 : 0)),
+        )[0]
+      if (!target) break
+      target.teamId = team.id
+      target.contractYears = contractLength(target, rng, team.roster.map((id) => state.players[id]))
+      target.salary = expectedSalary(target, team.tier)
+      team.roster.push(target.id)
+      // offseason emergency signings go on the record like any other move
+      state.news.push({
+        day: state.day, kind: 'transfer',
+        text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。`,
+      })
+    }
+    if (team.roster.length < 5) short.push(team.name)
+    // expiries and retirements can walk a club's caller out the door too
+    ensureCaller(state, team.id)
+    if (team.starters.length < 5) team.starters = autoStarters(state, team.id)
+  }
+  if (short.length) {
+    state.news.push({
+      day: state.day, kind: 'system',
+      text: `自由市场已无可签选手，以下战队人数不足：${short.slice(0, 6).join('、')}。`,
+    })
+  }
+}
+
+/** Next unplayed fixture for a club. */
+export const nextFixtureFor = (state: GameState, teamId: string): Fixture | undefined =>
+  state.fixtures
+    .filter((f) => !f.played && (f.teamA === teamId || f.teamB === teamId))
+    .sort((a, b) => a.day - b.day)[0]
+
+/**
+ * The next match that counts.
+ *
+ * A booked scrim used to replace the league fixture everywhere it was shown,
+ * so the one thing a manager always wants in view — when do we next play for
+ * real — kept disappearing behind a friendly.
+ */
+export const nextRealFixtureFor = (state: GameState, teamId: string): Fixture | undefined =>
+  state.fixtures
+    .filter((f) => !f.played && !isScrim(f) && (f.teamA === teamId || f.teamB === teamId))
+    .sort((a, b) => a.day - b.day)[0]
+
+export const nextScrimFor = (state: GameState, teamId: string): Fixture | undefined =>
+  state.fixtures
+    .filter((f) => !f.played && isScrim(f) && (f.teamA === teamId || f.teamB === teamId))
+    .sort((a, b) => a.day - b.day)[0]
+
+/** Matches we have played, most recent first — scrims included. */
+export const recentResultsFor = (state: GameState, teamId: string, n = 6): Fixture[] =>
+  state.fixtures
+    .filter((f) => f.result && (f.teamA === teamId || f.teamB === teamId))
+    .sort((a, b) => b.day - a.day)
+    .slice(0, n)
+
+export const fixturesFor = (state: GameState, teamId: string): Fixture[] =>
+  state.fixtures
+    .filter((f) => f.teamA === teamId || f.teamB === teamId)
+    .sort((a, b) => a.day - b.day)
+
+/** Fast-forward until something the manager should look at happens. */
+export function advanceToNextMatch(
+  state: GameState, maxDays = 40, opts: AdvanceOpts = {},
+): DayReport[] {
+  const reports: DayReport[] = []
+  for (let i = 0; i < maxDays; i++) {
+    const r = advanceDay(state, opts)
+    reports.push(r)
+    if (r.playedMine.length || r.pendingMine || r.pendingDraw || r.seasonEnded) break
+    const next = nextFixtureFor(state, state.myTeam)
+    if (next && next.day === state.day + 1) break
+  }
+  return reports
+}
+
+/** A scrim is arranged, not drawn: you name the opponent, the map and the format. */
+export type ScrimFormat = 'first13' | 'full24'
+
+/**
+ * Would this club take the practice?
+ *
+ * Clubs about to face us competitively will not show their hand, and a side far
+ * above us has nothing to gain from the session.
+ */
+export function scrimReply(
+  state: GameState, oppId: string,
+): { ok: boolean; reason?: string } {
+  const opp = state.teams[oppId]
+  const me = state.teams[state.myTeam]
+  if (!opp || !me) return { ok: false, reason: '对手不存在。' }
+
+  const soon = state.fixtures.some(
+    (f) => !f.played && f.comp !== 'scrim' && f.day - state.day <= 10 &&
+      ((f.teamA === state.myTeam && f.teamB === oppId) ||
+       (f.teamB === state.myTeam && f.teamA === oppId)),
+  )
+  if (soon) return { ok: false, reason: `${opp.name} 很快要和我们打正赛，不想提前暴露战术。` }
+
+  const gap = opp.rating - me.rating
+  const rng = new Rng(hashStr(`scrim:${state.seed}:${state.day}:${oppId}`))
+  if (gap >= 10 && rng.chance(0.55 + (gap - 10) * 0.03)) {
+    return { ok: false, reason: `${opp.name} 认为和我们打收益不大，婉拒了。` }
+  }
+  if (rng.chance(0.12)) return { ok: false, reason: `${opp.name} 这几天的训练安排已经排满了。` }
+  return { ok: true }
+}
+
+export function makeScrim(
+  state: GameState, oppId: string, day: number, map: string, format: ScrimFormat,
+): Fixture {
+  const f = makeFixture(day, state.stage, 'scrim', state.myTeam, oppId, 1, '训练赛')
+  f.scrim = { map, format }
+  state.fixtures.push(f)
+  return f
+}
