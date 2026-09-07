@@ -2,20 +2,25 @@ import { useGame } from '../ctx'
 import { Bar, Panel, Stat, fmtDay, money } from '../common'
 import { ATTR_CN, ATTR_KEYS } from '../../engine/types'
 import { statLine } from '../../engine/player'
+import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
+import { fansCn, fanTier } from '../../engine/me/fans'
+import { originOf } from '../../engine/me/origins'
+import { cupOf } from '../../engine/me/cups'
 
 export default function MeScreen() {
   const { game } = useGame()
   const me = game.me!
   const p = game.players[me.id]
-  const team = game.teams[game.myTeam]
+  const team = me.phase === 'pro' ? game.teams[game.myTeam] : null
   const s = statLine(p.season)
   const c = statLine(p.career)
   const recent = me.matches.slice(-10).reverse()
+  const origin = originOf(me.originKey)
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
-        <Panel title={`${p.ign} · ${p.role} · ${p.age} 岁`} actions={<span className="tag t1">综合 {p.overall} / 上限 {p.potential}</span>}>
+        <Panel title={`${p.ign} · ${p.role} · ${p.age} 岁 · ${origin.name}`} actions={<span className="tag t1">综合 {p.overall} / 上限 {p.potential}</span>}>
           {ATTR_KEYS.map((k) => (
             <div key={k} className="attr-row">
               <span className="k">{ATTR_CN[k]}</span>
@@ -41,21 +46,33 @@ export default function MeScreen() {
             <Stat k="疲劳" v={Math.round(p.fatigue)} />
             <Stat k="士气" v={Math.round(p.morale)} />
             <Stat k="心态气压" v={Math.round(me.tilt)} />
-            <Stat k="教练信任" v={Math.round(me.coachTrust)} />
-            <Stat k="粉丝" v={Math.round(me.fans)} />
+            {team && <Stat k="教练信任" v={Math.round(me.coachTrust)} />}
+            <Stat k="粉丝" v={fansCn(me.fans)} small />
             <Stat k="热度" v={Math.round(me.heat)} />
-            <Stat k="存款" v={money(me.money)} />
+            <Stat k="存款" v={money(me.money)} small />
           </div>
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>
-            心态气压超过 55 开始拖累发挥；休息、赢球都能泄压。疲劳超过 45 训练收益打折，超过 70 伤病风险明显上升。
+            咖位：{fanTier(me.fans).name}。心态气压超过 55 开始拖累发挥；休息、赢球都能泄压。疲劳超过 45 训练收益打折，超过 70 伤病风险明显上升。
           </p>
         </Panel>
-        <Panel title="合同">
-          <p className="small" style={{ margin: 0 }}>
-            {team.name} · 年薪 <b>{money(p.salary)}</b> · 还剩 <b>{p.contractYears}</b> 年 · 承诺位置：{p.contract?.promisedRole === 'starter' ? '首发' : p.contract?.promisedRole === 'star' ? '核心' : '轮换'}
-            {p.expiredYear != null ? ' · 已到期，冬窗自动续' : ''}
-          </p>
+        <Panel title="性格">
+          <div className="row wrap" style={{ gap: 14 }}>
+            {(Object.keys(AXIS_CN) as (keyof typeof AXIS_CN)[]).map((a) => (
+              <Stat key={a} k={AXIS_CN[a]} v={`${me.axes[a] ?? 0}/${TRAIT_NEED}`} small />
+            ))}
+          </div>
+          {me.traits.length ? me.traits.map((k) => {
+            const t = traitOf(k)
+            return t ? <p key={k} className="small" style={{ margin: '8px 0 0' }}><b>{t.name}</b> · {t.gain}；{t.cost}</p> : null
+          }) : <p className="tiny faint" style={{ margin: '8px 0 0' }}>事件里的选择会累积在四条轴上，同一条轴选够五次就成了永久特质。互为反面的两组只能有一个。</p>}
         </Panel>
+        {team && (
+          <Panel title="合同">
+            <p className="small" style={{ margin: 0 }}>
+              {team.name} · 年薪 <b>{money(p.salary)}</b> · 还剩 <b>{p.contractYears}</b> 年 · 承诺：{p.contract?.promisedRole === 'star' ? '核心' : p.contract?.promisedRole === 'starter' ? '首发' : '轮换'} · 违约金 {money(me.flags.buyout ?? 0)}
+            </p>
+          </Panel>
+        )}
       </div>
       <div>
         <Panel title="本赛季数据" actions={<span className="tiny faint">{p.season.maps} 张图</span>}>
@@ -68,41 +85,48 @@ export default function MeScreen() {
             <Stat k="残局" v={p.season.clutches} />
             <Stat k="MVP" v={p.season.mvps} />
           </div>
-          <p className="tiny faint" style={{ margin: '10px 0 0' }}>
-            生涯：{p.career.maps} 张图 · ACS {c.acs.toFixed(0)} · K/D {c.kd.toFixed(2)} · MVP {p.career.mvps}
-          </p>
+          <p className="tiny faint" style={{ margin: '10px 0 0' }}>生涯：{p.career.maps} 张图 · ACS {c.acs.toFixed(0)} · K/D {c.kd.toFixed(2)} · MVP {p.career.mvps} · 冠军 {me.titles.length}</p>
         </Panel>
         <Panel title="最近的比赛" flush>
-          {recent.length === 0 ? <p className="muted" style={{ padding: 12, margin: 0 }}>还没打过正赛。</p> : (
+          {recent.length === 0 ? <p className="muted" style={{ padding: 12, margin: 0 }}>还没打过比赛。</p> : (
             <table>
-              <thead><tr><th>日期</th><th>对手</th><th>比分</th><th>K/D/A</th><th>ACS</th><th>评分</th><th></th></tr></thead>
+              <thead><tr><th>日期</th><th>赛事</th><th>对手</th><th>比分</th><th>K/D/A</th><th>ACS</th><th>评分</th></tr></thead>
               <tbody>
                 {recent.map((m) => (
                   <tr key={m.fixtureId}>
                     <td className="muted">{fmtDay(m.day, m.year)}</td>
+                    <td className="tiny">{m.comp.replace(/VCT |VALORANT /, '')}</td>
                     <td>{m.oppTag}</td>
                     <td className="num" style={{ color: m.won ? 'var(--win)' : 'var(--loss)' }}>{m.score}</td>
                     <td className="num">{m.started ? `${m.kills}/${m.deaths}/${m.assists}` : '替补'}</td>
                     <td className="num">{m.started ? m.acs : '—'}</td>
-                    <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}</td>
-                    <td className="tiny faint">{m.mvp ? 'MVP' : m.carried ? '院长局' : ''}</td>
+                    <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}{m.mvp ? ' MVP' : m.carried ? ' 院长' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </Panel>
+        {me.pre.cups.length > 0 && (
+          <Panel title="杯赛" flush>
+            <table><tbody>
+              {me.pre.cups.slice().reverse().map((cu, i) => (
+                <tr key={i}><td>{cu.year}</td><td>{cupOf(cu.key)?.name}</td><td className="num">{cu.won ? '冠军' : `${cu.reached}/${cu.rounds}`}</td><td className="num">{cu.prize ? money(cu.prize) : ''}</td></tr>
+              ))}
+            </tbody></table>
+          </Panel>
+        )}
         {me.seasons.length > 0 && (
           <Panel title="生涯" flush>
             <table>
               <thead><tr><th>年</th><th>队伍</th><th>出场</th><th>首发胜</th><th>ACS</th><th>综合</th><th>荣誉</th></tr></thead>
               <tbody>
-                {me.seasons.map((s) => (
-                  <tr key={s.year}>
-                    <td>{s.year}</td><td>{s.team}</td>
-                    <td className="num">{s.starts}/{s.matches}</td><td className="num">{s.wins}</td>
-                    <td className="num">{s.acs || '—'}</td><td className="num">{s.overallFrom}→{s.overallTo}</td>
-                    <td className="tiny">{s.titles.join('、') || '—'}</td>
+                {me.seasons.map((x) => (
+                  <tr key={x.year}>
+                    <td>{x.year}</td><td>{x.team}{x.tier === 2 ? ' (CHAL)' : ''}</td>
+                    <td className="num">{x.tier ? `${x.starts}/${x.matches}` : '—'}</td><td className="num">{x.tier ? x.wins : '—'}</td>
+                    <td className="num">{x.acs || '—'}</td><td className="num">{x.overallFrom}→{x.overallTo}</td>
+                    <td className="tiny">{x.titles.join('、') || '—'}</td>
                   </tr>
                 ))}
               </tbody>

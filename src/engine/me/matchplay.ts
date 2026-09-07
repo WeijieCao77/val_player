@@ -9,8 +9,18 @@ import type { NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
 import { pushLog } from './log'
+import { questProgress } from './quests'
 
 export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
+
+/** A match outside the calendar — a cup round on two temporary fives. */
+export interface Friendly {
+  aId: string
+  bId: string
+  bo: 1 | 3 | 5
+  comp: string
+  label: string
+}
 
 /** at most this many calls a map, and never two within this many rounds */
 const NODES_PER_MAP = 3
@@ -48,6 +58,7 @@ export class MeMatch {
   readonly sim: MatchSim
   readonly side: Side | null
   readonly fixture: Fixture
+  readonly friendly: Friendly | null
   readonly state: GameState
   /** whether I was in the five when the first map began */
   started = false
@@ -60,13 +71,25 @@ export class MeMatch {
   private finished: MeMatchRecord | null = null
   private mapStarted = false
 
-  constructor(state: GameState, fixture: Fixture) {
+  constructor(state: GameState, src: Fixture | Friendly) {
     this.state = state
-    this.fixture = fixture
-    this.sim = new MatchSim(state, fixture.teamA, fixture.teamB, fixture.bo, fixtureRng(state, fixture), fixture.scrim)
-    this.side = this.sim.sideOf(state.myTeam)
-    this.nodeRng = new Rng(hashStr(`node:${state.seed}:${state.year}:${fixture.id}`))
+    if ('aId' in src) {
+      this.friendly = src
+      const id = `friendly:${state.year}:${state.day}:${src.label}`
+      this.fixture = { id, day: state.day, stage: state.stage, comp: src.comp, teamA: src.aId, teamB: src.bId, bo: src.bo, label: src.label, played: false }
+      this.sim = new MatchSim(state, src.aId, src.bId, src.bo, new Rng(hashStr(`match:${state.seed}:${id}`)))
+      this.side = this.sim.sideOf(src.aId)
+    } else {
+      this.friendly = null
+      this.fixture = src
+      this.sim = new MatchSim(state, src.teamA, src.teamB, src.bo, fixtureRng(state, src), src.scrim)
+      this.side = this.sim.sideOf(state.myTeam)
+    }
+    this.nodeRng = new Rng(hashStr(`node:${state.seed}:${state.year}:${this.fixture.id}`))
   }
+
+  /** my club in this match — the temporary five in a cup, my employer otherwise */
+  get myTeamId(): string { return this.friendly ? this.friendly.aId : this.state.myTeam }
 
   get map() { return this.sim.current }
   get mineIsA(): boolean { return this.side === 'a' }
@@ -165,7 +188,7 @@ export class MeMatch {
     if (!pend) throw new Error('no decision pending')
     const m = this.map!
     const opt = pend.node.a[i] ?? pend.node.a[pend.node.rec]
-    const p = nodeChance(this.state, opt)
+    const p = nodeChance(this.state, opt, this.myTeamId)
     const ok = this.nodeRng.chance(p)
     const before = this.winProb()
     const side = this.side!
@@ -230,16 +253,18 @@ export class MeMatch {
     const rating = started ? ratingOf(sum) : 0
 
     const notes: string[] = []
-    commitFixture(state, f, result, notes)
-    me.weekNotes.push(...notes)
-
     const opp = state.teams[this.mineIsA ? f.teamB : f.teamA]
+    if (!this.friendly) {
+      commitFixture(state, f, result, notes)
+      me.weekNotes.push(...notes)
+    }
+
     const comp = state.comps[f.comp]
     const score = this.mineIsA ? `${result.mapsWonA}-${result.mapsWonB}` : `${result.mapsWonB}-${result.mapsWonA}`
     const rec: MeMatchRecord = {
       fixtureId: f.id, day: state.day, year: state.year,
-      comp: comp?.name ?? f.comp, label: f.label.replace(/^(KO|SW):\d+:/, ''),
-      opp: opp?.name ?? '?', oppTag: opp?.tag ?? '?',
+      comp: this.friendly ? this.friendly.comp : (comp?.name ?? f.comp), label: f.label.replace(/^(KO|SW):\d+:/, ''),
+      opp: opp?.name ?? '?', oppTag: opp?.tag ?? '?', friendly: !!this.friendly,
       started, won, score, maps: result.maps.length,
       rounds: sum.rounds, kills: sum.kills, deaths: sum.deaths, assists: sum.assists,
       firstKills: sum.firstKills, clutches: sum.clutches,
@@ -248,16 +273,28 @@ export class MeMatch {
       nodes: this.nodes.slice(), rank,
     }
     this.finished = rec
+    if (this.friendly) {
+      me.matches.push(rec)
+      if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
+      me.heat += won ? 4 : 1
+      me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
+      pushLog(state, 'cup', `${rec.comp} ${rec.label} vs ${rec.opp} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
+      me.pendingFixture = undefined
+      return
+    }
     if (f.comp !== 'scrim') {
       me.matches.push(rec)
       if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
       me.seasonStart.matches++
+      me.playedThisStage++
       if (started) {
+        me.startedThisStage++
         me.seasonStart.starts++
         me.seasonStart.acsSum += rec.acs
         if (won) me.seasonStart.wins++
       }
       me.heat += started ? (won ? 7 : -2.5) : (won ? 3 : -1)
+      if (started && won) questProgress(state, 'win', 1)
       if (started) {
         me.tilt = clamp(me.tilt + (won ? -6 : rank >= 5 ? 14 : 8), 0, 100)
         if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)

@@ -1753,7 +1753,8 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   // would have matched 2030 exactly never — the one question the career is
   // built around, silently unreachable for precisely the players who had
   // played longest. Asked late is right; not asked at all is not.
-  if (state.year >= MID_YEAR && state.year < FINAL_YEAR && !state.midReviewDone) {
+  // a player career decides its own endings — see engine/me/endings.ts
+  if (state.year >= MID_YEAR && state.year < FINAL_YEAR && !state.midReviewDone && !state.me) {
     state.midReview = true
     notes.push(`⏳ ${tenureCn(state.year)}年之期已到——是就此收官拿一个结局，还是继续带到 2036？`)
     return
@@ -1780,7 +1781,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   // There is no 2037 to prepare for, so none of that should happen at all: the
   // record ends with the last season, and the last season's squad is the one
   // that gets judged.
-  if (state.year >= FINAL_YEAR) {
+  if (state.year >= FINAL_YEAR && !state.me) {
     const earned = endingsFor(state)
     state.finished = true
     state.gameOver = earned[0]
@@ -2097,7 +2098,7 @@ export function ensureMinimumRosters(state: GameState, rng: Rng): void {
     if (team.id === state.myTeam) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
-      const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring)
+      const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
       // under the import rule a club refills from its own region first;
       // fielding five still outranks the rule when the pool runs dry
       const legal = free.filter((p) => !importBlock(state, team.id, p))

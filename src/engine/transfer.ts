@@ -497,7 +497,8 @@ export function aiTransferTick(state: GameState, rng: Rng, notes?: string[]): vo
 
   const teams = Object.values(state.teams).filter((t) => t.id !== state.myTeam)
   // a free agent on his farewell season is done job-hunting
-  const agents = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring)
+  // the human, while still unsigned, is not on the market for AI clubs — see engine/me
+  const agents = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
 
   for (const team of teams) {
     if (!rng.chance(0.1)) continue

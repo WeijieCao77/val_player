@@ -6,6 +6,9 @@ import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceWeek } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
+import { runAutoPilot } from './engine/me/auto'
+import { ladderLabel } from './engine/me/prepro'
+import { fansCn } from './engine/me/fans'
 import { Crest, money } from './ui/common'
 import NewCareer from './ui/me/NewCareer'
 import Week from './ui/me/Week'
@@ -13,24 +16,34 @@ import MatchPlay from './ui/me/MatchPlay'
 import MeScreen from './ui/me/MeScreen'
 import TeamScreen from './ui/me/TeamScreen'
 import LogScreen from './ui/me/LogScreen'
+import TransferScreen from './ui/me/TransferScreen'
+import EconomyScreen from './ui/me/EconomyScreen'
+import AchievementsScreen from './ui/me/AchievementsScreen'
+import AutoScreen from './ui/me/AutoScreen'
+import PendingModal from './ui/me/Modals'
+import Poster from './ui/me/Poster'
 import Schedule from './ui/Schedule'
 import Standings from './ui/Standings'
 import MatchModal from './ui/MatchModal'
 import PlayerModal from './ui/PlayerModal'
 import ThemeToggle from './ui/ThemeToggle'
 
-const SCREENS: { key: string; label: string }[] = [
+const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
   { key: 'me', label: '我的' },
-  { key: 'team', label: '队伍' },
-  { key: 'schedule', label: '赛程' },
+  { key: 'team', label: '队伍', pro: true },
+  { key: 'transfer', label: '转会' },
+  { key: 'economy', label: '经济' },
+  { key: 'schedule', label: '赛程', pro: true },
   { key: 'standings', label: '积分榜' },
+  { key: 'awards', label: '成就' },
   { key: 'log', label: '日志' },
+  { key: 'auto', label: '托管', sep: true },
 ]
 
 /**
  * The player career, whole. The world and its engine are the manager game's;
- * this shell only knows about weeks, my club's matches and me.
+ * this shell knows about weeks, whatever is waiting on me, and my club's matches.
  */
 export default function PlayerGame() {
   const gameRef = useRef<GameState | null>(null)
@@ -65,16 +78,21 @@ export default function PlayerGame() {
     commit()
   }, [commit])
 
-  /** Run the week until it stops on my match, the week's end, or the end of the road. */
+  /** Run the week until it stops on my match, something waiting, the week's end, or the end of the road. */
   const advance = useCallback(() => {
     const g = gameRef.current
     if (!g?.me) return
+    // whatever the dials cover is answered before the clock moves
+    const did = runAutoPilot(g)
+    if (did.length) toast(`托管：${did.slice(0, 2).join('；')}${did.length > 2 ? '…' : ''}`)
+    if (g.me.pending.length) { commit(); return }
     const stop = advanceWeek(g)
+    runAutoPilot(g)
     commit()
     if (stop.kind === 'match') {
       setLive(new MeMatch(g, stop.fixture))
     } else if (stop.kind === 'week-end') {
-      setScreen('week')
+      setScreen((s) => (s === 'week' ? s : s))
       toast(`新的一周 · ${dateLabel(g)}`)
     }
   }, [commit, toast])
@@ -111,15 +129,21 @@ export default function PlayerGame() {
 
   const me = game.me
   const p = game.players[me.id]
-  const team = game.teams[game.myTeam]
-  const starter = team.starters.includes(me.id)
+  const pro = me.phase === 'pro'
+  const team = pro ? game.teams[game.myTeam] : null
+  const starter = !!team && team.starters.includes(me.id)
+  const pending = !live ? me.pending[0] : undefined
 
   const Screen = screen === 'me' ? MeScreen
-    : screen === 'team' ? TeamScreen
-      : screen === 'schedule' ? Schedule
-        : screen === 'standings' ? Standings
-          : screen === 'log' ? LogScreen
-            : null
+    : screen === 'team' && pro ? TeamScreen
+      : screen === 'transfer' ? TransferScreen
+        : screen === 'economy' ? EconomyScreen
+          : screen === 'schedule' && pro ? Schedule
+            : screen === 'standings' ? Standings
+              : screen === 'awards' ? AchievementsScreen
+                : screen === 'log' ? LogScreen
+                  : screen === 'auto' ? AutoScreen
+                    : null
 
   return (
     <GameCtx.Provider value={ctxValue}>
@@ -131,19 +155,25 @@ export default function PlayerGame() {
           <div className="chip own" title="你">
             <b>{p.ign}</b> <span className="muted">{p.role} · {p.age} 岁</span>
           </div>
-          <div className="chip brand-club" title="所属俱乐部">
-            <Crest id={game.myTeam} size={20} />
-            <b>{team.name}</b>
-            <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
-          </div>
+          {team ? (
+            <div className="chip brand-club" title="所属俱乐部">
+              <Crest id={game.myTeam} size={20} />
+              <b>{team.name}</b>
+              <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
+            </div>
+          ) : (
+            <div className="chip" title="没有队伍"><b>{me.phase === 'free' ? '自由人' : '自由身'}</b> <span className="muted">{ladderLabel(me.pre.ladder)}</span></div>
+          )}
           <div className="chip">{dateLabel(game)}</div>
           <div className="chip">{stageName(game.stage)}</div>
-          <div className="chip" title="本周教练的名单">
-            {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
-          </div>
+          {team && (
+            <div className="chip" title="本周教练的名单">
+              {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
+            </div>
+          )}
           <div className="spacer" />
           <div className="chip" title="行动点"><span aria-hidden="true">⚡</span> <b>{me.ap}/{me.apMax}</b></div>
-          <div className="chip" title="粉丝"><span aria-hidden="true">👥</span> <b>{Math.round(me.fans)}</b></div>
+          <div className="chip" title="粉丝"><span aria-hidden="true">👥</span> <b>{fansCn(me.fans)}</b></div>
           <div className="chip" title="存款"><span aria-hidden="true">💰</span> <b>{money(me.money)}</b></div>
         </header>
         <div className="pinbar" role="status" aria-label="属性">
@@ -162,24 +192,24 @@ export default function PlayerGame() {
 
         <div className="body">
           <nav className="nav">
-            {SCREENS.map((s) => (
+            {SCREENS.filter((s) => !s.pro || pro).map((s) => (
               <div key={s.key}>
+                {s.sep && <div className="nav-group">—</div>}
                 <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => setScreen(s.key)}>{s.label}</button>
               </div>
             ))}
             <div className="nav-foot"><ThemeToggle compact /></div>
           </nav>
           <main className="main" id="main" ref={mainRef}>
-            {Screen ? <Screen /> : <Week onAdvance={advance} />}
-            {game.gameOver && (
-              <div className="panel alert" style={{ marginTop: 16 }}>
-                <div className="panel-head"><h2>生涯结束</h2></div>
-                <div className="panel-body">
-                  <p className="small">{game.gameOver}</p>
-                  <button onClick={() => { gameRef.current = null; bump() }}>重新开始</button>
+            {me.phase === 'retired' ? (
+              <>
+                <Poster />
+                <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+                  <button onClick={() => { gameRef.current = null; bump() }}>再来一局</button>
                 </div>
-              </div>
-            )}
+                {Screen && screen !== 'week' && <div style={{ marginTop: 16 }}><Screen /></div>}
+              </>
+            ) : Screen ? <Screen /> : <Week onAdvance={advance} />}
           </main>
         </div>
 
@@ -194,6 +224,19 @@ export default function PlayerGame() {
               commit()
               // the week goes on from the day after the match
               window.setTimeout(advance, 0)
+            }}
+          />
+        )}
+        {pending && (
+          <PendingModal
+            key={`${pending.kind}:${pending.id ?? ''}:${pending.day}`}
+            item={pending}
+            onDone={() => {
+              commit()
+              // a week that stopped on this goes on once it is answered
+              const g = gameRef.current
+              if (g?.me && !g.me.pending.length && g.me.weekDay > 0 && g.me.weekDay < 7) window.setTimeout(advance, 0)
+              else bump()
             }}
           />
         )}

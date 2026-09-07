@@ -7,6 +7,8 @@ import { weightsFor } from '../player'
 import { ATTR_KEYS } from '../types'
 import type { MeMatchRecord } from './types'
 import { pushLog } from './log'
+import { traitMul } from './traits'
+import { fireEvent } from './events'
 
 /** duels won (net) before the coach agrees to a trial */
 export const EDGE_NEED = 3
@@ -207,7 +209,12 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     let d = rec.won ? 1.5 : -0.5
     if (rec.rank === 1) d += 1.5
     else if (rec.rank >= 5) d -= 2
+    if (d > 0) d *= traitMul(me, 'trust')
     me.coachTrust = clamp(me.coachTrust + d, 0, 100)
+    const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
+    if (rec.won && opp && opp.rating >= state.teams[state.myTeam].rating + 8) fireEvent(state, 'after_upset')
+    const last3 = me.matches.filter((m) => !m.friendly && m.started).slice(-3)
+    if (!rec.won && last3.length === 3 && last3.every((m) => !m.won)) fireEvent(state, 'after_skid')
   }
 
   if (me.trial && rec.started) {
@@ -217,6 +224,8 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
       if (me.trial.left <= 0) {
         me.trial = undefined
         me.proven = true
+        me.flags.trialPassed = 1
+        if (me.flags.benchedOnce) me.flags.cameBack = 1
         me.coachTrust = clamp(me.coachTrust + 6, 0, 100)
         pushLog(state, 'good', '试用期打完了，教练拍板：首发是你的。')
       } else {
@@ -243,8 +252,10 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     if (me.badStreak >= 3) {
       me.badStreak = 0
       me.benchLock = state.day + 14
+      me.flags.benchedOnce = 1
       team.starters = coachStarters(state)
       pushLog(state, 'bad', '连着三场你是全队最差，教练把你换下来了：两周之内不会再考虑你。')
+      fireEvent(state, 'after_bench')
     }
   }
 }

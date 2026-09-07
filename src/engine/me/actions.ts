@@ -28,6 +28,7 @@ export const ACTIONS: ActionDef[] = [
   { key: 'scrim', label: '跟队训练赛', cost: 3, desc: '教练看得见你，出场回合算进履历；涨协同与沟通', fatigue: 9 },
   { key: 'duo', label: '队友双排', cost: 1, desc: '和一名队友双排，涨羁绊', fatigue: 2 },
   { key: 'stream', label: '直播', cost: 2, desc: '涨热度，赚礼物', fatigue: 5 },
+  { key: 'content', label: '做内容', cost: 2, desc: '剪辑、vlog、采访；涨热度，粉丝多了也有点钱', fatigue: 4 },
   { key: 'rest', label: '休息', cost: 1, desc: '回体力，泄压；心态与体质慢慢涨', fatigue: -14 },
   { key: 'duel', label: '对位挑战', cost: 2, desc: '替补时向同位置首发发起训练赛对位，赢够三次教练给你试用期（每周最多 2 次）', fatigue: 7 },
 ]

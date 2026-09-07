@@ -25,7 +25,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const f = mm.fixture
   const a = game.teams[f.teamA]
   const b = game.teams[f.teamB]
-  const mine = game.teams[game.myTeam]
+  const mine = game.teams[mm.myTeamId]
   const oppId = mm.mineIsA ? f.teamB : f.teamA
   const opp = game.teams[oppId]
   const starterNow = mine.starters.includes(me.id) && game.players[me.id].injuredUntil <= game.day
@@ -68,7 +68,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
 
   if (phase === 'pre') {
     return (
-      <Modal title={`${game.comps[f.comp]?.name ?? f.comp} · ${f.label.replace(/^(KO|SW):\d+:/, '')} · BO${f.bo}`} onClose={skip} onBgClose={() => {}}>
+      <Modal title={`${mm.friendly ? mm.friendly.comp : (game.comps[f.comp]?.name ?? f.comp)} · ${f.label.replace(/^(KO|SW):\d+:/, '')} · BO${f.bo}`} onClose={skip} onBgClose={() => {}}>
         <div className="score-line">
           <div className="t a" title={a?.name}><Crest id={f.teamA} size={30} /><span>{a?.tag}</span></div>
           <div className="s muted" style={{ fontSize: 22 }}>VS</div>
@@ -88,7 +88,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <p className="tiny faint" style={{ margin: '8px 0 0' }}>
               {starterNow
                 ? '比赛里会有几次要你拿主意的时刻。每次决定后立刻能看到本图赢面怎么变。'
-                : '你不上场就没有决定要做，看结果就行。想上场：跟队训练赛、对位挑战。'}
+                : mm.friendly ? '车队赛，你当然上。' : '你不上场就没有决定要做，看结果就行。想上场：跟队训练赛、对位挑战。'}
             </p>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
     return (
       <Modal title={`终场 · ${mine.tag} ${rec.score} ${opp?.tag}`} onClose={onDone} onBgClose={() => {}}>
         <div className="score-line" style={{ padding: '6px 0' }}>
-          <div className={`t a ${rec.won ? 'win' : ''}`}><Crest id={game.myTeam} size={26} /><span>{mine.tag}</span></div>
+          <div className={`t a ${rec.won ? 'win' : ''}`}><Crest id={mm.myTeamId} size={26} /><span>{mine.tag}</span></div>
           <div className="s">{rec.score}</div>
           <div className={`t ${!rec.won ? 'win' : ''}`}><Crest id={oppId} size={26} /><span>{opp?.tag}</span></div>
         </div>
@@ -159,7 +159,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <span className="tag t1">大比分 {mm.myMaps} - {mm.theirMaps}</span>
       </div>
       <div className="score-line" style={{ padding: '8px 0' }}>
-        <div className={`t a ${myR > theirR ? 'win' : ''}`}><Crest id={game.myTeam} size={26} /><span>{mine.tag}</span></div>
+        <div className={`t a ${myR > theirR ? 'win' : ''}`}><Crest id={mm.myTeamId} size={26} /><span>{mine.tag}</span></div>
         <div className="s">{myR} : {theirR}</div>
         <div className={`t ${theirR > myR ? 'win' : ''}`}><Crest id={oppId} size={26} /><span>{opp?.tag}</span></div>
       </div>

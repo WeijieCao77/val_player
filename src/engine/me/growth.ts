@@ -7,6 +7,11 @@ import { duoBonded } from '../bonds'
 import { ACTIONS } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
+import { traitMul } from './traits'
+import { courseMul, gearTrainMul } from './shop'
+import { playRanked } from './prepro'
+import { streamIncome } from './stream'
+import { questProgress } from './quests'
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -78,9 +83,10 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   const me = state.me
   if (!me) return
   const p = state.players[me.id]
-  const team = state.teams[state.myTeam]
-  if (!p || !team) return
-  const g = gainBase(p, team, rng)
+  const team = me.phase === 'pro' ? state.teams[state.myTeam] : undefined
+  if (!p) return
+  const pro = me.phase === 'pro'
+  const g = gainBase(p, team ?? { coach: null, facilities: 40 } as Team, rng) * traitMul(me, 'train') * gearTrainMul(me.gear) * (me.flags.trainMul ?? 1)
   const w = weightsFor(p)
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
   let fatigue = 0
@@ -94,20 +100,37 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
     switch (a.key) {
       case 'aim': case 'vod': case 'util': {
         const split = SPLIT[a.key]!
+        const mul = a.key === 'vod' ? courseMul(me.courses, 'review', 1.25) : 1
+        // without a club the hours are mine alone: no team practice underneath them
+        const alone = pro ? 1 : 1.6
         for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) {
-          bump(k, g * EXTRA * n * share)
+          bump(k, g * EXTRA * n * share * mul * alone)
         }
         if (a.key === 'vod' && p.isIgl) bump('igl', g * EXTRA * n * 0.25)
+        questProgress(state, 'train', n)
         break
       }
-      case 'ranked':
+      case 'ranked': {
         for (const k of top3) bump(k, g * 0.18 * n)
         p.form = clamp(p.form + 0.8 * n, 30, 99)
         me.tilt = clamp(me.tilt - 3 * n, 0, 100)
         me.body = clamp(me.body + 0.1 * n, 0, 100)
+        let w = 0, l = 0
+        for (let i = 0; i < n; i++) { const r = playRanked(state, rng); w += r.wins; l += r.losses }
+        notes.push(`排位 ${w} 胜 ${l} 负，天梯 ${Math.round(me.pre.ladder)}。`)
+        questProgress(state, 'ranked', n)
         break
+      }
+      case 'content': {
+        const income = Math.round((80 + me.fans * 1.2) * n)
+        me.money += income
+        me.heat += 6 * n
+        notes.push(`做了 ${n} 期内容，热度涨了，收入 $${income.toLocaleString()}。`)
+        break
+      }
       case 'scrim':
-        me.coachTrust = clamp(me.coachTrust + 2.5 * n, 0, 100)
+        me.coachTrust = clamp(me.coachTrust + 2.5 * n * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.2), 0, 100)
+        questProgress(state, 'scrim', n)
         me.scrimRounds += 40 * n
         bump('teamwork', g * 0.35 * n)
         bump('communication', g * 0.35 * n)
@@ -115,21 +138,26 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         break
       case 'duo':
         if (me.duoWith && state.players[me.duoWith]?.teamId === state.myTeam) {
-          duoBonded(state, me.id, me.duoWith, 3 * n)
+          duoBonded(state, me.id, me.duoWith, 3 * n * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.3))
           notes.push(`和 ${state.players[me.duoWith].ign} 双排了 ${n} 次，关系近了一点。`)
         }
         bump('communication', g * 0.3 * n)
         break
       case 'stream': {
-        const income = Math.round((300 + me.fans * 4 + me.heat * 2) * n)
+        let income = 0
+        for (let i = 0; i < n; i++) income += streamIncome(state)
         me.money += income
         me.heat += 9 * n
-        notes.push(`直播 ${n} 次，礼物收入 $${income.toLocaleString()}。`)
+        me.stream.total += n
+        me.stream.thisStage += n
+        notes.push(`直播 ${n} 次，收入 $${income.toLocaleString()}。`)
+        questProgress(state, 'stream', n)
         break
       }
       case 'rest':
         // 体质 makes rest worth more; nerve settles when the body does
         fatigue -= 14 * n * ((me.body - 50) / 200)
+        fatigue -= 14 * n * (traitMul(me, 'rest') - 1)
         me.tilt = clamp(me.tilt - 10 * n, 0, 100)
         me.mental = clamp(me.mental + 0.3 * n, 0, 100)
         me.body = clamp(me.body + 0.3 * n, 0, 100)
@@ -139,6 +167,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         break
     }
   }
+  if (me.flags.relax_flat) fatigue -= 3
   p.fatigue = clamp(p.fatigue + fatigue, 0, 100)
   if (rose.length) {
     const cn: Record<keyof Attrs, string> = {

@@ -2,13 +2,16 @@ import RAW from '../../data/world.json'
 import { createNewGame } from '../world'
 import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
-import { ATTR_KEYS, defaultContract, emptyStats } from '../types'
+import { ATTR_KEYS, emptyStats } from '../types'
 import type { Attrs, GameState, Player, Region, Role } from '../types'
-import { expectedSalary, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { recomputeOverall, refreshValue, weightsFor } from '../player'
 import { AP_SEASON } from './actions'
+import { AP_PRE } from './prepro'
 import type { MeState } from './types'
 import { beginWeek } from './week'
 import { pushLog } from './log'
+import { originOf } from './origins'
+import { makeDeal, joinClub } from './contract'
 
 export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
@@ -16,31 +19,39 @@ export const TALENT_MAX = 8
 
 export const NAT_DEFAULT: Record<Region, string> = { China: 'cn', Pacific: 'kr', Americas: 'us', EMEA: 'gb' }
 
+export type StartPoint = 'pre' | 'chal' | 't1'
+export const START_CN: Record<StartPoint, { name: string; blurb: string }> = {
+  pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。排位、杯赛、试训，先拿到第一份合同。最长的路，也是完整的路。' },
+  chal: { name: 'Challengers 青训', blurb: '18 岁，一支二级联赛俱乐部的首发。Ascension 升级，或者被一级俱乐部挖走。' },
+  t1: { name: 'VCT 替补', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。' },
+}
+
 export interface CareerOpts {
   name: string
   region: Region
   role: Role
   /** 0..TALENT_MAX per attribute, TALENT_POINTS in all */
   talents: Record<keyof Attrs, number>
+  originKey: string
+  start: StartPoint
   teamId?: string
   seed?: number
-  age?: number
   nat?: string
 }
 
-export interface ClubChoice { id: string; name: string; tag: string; rating: number; roster: number }
+export interface ClubChoice { id: string; name: string; tag: string; rating: number; roster: number; tier: number }
 
-/** Tier-one clubs in a region that have a seat on the bench for a rookie. */
-export function candidateClubs(region: Region): ClubChoice[] {
+/** Clubs in a region, by tier. */
+export function candidateClubs(region: Region, tier: 1 | 2): ClubChoice[] {
   return RAW.teams
-    .filter((t) => t.region === region && t.tier === 1)
-    .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster.length }))
+    .filter((t) => t.region === region && t.tier === tier)
+    .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier }))
     .sort((a, b) => a.rating - b.rating)
 }
 
-function pickClub(region: Region, rng: Rng): string {
-  const pool = candidateClubs(region).filter((t) => t.roster <= 6)
-  const list = pool.length ? pool : candidateClubs(region)
+function pickClub(region: Region, tier: 1 | 2, rng: Rng): string {
+  const pool = candidateClubs(region, tier).filter((t) => t.roster <= 6)
+  const list = pool.length ? pool : candidateClubs(region, tier)
   // the weaker the club, the likelier it takes a chance on an unknown —
   // squared, so a 74 is about five times as likely as an 88
   const w = list.map((t) => Math.max(4, 100 - t.rating) ** 2)
@@ -51,61 +62,94 @@ export function emptyTalents(): Record<keyof Attrs, number> {
   return { aim: 3, reaction: 3, awareness: 3, utility: 3, clutch: 2, teamwork: 2, communication: 2, igl: 2 }
 }
 
-/** A new career: the manager game's world, with me added to one club's bench. */
+/** The eight, the way the new-career screen previews them. */
+export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, originKey: string, rng?: Rng): Attrs {
+  const w = weightsFor({ role })
+  const top = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 2)
+  const o = originOf(originKey)
+  const attrs = {} as Attrs
+  for (const k of ATTR_KEYS) {
+    attrs[k] = clamp(58 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
+  }
+  attrs.igl = Math.min(attrs.igl, 62)
+  return attrs
+}
+
+/** A new career: the manager game's world, with me in it. */
 export function createCareer(o: CareerOpts): GameState {
-  const seed = o.seed ?? (hashStr(o.name + o.region + o.role + String(Date.now())) >>> 0)
+  const seed = o.seed ?? (hashStr(o.name + o.region + o.role + o.originKey + String(Date.now())) >>> 0)
   const rng = new Rng(seed ^ 0x3e11)
-  const teamId = o.teamId ?? pickClub(o.region, rng)
+  const origin = originOf(o.originKey)
+  const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
+  const teamId = o.start === 'pre'
+    ? candidateClubs(o.region, 2)[0]?.id ?? candidateClubs(o.region, 1)[0].id   // a club to watch until I have one
+    : (o.teamId ?? pickClub(o.region, clubTier, rng))
   const state = createNewGame(teamId, o.name, seed)
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
-  const team = state.teams[teamId]
 
-  const w = weightsFor({ role: o.role })
-  const top = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 2)
-  const attrs = {} as Attrs
-  for (const k of ATTR_KEYS) {
-    attrs[k] = clamp(60 + (o.talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + rng.int(-1, 1), 40, 90)
-  }
-  attrs.igl = Math.min(attrs.igl, 62)
-
+  const attrs = buildAttrs(o.role, o.talents, o.originKey, rng)
   const model = Object.values(state.players).find((p) => p.role === o.role && p.region === o.region && (p.agentPool?.length ?? 0) >= 3)
     ?? Object.values(state.players).find((p) => p.role === o.role && (p.agentPool?.length ?? 0) >= 3)
+  const age = origin.flags?.late ? 20 : o.start === 'pre' ? 17 : 18
 
   const p: Player = {
-    id: ME_ID, ign: o.name, teamId, region: o.region, nat: o.nat ?? NAT_DEFAULT[o.region],
+    id: ME_ID, ign: o.name, teamId: null, region: o.region, nat: o.nat ?? NAT_DEFAULT[o.region],
     realName: null, birth: null, ageEstimated: false,
-    role: o.role, roles: [o.role], flex: false, age: o.age ?? 18,
+    role: o.role, roles: [o.role], flex: false, age,
     isIgl: false, iglSource: 'inferred',
     attrs, overall: 0, potential: 0, form: 70, morale: 75, fatigue: 10,
-    salary: 0, value: 0, contractYears: 1,
+    salary: 0, value: 0, contractYears: 0,
     loyalty: 38, ambition: 70, trust: 62,
     agentPool: model ? [...model.agentPool] : [],
     season: emptyStats(), career: emptyStats(), injuredUntil: 0, xp: {},
-    rounds: 400, joinedYear: state.year,
-    clubHist: [{ team: teamId, from: state.year, to: state.year }], titles: [],
+    rounds: o.start === 'pre' ? 150 : 400, joinedYear: state.year,
+    clubHist: [], titles: [],
   }
   recomputeOverall(p)
-  p.potential = clamp(p.overall + 14 + rng.int(0, 6), p.overall + 4, 95)
-  p.salary = Math.round(expectedSalary(p, team.tier) * 0.6 / 1000) * 1000
-  p.contract = { ...defaultContract(p.salary, 1), promisedRole: 'rotation', bonusShare: 8 }
+  const head = origin.flags?.late ? 10 : 14
+  p.potential = clamp(p.overall + head + rng.int(0, 6), p.overall + 4, 95)
+  p.salary = 0
   refreshValue(p)
-
   state.players[ME_ID] = p
-  team.roster.push(ME_ID)
-  state.training[ME_ID] = 'rest'
-  state.startingSquad = [...team.roster]
   state.manager = undefined
 
   const me: MeState = {
-    id: ME_ID, origin: '新人', week: 0, weekDay: 0, ap: AP_SEASON, apMax: AP_SEASON, plan: {},
-    mental: 50, body: 55, tilt: 0, edge: 0, duelsThisWeek: 0, scrimRounds: 0,
-    badStreak: 0, proven: false, coachTrust: 55, gmTrust: 55,
-    fans: 20, heat: 10, money: 8000, log: [], matches: [], weekNotes: [], seasons: [],
+    id: ME_ID, originKey: o.originKey, phase: 'pre', week: 0, weekDay: 0, ap: AP_PRE, apMax: AP_PRE, plan: {},
+    mental: clamp(50 + (origin.mental ?? 0), 0, 100), body: clamp(55 + (origin.body ?? 0), 0, 100), tilt: 0,
+    edge: 0, duelsThisWeek: 0, scrimRounds: 0, badStreak: 0, proven: false, coachTrust: 50, gmTrust: 50,
+    fans: Math.max(0, 20 + (origin.fans ?? 0)), heat: 10, money: 3000 + (origin.money ?? 0), upkeep: origin.upkeep ?? 0,
+    log: [], matches: [], weekNotes: [], pending: [], seasons: [],
     seasonStart: { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 },
+    benchedStages: 0, startedThisStage: 0, playedThisStage: 0,
+    pre: { year: 1, ladder: 0, ladderPeak: 0, cups: [], scoutSeen: origin.scoutSeen ?? 0, invites: [], seen: [], tac: origin.tac ?? 0, mates: [], wasPro: false },
+    deals: [], intents: [], declined: [], tenure: 0, freeYears: 0, region: o.region, abroad: false,
+    stream: { cut: 0, thisStage: 0, total: 0 }, gear: {}, courses: [], agentTier: 0, relaxUsed: 0,
+    axes: { hard: 0, warm: 0, grind: 0, show: 0 }, traits: [], eventCounts: {}, quests: [], eventsSeen: 0,
+    auto: { buy: false, biz: false, daily: false, career: false }, autoNotes: [],
+    achievements: [], titles: [], flags: { ...(origin.flags ?? {}) },
   }
+  if (origin.trainMul) me.flags.trainMul = origin.trainMul
+  if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
+  // the ladder starts where the skill puts it, less a season of not having played the top
+  me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)
+  me.pre.ladderPeak = me.pre.ladder
+
+  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.blurb}`)
+  if (o.start === 'pre') {
+    state.training[ME_ID] = 'rest'
+    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。城市争霸赛在第 7 周开打，Premier 在第 15 周，主播杯要 60 个粉丝才请你。`)
+  } else {
+    me.ap = AP_SEASON
+    me.apMax = AP_SEASON
+    p.rounds = 400
+    const deal = makeDeal(state, teamId, 'sign', o.start === 'chal' ? 'A' : 'B', rng)
+    deal.role = o.start === 'chal' ? 'starter' : 'rotation'
+    deal.years = o.start === 'chal' ? 1 : 1
+    deal.signBonus = 0
+    joinClub(state, deal)
+  }
   beginWeek(state)
-  pushLog(state, 'info', `${state.year} 年 1 月，你以 ${p.age} 岁的年纪签进 ${team.name}，一年合同，年薪 $${p.salary.toLocaleString()}，位置是${o.role}。名单上有 ${team.roster.length} 个人，首发只有五个。`)
   return state
 }

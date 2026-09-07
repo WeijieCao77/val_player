@@ -72,3 +72,31 @@
 .club-list button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding: 8px 10px; }
 .club-list button.on { border-color: var(--accent); background: var(--accent-wash); }
 .club-list button .r { margin-left: auto; color: var(--muted); font-size: var(--t-tiny); }
+
+/* ---- new career: start points and origins ---- */
+.start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 720px) { .start-grid { grid-template-columns: 1fr; } }
+.start-card, .origin-pick { text-align: left; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 10px 12px; white-space: normal; height: auto; }
+.start-card.on, .origin-pick.on { border-color: var(--accent); background: var(--accent-wash); }
+.start-card span, .origin-pick span { font-size: var(--t-small); color: var(--muted); font-weight: 400; }
+.origin-pick em { font-size: var(--t-tiny); color: var(--faint); font-style: normal; }
+.origin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .origin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .origin-grid { grid-template-columns: 1fr; } }
+
+/* ---- the career on one card ---- */
+.poster-me { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(160deg, var(--panel), var(--panel-2)); }
+.poster-me .eyebrow { font-size: var(--t-tiny); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.poster-me h1 { margin: 2px 0 6px; font-size: 34px; }
+.poster-me .txt { color: var(--muted); margin: 0 0 12px; }
+.poster-me .wall { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.poster-me .trophy { padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line-hi); font-size: var(--t-small); }
+.poster-me .trophy.c { border-color: var(--gold); color: var(--gold); }
+.poster-me .trophy.m { border-color: var(--accent); color: var(--accent); }
+.poster-me .trophy.ring { opacity: .6; }
+.poster-me .years td { padding: 2px 8px 2px 0; font-size: var(--t-small); }
+.poster-me .nums { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0; }
+.poster-me .nums div { display: flex; flex-direction: column; }
+.poster-me .nums b { font-size: 22px; }
+.poster-me .nums span { font-size: var(--t-tiny); color: var(--muted); }
+.poster-me .sig { font-size: var(--t-tiny); color: var(--faint); border-top: 1px solid var(--line-soft); padding-top: 8px; }

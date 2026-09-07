@@ -1,14 +1,18 @@
-import type { Attrs } from '../types'
+import type { Attrs, Region, SquadRole } from '../types'
 
 /** What a week's action points can be spent on. */
-export type MeAction = 'aim' | 'vod' | 'util' | 'ranked' | 'scrim' | 'duo' | 'stream' | 'rest' | 'duel'
+export type MeAction =
+  | 'aim' | 'vod' | 'util' | 'ranked' | 'scrim' | 'duo' | 'stream' | 'content' | 'rest' | 'duel'
 
 /** An in-round decision is judged on one of the eight attributes, or on nerve. */
 export type NodeDim = keyof Attrs | 'mental'
 
-export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | 'bad' | 'season'
+export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | 'bad' | 'season' | 'event' | 'cup' | 'deal'
 
 export interface MeLog { day: number; year: number; kind: LogKind; text: string }
+
+/** Where the career is: chasing a contract, under one, between two, or done. */
+export type Phase = 'pre' | 'pro' | 'free' | 'retired'
 
 /** The ledger of one in-round call: what it was, the odds at the time, how it went. */
 export interface NodeLogEntry {
@@ -51,11 +55,14 @@ export interface MeMatchRecord {
   nodes: NodeLogEntry[]
   /** where I ranked by ACS on my own side, 1 = best; 0 when I did not play */
   rank: number
+  /** a cup or exhibition rather than a league fixture */
+  friendly?: boolean
 }
 
 export interface MeSeason {
   year: number
   team: string
+  tier: 1 | 2 | 0
   matches: number
   starts: number
   wins: number
@@ -65,10 +72,162 @@ export interface MeSeason {
   titles: string[]
 }
 
+/** A generated team-mate for a cup run — five strangers, one of them me. */
+export interface PickupMate {
+  id: string
+  ign: string
+  role: string
+  overall: number
+}
+
+export interface CupRun {
+  key: string
+  year: number
+  /** rounds won */
+  reached: number
+  rounds: number
+  won: boolean
+  prize: number
+}
+
+export interface Invite {
+  id: string
+  teamId: string
+  /** how they heard of me */
+  via: 'cup' | 'rank' | 'fans' | 'scout' | 'free'
+  day: number
+  expires: number
+  /** seen enough to skip the tryout */
+  direct: boolean
+}
+
+export interface TryoutDayLog { day: number; pick: string; dim: string; p: number; ok: boolean }
+
+export interface Tryout {
+  inviteId: string
+  teamId: string
+  startDay: number
+  /** which of the four days is next, 0-3; 4 = finished */
+  step: number
+  score: number
+  log: TryoutDayLog[]
+  grade?: string
+}
+
+/** Contract terms on the table — from a tryout, a rival club, or my own club. */
+export interface Deal {
+  id: string
+  teamId: string
+  kind: 'sign' | 'transfer' | 'renew'
+  tier: 1 | 2
+  role: SquadRole
+  salary: number
+  signBonus: number
+  years: number
+  buyout: number
+  /** what I already asked for */
+  asks: string[]
+  /** how many times they pushed back */
+  blown: number
+  leverage: number
+  grade: string
+  day: number
+  expires: number
+  /** a move abroad — language and distance come with it */
+  abroad: boolean
+}
+
+export interface PreState {
+  /** how many years I have been chasing a contract, 1-based */
+  year: number
+  /** 0-100 ladder score */
+  ladder: number
+  ladderPeak: number
+  cups: CupRun[]
+  /** how many times a club's people wrote my name down */
+  scoutSeen: number
+  invites: Invite[]
+  /** `${year}:${key}` milestones already offered */
+  seen: string[]
+  /** 战术素养 0-60: what playing with a five teaches that ranked cannot */
+  tac: number
+  mates: PickupMate[]
+  /** the cup in progress, if any */
+  cup?: { key: string; round: number; alive: boolean; mates: PickupMate[]; results: string[] }
+  /** a former pro on the market keeps his record but starts here again */
+  wasPro: boolean
+}
+
+export interface StreamDealMe {
+  platform: string
+  /** signed with the club's partner platform */
+  club: boolean
+  guarantee: number
+  clubCut: number
+  minPerStage: number
+  untilYear: number
+}
+
+export interface StreamOffer {
+  id: string
+  tier: 'B' | 'S'
+  platform: string
+  clubPlatform: string
+  sign: number
+  guarantee: number
+  day: number
+  expires: number
+}
+
+export interface Quest {
+  id: string
+  title: string
+  kind: 'stream' | 'train' | 'ranked' | 'win' | 'scrim'
+  need: number
+  done: number
+  deadline: number
+  rewardText: string
+  penaltyText: string
+  reward: EffectSpec
+  penalty: EffectSpec
+}
+
+/** A bundle of consequences, applied by fx.apply — the same shape events, quests and traits use. */
+export interface EffectSpec {
+  money?: number
+  heat?: number
+  fans?: number
+  tilt?: number
+  mental?: number
+  body?: number
+  fatigue?: number
+  form?: number
+  morale?: number
+  coachTrust?: number
+  gmTrust?: number
+  /** a random team-mate's bond with me */
+  bond?: number
+  /** progress on the eight, in xp */
+  xp?: Partial<Record<keyof Attrs, number>>
+  ladder?: number
+  scoutSeen?: number
+  quest?: string
+  note?: string
+}
+
+export type Axis = 'hard' | 'warm' | 'grind' | 'show'
+
+export interface PendingItem {
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released'
+  id?: string
+  day: number
+}
+
 export interface MeState {
   /** my player id in state.players */
   id: string
-  origin: string
+  originKey: string
+  phase: Phase
   /** career weeks completed */
   week: number
   /** days already advanced inside the current week, 0-7 */
@@ -100,13 +259,67 @@ export interface MeState {
   fans: number
   heat: number
   money: number
+  /** weekly outgoing the background left me with */
+  upkeep: number
   log: MeLog[]
   matches: MeMatchRecord[]
   /** engine digest lines collected during the week, shown on the week screen */
   weekNotes: string[]
   /** a fixture the week stopped on, still to be played */
   pendingFixture?: string
+  /** things waiting on me before the clock moves */
+  pending: PendingItem[]
   seasons: MeSeason[]
   seasonStart: { year: number; overall: number; matches: number; starts: number; wins: number; acsSum: number }
   lastLineupIn?: boolean
+  /** stages this season I sat out entirely — the scouts count those */
+  benchedStages: number
+  startedThisStage: number
+  playedThisStage: number
+
+  pre: PreState
+  tryout?: Tryout
+  deals: Deal[]
+  /** clubs that wrote me down at a stage's end */
+  intents: { teamId: string; day: number }[]
+  /** clubs that offered this year and were turned down */
+  declined: string[]
+  /** the year I asked to be listed */
+  listedYear?: number
+  /** seasons at the current club */
+  tenure: number
+  /** years spent with no club as a former pro */
+  freeYears: number
+  region: Region
+  /** playing outside my home region */
+  abroad: boolean
+
+  stream: {
+    /** index into STREAM_CUTS */
+    cut: number
+    deal?: StreamDealMe
+    offer?: StreamOffer
+    thisStage: number
+    total: number
+  }
+  gear: Record<string, number>
+  courses: string[]
+  agentTier: number
+  relaxUsed: number
+
+  axes: Record<Axis, number>
+  traits: string[]
+  eventCounts: Record<string, number>
+  pendingEvent?: string
+  quests: Quest[]
+  eventsSeen: number
+
+  auto: { buy: boolean; biz: boolean; daily: boolean; career: boolean }
+  autoNotes: string[]
+
+  achievements: string[]
+  titles: { year: number; title: string; started: boolean }[]
+  ending?: { key: string; title: string; text: string; year: number }
+  retireAsk?: boolean
+  flags: Record<string, number>
 }

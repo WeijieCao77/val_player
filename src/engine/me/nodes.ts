@@ -112,10 +112,10 @@ export const DIM_CN: Record<NodeDim, string> = {
  * me — one man does not carry four — and the riskier option really is less
  * likely, not just swingier. Nerve helps; tilt hurts.
  */
-export function nodeChance(state: GameState, opt: NodeOpt): number {
+export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): number {
   const me = state.me!
   const p = state.players[me.id]
-  const mates = state.teams[state.myTeam].starters
+  const mates = (state.teams[teamId ?? state.myTeam]?.starters ?? [])
     .filter((id) => id !== me.id)
     .map((id) => state.players[id])
     .filter(Boolean)
@@ -126,8 +126,11 @@ export function nodeChance(state: GameState, opt: NodeOpt): number {
     const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[opt.dim as keyof typeof m.attrs], 0) / mates.length : mine
     v = mine * NODE_MINE + avg * (1 - NODE_MINE)
   }
+  // gear on the desk and a cool head each add a little; a trait may add more
+  const gear = Object.values(me.gear ?? {}).reduce((s, t) => s + t * 0.004, 0)
+  const edge = me.traits?.includes('edge') && (p.form < 70 || me.tilt > 40) ? 0.03 : 0
   return clamp(
-    0.30 + (v / 100) * 0.55 - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60,
+    0.30 + (v / 100) * 0.55 - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60 + gear + edge,
     0.12, 0.92,
   )
 }
