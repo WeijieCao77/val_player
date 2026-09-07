@@ -106,7 +106,7 @@ function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0): Team | null {
     let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
     if (prefer && t.tier === prefer) v *= 4
     if (!prefer && t.tier === 1) v *= 0.5
-    if (t.region !== me.region) v *= me.flags.lang ? 0.3 : 0.08
+    if (t.region !== me.region) v *= me.flags.lang ? 0.2 : 0.04
     return v
   })
   return rng.weighted(pool, w)

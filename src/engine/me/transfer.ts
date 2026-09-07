@@ -79,7 +79,7 @@ function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
   if (!fit.length) return null
   const w = fit.map((t) => {
     let v = 10 + Math.max(0, t.rating - mine.rating) * (rut ? 0 : 3) + (t.tier === 1 ? 6 : 0)
-    if (t.region !== me.region) v *= me.flags.lang || me.agentTier >= 2 ? 0.2 : 0.03
+    if (t.region !== me.region) v *= me.flags.lang || me.agentTier >= 2 ? 0.12 : 0.015
     else v *= 1.5
     if (me.intents.some((i) => i.teamId === t.id)) v *= 4
     return v

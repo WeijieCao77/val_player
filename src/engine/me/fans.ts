@@ -33,8 +33,13 @@ export function fanCap(state: GameState): number {
   const champs = me.titles.filter((t) => /Champions/.test(t.title)).length
   const cups = me.pre.cups.reduce((s, c) => s + (c.won ? 35 : c.reached * 8), 0)
   const starts = me.seasons.reduce((s, x) => s + x.starts, 0) + me.seasonStart.starts
-  let cap = 120 + me.pre.ladderPeak * 1.5 + cups + Math.min(starts, 200) * 2.0 +
-    regional * 520 + masters * 1150 + champs * 2300 + (me.stream.deal ? 180 : 0)
+  // titles are the biggest thing here and they keep coming for a decade, so
+  // the term flattens: three regional titles are worth a lot, thirteen are
+  // not worth four times that. Measured before this: 55% of careers at the
+  // top tier after sixteen seasons, against a target of 15%.
+  const raw = regional * 260 + masters * 700 + champs * 1400
+  const titleTerm = 3600 * (1 - Math.exp(-raw / 3600))
+  let cap = 120 + me.pre.ladderPeak * 1.5 + cups + Math.min(starts, 200) * 2.0 + titleTerm + (me.stream.deal ? 180 : 0)
   if (me.abroad) cap *= 0.82
   return cap
 }
