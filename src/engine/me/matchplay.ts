@@ -2,6 +2,7 @@ import { MatchSim } from '../match'
 import type { Side } from '../match'
 import { Rng, clamp, hashStr } from '../rng'
 import { commitFixture, fixtureRng } from '../season'
+import { agentCn } from '../content'
 import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine } from '../types'
 import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
@@ -148,7 +149,16 @@ export class MeMatch {
       mapIndex: this.sim.mapIndex,
       seriesMine: this.myMaps, seriesTheirs: this.theirMaps, need: this.sim.need,
       isIntl: !comp?.region, role: this.me.role, form: this.me.form,
+      agent: this.myAgent(),
     }
+  }
+
+  /** the agent I am on the map in progress, in Chinese */
+  myAgent(): string | undefined {
+    const m = this.map
+    if (!m || !this.side) return undefined
+    const en = (this.mineIsA ? m.A : m.B).agents[this.state.me!.id]
+    return en ? agentCn(en) : undefined
   }
 
   /** Advance one beat. 'node' means a decision is waiting on choose(). */
@@ -175,9 +185,10 @@ export class MeMatch {
       return 'map-end'
     }
     // a decision only when the map is still in the balance — nobody needs to
-    // be asked anything at 12-2
+    // be asked anything at 12-2 — and only while I am the one playing: a
+    // skipped match is the engine's numbers against theirs, nothing of mine
     const open = this.winProb()
-    if (this.playing && this.side && this.perMap < NODES_PER_MAP && m.round - this.lastNodeRound >= NODE_GAP &&
+    if (!this.skipNodes && this.playing && this.side && this.perMap < NODES_PER_MAP && m.round - this.lastNodeRound >= NODE_GAP &&
         open > 0.06 && open < 0.94) {
       const c = this.ctxOf()
       const pool = eligibleNodes(c, this.seen)
@@ -219,7 +230,8 @@ export class MeMatch {
     }
     const after = this.winProb()
     const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
-    const hl = nodeHighlight(pend.node.id, ok)
+    const idx = pend.node.a.indexOf(opt)
+    const hl = nodeHighlight(pend.node.id, idx < 0 ? pend.node.rec : idx, ok)
     const entry: NodeLogEntry = {
       map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
       p: Math.round(p * 100), ok, before: Math.round(before * 100), after: Math.round(after * 100),
@@ -231,13 +243,19 @@ export class MeMatch {
     return entry
   }
 
-  /** Everything left, with the steady option taken at every decision. */
+  /** no more decisions once the player has stepped away from the chair */
+  private skipNodes = false
+
+  /**
+   * Everything left, with no decisions in it: 快进, 托管 and the headless bot
+   * all take this road, so a skipped match is the two rosters' numbers and
+   * nothing else. Decisions already made stay in the record.
+   */
   runOut(): MeMatchRecord {
+    this.skipNodes = true
+    if (this.pending) this.choose(this.pending.node.rec)
     let guard = 0
-    while (!this.finished && guard++ < 400) {
-      const k = this.step()
-      if (k === 'node') this.choose(this.pending!.node.rec)
-    }
+    while (!this.finished && guard++ < 400) this.step()
     return this.finished!
   }
 

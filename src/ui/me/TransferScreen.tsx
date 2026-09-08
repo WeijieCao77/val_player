@@ -1,6 +1,6 @@
 import { useGame } from '../ctx'
 import { Crest, Panel, money } from '../common'
-import { inWindow, listSelf, perfWord, proPerf, PLAYER_WINDOWS } from '../../engine/me/transfer'
+import { inWindow, listSelf, nextWindow, perfWord, proPerf, PLAYER_WINDOWS, windowLabel } from '../../engine/me/transfer'
 import { expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { ROLE_CN } from '../../engine/me/contract'
 
@@ -22,7 +22,9 @@ export default function TransferScreen() {
         {pro && team && (
           <Panel title="合同">
             <p className="small" style={{ margin: 0 }}>
-              {team.name} · {ROLE_CN[p.contract?.promisedRole ?? 'rotation']} · 年薪 <b>{money(p.salary)}</b> · 还剩 <b>{p.contractYears}</b> 年 · 违约金 {money(me.flags.buyout ?? 0)} · 在队 {me.tenure} 季
+              <b>{team.name}</b> · 合同身份 <b>{ROLE_CN[p.contract?.promisedRole ?? 'rotation']}</b> · 年薪 <b>{money(p.salary)}</b>
+              <br />合同到 <b>{game.year + Math.max(0, p.contractYears - 1)} 赛季末</b>（还剩 {p.contractYears} 年）· 在队第 {me.tenure + 1} 季
+              <br /><span className="muted">违约金 {money(me.flags.buyout ?? 0)}：合同没到期时别的俱乐部要带走你，得付给 {team.tag} 这个数。</span>
             </p>
           </Panel>
         )}
@@ -31,7 +33,10 @@ export default function TransferScreen() {
             <p className="small" style={{ marginTop: 0 }}><b>{perfWord(perf)}</b>。</p>
             <p className="tiny faint">这个数字由：综合与联赛水平的差 ×1.2、队伍胜率、你的场均评分、院长局、冠军、状态、粉丝、坐过的板凳、训练赛，减去违约金的拖累。赛段结束时够高，看台上就会出现别队的教练；转会窗开了他们来报价。</p>
             {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
-            <p className="small">转会窗：{PLAYER_WINDOWS.map(([a, b]) => `第 ${a}–${b} 天`).join('，')}。{inWindow(game) ? '现在开着。' : '现在关着。'}</p>
+            <p className="small">
+              转会窗一年两次：{PLAYER_WINDOWS.map(windowLabel).join('、')}。
+              {inWindow(game) ? <b>现在开着。</b> : <>现在关着，下一次是<b>{nextWindow(game).label}</b>，约 {nextWindow(game).weeks} 周后。</>}
+            </p>
             <button className="sm" disabled={!inWindow(game) || me.listedYear === game.year} onClick={() => { toast(listSelf(game)); commit() }}>主动挂牌（经理信任 −8）</button>
           </Panel>
         )}

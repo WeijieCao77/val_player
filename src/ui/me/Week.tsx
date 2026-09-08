@@ -49,7 +49,6 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
       <div>
         <Panel
           title={`本周行动 · 剩 ${me.ap}/${me.apMax} 点`}
-          actions={<button className="sm" onClick={() => { autoPlan(game); commit() }}>按推荐安排</button>}
         >
           {/* the other budget: what the body has left after this week's plan */}
           {(() => {
@@ -134,6 +133,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </div>
           )}
           <div className="advance-me">
+            <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
             <button className="primary" onClick={onAdvance}>推进一周 →</button>
             <button onClick={() => onAdvanceUntil('match')}>到下一场比赛</button>
             <button onClick={() => onAdvanceUntil('stage')}>到赛段末</button>

@@ -96,7 +96,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
   const team = game.teams[inv.teamId]
   const skill = tryoutSkill(game)
   const expect = expectOf(team)
-  const via = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '球探推荐', free: '知道你在找队' }[inv.via]
+  const via = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '教练组推荐', free: '知道你在找队' }[inv.via]
   return (
     <Modal title={inv.direct ? `${team.name} 的报价` : `${team.name} 的试训邀请`} onClose={() => {}} onBgClose={() => {}}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>

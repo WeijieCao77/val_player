@@ -24,6 +24,8 @@ export interface NodeCtx {
   isIntl: boolean
   role: Role
   form: number
+  /** the agent I am on this map, in Chinese, so the screen can say 你今晚打欧门 */
+  agent?: string
 }
 
 export interface NodeOpt { t: string; dim: NodeDim; risk: number }
@@ -158,32 +160,81 @@ export function nodeReadout(
 }
 
 /**
- * What a call looks like from the seat next to you, one line each way. These
- * describe the action landing or not — the round itself is still played
- * afterwards, so none of them claim the round.
+ * What a call looks like from the seat next to you: one line for each option
+ * of each node, landing or not — the story has to be about the thing you
+ * actually chose. These describe the action, not the round, which is still
+ * played afterwards.
  */
-const NODE_HL: Record<string, { ok: string; bad: string }> = {
-  pistol_rush: { ok: '手枪局五个人一起冲，对面还没架好枪就被打穿了一条道。', bad: '五个人挤在一条道上被架住，冲锋在第一个拐角就停了。' },
-  entry: { ok: '你第一个探出去，先手拿下首杀，身后四个人跟着进了点。', bad: '先手被反枪，你第一个倒下，进点的节奏断了。' },
-  eco_gun: { ok: '全队唯一一把大枪在你手里，你打开了局面。', bad: '那把大枪在你手里被打掉了，这回合的经济白攒。' },
-  clutch: { ok: '1v2，你先解决了一个，再把最后一个等了出来。', bad: '1v2 想先找一个，被两边同时夹住。' },
-  behind_to: { ok: '暂停之后你在语音里把节奏拉了回来，五个人重新站到了一起。', bad: '喊了一嗓子，语音里没人接话。' },
-  behind_site: { ok: '你换了位置，他们第四次来的时候扑了个空。', bad: '还守在那个点，他们第四次来了。' },
-  ahead_rush: { ok: '一波冲上去，速战速决。', bad: '冲得太急，被守住反打了一波。' },
-  map_point_mine: { ok: '最后一波先手交给你，你把这张图打完了。', bad: '最后一波没打开，赛点从手里溜了一下。' },
-  map_point_theirs: { ok: '对面赛点，你站出来把这回合抢了回来。', bad: '对面赛点，你要来的这回合没打好。' },
-  ot: { ok: '加时，你的手稳住了。', bad: '加时第一回合，手抖了一下。' },
-  first_map: { ok: '开局稳住，第一回合按流程拿下。', bad: '第一回合就去找人，被人先找到了。' },
-  hot: { ok: '手感烫，资源都给了你，你也都打中了。', bad: '要了资源，手感却在这一回合凉了。' },
-  cold: { ok: '认了状态差，把枪让给队友，这一回合反而顺了。', bad: '硬扛的这一回合，简单的枪又漏了。' },
-  intl: { ok: '声浪里你还是听得见自己的报点。', bad: '声浪把你的节奏冲乱了。' },
-  save: { ok: '队友喊 save 你没听，赌上去，赌成了。', bad: '赌上去，枪没保住。' },
-  info: { ok: '跟上去二打二，这波你们打赢了。', bad: '跟上去被夹了一下。' },
+const NODE_HL: Record<string, { ok: string; bad: string }[]> = {
+  pistol_rush: [
+    { ok: '手枪局五个人一起冲，对面还没架好枪就被打穿了一条道。', bad: '五个人挤在一条道上被架住，冲锋在第一个拐角就停了。' },
+    { ok: '你们分散拿到了信息，对面的站位一清二楚，再慢慢收。', bad: '分散得太开，信息没拿到，人先被各个击破。' },
+  ],
+  entry: [
+    { ok: '你第一个探出去，先手拿下首杀，身后四个人跟着进了点。', bad: '先手被反枪，你第一个倒下，进点的节奏断了。' },
+    { ok: '你压住了自己，等烟和闪都到位才进，五个人一起压上去。', bad: '等道具的这几秒对面已经架好了，进点变成了硬啃。' },
+  ],
+  eco_gun: [
+    { ok: '全队唯一一把大枪在你手里，你打开了局面。', bad: '那把大枪在你手里被打掉了，这回合的经济白攒。' },
+    { ok: '五把手枪半甲一起冲，靠人数把点撕开了。', bad: '五个人半甲冲上去，被两把大枪扫了回来。' },
+  ],
+  clutch: [
+    { ok: '1v2，你先解决了一个，再把最后一个等了出来。', bad: '1v2 想先找一个，被两边同时夹住。' },
+    { ok: '1v2，你藏住了，等他们来拆包的那一下把两个都打了。', bad: '藏得太久，他们没来拆，包炸了你还在角落里。' },
+  ],
+  behind_to: [
+    { ok: '暂停之后你在语音里把节奏拉了回来，五个人重新站到了一起。', bad: '喊了一嗓子，语音里没人接话。' },
+    { ok: '你没说话，用一个回合的枪把队友重新打醒了。', bad: '你闷头打自己的，语音里还是一片安静。' },
+  ],
+  behind_site: [
+    { ok: '你换了位置，他们第四次来的时候扑了个空。', bad: '换了位置，他们这回没来，你守了个空点。' },
+    { ok: '你硬守，正面把第四次进攻顶了回去。', bad: '还守在那个点，他们第四次来了，人比上次多。' },
+  ],
+  ahead_rush: [
+    { ok: '一波冲上去，速战速决。', bad: '冲得太急，被守住反打了一波。' },
+    { ok: '按道具慢慢打，没给对面任何机会。', bad: '打得太慢，时间快到了才进点，进得很别扭。' },
+  ],
+  map_point_mine: [
+    { ok: '最后一波先手交给你，你把这张图打完了。', bad: '最后一波没打开，赛点从手里溜了一下。' },
+    { ok: '按体系打完最后一回合，谁都没有多做动作。', bad: '按体系打，但对面早就把这套看透了。' },
+  ],
+  map_point_theirs: [
+    { ok: '对面赛点，你站出来把这回合抢了回来。', bad: '对面赛点，你要来的这回合没打好。' },
+    { ok: '对面赛点，五个人按流程打了一回合，稳住了。', bad: '对面赛点，按流程打，流程被打穿了。' },
+  ],
+  ot: [
+    { ok: '加时，你深呼吸，按流程走，手稳住了。', bad: '加时第一回合，手还是抖了一下。' },
+    { ok: '加时，你用一波激进开局把自己逼进了状态。', bad: '加时的激进开局冲得太猛，先送了一个。' },
+  ],
+  first_map: [
+    { ok: '开局稳住，第一回合按流程拿下。', bad: '按流程打，第一回合还是没拿住。' },
+    { ok: '第一回合就去找人，先找到了对面。', bad: '第一回合就去找人，被人先找到了。' },
+  ],
+  hot: [
+    { ok: '手感烫，资源都给了你，你也都打中了。', bad: '要了资源，手感却在这一回合凉了。' },
+    { ok: '手感烫也没飘，按体系打，赢得很稳。', bad: '手感这么烫却按体系打，机会从眼前过去了。' },
+  ],
+  cold: [
+    { ok: '认了状态差，把枪让给队友，这一回合反而顺了。', bad: '把枪让出去了，队友这回合也没打好。' },
+    { ok: '硬扛的这一回合，手感被你找回来了。', bad: '硬扛的这一回合，简单的枪又漏了。' },
+  ],
+  intl: [
+    { ok: '声浪里你还是听得见自己的报点。', bad: '想享受，结果声浪把你的节奏冲乱了。' },
+    { ok: '戴上降噪，世界只剩枪声，你打得很干净。', bad: '降噪戴上了，队友的报点也听不清了。' },
+  ],
+  save: [
+    { ok: '队友喊 save 你没听，赌上去，赌成了。', bad: '赌上去，枪没保住。' },
+    { ok: '听队友的保了枪，下回合满配站上去。', bad: '保枪的时候被追着打，枪也没保住。' },
+  ],
+  info: [
+    { ok: '跟上去二打二，这波你们打赢了。', bad: '跟上去被夹了一下。' },
+    { ok: '你退了一步报点，队友顺着你的信息把人抓了。', bad: '退了，报了点，没人去接，信息浪费了。' },
+  ],
 }
 
-/** The one-line story of a call, by node id and outcome. */
-export function nodeHighlight(id: string, ok: boolean): string {
-  const t = NODE_HL[id]
+/** The one-line story of a call, by node, option and outcome. */
+export function nodeHighlight(id: string, option: number, ok: boolean): string {
+  const t = NODE_HL[id]?.[option] ?? NODE_HL[id]?.[0]
   if (t) return ok ? t.ok : t.bad
   return ok ? '这一下做对了。' : '这一下没成。'
 }

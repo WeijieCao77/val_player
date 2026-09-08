@@ -195,7 +195,7 @@ export default function PlayerGame() {
                   <span className="muted">效力</span>
                   <Crest id={game.myTeam} size={20} />
                   <b>{team.name}</b>
-                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
+                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
                   <span className="muted">·</span>
                   {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
                   <span className="muted">· 本季首发 {me.seasonStart.starts}/{me.seasonStart.matches} · 胜 {me.seasonStart.wins}</span>

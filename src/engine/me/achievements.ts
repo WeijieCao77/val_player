@@ -25,9 +25,9 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'carry5', name: '院长', desc: '5 场输球局里你是全队最高', group: '逆境', cond: (s) => starts(s).filter((m) => m.carried).length >= 5 },
   { key: 'matches100', name: '一百场', desc: '打满 100 场正赛', group: '里程碑', cond: (s) => starts(s).length >= 100 },
   { key: 'title_regional', name: '赛区冠军', desc: '随队夺得一个赛区赛事冠军', group: '荣誉', cond: (s) => titlesOf(s).some((t) => !/Masters|Champions/.test(t.title)) },
-  { key: 'title_masters', name: '大师', desc: '随队夺得 Masters', group: '荣誉', cond: (s) => intl(s, /Masters/).length >= 1 },
-  { key: 'title_champs', name: '世界之巅', desc: '随队夺得 Champions', group: '荣誉', cond: (s) => intl(s, /Champions/).length >= 1 },
-  { key: 'double', name: '双冠', desc: '同一年拿下 Masters 和 Champions', group: '荣誉', cond: (s) => {
+  { key: 'title_masters', name: '大师', desc: '随队夺得大师赛冠军', group: '荣誉', cond: (s) => intl(s, /Masters/).length >= 1 },
+  { key: 'title_champs', name: '世界之巅', desc: '随队夺得冠军赛冠军', group: '荣誉', cond: (s) => intl(s, /Champions/).length >= 1 },
+  { key: 'double', name: '双冠', desc: '同一年拿下大师赛和冠军赛', group: '荣誉', cond: (s) => {
     const years = new Set(intl(s, /Masters/).map((t) => t.year))
     return intl(s, /Champions/).some((t) => years.has(t.year))
   } },
@@ -40,7 +40,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'ladder_top', name: '国服第一', desc: '天梯登顶', group: '职业前', cond: (s) => s.me!.pre.ladderPeak >= 96 },
   { key: 'ladder_100', name: '前一百', desc: '天梯进前 100', group: '职业前', cond: (s) => s.me!.pre.ladderPeak >= 72 },
   { key: 'cup_city', name: '网吧之王', desc: '城市争霸赛冠军', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'city' && c.won) },
-  { key: 'cup_premier', name: 'Premier 冠军', desc: '拿下 Premier 挑战者组', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'premier' && c.won) },
+  { key: 'cup_premier', name: '业余联赛冠军', desc: '拿下官方业余联赛挑战者组', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'premier' && c.won) },
   { key: 'signed_t1', name: '一步登天', desc: '从业余直接签进 VCT 俱乐部', group: '职业前', cond: (s) => !!s.me!.flags.signedT1FromPre },
   { key: 'fans350', name: '平台头部', desc: '粉丝到「平台头部」', group: '人气', cond: (s) => s.me!.fans >= 350 },
   { key: 'fans900', name: '全网知名', desc: '粉丝到「全网知名」', group: '人气', cond: (s) => s.me!.fans >= 900 },

@@ -129,7 +129,7 @@ function offerInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng)
   const inv = makeInvite(state, team, via, rng)
   me.pre.invites.push(inv)
   push(state, { kind: 'invite', id: inv.id })
-  const how = via === 'cup' ? '看了你的杯赛' : via === 'rank' ? '在天梯上注意到你' : via === 'fans' ? '看了你的直播' : via === 'free' ? '知道你在找队' : '球探推荐'
+  const how = via === 'cup' ? '看了你的杯赛' : via === 'rank' ? '在天梯上注意到你' : via === 'fans' ? '看了你的直播' : via === 'free' ? '知道你在找队' : '教练组推荐'
   pushLog(state, 'good', `${team.name} 的人${how}，${inv.direct ? '直接给了报价' : '邀请你去试训'}。${INVITE_DAYS} 天内答复。`)
 }
 

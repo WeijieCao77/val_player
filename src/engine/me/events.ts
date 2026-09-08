@@ -105,7 +105,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '接', g: 'hard', e: { money: 3000, fatigue: 8, mental: -1, note: '这件事以后可能被翻出来' } }, { t: '不接', g: 'grind', e: { mental: 1 } }] },
   { id: 'scout_dm', w: 4, max: 2, when: (s) => pre(s) && s.me!.pre.ladder >= 60, rec: 0,
     q: '一个自称青训教练的人加你，说想看你打几把。', ctx: '真的假的不知道。',
-    a: [{ t: '打给他看', g: 'show', e: { scoutSeen: 1, fatigue: 3 } }, { t: '先问清楚是哪家', g: 'hard', e: { scoutSeen: 1, mental: 1 } }, { t: '不理', g: 'grind', e: {} }] },
+    a: [{ t: '打给他看', g: 'show', e: { scoutSeen: 1, fatigue: 3 } }, { t: '先问清楚是哪家', g: 'hard', e: { scoutSeen: 1, mental: 1 } }, { t: '不理', g: 'grind', e: { tilt: -3, mental: 1, note: '真假都不重要，你把这周的排位打完了' } }] },
   { id: 'parents', w: 5, max: 2, when: (s) => pre(s) && s.me!.pre.year >= 2, rec: 0,
     q: '父母问你还要打多久，隔壁家孩子已经工作了。', ctx: '第二年了。',
     a: [{ t: '再给我一年', g: 'hard', e: { mental: 2, tilt: 5 } }, { t: '答应边打边找工作', g: 'warm', e: { mental: -1, fatigue: 4 } }] },
@@ -134,7 +134,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '给经理发消息问情况', g: 'hard', e: { gmTrust: -3, mental: 1 } }, { t: '练到保洁来赶人', g: 'grind', e: { xp: { aim: 12, reaction: 8 }, fatigue: 10 } }, { t: '找队友聊', g: 'warm', e: { bond: 6, tilt: -8 } }] },
   { id: 'after_sign', w: 0, max: 4, when: pro, rec: 0,
     q: '官宣签约的那条微博下面，第一条评论问你是谁。', ctx: '很正常。',
-    a: [{ t: '回一句「打给你看」', g: 'hard', e: { heat: 15, mental: 1 } }, { t: '不回', g: 'grind', e: {} }, { t: '发一段训练视频', g: 'show', e: { heat: 25 } }] },
+    a: [{ t: '回一句「打给你看」', g: 'hard', e: { heat: 15, mental: 1 } }, { t: '不回', g: 'grind', e: { tilt: -4, mental: 1, heat: -5, note: '评论区自己吵去，你关了手机' } }, { t: '发一段训练视频', g: 'show', e: { heat: 25 } }] },
   { id: 'abroad', w: 0, max: 2, when: (s) => s.me!.abroad, rec: 0,
     q: '外赛区的第一周，队友的玩笑你一个都没听懂。', ctx: '语言课不是白报的。',
     a: [{ t: '硬着头皮多说', g: 'hard', e: { xp: { communication: 14 }, bond: 3, mental: -1 } }, { t: '找翻译软件先撑着', g: 'grind', e: { bond: -2 } }, { t: '请全队吃饭', g: 'warm', e: { money: -800, bond: 8 } }] },
@@ -200,7 +200,7 @@ export function describeEffect(e: EffectSpec): string {
   if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
   if (e.xp) for (const [k, v] of Object.entries(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}进度 ${num(v as number)}`)
   if (e.ladder) out.push(`天梯 ${num(e.ladder)}`)
-  if (e.scoutSeen) out.push('球探会记下你')
+  if (e.scoutSeen) out.push('会有俱乐部记下你')
   if (e.quest) out.push('接一个待办')
   if (e.note) out.push(e.note)
   return out.join(' · ')

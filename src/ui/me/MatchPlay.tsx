@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Modal, OvrBadge, Roles } from '../common'
 import RoundRibbon, { RibbonLegend } from '../RoundRibbon'
-import { mapCn } from '../../engine/content'
+import { agentCn, mapCn } from '../../engine/content'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
 import type { NodeLogEntry } from '../../engine/me/types'
@@ -93,7 +93,13 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const verdict = map && !map.over ? gapVerdict(mm.roundProb()) : null
   const verdictTag = (k: string) => k === 'crush' || k === 'edge' ? 'tag win' : k === 'even' ? 'tag' : 'tag warn'
 
-  const five = (teamId: string) => (game.teams[teamId]?.starters ?? []).map((id) => game.players[id]).filter(Boolean)
+  // the five on the floor for the current map, with the agent each is on;
+  // before the first map is built, the club's starters without agents
+  const five = (teamId: string) => {
+    const side = map ? (teamId === mm.myTeamId ? (mm.mineIsA ? map.A : map.B) : (mm.mineIsA ? map.B : map.A)) : null
+    if (side) return side.players.map((p) => ({ p, agent: side.agents[p.id] ? agentCn(side.agents[p.id]) : '' }))
+    return (game.teams[teamId]?.starters ?? []).map((id) => game.players[id]).filter(Boolean).map((p) => ({ p, agent: '' }))
+  }
 
   if (phase === 'pre') {
     return (
@@ -116,9 +122,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-head"><h2>{mine.tag} · {starterNow ? '你今晚首发' : '你在替补席'}</h2></div>
             <div className="panel-body">
               <div className="col tiny" style={{ gap: 4 }}>
-                {five(mm.myTeamId).map((p) => (
+                {five(mm.myTeamId).map(({ p, agent }) => (
                   <span key={p.id} className="row" style={{ gap: 4, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                    <Roles p={p} /><span>{p.ign}</span><OvrBadge value={p.overall} />
+                    <Roles p={p} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -128,9 +134,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-head"><h2>{opp?.tag ?? '对手'}</h2></div>
             <div className="panel-body">
               <div className="col tiny" style={{ gap: 4 }}>
-                {five(oppId).map((p) => (
+                {five(oppId).map(({ p, agent }) => (
                   <span key={p.id} className="row" style={{ gap: 4 }}>
-                    <Roles p={p} /><span>{p.ign}</span><OvrBadge value={p.overall} />
+                    <Roles p={p} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -258,6 +264,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
 
       {phase === 'node' && pend ? (
         <div className="node-box">
+          {pend.ctx.agent && <p className="tiny muted" style={{ margin: '0 0 6px' }}>你今晚打 <b>{pend.ctx.agent}</b> · {pend.ctx.role}</p>}
           <p className="q">{pend.node.q}</p>
           <p className="ctx">{pend.node.ctx}</p>
           <div className="node-opt">
@@ -296,9 +303,10 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="faint" style={{ marginBottom: 4 }}>{mine.tag}{!mm.playing && ' · 你不在场上'}</div>
             {myFive.map((p) => {
               const l = lineOf(p.id)
+              const ag = map ? (mm.mineIsA ? map.A : map.B).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}</span>
+                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )
@@ -308,9 +316,10 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="faint" style={{ marginBottom: 4 }}>{opp?.tag}</div>
             {theirFive.map((p) => {
               const l = lineOf(p.id)
+              const ag = map ? (mm.mineIsA ? map.B : map.A).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6 }}>
-                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}</span>
+                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )

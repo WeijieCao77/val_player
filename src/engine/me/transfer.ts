@@ -48,6 +48,19 @@ export function inWindow(state: GameState): boolean {
 
 /** the two windows a player actually moves in: after Masters I, and the winter */
 export const PLAYER_WINDOWS = [TRANSFER_WINDOWS[2], TRANSFER_WINDOWS[3]]
+/** a window named by where it sits in the season, not by day numbers */
+export const windowLabel = ([a]: [number, number]): string =>
+  a === 165 ? '第一赛段结束后（第二站大师赛期间）' : a === 323 ? '休赛期' : a === 63 ? '揭幕赛结束后' : a === 0 ? '季前' : `第 ${a} 天起`
+
+/** the next player window from today: its name, and how many weeks away */
+export function nextWindow(state: GameState): { label: string; weeks: number } {
+  const day = state.day
+  const ahead = PLAYER_WINDOWS.filter(([a]) => a > day).sort((x, y) => x[0] - y[0])[0]
+  if (ahead) return { label: windowLabel(ahead), weeks: Math.ceil((ahead[0] - day) / 7) }
+  const first = PLAYER_WINDOWS.slice().sort((x, y) => x[0] - y[0])[0]
+  return { label: `明年${windowLabel(first)}`, weeks: Math.ceil((first[0] + 364 - day) / 7) }
+}
+
 export function windowOpensToday(state: GameState): boolean {
   return PLAYER_WINDOWS.some(([a]) => state.day === a + 1)
 }

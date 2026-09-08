@@ -43,7 +43,7 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
     }
   }
   if (e.ladder) { me.pre.ladder = clamp(me.pre.ladder + e.ladder, 0, 100); out.push(`天梯 ${num(e.ladder)}`) }
-  if (e.scoutSeen) { me.pre.scoutSeen += e.scoutSeen; out.push('被球探记下来了') }
+  if (e.scoutSeen) { me.pre.scoutSeen += e.scoutSeen; out.push('有俱乐部记下了你') }
   if (e.note) out.push(e.note)
   return out
 }

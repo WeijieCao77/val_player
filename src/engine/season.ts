@@ -85,12 +85,12 @@ export interface StageDef {
 
 export const STAGES: StageDef[] = [
   { key: 'preseason', name: '季前准备', start: 0, end: 20 },
-  { key: 'kickoff', name: 'Kickoff', start: 21, end: 62 },
-  { key: 'masters1', name: 'Masters I', start: 63, end: 98 },
-  { key: 'stage1', name: 'Stage 1', start: 99, end: 164 },
-  { key: 'masters2', name: 'Masters II', start: 165, end: 214 },
-  { key: 'stage2', name: 'Stage 2', start: 215, end: 280 },
-  { key: 'champions', name: 'Champions', start: 281, end: 322 },
+  { key: 'kickoff', name: '揭幕赛', start: 21, end: 62 },
+  { key: 'masters1', name: '第一站大师赛', start: 63, end: 98 },
+  { key: 'stage1', name: '第一赛段', start: 99, end: 164 },
+  { key: 'masters2', name: '第二站大师赛', start: 165, end: 214 },
+  { key: 'stage2', name: '第二赛段', start: 215, end: 280 },
+  { key: 'champions', name: '冠军赛', start: 281, end: 322 },
   { key: 'offseason', name: '休赛期', start: 323, end: SEASON_DAYS - 1 },
 ]
 
@@ -109,7 +109,7 @@ export const stageAt = (day: number): StageKey =>
 
 export const stageName = (key: StageKey): string =>
   STAGES.find((s) => s.key === key)?.name ??
-  ({ challengers1: 'Challengers 第一赛段', challengers2: 'Challengers 第二赛段', ascension: 'Ascension' } as Record<string, string>)[key] ??
+  ({ challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', ascension: '晋升赛' } as Record<string, string>)[key] ??
   key
 
 /** Display a day index as an in-fiction date. */
