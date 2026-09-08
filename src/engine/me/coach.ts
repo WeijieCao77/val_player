@@ -1,5 +1,4 @@
-import { clamp } from '../rng'
-import type { Rng } from '../rng'
+import { Rng, clamp, hashStr } from '../rng'
 import { ROLES } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
@@ -256,6 +255,20 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
       team.starters = coachStarters(state)
       pushLog(state, 'bad', '连着三场你是全队最差，教练把你换下来了：两周之内不会再考虑你。')
       fireEvent(state, 'after_bench')
+      return
+    }
+    // losing with me in the bottom half, again: a coach who keeps losing
+    // starts trying other fives to see who is dragging the team
+    if (!rec.won && rec.rank >= 4) me.rotateHeat = (me.rotateHeat ?? 0) + 1
+    else if (rec.won) me.rotateHeat = 0
+    if ((me.rotateHeat ?? 0) >= 2 && !(me.benchLock && me.benchLock > state.day)) {
+      const r = new Rng(hashStr(`rotate:${state.seed}:${state.year}:${state.day}`))
+      if (r.chance(0.4)) {
+        me.rotateHeat = 0
+        me.benchLock = state.day + 7
+        team.starters = coachStarters(state)
+        pushLog(state, 'bad', '连着输球，教练要试新阵容：这一周先换人打，看看到底是谁在拖累。')
+      }
     }
   }
 }

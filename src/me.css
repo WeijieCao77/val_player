@@ -39,6 +39,27 @@
 .tile.dn b { color: var(--loss); }
 @media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tile { border-bottom: 1px solid var(--line); } }
 
+/* the whiteboard in a live match */
+.map-board { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 12px; align-items: center; margin: 6px 0 10px; }
+.map-board svg { width: 220px; height: 220px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; }
+.map-floor { fill: var(--panel); stroke: var(--line-hi); stroke-width: .8; }
+.map-lane { fill: none; stroke: var(--line-hi); stroke-width: .9; stroke-dasharray: 2 1.6; opacity: .7; }
+.map-link { stroke: var(--muted); stroke-width: .7; stroke-dasharray: 1 1; }
+.map-link.tp { stroke: var(--accent); }
+.map-site { fill: var(--panel); stroke: var(--muted); stroke-width: .9; }
+.map-site.hot { fill: var(--warn-wash, rgba(255,180,80,.18)); stroke: var(--warn); stroke-width: 1.2; }
+.map-site-label { font-size: 7px; font-weight: 700; text-anchor: middle; fill: var(--text); }
+.map-label { font-size: 5px; text-anchor: middle; fill: var(--muted); }
+.map-spawn { font-size: 4.2px; text-anchor: middle; fill: var(--muted); }
+.map-arrow { fill: none; stroke: var(--warn); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 3 2; animation: map-flow 1.2s linear infinite; }
+.map-arrow.deciding { stroke-width: 2.2; animation-duration: .6s; }
+.map-me.deciding circle:last-child { animation: map-pulse 1s ease-in-out infinite; }
+.map-read { font-size: var(--t-small); line-height: 1.6; }
+.map-read .win { color: var(--win); } .map-read .loss { color: var(--loss); }
+@keyframes map-flow { to { stroke-dashoffset: -10; } }
+@keyframes map-pulse { 0%, 100% { r: 5.2; opacity: .6; } 50% { r: 7.5; opacity: .15; } }
+@media (max-width: 720px) { .map-board { grid-template-columns: 1fr; } .map-board svg { width: 100%; height: auto; aspect-ratio: 1; } }
+
 /* the corner stack: changelog sits at 62px, the numbers switch above it */
 .pins-fab { bottom: 108px; }
 .support-fab.pins-fab.on .ico { color: var(--win); }

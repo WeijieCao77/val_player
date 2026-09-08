@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Modal, OvrBadge, Roles } from '../common'
 import RoundRibbon, { RibbonLegend } from '../RoundRibbon'
+import MapSchematic from './MapSchematic'
 import { agentCn, mapCn } from '../../engine/content'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
@@ -248,6 +249,13 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <div className="winbar" style={{ flex: 1 }}><i style={{ width: `${Math.round(wp * 100)}%` }} /></div>
           <span className="n">{Math.round(wp * 100)}%</span>
         </div>
+      )}
+      {map && (
+        <MapSchematic
+          map={map.map} roundNo={roundNo}
+          myAttack={mm.mineIsA ? (roundNo <= 12 || (roundNo >= 25 && (roundNo - 25) % 2 === 0)) : !(roundNo <= 12 || (roundNo >= 25 && (roundNo - 25) % 2 === 0))}
+          lastRound={lastRound} mineIsA={mm.mineIsA} deciding={phase === 'node'} agent={mm.myAgent()}
+        />
       )}
       {map && map.rounds.length > 0 && (
         <div style={{ marginBottom: 6 }}>

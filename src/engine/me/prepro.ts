@@ -85,8 +85,14 @@ export function tryoutSkill(state: GameState): number {
 }
 
 /** What this club expects of a signing: a bench place at a VCT side, a starter at a Challengers one. */
+/**
+ * What a club wants to see before it signs me. A Challengers side asks for a
+ * little more than its own level — nobody signs a rookie to be exactly as
+ * good as the bench — so a day-one player (about 60) is under every bar and
+ * has a season of climbing in front of him.
+ */
 export function expectOf(team: Team): number {
-  return team.tier === 1 ? team.rating - 4 : team.rating - 2
+  return team.tier === 1 ? team.rating - 2 : team.rating + 1
 }
 
 export const CLUB_TIER_CN = (team: Team): string =>

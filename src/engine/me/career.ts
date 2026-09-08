@@ -69,7 +69,9 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
   const o = originOf(originKey)
   const attrs = {} as Attrs
   for (const k of ATTR_KEYS) {
-    attrs[k] = clamp(58 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
+    // 52, not 58: a fresh player starts a clear step under every club's bar
+    // and has to climb to it, the way 破晓 opens — see prepro.expectOf
+    attrs[k] = clamp(52 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
   }
   attrs.igl = Math.min(attrs.igl, 62)
   return attrs

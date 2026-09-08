@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
-import { doDuel, planBlock, setPlan, staminaLeft } from '../../engine/me/week'
+import { planBlock, setPlan, staminaLeft } from '../../engine/me/week'
+import { duelBlock, startDuel } from '../../engine/me/duel'
+import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
-import type { DuelResult } from '../../engine/me/coach'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan } from '../../engine/me/auto'
 import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
@@ -19,7 +19,6 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
-  const [duel, setDuel] = useState<DuelResult | null>(null)
   const next = pro ? nextRealFixtureFor(game, game.myTeam) : undefined
   const opp = next ? game.teams[next.teamA === game.myTeam ? next.teamB : next.teamA] : null
   const soon = pro ? fixturesFor(game, game.myTeam).filter((f) => !f.played && f.day > game.day && f.day <= game.day + 7) : []
@@ -35,11 +34,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
     commit()
   }
   const tryDuel = () => {
-    const r = doDuel(game)
-    if (typeof r === 'string') { toast(r); return }
-    setDuel(r)
+    const why = startDuel(game)
+    if (why) { toast(why); return }
     commit()
   }
+  const duelWhy = pro ? duelBlock(game) : '需要先加入战队'
   // every action stays on the board; the ones I cannot take yet are greyed
   // with the reason under them, so the board also shows what is ahead
   const acts = ACTIONS.filter((a) => a.key !== 'duel')
@@ -104,34 +103,24 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   })}
                   {g === 'team' && (
                     <div
-                      role="button" tabIndex={!pro || starter || !target ? -1 : 0}
-                      className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}${!pro ? ' locked' : ''}`}
-                      onClick={() => { if (pro && !starter && target && me.ap >= 2) tryDuel() }}
+                      role="button" tabIndex={duelWhy ? -1 : 0}
+                      className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}${duelWhy ? ' locked' : ''}`}
+                      onClick={() => { if (!duelWhy) tryDuel() }}
                     >
                       <div className="t">对位挑战<span className="tag">2 点</span></div>
                       <div className="d">
-                        {!pro ? '替补时向同位置首发发起训练赛对位，赢够三次教练给你试用期。'
-                          : starter ? '你已经是首发，不用挑战谁。'
-                            : target ? `向 ${target.ign}（${target.overall}）发起训练赛对位，赢够 ${EDGE_NEED} 次教练给你试用期。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
-                              : '现在没有可以挑战的首发。'}
+                        {target
+                          ? `和 ${target.ign}（${target.overall}）打一场三局两胜的训练赛对位：每局一个场面，你选怎么打。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
+                          : '替补时向同位置首发发起训练赛对位，三局两胜，赢够三次教练给你试用期。'}
                       </div>
-                      {!pro && <div className="why">需要先加入战队</div>}
-                      <div className="c">
-                        <button className="sm primary" onClick={(e) => { e.stopPropagation(); tryDuel() }} disabled={!pro || starter || !target || me.ap < 2}>现在打</button>
-                      </div>
+                      {duelWhy && <div className="why">{duelWhy}</div>}
                     </div>
                   )}
                 </div>
               </div>
             )
           })}
-          {duel && (
-            <div className={`node-line ${duel.won ? 'ok' : 'bad'}`} style={{ marginTop: 10 }}>
-              对位 <b>{duel.him.ign}</b>：{duel.rounds.map((r) => `${r.dim} ${r.mine} vs ${r.his}（${r.p}%）${r.ok ? '✓' : '✗'}`).join(' · ')}
-              —— <b>{duel.won ? (duel.flash ? '三局全胜' : '赢了') : '输了'}</b>，资本 {duel.edge.toFixed(1)}/{EDGE_NEED}
-              {duel.trial && <b style={{ color: 'var(--win)' }}>　教练给了你试用期！</b>}
-            </div>
-          )}
+          {me.duelLive && <DuelPlay onDone={() => commit()} />}
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
             <button className="primary" onClick={onAdvance}>推进一周 →</button>

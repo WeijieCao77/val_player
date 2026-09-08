@@ -189,24 +189,44 @@ export type AdvanceUntil = 'match' | 'stage' | 'season'
  * the moment something is mine to do — my match (I play it), a decision the
  * dials do not cover, the end of the road — or at the boundary asked for.
  */
-export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number } {
+export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number; notes: string[] } {
   const me = state.me!
   const stage0 = state.stage
   const year0 = state.year
   let weeks = 0
+  const notes: string[] = []
   let stop: WeekStop = { kind: 'week-end' }
+  // whatever is waiting is answered the steady way and written down — a run
+  // to the end of the season that stops at every event is not a run
+  const settle = (): boolean => {
+    let g = 0
+    while (me.pending.length && g++ < 20) {
+      const line = autoResolve(state, me.pending[0])
+      notes.push(line || '替你处理了一件等着的事。')
+    }
+    return me.pending.length === 0
+  }
   while (weeks < 60) {
     runAutoPilot(state)
-    if (me.pending.length) return { stop: { kind: 'pending', item: me.pending[0] }, weeks }
-    if (me.phase === 'retired' || state.gameOver) return { stop: { kind: 'game-over' }, weeks }
+    if (!settle()) return { stop: { kind: 'pending', item: me.pending[0] }, weeks, notes }
+    if (me.phase === 'retired' || state.gameOver) return { stop: { kind: 'game-over' }, weeks, notes }
     if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
     stop = advanceWeek(state)
-    if (stop.kind !== 'week-end') return { stop, weeks }
+    if (stop.kind === 'match') {
+      // the next match is what "到下一场比赛" runs to; a longer run plays it
+      // the skipped way — two rosters' numbers, no decisions of mine
+      if (until === 'match') return { stop, weeks, notes }
+      const rec = new MeMatch(state, stop.fixture).runOut()
+      notes.push(`${rec.comp} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)
+      continue
+    }
+    if (stop.kind === 'pending') { if (!settle()) return { stop, weeks, notes }; continue }
+    if (stop.kind === 'game-over') return { stop, weeks, notes }
     weeks++
     if (until === 'stage' && state.stage !== stage0) break
     if (until === 'season' && state.year !== year0) break
   }
-  return { stop, weeks }
+  return { stop, weeks, notes }
 }
 
 export function autoWeek(state: GameState): WeekStop {

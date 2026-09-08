@@ -35,6 +35,35 @@ export interface NodeLogEntry {
   hl?: string
 }
 
+/** One scene of a practice duel, answered. */
+export interface DuelSceneLog {
+  r: number
+  t: string
+  dim: string
+  p: number
+  ok: boolean
+  mine: number
+  his: number
+  /** landed on a high-risk option — the coaching staff writes those down */
+  flash: boolean
+  line: string
+}
+
+/** A practice duel against the starter in my slot, played a scene at a time. */
+export interface DuelLive {
+  himId: string
+  sc: [number, number]
+  round: number
+  /** scene indices drawn for this duel */
+  pool: number[]
+  rounds: DuelSceneLog[]
+  flash: number
+  done: boolean
+  verdict?: string
+  trial?: boolean
+  edge?: number
+}
+
 export interface MeMatchRecord {
   fixtureId: string
   day: number
@@ -263,6 +292,10 @@ export interface MeState {
   /** day until which the coach will not consider me after a benching */
   benchLock?: number
   badStreak: number
+  /** losses with me near the bottom, in a row — the coach starts trying other fives */
+  rotateHeat?: number
+  /** a practice duel in progress, scene by scene */
+  duelLive?: DuelLive
   /** confirmed as a starter: selection reads my full rating, not the rookie discount */
   proven: boolean
   coachTrust: number

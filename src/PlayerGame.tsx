@@ -12,7 +12,7 @@ import Changelog from './ui/Changelog'
 import { CHANGELOG_ME, LATEST_ME } from './data/changelog_me'
 import { ladderLabel } from './engine/me/prepro'
 import { fanTier, fansCn } from './engine/me/fans'
-import { Crest, money } from './ui/common'
+import { Crest, Modal, money } from './ui/common'
 import NewCareer from './ui/me/NewCareer'
 import Week from './ui/me/Week'
 import MatchPlay from './ui/me/MatchPlay'
@@ -57,6 +57,8 @@ export default function PlayerGame() {
   const [live, setLive] = useState<MeMatch | null>(null)
   const [fixture, setFixture] = useState<Fixture | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(null)
+  // what a multi-week run did on my behalf, shown once it stops
+  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean } | null>(null)
   // the attribute strip under the overview; off is remembered per browser
   const [pins, setPinsRaw] = useState<boolean>(() => { try { return localStorage.getItem('val_player.pins') !== '0' } catch { return true } })
   const setPins = (f: (v: boolean) => boolean) => setPinsRaw((v) => { const n = f(v); try { localStorage.setItem('val_player.pins', n ? '1' : '0') } catch { /* private mode */ } return n })
@@ -103,16 +105,22 @@ export default function PlayerGame() {
     }
   }, [commit, toast])
 
-  /** Run several weeks, stopping wherever something is mine to do. */
+  /**
+   * Run several weeks. Everything waiting is answered the steady way and
+   * every match on the road is played by the numbers; what was done comes
+   * back as a summary. "到下一场比赛" is the one run that hands me the match.
+   */
   const advanceMany = useCallback((until: AdvanceUntil) => {
     const g = gameRef.current
     if (!g?.me) return
-    const { stop, weeks } = advanceUntil(g, until)
+    const { stop, weeks, notes } = advanceUntil(g, until)
     commit()
-    if (stop.kind === 'match') setLive(new MeMatch(g, stop.fixture))
-    else if (stop.kind === 'pending') toast(weeks ? `推进了 ${weeks} 周，有事等你拿主意。` : '有事等你拿主意。')
-    else if (stop.kind === 'game-over') toast('生涯到头了。')
-    else toast(`推进了 ${weeks} 周 · ${dateLabel(g)}`)
+    if (stop.kind === 'match') {
+      if (notes.length) toast(`推进了 ${weeks} 周，替你处理了 ${notes.length} 件事，到你的比赛了。`)
+      setLive(new MeMatch(g, stop.fixture))
+      return
+    }
+    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over' })
   }, [commit, toast])
 
   const ctxValue = useMemo(() => ({
@@ -260,6 +268,19 @@ export default function PlayerGame() {
 
         {playerId && <PlayerModal playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}
+        {summary && (
+          <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
+            <p className="small muted" style={{ marginTop: 0 }}>
+              现在是 {dateLabel(game)} · {stageName(game.stage)}。{summary.ended ? '生涯到头了。' : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
+            </p>
+            {summary.notes.length === 0
+              ? <p className="muted">一路没有需要拿主意的事。</p>
+              : <ul className="diary">{summary.notes.map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>}
+            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+              <button className="primary" onClick={() => setSummary(null)}>继续</button>
+            </div>
+          </Modal>
+        )}
         {live && (
           <MatchPlay
             key={live.fixture.id}
