@@ -109,6 +109,8 @@ const assetBase = (): string =>
 
 /** The wide banner valorant-api ships for a map, sized for a BP card. */
 export const mapImg = (map: string): string => `${assetBase()}maps/${map}.webp`
+/** The official top-down minimap, clean, only the site letters — see scripts/fetch_minimaps.ts. */
+export const minimapImg = (map: string): string => `${assetBase()}minimaps/${map}.png`
 
 /**
  * An agent's portrait icon, the way vlr.gg prints one in a scoreboard.
