@@ -68,6 +68,20 @@ export function setPlan(state: GameState, action: MeAction, delta: 1 | -1): stri
   return null
 }
 
+/**
+ * Why one more of this action cannot be planned right now, without planning
+ * it. The week screen greys the card out and prints this under it: a locked
+ * option is still a signpost — hide it and the player never learns it exists.
+ */
+export function planBlock(state: GameState, action: MeAction): string | null {
+  const me = state.me!
+  const def = ACTION_BY_KEY[action]
+  if (action === 'duel') return null
+  if (me.phase !== 'pro' && PRO_ONLY.includes(action)) return '需要先加入战队'
+  if (me.ap < def.cost) return `行动点不够（需 ${def.cost}，剩 ${me.ap}）`
+  return null
+}
+
 /** A practice duel happens now, not at the settlement. */
 export function doDuel(state: GameState): DuelResult | string {
   const me = state.me!

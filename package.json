@@ -6,7 +6,7 @@
   "description": "无畏契约（VALORANT）电竞经理 — a browser-based VCT esports manager game",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && npm run build:server",
+    "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "extract": "python3 scripts/extract.py",

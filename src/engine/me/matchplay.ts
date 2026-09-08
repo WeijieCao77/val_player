@@ -4,7 +4,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import { commitFixture, fixtureRng } from '../season'
 import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine } from '../types'
-import { eligibleNodes, nodeChance, NODE_SWING } from './nodes'
+import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
 import type { NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
@@ -64,6 +64,11 @@ export class MeMatch {
   started = false
   pending: { node: NodeDef; ctx: NodeCtx } | null = null
   nodes: NodeLogEntry[] = []
+  /** per map: the win estimate at kickoff and how it ended — the ledger that
+      lets "90% and still lost" be checked rather than felt */
+  mapLog: { map: string; before: number; won: boolean }[] = []
+  /** the story of the call just made, to be pinned on the round it shapes */
+  private pendingHl: string | null = null
   private seen = new Set<string>()
   private perMap = 0
   private lastNodeRound = -99
@@ -90,6 +95,11 @@ export class MeMatch {
 
   /** my club in this match — the temporary five in a cup, my employer otherwise */
   get myTeamId(): string { return this.friendly ? this.friendly.aId : this.state.myTeam }
+  /** the other five */
+  get oppTeamId(): string {
+    if (this.friendly) return this.friendly.bId
+    return this.mineIsA ? this.fixture.teamB : this.fixture.teamA
+  }
 
   get map() { return this.sim.current }
   get mineIsA(): boolean { return this.side === 'a' }
@@ -154,9 +164,12 @@ export class MeMatch {
         this.mapStarted = true
         this.started = this.playing
       }
+      this.mapLog.push({ map: this.sim.current!.map, before: Math.round(this.winProb() * 100), won: false })
       return 'map-start'
     }
     if (m.over) {
+      const entry = this.mapLog[this.mapLog.length - 1]
+      if (entry) entry.won = this.mineIsA ? m.a > m.b : m.b > m.a
       this.sim.closeMap()
       if (this.sim.decided) { this.finishInternal(); return 'done' }
       return 'map-end'
@@ -179,6 +192,12 @@ export class MeMatch {
       }
     }
     m.playRound()
+    // the call I just made belongs to the round it shaped, not to the map
+    if (this.pendingHl) {
+      const rl = m.rounds[m.rounds.length - 1]
+      if (rl) rl.hl = [this.pendingHl, ...(rl.hl ?? [])]
+      this.pendingHl = null
+    }
     return 'round'
   }
 
@@ -199,11 +218,15 @@ export class MeMatch {
       m.nudge[side] -= opt.risk * NODE_SWING * 0.8
     }
     const after = this.winProb()
+    const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
+    const hl = nodeHighlight(pend.node.id, ok)
     const entry: NodeLogEntry = {
       map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
       p: Math.round(p * 100), ok, before: Math.round(before * 100), after: Math.round(after * 100),
+      mine: ro.mine, theirs: ro.theirs ?? undefined, hl,
     }
     this.nodes.push(entry)
+    this.pendingHl = hl
     this.pending = null
     return entry
   }
@@ -219,6 +242,23 @@ export class MeMatch {
   }
 
   get record(): MeMatchRecord | null { return this.finished }
+
+  /**
+   * The lines from this match that were about me: the engine's highlights
+   * that carry my name (it already writes the clutch and the ace — nobody was
+   * reading them), and what each of my calls did, in the order they happened.
+   */
+  private myHighlights(engine: string[]): string[] {
+    const ign = this.me.ign
+    const out: string[] = []
+    for (const n of this.nodes) {
+      if (n.hl) out.push(`${n.map} 第 ${n.round} 回合 · ${n.hl}`)
+    }
+    for (const h of engine) {
+      if (h.includes(ign)) out.push(h)
+    }
+    return out
+  }
 
   private finishInternal(): void {
     if (this.finished) return
@@ -271,6 +311,8 @@ export class MeMatch {
       acs: Math.round(acs), rating: Math.round(rating * 100) / 100,
       mvp: result.mvp === me.id, carried: started && !won && rank === 1,
       nodes: this.nodes.slice(), rank,
+      highlights: this.myHighlights(result.highlights),
+      mapLog: this.mapLog.slice(),
     }
     this.finished = rec
     if (this.friendly) {

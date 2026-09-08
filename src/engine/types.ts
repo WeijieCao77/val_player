@@ -599,6 +599,9 @@ export interface RoundLog {
   /** economy state each side went into the round with */
   buyA: 'eco' | 'force' | 'full'
   buyB: 'eco' | 'force' | 'full'
+  /** highlight lines produced in this round, so the player screen can name
+      the clutch or the ace on the round it happened, not just at the end */
+  hl?: string[]
 }
 
 /**

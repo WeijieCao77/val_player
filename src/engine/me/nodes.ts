@@ -134,3 +134,68 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): num
     0.12, 0.92,
   )
 }
+
+/**
+ * The numbers behind a call, for the screen: what I bring on the attribute it
+ * is judged on, what the four around me average, and what the other five
+ * average on the same one. An attribute is only real once the player can see
+ * it lined up against somebody.
+ */
+export function nodeReadout(
+  state: GameState, opt: NodeOpt, teamId?: string, oppTeamId?: string,
+): { mine: number; mates: number | null; theirs: number | null } {
+  const me = state.me!
+  const p = state.players[me.id]
+  if (opt.dim === 'mental') return { mine: Math.round(me.mental), mates: null, theirs: null }
+  const dim = opt.dim
+  const avgOf = (ids: string[]) => {
+    const rows = ids.map((id) => state.players[id]).filter(Boolean)
+    return rows.length ? Math.round(rows.reduce((s, m) => s + m.attrs[dim], 0) / rows.length) : null
+  }
+  const mates = avgOf((state.teams[teamId ?? state.myTeam]?.starters ?? []).filter((id) => id !== me.id))
+  const theirs = oppTeamId ? avgOf(state.teams[oppTeamId]?.starters ?? []) : null
+  return { mine: Math.round(p.attrs[dim]), mates, theirs }
+}
+
+/**
+ * What a call looks like from the seat next to you, one line each way. These
+ * describe the action landing or not — the round itself is still played
+ * afterwards, so none of them claim the round.
+ */
+const NODE_HL: Record<string, { ok: string; bad: string }> = {
+  pistol_rush: { ok: '手枪局五个人一起冲，对面还没架好枪就被打穿了一条道。', bad: '五个人挤在一条道上被架住，冲锋在第一个拐角就停了。' },
+  entry: { ok: '你第一个探出去，先手拿下首杀，身后四个人跟着进了点。', bad: '先手被反枪，你第一个倒下，进点的节奏断了。' },
+  eco_gun: { ok: '全队唯一一把大枪在你手里，你打开了局面。', bad: '那把大枪在你手里被打掉了，这回合的经济白攒。' },
+  clutch: { ok: '1v2，你先解决了一个，再把最后一个等了出来。', bad: '1v2 想先找一个，被两边同时夹住。' },
+  behind_to: { ok: '暂停之后你在语音里把节奏拉了回来，五个人重新站到了一起。', bad: '喊了一嗓子，语音里没人接话。' },
+  behind_site: { ok: '你换了位置，他们第四次来的时候扑了个空。', bad: '还守在那个点，他们第四次来了。' },
+  ahead_rush: { ok: '一波冲上去，速战速决。', bad: '冲得太急，被守住反打了一波。' },
+  map_point_mine: { ok: '最后一波先手交给你，你把这张图打完了。', bad: '最后一波没打开，赛点从手里溜了一下。' },
+  map_point_theirs: { ok: '对面赛点，你站出来把这回合抢了回来。', bad: '对面赛点，你要来的这回合没打好。' },
+  ot: { ok: '加时，你的手稳住了。', bad: '加时第一回合，手抖了一下。' },
+  first_map: { ok: '开局稳住，第一回合按流程拿下。', bad: '第一回合就去找人，被人先找到了。' },
+  hot: { ok: '手感烫，资源都给了你，你也都打中了。', bad: '要了资源，手感却在这一回合凉了。' },
+  cold: { ok: '认了状态差，把枪让给队友，这一回合反而顺了。', bad: '硬扛的这一回合，简单的枪又漏了。' },
+  intl: { ok: '声浪里你还是听得见自己的报点。', bad: '声浪把你的节奏冲乱了。' },
+  save: { ok: '队友喊 save 你没听，赌上去，赌成了。', bad: '赌上去，枪没保住。' },
+  info: { ok: '跟上去二打二，这波你们打赢了。', bad: '跟上去被夹了一下。' },
+}
+
+/** The one-line story of a call, by node id and outcome. */
+export function nodeHighlight(id: string, ok: boolean): string {
+  const t = NODE_HL[id]
+  if (t) return ok ? t.ok : t.bad
+  return ok ? '这一下做对了。' : '这一下没成。'
+}
+
+/**
+ * How a map looks before it starts, from my side's round-win estimate. Text
+ * for the player, thresholds on the same number the engine rolls with.
+ */
+export function gapVerdict(p: number): { k: 'crush' | 'edge' | 'even' | 'under' | 'hopeless'; t: string; d: string } {
+  if (p >= 0.60) return { k: 'crush', t: '实力碾压', d: '正常打就能赢，别浪。' }
+  if (p >= 0.54) return { k: 'edge', t: '占优', d: '稳住节奏就行。' }
+  if (p > 0.46) return { k: 'even', t: '势均力敌', d: '胜负就在那几个关键回合上。' }
+  if (p > 0.40) return { k: 'under', t: '劣势', d: '硬碰硬赢不了，得在关键回合赌一把。' }
+  return { k: 'hopeless', t: '差距过大', d: '这一图基本没戏。打完它，把状态留给下一图。' }
+}

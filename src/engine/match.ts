@@ -659,6 +659,11 @@ export class MapSim {
     return this.ctx.highlights
   }
 
+  /** per-player lines so far on this map, live — read-only */
+  get lines(): Readonly<Record<string, MapLine>> {
+    return this.ctx.lines
+  }
+
   /** True when this side still has a timeout and the map is live. */
   canTimeout(side: Side): boolean {
     return !this.over && this.timeouts[side] > 0 && this.round > 0
@@ -707,6 +712,8 @@ export class MapSim {
       this.timeouts.b++
     }
 
+    // everything pushed to highlights from here on belongs to this round
+    const hBefore = this.ctx.highlights.length
     const rng = this.rng
     const buyA = pistol ? 'eco' : this.ecoA.decide(rng)
     const buyB = pistol ? 'eco' : this.ecoB.decide(rng)
@@ -821,6 +828,12 @@ export class MapSim {
         this.mapPointSaid = true
         if (room()) this.ctx.highlights.push(HL.mapPoint(this.A.team.name))
       }
+    }
+    // pin this round's lines on the round, so a screen can say what happened
+    // on round 7, not only at the end of the map
+    if (this.ctx.highlights.length > hBefore) {
+      const rl = this.ctx.rounds[this.ctx.rounds.length - 1]
+      if (rl) rl.hl = this.ctx.highlights.slice(hBefore)
     }
 
     for (const side of ['a', 'b'] as Side[]) {

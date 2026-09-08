@@ -27,6 +27,12 @@ export interface NodeLogEntry {
   /** map win estimate before and after, percent */
   before: number
   after: number
+  /** my value on the attribute the call was judged on, and the other side's
+      average on the same one — so the line can say 反应 78 对 71 */
+  mine?: number
+  theirs?: number
+  /** the one-line story of what the call did, written into that round */
+  hl?: string
 }
 
 export interface MeMatchRecord {
@@ -55,6 +61,11 @@ export interface MeMatchRecord {
   nodes: NodeLogEntry[]
   /** where I ranked by ACS on my own side, 1 = best; 0 when I did not play */
   rank: number
+  /** the rounds that were about me — engine highlights with my name on them,
+      plus what my own calls did */
+  highlights?: string[]
+  /** per map: what the win estimate was when it began, and how it went */
+  mapLog?: { map: string; before: number; won: boolean }[]
   /** a cup or exhibition rather than a league fixture */
   friendly?: boolean
 }

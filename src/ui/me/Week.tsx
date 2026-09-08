@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
 import { ACTIONS } from '../../engine/me/actions'
-import { doDuel, setPlan } from '../../engine/me/week'
+import { doDuel, planBlock, setPlan } from '../../engine/me/week'
 import type { DuelResult } from '../../engine/me/coach'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan } from '../../engine/me/auto'
@@ -10,8 +10,6 @@ import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
 import { CUPS } from '../../engine/me/cups'
-
-const PRO_ONLY = new Set(['scrim', 'duo', 'duel'])
 
 export default function Week({ onAdvance }: { onAdvance: () => void }) {
   const { game, commit, toast, openMatch } = useGame()
@@ -41,7 +39,9 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
     setDuel(r)
     commit()
   }
-  const acts = ACTIONS.filter((a) => a.key !== 'duel' && (pro || !PRO_ONLY.has(a.key)))
+  // every action stays on the board; the ones I cannot take yet are greyed
+  // with the reason under them, so the board also shows what is ahead
+  const acts = ACTIONS.filter((a) => a.key !== 'duel')
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}>
@@ -53,10 +53,13 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
           <div className="act-grid">
             {acts.map((a) => {
               const n = me.plan[a.key] ?? 0
+              const why = planBlock(game, a.key)
+              const locked = !!why && n === 0
               return (
-                <div key={a.key} className={`act-card${n ? ' on' : ''}`}>
+                <div key={a.key} className={`act-card${n ? ' on' : ''}${locked ? ' locked' : ''}`}>
                   <div className="t">{a.label}<span className="tag">{a.cost} 点</span></div>
                   <div className="d">{a.desc}{a.fatigue ? `。体力 ${a.fatigue > 0 ? '−' : '+'}${Math.abs(a.fatigue)}` : ''}</div>
+                  {why && <div className="why">{why}</div>}
                   {a.key === 'duo' && n > 0 && (
                     <select value={me.duoWith ?? ''} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
                       <option value="">和谁双排…</option>
@@ -66,7 +69,7 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
                   <div className="c">
                     <button className="sm" onClick={() => plan(a.key, -1)} disabled={n <= 0}>−</button>
                     <b>{n}</b>
-                    <button className="sm" onClick={() => plan(a.key, 1)} disabled={me.ap < a.cost}>+</button>
+                    <button className="sm" onClick={() => plan(a.key, 1)} disabled={!!why}>+</button>
                   </div>
                 </div>
               )
