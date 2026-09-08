@@ -252,9 +252,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       )}
       {map && (
         <MapSchematic
-          map={map.map} roundNo={roundNo}
-          myAttack={mm.mineIsA ? (roundNo <= 12 || (roundNo >= 25 && (roundNo - 25) % 2 === 0)) : !(roundNo <= 12 || (roundNo >= 25 && (roundNo - 25) % 2 === 0))}
-          lastRound={lastRound} mineIsA={mm.mineIsA} deciding={phase === 'node'} agent={mm.myAgent()}
+          map={map.map}
+          myAttack={mm.mineIsA === (roundNo <= 12 || (roundNo >= 25 && (roundNo - 25) % 2 === 0))}
+          lastRound={lastRound} mineIsA={mm.mineIsA} agent={mm.myAgent()}
         />
       )}
       {map && map.rounds.length > 0 && (
