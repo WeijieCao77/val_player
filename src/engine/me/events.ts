@@ -1,5 +1,6 @@
 import { Rng, hashStr } from '../rng'
 import type { GameState } from '../types'
+import { ATTR_CN } from '../types'
 import type { Axis, EffectSpec } from './types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
@@ -166,10 +167,43 @@ export const EVENTS: EventDef[] = [
 
 export const eventOf = (id: string) => EVENTS.find((e) => e.id === id)
 
+/** the same thing does not happen twice in two months, drawn or hooked */
+const EVENT_COOLDOWN_DAYS = 56
+
 function canFire(state: GameState, ev: EventDef): boolean {
   const me = state.me!
   if ((me.eventCounts[ev.id] ?? 0) >= ev.max) return false
+  const last = me.flags[`ev_${ev.id}`]
+  if (last != null && state.day - last >= 0 && state.day - last < EVENT_COOLDOWN_DAYS) return false
   try { return ev.when(state) } catch { return false }
+}
+
+/**
+ * What an option would do, in the words the settlement uses — shown on the
+ * button, so a choice is a choice and not a guess. Random parts (who the bond
+ * lands on, whether an attribute rises) are left out.
+ */
+export function describeEffect(e: EffectSpec): string {
+  const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
+  const out: string[] = []
+  if (e.money) out.push(`存款 ${num(e.money, ' $')}`)
+  if (e.heat) out.push(`热度 ${num(e.heat)}`)
+  if (e.fans) out.push(`粉丝 ${num(e.fans)}`)
+  if (e.fatigue) out.push(`体力 ${num(-e.fatigue)}`)
+  if (e.form) out.push(`状态 ${num(e.form)}`)
+  if (e.mental) out.push(`心态 ${num(e.mental)}`)
+  if (e.body) out.push(`体质 ${num(e.body)}`)
+  if (e.tilt) out.push(`气压 ${num(e.tilt)}`)
+  if (e.morale) out.push(`士气 ${num(e.morale)}`)
+  if (e.coachTrust) out.push(`教练信任 ${num(e.coachTrust)}`)
+  if (e.gmTrust) out.push(`经理信任 ${num(e.gmTrust)}`)
+  if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
+  if (e.xp) for (const [k, v] of Object.entries(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}进度 ${num(v as number)}`)
+  if (e.ladder) out.push(`天梯 ${num(e.ladder)}`)
+  if (e.scoutSeen) out.push('球探会记下你')
+  if (e.quest) out.push('接一个待办')
+  if (e.note) out.push(e.note)
+  return out.join(' · ')
 }
 
 /** The weekly draw. One event at a time; the clock stops on it. */

@@ -10,6 +10,7 @@ import type { Fixture, GameState, Player, Role, Team } from '../types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
+import { weekReport } from './press'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -79,7 +80,24 @@ export function planBlock(state: GameState, action: MeAction): string | null {
   if (action === 'duel') return null
   if (me.phase !== 'pro' && PRO_ONLY.includes(action)) return '需要先加入战队'
   if (me.ap < def.cost) return `行动点不够（需 ${def.cost}，剩 ${me.ap}）`
+  // stamina is the other budget: what is already planned this week counts
+  if (def.fatigue > 0) {
+    const left = staminaLeft(state)
+    if (left < def.fatigue) return `体力不够（需 ${def.fatigue}，剩 ${left}）`
+  }
   return null
+}
+
+/** 体力 = 100 − 疲劳, minus what this week's plan will already cost */
+export function staminaLeft(state: GameState): number {
+  const me = state.me!
+  const p = state.players[me.id]
+  let planned = 0
+  for (const [k, n] of Object.entries(me.plan)) {
+    const d = ACTION_BY_KEY[k as MeAction]
+    if (d && d.fatigue > 0) planned += d.fatigue * (n ?? 0)
+  }
+  return Math.max(0, Math.round(100 - p.fatigue - planned))
 }
 
 /** A practice duel happens now, not at the settlement. */
@@ -107,7 +125,8 @@ export const LIVING = 0.3
 
 /** engine digest lines worth showing a player; the manager's paperwork is not */
 function keep(n: string): boolean {
-  if (/董事会|行动力|赞助|商务|联盟|捆绑|报价|问价|教练组|分析师|申请|工作邀请|设施|经理/.test(n)) return false
+  // the manager's desk: sponsors, gigs, staff, the market board, whom to rest
+  if (/董事会|行动力|赞助|商务|联盟|捆绑|报价|问价|教练组|分析师|申请|工作邀请|设施|经理|来谈|轮休|状态正热|状态低迷|新挂牌/.test(n)) return false
   return true
 }
 
@@ -232,6 +251,8 @@ export function settleWeek(state: GameState): void {
   state.jobOffers = []
 
   for (const n of notes) me.weekNotes.push(n)
+  // the week's paper: my results, who moved where, who got stronger, what is next
+  me.weekNotes.unshift(...weekReport(state))
   me.week++
   me.weekDay = 0
   me.plan = {}

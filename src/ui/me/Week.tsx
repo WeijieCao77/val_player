@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
-import { doDuel, planBlock, setPlan } from '../../engine/me/week'
+import { doDuel, planBlock, setPlan, staminaLeft } from '../../engine/me/week'
+import type { AdvanceUntil } from '../../engine/me/auto'
 import type { DuelResult } from '../../engine/me/coach'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan } from '../../engine/me/auto'
@@ -11,7 +12,7 @@ import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
 import { CUPS } from '../../engine/me/cups'
 
-export default function Week({ onAdvance }: { onAdvance: () => void }) {
+export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
   const me = game.me!
   const p = game.players[me.id]
@@ -50,6 +51,19 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
           title={`本周行动 · 剩 ${me.ap}/${me.apMax} 点`}
           actions={<button className="sm" onClick={() => { autoPlan(game); commit() }}>按推荐安排</button>}
         >
+          {/* the other budget: what the body has left after this week's plan */}
+          {(() => {
+            const left = staminaLeft(game)
+            const now = Math.round(100 - p.fatigue)
+            return (
+              <div className="winbar-row" style={{ margin: '0 0 12px' }}>
+                <span className="tiny muted">体力</span>
+                <div className="winbar" style={{ flex: 1 }}><i style={{ width: `${left}%`, background: left < 40 ? 'var(--loss)' : undefined }} /></div>
+                <span className="n">{left}<span className="tiny muted">/100</span></span>
+                <span className="tiny muted">{left < now ? `（本周安排后）` : ''}{now < 40 ? ' · 四成以下，状态和比赛发挥明显下滑' : ''}</span>
+              </div>
+            )
+          })()}
           {/* three blocks, so the eye finds "mine" / "needs a club" / "outside
               the game" without reading every card */}
           {(['train', 'team', 'life'] as const).map((g) => {
@@ -121,9 +135,13 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
           )}
           <div className="advance-me">
             <button className="primary" onClick={onAdvance}>推进一周 →</button>
+            <button onClick={() => onAdvanceUntil('match')}>到下一场比赛</button>
+            <button onClick={() => onAdvanceUntil('stage')}>到赛段末</button>
+            <button onClick={() => onAdvanceUntil('season')}>到赛季末</button>
             <span className="hint">
               {me.ap > 0 ? `还有 ${me.ap} 点没用，推进后作废。` : '行动点已用完。'}
               {pro ? '一周里遇到你队的比赛会停下来打。' : '杯赛、邀请、事件都会停下来等你。'}
+              自动推进的周按推荐安排，遇到你的比赛或要你拿主意的事就停。
             </span>
           </div>
         </Panel>
@@ -138,7 +156,7 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
           </Panel>
         )}
 
-        <Panel title="这一周">
+        <Panel title={`电竞周报 · 第 ${week} 周`}>
           {me.weekNotes.length === 0 ? <p className="muted" style={{ margin: 0 }}>还没有发生什么。</p> : (
             <ul className="diary">{me.weekNotes.slice(-14).map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>
           )}

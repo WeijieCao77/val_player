@@ -11,17 +11,25 @@
  */
 import { useEffect, useState } from 'react'
 import { CHANGELOG, LATEST } from '../data/changelog'
+import type { ChangeEntry } from '../data/changelog'
 import Rich from './rich'
 
 const SEEN = 'valmgr.changelog.seen'
 
-const readSeen = (): string => {
-  try { return localStorage.getItem(SEEN) ?? '' } catch { return '' }
+const readSeen = (key: string): string => {
+  try { return localStorage.getItem(key) ?? '' } catch { return '' }
 }
 
-export default function Changelog({ raised = false }: { raised?: boolean }) {
+export default function Changelog({
+  raised = false, entries = CHANGELOG, latest = LATEST, seenKey = SEEN,
+  foot = '猪之家出品 · 小红书/抖音 @点点点点点点点点 · 有问题欢迎在群里说',
+}: {
+  raised?: boolean
+  /** another mode's log, with its own "have I read this" key */
+  entries?: ChangeEntry[]; latest?: string; seenKey?: string; foot?: string
+}) {
   const [open, setOpen] = useState(false)
-  const [seen, setSeen] = useState(readSeen)
+  const [seen, setSeen] = useState(() => readSeen(seenKey))
 
   // Escape closes it, like every other panel in the game
   useEffect(() => {
@@ -31,15 +39,15 @@ export default function Changelog({ raised = false }: { raised?: boolean }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  const fresh = !!LATEST && seen !== LATEST
+  const fresh = !!latest && seen !== latest
 
   const toggle = () => {
     setOpen((x) => {
       // Marked read on open, not on close: someone who opens it and then hits
       // Escape has still seen what is new.
       if (!x && fresh) {
-        setSeen(LATEST)
-        try { localStorage.setItem(SEEN, LATEST) } catch { /* private mode */ }
+        setSeen(latest)
+        try { localStorage.setItem(seenKey, latest) } catch { /* private mode */ }
       }
       return !x
     })
@@ -71,7 +79,7 @@ export default function Changelog({ raised = false }: { raised?: boolean }) {
             </p>
 
             <div className="log-list">
-              {CHANGELOG.map((entry) => (
+              {entries.map((entry) => (
                 <section key={entry.date + entry.title}>
                   <header>
                     <b>{entry.title}</b>
@@ -90,9 +98,7 @@ export default function Changelog({ raised = false }: { raised?: boolean }) {
             </div>
 
             <div className="support-foot">
-              <span className="tiny faint">
-                猪之家出品 · 小红书/抖音 @点点点点点点点点 · 有问题欢迎在群里说
-              </span>
+              <span className="tiny faint">{foot}</span>
             </div>
           </div>
         </>

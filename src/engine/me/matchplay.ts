@@ -319,6 +319,7 @@ export class MeMatch {
       me.matches.push(rec)
       if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
       me.heat += won ? 4 : 1
+      this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
       pushLog(state, 'cup', `${rec.comp} ${rec.label} vs ${rec.opp} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
       me.pendingFixture = undefined
@@ -336,6 +337,8 @@ export class MeMatch {
         if (won) me.seasonStart.wins++
       }
       me.heat += started ? (won ? 7 : -2.5) : (won ? 3 : -1)
+      // a match is the most tiring thing in the week; a map on the floor costs more than a map on the bench
+      this.me.fatigue = clamp(this.me.fatigue + (started ? 5 : 1.5) * result.maps.length, 0, 100)
       if (started && won) questProgress(state, 'win', 1)
       if (started) {
         me.tilt = clamp(me.tilt + (won ? -6 : rank >= 5 ? 14 : 8), 0, 100)

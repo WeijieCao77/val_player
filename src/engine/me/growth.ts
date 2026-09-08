@@ -168,6 +168,10 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
     }
   }
   if (me.flags.relax_flat) fatigue -= 3
+  // a week passes: the body gets some of it back on its own, more with a
+  // better constitution — so an idle week is never a dead week, and a full
+  // week of training is a real choice against it
+  fatigue -= clamp(6 + (me.body - 50) / 10, 3, 12)
   p.fatigue = clamp(p.fatigue + fatigue, 0, 100)
   if (rose.length) {
     const cn: Record<keyof Attrs, string> = {

@@ -39,6 +39,11 @@
 .tile.dn b { color: var(--loss); }
 @media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tile { border-bottom: 1px solid var(--line); } }
 
+/* the corner stack: changelog sits at 62px, the numbers switch above it */
+.pins-fab { bottom: 108px; }
+.support-fab.pins-fab.on .ico { color: var(--win); }
+@media (max-width: 720px) { .pins-fab { bottom: 100px; } }
+
 /* the week board: the card is the button */
 .act-card:not(.locked) { cursor: pointer; }
 .act-card:not(.locked):hover { border-color: var(--accent-line); }

@@ -181,6 +181,34 @@ export function autoBuy(state: GameState): string[] {
 }
 
 /** One whole week the steady way, matches and everything waiting included. */
+export type AdvanceUntil = 'match' | 'stage' | 'season'
+
+/**
+ * Let the clock run: each week is planned the steady way unless I already
+ * planned it by hand, whatever the dials cover is answered, and the run stops
+ * the moment something is mine to do — my match (I play it), a decision the
+ * dials do not cover, the end of the road — or at the boundary asked for.
+ */
+export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number } {
+  const me = state.me!
+  const stage0 = state.stage
+  const year0 = state.year
+  let weeks = 0
+  let stop: WeekStop = { kind: 'week-end' }
+  while (weeks < 60) {
+    runAutoPilot(state)
+    if (me.pending.length) return { stop: { kind: 'pending', item: me.pending[0] }, weeks }
+    if (me.phase === 'retired' || state.gameOver) return { stop: { kind: 'game-over' }, weeks }
+    if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
+    stop = advanceWeek(state)
+    if (stop.kind !== 'week-end') return { stop, weeks }
+    weeks++
+    if (until === 'stage' && state.stage !== stage0) break
+    if (until === 'season' && state.year !== year0) break
+  }
+  return { stop, weeks }
+}
+
 export function autoWeek(state: GameState): WeekStop {
   const me = state.me!
   let guard = 0

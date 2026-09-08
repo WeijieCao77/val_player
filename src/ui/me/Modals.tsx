@@ -9,7 +9,7 @@ import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
 import { Rng, hashStr } from '../../engine/rng'
 import { answerStreamOffer } from '../../engine/me/stream'
-import { eventOf, resolveEvent } from '../../engine/me/events'
+import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
 import { AXIS_CN, traitOf } from '../../engine/me/traits'
 import { pop } from '../../engine/me/pending'
 import { retire } from '../../engine/me/endings'
@@ -239,30 +239,36 @@ function StreamModal({ onDone }: { onDone: () => void }) {
 // ------------------------------------------------------------------ event
 function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }) {
   const { game, commit } = useGame()
-  const [result, setResult] = useState<string[] | null>(null)
+  const [result, setResult] = useState<{ pick: string; lines: string[] } | null>(null)
   const ev = eventOf(eventId)
   if (!ev) { pop(game, 'event', eventId); onDone(); return null }
-  if (result) {
-    return (
-      <Modal title="发生了什么" onClose={onDone} onBgClose={onDone}>
-        <p className="small" style={{ marginTop: 0 }}>{result.length ? result.join('，') : '没有立刻的变化。'}</p>
-        <div className="row" style={{ justifyContent: 'center' }}><button className="primary" onClick={onDone}>继续</button></div>
-      </Modal>
-    )
-  }
+  // the question stays on screen after the choice, with what it did right
+  // under the option you took — a popup that closes on click teaches nothing
   return (
-    <Modal title="际遇" onClose={() => {}} onBgClose={() => {}}>
+    <Modal title="事件" onClose={result ? onDone : () => {}} onBgClose={result ? onDone : () => {}}>
       <p className="q" style={{ fontSize: 'var(--t-h2)', fontWeight: 650, margin: '0 0 4px' }}>{ev.q}</p>
       <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctx}</p>
-      <div className="node-opt">
-        {ev.a.map((o, i) => (
-          <button key={i} onClick={() => { setResult(resolveEvent(game, ev.id, i)); commit() }}>
-            <span>{o.t}</span>
-            <span className="m">{AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
-          </button>
-        ))}
-      </div>
-      <p className="tiny faint" style={{ marginBottom: 0 }}>每个选项都靠向一条气质轴（硬 / 暖 / 苦 / 秀），同一条轴选够五次，你就成了那样的人。</p>
+      {result ? (
+        <>
+          <div className="node-line ok">
+            你选了「{result.pick}」
+            <div className="small" style={{ marginTop: 4 }}>{result.lines.length ? result.lines.join('，') : '没有立刻的变化。'}</div>
+          </div>
+          <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onDone}>继续</button></div>
+        </>
+      ) : (
+        <>
+          <div className="node-opt">
+            {ev.a.map((o, i) => (
+              <button key={i} onClick={() => { const lines = resolveEvent(game, ev.id, i); setResult({ pick: o.t, lines }); commit() }}>
+                <span>{o.t}</span>
+                <span className="m">{describeEffect(o.e) || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
+              </button>
+            ))}
+          </div>
+          <p className="tiny faint" style={{ marginBottom: 0 }}>每个选项都靠向一条气质轴（硬 / 暖 / 苦 / 秀），同一条轴选够五次，你就成了那样的人。</p>
+        </>
+      )}
     </Modal>
   )
 }

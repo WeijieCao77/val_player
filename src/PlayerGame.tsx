@@ -6,7 +6,10 @@ import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceWeek } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
-import { runAutoPilot } from './engine/me/auto'
+import { advanceUntil, runAutoPilot } from './engine/me/auto'
+import type { AdvanceUntil } from './engine/me/auto'
+import Changelog from './ui/Changelog'
+import { CHANGELOG_ME, LATEST_ME } from './data/changelog_me'
 import { ladderLabel } from './engine/me/prepro'
 import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, money } from './ui/common'
@@ -100,6 +103,18 @@ export default function PlayerGame() {
     }
   }, [commit, toast])
 
+  /** Run several weeks, stopping wherever something is mine to do. */
+  const advanceMany = useCallback((until: AdvanceUntil) => {
+    const g = gameRef.current
+    if (!g?.me) return
+    const { stop, weeks } = advanceUntil(g, until)
+    commit()
+    if (stop.kind === 'match') setLive(new MeMatch(g, stop.fixture))
+    else if (stop.kind === 'pending') toast(weeks ? `推进了 ${weeks} 周，有事等你拿主意。` : '有事等你拿主意。')
+    else if (stop.kind === 'game-over') toast('生涯到头了。')
+    else toast(`推进了 ${weeks} 周 · ${dateLabel(g)}`)
+  }, [commit, toast])
+
   const ctxValue = useMemo(() => ({
     game: gameRef.current!,
     commit,
@@ -157,8 +172,14 @@ export default function PlayerGame() {
           </button>
           <div className="spacer" />
           <div className="chip" title="行动点"><span aria-hidden="true">⚡</span> <b>{me.ap}/{me.apMax}</b> <span className="muted">行动点</span></div>
-          <button className="sm" onClick={() => setPins((v) => !v)} title="显示或收起属性数字">数值 {pins ? '开' : '关'}</button>
         </header>
+
+        {/* the corner: what changed in this build, and the numbers switch */}
+        <Changelog entries={CHANGELOG_ME} latest={LATEST_ME} seenKey="valplayer.changelog.seen" foot="选手生涯 demo · 每一版改了什么都在这里，回看用" />
+        <button className={`support-fab pins-fab${pins ? ' on' : ''}`} onClick={() => setPins((v) => !v)} title="显示或收起属性数字" aria-pressed={pins}>
+          <span className="ico" aria-hidden="true">🔢</span>
+          <span className="lbl">数值 {pins ? '开' : '关'}</span>
+        </button>
 
         {/* who I am, where I am, and the six numbers that matter — the rest of
             the numbers live one row down and can be switched off */}
@@ -233,7 +254,7 @@ export default function PlayerGame() {
                 </div>
                 {Screen && screen !== 'week' && <div style={{ marginTop: 16 }}><Screen /></div>}
               </>
-            ) : Screen ? <Screen /> : <Week onAdvance={advance} />}
+            ) : Screen ? <Screen /> : <Week onAdvance={advance} onAdvanceUntil={advanceMany} />}
           </main>
         </div>
 
