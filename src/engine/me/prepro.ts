@@ -13,18 +13,30 @@ export const INVITE_DAYS = 21
 /** Where a player of this rating settles on the ladder, 0-100. */
 export const skillToLadder = (overall: number): number => clamp(45 + (overall - 60) * 1.7, 0, 100)
 
-export const LADDER_TIERS: { at: number; name: string; k: string }[] = [
-  { at: 92, name: '辐能第一梯队', k: 'top' },
-  { at: 82, name: '辐能前 10', k: 'top10' },
-  { at: 72, name: '辐能前 100', k: 'top100' },
-  { at: 62, name: '辐能前 500', k: 'top500' },
-  { at: 52, name: '辐能', k: 'radiant' },
-  { at: 40, name: '不朽', k: 'immortal' },
-  { at: 0, name: '钻石', k: 'diamond' },
+/**
+ * The real ladder, in the names the CN client uses: 铂金 / 钻石 / 超凡 / 神话
+ * each split into 1–3, then 赋能 with a leaderboard rank once inside the top
+ * 500. Bands below 赋能 carry `sub: 3`; the tier function turns 44.5 into 神话1.
+ */
+export const LADDER_TIERS: { at: number; name: string; k: string; sub?: number }[] = [
+  { at: 92, name: '赋能第一梯队', k: 'top' },
+  { at: 82, name: '赋能前 10', k: 'top10' },
+  { at: 72, name: '赋能前 100', k: 'top100' },
+  { at: 62, name: '赋能前 500', k: 'top500' },
+  { at: 52, name: '赋能', k: 'radiant' },
+  { at: 42, name: '神话', k: 'immortal', sub: 3 },
+  { at: 30, name: '超凡', k: 'ascendant', sub: 3 },
+  { at: 16, name: '钻石', k: 'diamond', sub: 3 },
+  { at: 0, name: '铂金', k: 'platinum', sub: 3 },
 ]
 
 export function ladderTier(l: number): { name: string; k: string } {
-  return LADDER_TIERS.find((t) => l >= t.at) ?? LADDER_TIERS[LADDER_TIERS.length - 1]
+  const i = LADDER_TIERS.findIndex((t) => l >= t.at)
+  const t = LADDER_TIERS[i < 0 ? LADDER_TIERS.length - 1 : i]
+  if (!t.sub) return { name: t.name, k: t.k }
+  const top = i > 0 ? LADDER_TIERS[i - 1].at : 100
+  const n = clamp(1 + Math.floor((t.sub * (l - t.at)) / (top - t.at)), 1, t.sub)
+  return { name: `${t.name}${n}`, k: t.k }
 }
 
 /** The line the HUD shows: tier, and a rank number once inside the top 500. */
@@ -32,7 +44,7 @@ export function ladderLabel(l: number): string {
   if (l >= 96) return '国服第一'
   if (l >= 62) {
     const rank = Math.max(2, Math.round(500 * Math.pow((100 - l) / 38, 2.2)))
-    return `辐能 第 ${rank}`
+    return `赋能 第 ${rank}`
   }
   return ladderTier(l).name
 }

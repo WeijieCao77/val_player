@@ -80,15 +80,10 @@ export default function NewCareer({
         <div className="origin-grid">
           {ORIGINS.map((o) => (
             <button key={o.key} className={`origin-pick${originKey === o.key ? ' on' : ''}`} onClick={() => setOriginKey(o.key)}>
+              {/* the card is the story; what it does to the numbers stays in
+                  origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
               <b>{o.name}</b>
               <span>{o.blurb}</span>
-              <em>{[
-                ...Object.entries(o.attrs ?? {}).map(([k, v]) => `${ATTR_CN[k as keyof Attrs]} ${v > 0 ? '+' : ''}${v}`),
-                o.money ? `$${o.money.toLocaleString()}` : '', o.fans ? `粉丝 ${o.fans > 0 ? '+' : ''}${o.fans}` : '',
-                o.mental ? `心态 ${o.mental > 0 ? '+' : ''}${o.mental}` : '', o.body ? `体质 ${o.body > 0 ? '+' : ''}${o.body}` : '',
-                o.trainMul ? `训练 ×${o.trainMul}` : '', o.upkeep ? `每周寄家 $${o.upkeep}` : '', o.ladder ? `天梯 +${o.ladder}` : '',
-                o.tac ? `战术素养 +${o.tac}` : '', o.scoutSeen ? '球探认识你' : '', o.flags?.lang ? '会外语' : '',
-              ].filter(Boolean).join(' · ')}</em>
             </button>
           ))}
         </div>

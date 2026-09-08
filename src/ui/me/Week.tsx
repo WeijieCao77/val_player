@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
-import { ACTIONS } from '../../engine/me/actions'
+import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
 import { doDuel, planBlock, setPlan } from '../../engine/me/week'
 import type { DuelResult } from '../../engine/me/coach'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
@@ -50,44 +50,68 @@ export default function Week({ onAdvance }: { onAdvance: () => void }) {
           title={`本周行动 · 剩 ${me.ap}/${me.apMax} 点`}
           actions={<button className="sm" onClick={() => { autoPlan(game); commit() }}>按推荐安排</button>}
         >
-          <div className="act-grid">
-            {acts.map((a) => {
-              const n = me.plan[a.key] ?? 0
-              const why = planBlock(game, a.key)
-              const locked = !!why && n === 0
-              return (
-                <div key={a.key} className={`act-card${n ? ' on' : ''}${locked ? ' locked' : ''}`}>
-                  <div className="t">{a.label}<span className="tag">{a.cost} 点</span></div>
-                  <div className="d">{a.desc}{a.fatigue ? `。体力 ${a.fatigue > 0 ? '−' : '+'}${Math.abs(a.fatigue)}` : ''}</div>
-                  {why && <div className="why">{why}</div>}
-                  {a.key === 'duo' && n > 0 && (
-                    <select value={me.duoWith ?? ''} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
-                      <option value="">和谁双排…</option>
-                      {mates.map((m) => <option key={m.id} value={m.id}>{m.ign}</option>)}
-                    </select>
+          {/* three blocks, so the eye finds "mine" / "needs a club" / "outside
+              the game" without reading every card */}
+          {(['train', 'team', 'life'] as const).map((g) => {
+            const rows = acts.filter((a) => a.group === g)
+            return (
+              <div key={g} className="act-group">
+                <div className="act-group-head">{ACTION_GROUP_CN[g]}</div>
+                <div className="act-grid">
+                  {rows.map((a) => {
+                    const n = me.plan[a.key] ?? 0
+                    const why = planBlock(game, a.key)
+                    const locked = !!why && n === 0
+                    // the card itself is the action: one click plans it once
+                    // more, the way 破晓 does it; a small − takes one back
+                    return (
+                      <div
+                        key={a.key} role="button" tabIndex={why ? -1 : 0} aria-disabled={!!why}
+                        className={`act-card${n ? ' on' : ''}${locked ? ' locked' : ''}`}
+                        onClick={() => { if (!why) plan(a.key, 1) }}
+                        onKeyDown={(e) => { if (!why && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); plan(a.key, 1) } }}
+                      >
+                        <div className="t">{a.label}<span className="tag">{a.cost} 点{n ? ` · ×${n}` : ''}</span></div>
+                        <div className="d">{a.desc}{a.fatigue ? `。体力 ${a.fatigue > 0 ? '−' : '+'}${Math.abs(a.fatigue)}` : ''}</div>
+                        {why && <div className="why">{why}</div>}
+                        {a.key === 'duo' && n > 0 && (
+                          <select value={me.duoWith ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
+                            <option value="">和谁双排…</option>
+                            {mates.map((m) => <option key={m.id} value={m.id}>{m.ign}</option>)}
+                          </select>
+                        )}
+                        {n > 0 && (
+                          <div className="c">
+                            <b>已安排 {n} 次</b>
+                            <button className="sm" onClick={(e) => { e.stopPropagation(); plan(a.key, -1) }}>−</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {g === 'team' && (
+                    <div
+                      role="button" tabIndex={!pro || starter || !target ? -1 : 0}
+                      className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}${!pro ? ' locked' : ''}`}
+                      onClick={() => { if (pro && !starter && target && me.ap >= 2) tryDuel() }}
+                    >
+                      <div className="t">对位挑战<span className="tag">2 点</span></div>
+                      <div className="d">
+                        {!pro ? '替补时向同位置首发发起训练赛对位，赢够三次教练给你试用期。'
+                          : starter ? '你已经是首发，不用挑战谁。'
+                            : target ? `向 ${target.ign}（${target.overall}）发起训练赛对位，赢够 ${EDGE_NEED} 次教练给你试用期。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
+                              : '现在没有可以挑战的首发。'}
+                      </div>
+                      {!pro && <div className="why">需要先加入战队</div>}
+                      <div className="c">
+                        <button className="sm primary" onClick={(e) => { e.stopPropagation(); tryDuel() }} disabled={!pro || starter || !target || me.ap < 2}>现在打</button>
+                      </div>
+                    </div>
                   )}
-                  <div className="c">
-                    <button className="sm" onClick={() => plan(a.key, -1)} disabled={n <= 0}>−</button>
-                    <b>{n}</b>
-                    <button className="sm" onClick={() => plan(a.key, 1)} disabled={!!why}>+</button>
-                  </div>
-                </div>
-              )
-            })}
-            {pro && (
-              <div className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}`}>
-                <div className="t">对位挑战<span className="tag">2 点</span></div>
-                <div className="d">
-                  {starter ? '你已经是首发，不用挑战谁。'
-                    : target ? `向 ${target.ign}（${target.overall}）发起训练赛对位，赢够 ${EDGE_NEED} 次教练给你试用期。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
-                      : '现在没有可以挑战的首发。'}
-                </div>
-                <div className="c">
-                  <button className="sm primary" onClick={tryDuel} disabled={starter || !target || me.ap < 2}>现在打</button>
                 </div>
               </div>
-            )}
-          </div>
+            )
+          })}
           {duel && (
             <div className={`node-line ${duel.won ? 'ok' : 'bad'}`} style={{ marginTop: 10 }}>
               对位 <b>{duel.him.ign}</b>：{duel.rounds.map((r) => `${r.dim} ${r.mine} vs ${r.his}（${r.p}%）${r.ok ? '✓' : '✗'}`).join(' · ')}

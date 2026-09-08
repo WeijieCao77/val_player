@@ -8,7 +8,7 @@ import { advanceWeek } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
 import { runAutoPilot } from './engine/me/auto'
 import { ladderLabel } from './engine/me/prepro'
-import { fansCn } from './engine/me/fans'
+import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, money } from './ui/common'
 import NewCareer from './ui/me/NewCareer'
 import Week from './ui/me/Week'
@@ -54,6 +54,9 @@ export default function PlayerGame() {
   const [live, setLive] = useState<MeMatch | null>(null)
   const [fixture, setFixture] = useState<Fixture | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(null)
+  // the attribute strip under the overview; off is remembered per browser
+  const [pins, setPinsRaw] = useState<boolean>(() => { try { return localStorage.getItem('val_player.pins') !== '0' } catch { return true } })
+  const setPins = (f: (v: boolean) => boolean) => setPinsRaw((v) => { const n = f(v); try { localStorage.setItem('val_player.pins', n ? '1' : '0') } catch { /* private mode */ } return n })
   const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => { setBooted(true) }, [])
@@ -152,43 +155,64 @@ export default function PlayerGame() {
           <button className="brand as-link" onClick={() => setScreen('week')}>
             VAL<span>选手生涯</span><em className="by">demo</em>
           </button>
-          <div className="chip own" title="你">
-            <b>{p.ign}</b> <span className="muted">{p.role} · {p.age} 岁</span>
-          </div>
-          {team ? (
-            <div className="chip brand-club" title="所属俱乐部">
-              <Crest id={game.myTeam} size={20} />
-              <b>{team.name}</b>
-              <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
-            </div>
-          ) : (
-            <div className="chip" title="没有队伍"><b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b> {me.phase !== 'retired' && <span className="muted">{ladderLabel(me.pre.ladder)}</span>}</div>
-          )}
-          <div className="chip">{dateLabel(game)}</div>
-          <div className="chip">{stageName(game.stage)}</div>
-          {team && (
-            <div className="chip" title="本周教练的名单">
-              {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
-            </div>
-          )}
           <div className="spacer" />
-          <div className="chip" title="行动点"><span aria-hidden="true">⚡</span> <b>{me.ap}/{me.apMax}</b></div>
-          <div className="chip" title="粉丝"><span aria-hidden="true">👥</span> <b>{fansCn(me.fans)}</b></div>
-          <div className="chip" title="存款"><span aria-hidden="true">💰</span> <b>{money(me.money)}</b></div>
+          <div className="chip" title="行动点"><span aria-hidden="true">⚡</span> <b>{me.ap}/{me.apMax}</b> <span className="muted">行动点</span></div>
+          <button className="sm" onClick={() => setPins((v) => !v)} title="显示或收起属性数字">数值 {pins ? '开' : '关'}</button>
         </header>
-        <div className="pinbar" role="status" aria-label="属性">
-          {ATTR_KEYS.map((k) => (
-            <span key={k} className="pin"><span>{ATTR_CN[k]}</span><b>{p.attrs[k]}</b></span>
-          ))}
-          <span className="sep" />
-          <span className="pin"><span>综合</span><b>{p.overall}</b></span>
-          <span className="pin"><span>心态</span><b>{Math.round(me.mental)}</b></span>
-          <span className="pin"><span>体质</span><b>{Math.round(me.body)}</b></span>
-          <span className="sep" />
-          <span className={`pin ${p.form >= 78 ? 'up' : p.form <= 60 ? 'dn' : ''}`}><span>状态</span><b>{Math.round(p.form)}</b></span>
-          <span className={`pin ${p.fatigue >= 60 ? 'dn' : ''}`}><span>疲劳</span><b>{Math.round(p.fatigue)}</b></span>
-          <span className={`pin ${me.tilt >= 55 ? 'dn' : ''}`}><span>气压</span><b>{Math.round(me.tilt)}</b></span>
-        </div>
+
+        {/* who I am, where I am, and the six numbers that matter — the rest of
+            the numbers live one row down and can be switched off */}
+        <section className="hero" aria-label="总览">
+          <div className="hero-row">
+            <div className="hero-who">
+              <b className="hero-name">{p.ign}</b>
+              <span className="muted">{p.role} · {p.age} 岁</span>
+            </div>
+            <div className="hero-club">
+              {team ? (
+                <>
+                  <span className="muted">效力</span>
+                  <Crest id={game.myTeam} size={20} />
+                  <b>{team.name}</b>
+                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : 'CHAL'}</span>
+                  <span className="muted">·</span>
+                  {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
+                  <span className="muted">· 本季首发 {me.seasonStart.starts}/{me.seasonStart.matches} · 胜 {me.seasonStart.wins}</span>
+                </>
+              ) : (
+                <b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b>
+              )}
+            </div>
+          </div>
+          <div className="hero-stage">
+            <small>{game.year}</small>
+            <b>{stageName(game.stage)}</b>
+            <span className="muted">{dateLabel(game)} · 第 {Math.floor(game.day / 7)} 周</span>
+          </div>
+          <div className="tiles">
+            <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
+            <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(me.pre?.ladder ?? 0)}</b></div>
+            <div className="tile"><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
+            <div className="tile"><small>资金</small><b>{money(me.money)}</b></div>
+            <div className={`tile ${p.fatigue >= 60 ? 'dn' : ''}`}><small>体力</small><b>{Math.round(100 - p.fatigue)}<em>/100</em></b></div>
+            <div className={`tile ${p.form >= 78 ? 'up' : p.form <= 60 ? 'dn' : ''}`}><small>状态</small><b>{p.form >= 78 ? '火热' : p.form >= 68 ? '正常' : p.form >= 60 ? '一般' : '低迷'}<em>{Math.round(p.form)}</em></b></div>
+          </div>
+        </section>
+
+        {pins && (
+          <div className="pinbar" role="status" aria-label="属性">
+            {ATTR_KEYS.map((k) => (
+              <span key={k} className="pin"><span>{ATTR_CN[k]}</span><b>{p.attrs[k]}</b></span>
+            ))}
+            <span className="sep" />
+            <span className="pin"><span>综合</span><b>{p.overall}</b></span>
+            <span className="pin"><span>心态</span><b>{Math.round(me.mental)}</b></span>
+            <span className="pin"><span>体质</span><b>{Math.round(me.body)}</b></span>
+            <span className="sep" />
+            <span className={`pin ${p.fatigue >= 60 ? 'dn' : ''}`}><span>疲劳</span><b>{Math.round(p.fatigue)}</b></span>
+            <span className={`pin ${me.tilt >= 55 ? 'dn' : ''}`}><span>气压</span><b>{Math.round(me.tilt)}</b></span>
+          </div>
+        )}
 
         <div className="body">
           <nav className="nav">

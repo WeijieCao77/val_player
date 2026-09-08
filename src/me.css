@@ -20,6 +20,31 @@
   background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; min-height: 96px;
 }
 .act-card.on { border-color: var(--accent-line); background: var(--accent-wash); }
+/* overview block under the top bar: who / where / six big numbers */
+.hero { margin: 8px 14px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.hero-row { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.hero-who { display: flex; align-items: baseline; gap: 10px; }
+.hero-name { font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+.hero-club { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: var(--t-small); }
+.hero-stage { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.hero-stage small { color: var(--accent); letter-spacing: .12em; font-weight: 700; }
+.hero-stage b { font-size: 22px; font-weight: 700; }
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.tile { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
+.tile:last-child { border-right: 0; }
+.tile small { display: block; color: var(--muted); font-size: var(--t-small); margin-bottom: 4px; }
+.tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.tile b em { font-style: normal; font-size: var(--t-small); color: var(--muted); margin-left: 4px; }
+.tile.up b { color: var(--win); }
+.tile.dn b { color: var(--loss); }
+@media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tile { border-bottom: 1px solid var(--line); } }
+
+/* the week board: the card is the button */
+.act-card:not(.locked) { cursor: pointer; }
+.act-card:not(.locked):hover { border-color: var(--accent-line); }
+.act-card:not(.locked):active { transform: translateY(1px); }
+.act-group + .act-group { margin-top: 14px; }
+.act-group-head { font-size: var(--t-small); color: var(--muted); letter-spacing: .06em; margin: 0 0 6px 2px; }
 /* a locked action stays visible — the reason under it is the signpost */
 .act-card.locked { opacity: .55; }
 .act-card .why { font-size: var(--t-small); color: var(--warn); }
