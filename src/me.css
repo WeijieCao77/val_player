@@ -270,3 +270,18 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); }
 .clout-row:last-child { border-bottom: 0; }
 .clout-row .muted { font-size: var(--t-tiny); }
+
+/* 门槛阶梯（engine/me/prepro.ts clubBars）：整条梯子放一屏，
+   写清每一级要什么、你还差多少——上锁的门得说出锁是什么。 */
+.bars { display: flex; flex-direction: column; }
+.bar-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); }
+.bar-row:last-child { border-bottom: 0; }
+.bar-row.ok { background: var(--accent-wash); }
+.bar-row .n .muted { font-size: var(--t-tiny); }
+.bar-row .mono { font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
+.bar-row .mono.good { color: var(--win); }
+.bar-row .mono.warn { color: var(--warn); }
+.bar-row .mono.bad { color: var(--loss); }
+/* 试训选项：上面一行是「你在赌什么」，下面一行才是数字 */
+.node-opt button .m.mech { color: var(--faint); }

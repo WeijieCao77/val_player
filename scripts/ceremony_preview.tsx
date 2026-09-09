@@ -13,6 +13,8 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { cerStart } from '../src/engine/me/ceremony'
 import CeremonyModal from '../src/ui/me/Ceremony'
+import PendingModal from '../src/ui/me/Modals'
+import { startTryout } from '../src/engine/me/tryout'
 import { GameCtx } from '../src/ui/ctx'
 import type { CerKind } from '../src/engine/me/types'
 import '../src/styles.css'
@@ -29,7 +31,17 @@ const state = createCareer({
 for (let i = 0; i < 30; i++) if (autoWeek(state).kind === 'game-over') break
 state.me!.cer = undefined
 state.me!.pending = []
-cerStart(state, kind, about)
+// ?modal=tryout puts the four-day tryout on screen instead of a ceremony
+const asTryout = q.get('modal') === 'tryout'
+if (asTryout) {
+  const inv = state.me!.pre.invites[0]
+  const teamId = inv?.teamId ?? Object.values(state.teams).find((t) => t.tier === 2)!.id
+  state.me!.tryout = { inviteId: inv?.id ?? 'probe', teamId, startDay: state.day, step: 0, score: 0, log: [] }
+  state.me!.pending = [{ kind: 'tryout', id: inv?.id ?? 'probe', day: state.day }]
+  void startTryout
+} else {
+  cerStart(state, kind, about)
+}
 
 function Harness() {
   const [n, setN] = useState(0)
@@ -48,7 +60,9 @@ function Harness() {
             <a key={k} href={`?k=${k}`} style={{ marginLeft: 8 }}>{k}</a>
           ))}
         </p>
-        {state.me!.cer
+        {asTryout && state.me!.pending[0]
+          ? <PendingModal item={state.me!.pending[0]} onDone={() => setN((x) => x + 1)} />
+          : state.me!.cer
           ? <CeremonyModal onDone={() => setN((x) => x + 1)} />
           : <div className="card">
             <p>仪式已结束。日志最后三条：</p>

@@ -7,7 +7,13 @@ import { expectOf, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
 
-export interface TryoutOpt { t: string; dim: NodeDim; risk: number }
+export interface TryoutOpt {
+  t: string
+  dim: NodeDim
+  risk: number
+  /** what you are actually betting — the sentence 破晓 puts under every option */
+  why: string
+}
 export interface TryoutDay { name: string; desc: string; opts: TryoutOpt[]; rec: number }
 
 /**
@@ -15,16 +21,79 @@ export interface TryoutDay { name: string; desc: string; opts: TryoutOpt[]; rec:
  * the riskier option swings the verdict harder both ways, and a failure costs
  * exactly what a success earns — a grade means nothing otherwise.
  */
+/**
+ * Four days at the club.
+ *
+ * The shape was already ours: one test a day, one choice, the riskier option
+ * swinging the verdict harder both ways. What came across from 破晓's
+ * tryout.ts is what each option *says* — every one of theirs carries a line
+ * naming the bet («打成了就是核心，打崩了就是不合群»), and without it a
+ * choice between three attribute names is a dice roll with extra steps.
+ */
 export const TRYOUT_DAYS: TryoutDay[] = [
-  { name: '第一天 · 枪法测试', desc: 'DM 与 aim 测试，教练组在后面看数据。', rec: 0,
-    opts: [{ t: '稳扎稳打，打自己的节奏', dim: 'aim', risk: 0.6 }, { t: '秀一把，打出上限', dim: 'reaction', risk: 1.2 }, { t: '只当热身，别受伤', dim: 'aim', risk: 0.4 }] },
-  { name: '第二天 · 训练赛', desc: '顶替一个首发打两张图。', rec: 0,
-    opts: [{ t: '按他们的体系打', dim: 'teamwork', risk: 0.7 }, { t: '多做道具，让队友舒服', dim: 'utility', risk: 0.8 }, { t: '先手冲，让他们看到枪', dim: 'reaction', risk: 1.3 }] },
-  { name: '第三天 · 复盘会', desc: '教练放录像，让你说。', rec: 0,
-    opts: [{ t: '认真讲自己的错', dim: 'awareness', risk: 0.6 }, { t: '指出队伍体系的问题', dim: 'igl', risk: 1.1 }, { t: '少说话，多听', dim: 'communication', risk: 0.4 }] },
-  { name: '第四天 · 经理面谈', desc: '聊合同之前先聊人。', rec: 2,
-    opts: [{ t: '直接谈钱', dim: 'mental', risk: 1.0 }, { t: '谈上场时间', dim: 'communication', risk: 0.8 }, { t: '都听俱乐部安排', dim: 'mental', risk: 0.5 }] },
+  {
+    name: '第一天 · 枪法考核', rec: 0,
+    desc: '教练组在你身后架了台机器录屏。他们不看你杀了几个，看你每一发开枪前的那半秒。',
+    opts: [
+      { t: '打自己的节奏，不急', dim: 'aim', risk: 0.6, why: '数据不会难看，也不会让人记住。' },
+      { t: '全程拉到最快，秀一把', dim: 'reaction', risk: 1.3, why: '打出来就是“这手得留下”，拉拉垮了就是“心太浮”。' },
+      { t: '只当热身，别把手腾担累坏', dim: 'aim', risk: 0.4, why: '保住体力，代价是这一天几乎不加分。' },
+    ],
+  },
+  {
+    name: '第二天 · 训练赛', rec: 0,
+    desc: '顶掉一个首发打两张图。队伍不会为你改战术，你得自己钻进去。',
+    opts: [
+      { t: '完全按他们的体系打', dim: 'teamwork', risk: 0.7, why: '融入得快，但录像里看不出哪一个是你。' },
+      { t: '多丢道具，把队友喀舒服', dim: 'utility', risk: 0.8, why: '教练看得见，数据面板上看不见。' },
+      { t: '先手冲，让他们看到枪', dim: 'reaction', risk: 1.3, why: '打成了就是核心，打崩了就是不合群。' },
+    ],
+  },
+  {
+    name: '第三天 · 复盘会', rec: 0,
+    desc: '教练把昨天那个丢包的回合倒了七遍，然后问你：这一回合，问题出在谁身上。',
+    opts: [
+      { t: '承认是自己的错，并给出改法', dim: 'awareness', risk: 0.7, why: '教练最想听到的答案。' },
+      { t: '指出这支队伍体系上的问题', dim: 'igl', risk: 1.2, why: '说服了是有主见，没说服就是听不进话。' },
+      { t: '少说话，多听', dim: 'communication', risk: 0.4, why: '稳妥，但显得你没有自己的想法。' },
+    ],
+  },
+  {
+    name: '第四天 · 经理面谈', rec: 2,
+    desc: '合同就摆在桌上，他没推过来。先问你一句：你觉得自己值多少。',
+    opts: [
+      { t: '报一个高数字', dim: 'mental', risk: 1.3, why: '有底气是加分项，没底气就是不自量力。谈成了筹码也高。' },
+      { t: '先谈上场时间，钱往后放', dim: 'communication', risk: 0.9, why: '他会记住你想打比赛，不是想拿钱。' },
+      { t: '都听俱乐部安排', dim: 'mental', risk: 0.5, why: '不会出错，也不会给你加什么。' },
+    ],
+  },
 ]
+
+/**
+ * What the coaching staff said when they closed the door.
+ *
+ * A grade with no sentence attached is a letter, not a verdict.
+ */
+export const GRADE_TEXT: Record<string, string> = {
+  'A+': '教练组开会时用了「捡到了」这个说法。',
+  A: '四天下来，他们对你没有保留意见。',
+  B: '他们觉得你能用，但还不到能托付的程度。',
+  C: '差了一口气。要么再练一年，要么从低一级做起。',
+  D: '教练组没有留你的意思。',
+}
+
+/**
+ * Which days this tryout actually runs.
+ *
+ * A man who has played professionally does not get re-tested on his aim in
+ * a solo-queue booth — 破晓's rule, 「打过职业的人不用再考单排」, and the
+ * same holds here: his match record is the test. His day one is skipped, and
+ * the grade is computed over the three days he did play.
+ */
+export function tryoutDays(state: GameState): TryoutDay[] {
+  const me = state.me!
+  return me.pre.wasPro || me.phase === 'pro' ? TRYOUT_DAYS.slice(1) : TRYOUT_DAYS
+}
 
 const tryoutRng = (state: GameState, step: number) =>
   new Rng(hashStr(`tryout:${state.seed}:${state.year}:${state.day}:${step}`))
@@ -67,7 +136,8 @@ export const tryoutFatiguePenalty = (state: GameState, day: number): number =>
 export function tryoutChoose(state: GameState, i: number): TryoutDayLog {
   const me = state.me!
   const t = me.tryout!
-  const day = TRYOUT_DAYS[t.step]
+  const days = tryoutDays(state)
+  const day = days[t.step]
   const opt = day.opts[i] ?? day.opts[day.rec]
   const p = state.players[me.id]
   const v = opt.dim === 'mental' ? me.mental : p.attrs[opt.dim]
@@ -80,7 +150,7 @@ export function tryoutChoose(state: GameState, i: number): TryoutDayLog {
   const entry: TryoutDayLog = { day: t.step, pick: opt.t, dim: DIM_CN[opt.dim], p: Math.round(chance * 100), ok }
   t.log.push(entry)
   t.step++
-  if (t.step >= TRYOUT_DAYS.length) finishTryout(state)
+  if (t.step >= days.length) finishTryout(state)
   return entry
 }
 
@@ -107,6 +177,6 @@ function finishTryout(state: GameState): void {
   const deal = makeDeal(state, team.id, 'sign', grade, tryoutRng(state, 8))
   me.deals.push(deal)
   push(state, { kind: 'deal', id: deal.id })
-  pushLog(state, 'deal', `${team.name} 试训评级 ${grade}，给了一份合同。`)
+  pushLog(state, 'deal', `${team.name} 试训评级 <b>${grade}</b>。${GRADE_TEXT[grade]}他们给了一份合同。`)
   me.tryout = undefined
 }

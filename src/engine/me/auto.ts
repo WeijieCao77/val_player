@@ -10,7 +10,7 @@ import { EDGE_NEED } from './coach'
 import type { PendingItem } from './types'
 import { pop } from './pending'
 import { cupOf, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng } from './cups'
-import { declineInvite, startTryout, tryoutChoose, TRYOUT_DAYS } from './tryout'
+import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
@@ -105,7 +105,7 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     }
     case 'tryout': {
       let guard = 0
-      while (me.tryout && guard++ < 6) tryoutChoose(state, TRYOUT_DAYS[me.tryout.step].rec)
+      while (me.tryout && guard++ < 6) tryoutChoose(state, tryoutDays(state)[me.tryout.step].rec)
       return '试训打完了'
     }
     case 'deal': {

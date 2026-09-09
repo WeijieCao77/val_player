@@ -98,6 +98,44 @@ export function expectOf(team: Team): number {
 export const CLUB_TIER_CN = (team: Team): string =>
   team.tier === 2 ? 'Challengers' : team.rating >= 86 ? '豪门' : team.rating >= 79 ? '中游' : '弱队'
 
+/**
+ * The bar at every level, and how far under it you are.
+ *
+ * Ported from 破晓's 俱乐部门槛 card. Its point is the one the author has
+ * made about grey-outs all along: a locked door has to say what the lock is.
+ * The pre-pro stretch was 「过于冗长」 in the original partly because you
+ * could not see what you were climbing towards — you ground the ladder and
+ * hoped. This puts the whole ladder on one screen: what each tier of club
+ * expects, where you actually are, and how many points short.
+ *
+ * The bar is read off the real clubs in the world, not typed in, so it moves
+ * when the league does.
+ */
+export interface ClubBar { key: string; name: string; expect: number; gap: number; ok: boolean; example: string }
+
+export function clubBars(state: GameState): ClubBar[] {
+  const me = state.me!
+  const skill = tryoutSkill(state)
+  const groups: { key: string; name: string; pick: (t: Team) => boolean }[] = [
+    { key: 't1top', name: '豪门', pick: (t) => t.tier === 1 && t.rating >= 86 },
+    { key: 't1mid', name: '中游', pick: (t) => t.tier === 1 && t.rating >= 79 && t.rating < 86 },
+    { key: 't1low', name: '弱队', pick: (t) => t.tier === 1 && t.rating < 79 },
+    { key: 't2', name: '挑战者联赛', pick: (t) => t.tier === 2 },
+  ]
+  const home = Object.values(state.teams).filter((t) => t.region === me.region && !t.id.startsWith('CUP_'))
+  const pool = home.length ? home : Object.values(state.teams).filter((t) => !t.id.startsWith('CUP_'))
+  const out: ClubBar[] = []
+  for (const g of groups) {
+    const ts = pool.filter(g.pick)
+    if (!ts.length) continue
+    // the easiest door of that tier is the one you actually have to clear
+    const expect = Math.min(...ts.map(expectOf))
+    const example = ts.slice().sort((a, b) => expectOf(a) - expectOf(b))[0]?.name ?? ''
+    out.push({ key: g.key, name: g.name, expect: Math.round(expect), gap: Math.round(expect - skill), ok: skill >= expect, example })
+  }
+  return out
+}
+
 /** Clubs whose bar I am within reach of, my own region first. */
 export function reachableClubs(state: GameState, slack = 6): Team[] {
   const me = state.me!

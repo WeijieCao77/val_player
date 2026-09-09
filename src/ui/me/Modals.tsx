@@ -4,7 +4,7 @@ import { Crest, Modal, money } from '../common'
 import type { PendingItem } from '../../engine/me/types'
 import { cupOf, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
 import { MeMatch } from '../../engine/me/matchplay'
-import { declineInvite, startTryout, tryoutChoose, TRYOUT_DAYS, tryoutFatiguePenalty } from '../../engine/me/tryout'
+import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
 import { Rng, hashStr } from '../../engine/rng'
@@ -130,12 +130,18 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
   const [last, setLast] = useState<string | null>(null)
   if (!t) { onDone(); return null }
   const team = game.teams[t.teamId]
-  const day = TRYOUT_DAYS[t.step]
+  const days = tryoutDays(game)
+  const day = days[t.step]
   const p = game.players[me.id]
   const pen = tryoutFatiguePenalty(game, t.step)
   return (
     <Modal title={`${team.name} 试训 · ${day.name}`} onClose={() => {}} onBgClose={() => {}}>
       <p className="small muted" style={{ marginTop: 0 }}>{day.desc}</p>
+      {days.length < 4 && t.step === 0 && (
+        <p className="tiny" style={{ color: 'var(--win)', margin: '0 0 6px' }}>
+          打过职业的人不用再考单排——你的比赛数据顶掉了第一天。
+        </p>
+      )}
       {last && <div className="node-line">{last}</div>}
       <p className="small">目前的评估分：<b>{t.score > 0 ? '+' : ''}{t.score.toFixed(1)}</b>{pen > 0 ? `（第 ${t.step + 1} 天，体质拖累 −${pen.toFixed(1)}）` : ''}</p>
       <div className="node-opt">
@@ -150,12 +156,18 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
               if (!game.me!.tryout) onDone()
             }}>
               <span>{o.t}</span>
-              <span className="m">看{DIM_CN[o.dim]} · 成功率 {chance}% · {o.risk >= 1.1 ? '高风险' : o.risk >= 0.7 ? '中等' : '稳健'}{i === day.rec ? ' · 稳妥的选法' : ''}</span>
+              {/* the bet, in words — a choice between three attribute names
+                  is a dice roll with extra steps */}
+              <span className="m">{o.why}</span>
+              <span className="m mech">看{DIM_CN[o.dim]} · 成功率 {chance}% · {o.risk >= 1.1 ? '高风险高回报' : o.risk >= 0.7 ? '中等' : '稳健'}{i === day.rec ? ' · 稳妥的选法' : ''}</span>
             </button>
           )
         })}
       </div>
-      <p className="tiny faint" style={{ marginBottom: 0 }}>评级 = 你的水平 + 四天的分 − 他们的要求：≥16 A+ / ≥8 A / ≥0 B / ≥−9 C / D。C 以下一级俱乐部不签。</p>
+      <p className="tiny faint" style={{ marginBottom: 0 }}>
+        评级 = 你的水平 + 这几天的分 − 他们的要求：≥16 A+ / ≥8 A / ≥0 B / ≥−9 C / D。C 以下一级俱乐部不签。
+        连着几天下来会累，<b>体质就是在这种时候才看得出来</b>。
+      </p>
     </Modal>
   )
 }
