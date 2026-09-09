@@ -35,6 +35,23 @@ export interface NodeLogEntry {
   hl?: string
 }
 
+/** One player's line on the all-ten table after a series. */
+export interface BoxRow {
+  id: string
+  ign: string
+  role: string
+  mine: boolean
+  me: boolean
+  k: number
+  d: number
+  a: number
+  acs: number
+  rating: number
+  firstKills: number
+  clutches: number
+  rounds: number
+}
+
 /** Which of us was carrying, on the older/younger × stronger/weaker axes. */
 export type BondRole = 'carried' | 'anchor' | 'passed' | 'mentor' | 'equal'
 
@@ -119,6 +136,14 @@ export interface MeMatchRecord {
   /** the rounds that were about me — engine highlights with my name on them,
       plus what my own calls did */
   highlights?: string[]
+  /** why it went that way: the engine's own terms, ours minus theirs */
+  edge?: { key: string; label: string; diff: number; advice: string }[]
+  /** the honest one-liner, including "the numbers were ours and we lost" */
+  verdict?: string
+  /** where it went wrong on my own five, when that can be said */
+  blame?: string | null
+  /** all ten, from the engine's real lines — kept only for recent matches */
+  box?: BoxRow[]
   /** per map: what the win estimate was when it began, and how it went */
   mapLog?: { map: string; before: number; won: boolean }[]
   /** a cup or exhibition rather than a league fixture */

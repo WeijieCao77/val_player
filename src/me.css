@@ -55,6 +55,25 @@
 .map-read .win { color: var(--win); } .map-read .loss { color: var(--loss); }
 @media (max-width: 720px) { .map-board { grid-template-columns: 1fr; } .map-real { width: 100%; height: auto; aspect-ratio: 1; } }
 
+/* post-match attribution: the terms the engine actually added up */
+.edge-list { display: grid; gap: 2px; }
+.edge-row { display: grid; grid-template-columns: 92px 52px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: var(--t-small); padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
+.edge-row:last-child { border-bottom: 0; }
+.edge-row .k { color: var(--muted); }
+.edge-row .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; }
+.edge-row .v.up { color: var(--win); } .edge-row .v.dn { color: var(--loss); }
+.edge-row .a { font-size: var(--t-tiny); }
+
+/* the all-ten table */
+table.box { width: 100%; border-collapse: collapse; font-size: var(--t-small); }
+table.box th { text-align: right; color: var(--muted); font-weight: 500; font-size: var(--t-tiny); padding: 2px 4px; }
+table.box th:nth-child(1), table.box th:nth-child(2) { text-align: left; }
+table.box td { padding: 3px 4px; border-top: 1px solid var(--line-soft); }
+table.box td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.box tr.mine td { background: var(--accent-wash); }
+table.box tr.me td { font-weight: 650; }
+table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss); }
+
 /* the names on the career card */
 .poster-me .mates { margin: 10px 0 0; padding: 10px 12px; border-left: 2px solid var(--accent-line); background: var(--accent-wash); border-radius: 0 8px 8px 0; }
 .poster-me .mates p { margin: 0 0 4px; font-size: var(--t-small); }

@@ -196,6 +196,54 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         )}
+        {/* why it went that way — every row is a term the engine actually used */}
+        {rec.verdict && (
+          <div className="panel" style={{ marginTop: 10 }}>
+            <div className="panel-head"><h2>为什么是这个结果</h2></div>
+            <div className="panel-body">
+              <p className="small" style={{ margin: '0 0 8px' }}>{rec.verdict}</p>
+              {rec.blame && <div className={`node-line ${rec.won ? 'ok' : 'bad'}`}>{rec.blame}</div>}
+              {rec.edge && rec.edge.length > 0 && (
+                <>
+                  <div className="edge-list">
+                    {rec.edge.slice(0, 7).map((r) => (
+                      <div key={r.key} className="edge-row">
+                        <span className="k">{r.label}</span>
+                        <span className={`v ${r.diff > 0 ? 'up' : 'dn'}`}>{r.diff > 0 ? '+' : ''}{r.diff}</span>
+                        <span className="a muted">{r.advice}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="tiny faint" style={{ margin: '6px 0 0' }}>
+                    正数是你们占优，单位是引擎判定每回合胜率时用的强度。不编解释：这里的每一项都是它真的算过的。
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {/* all ten, from the engine's own lines — nothing synthesised */}
+        {rec.box && rec.box.length > 0 && (
+          <div className="panel" style={{ marginTop: 10 }}>
+            <div className="panel-head"><h2>全员数据</h2></div>
+            <div className="panel-body">
+              <table className="box">
+                <thead><tr><th></th><th>选手</th><th>K</th><th>D</th><th>A</th><th>ACS</th><th>首杀</th><th>残局</th><th>评分</th></tr></thead>
+                <tbody>
+                  {rec.box.map((r) => (
+                    <tr key={r.id} className={`${r.mine ? 'mine' : ''}${r.me ? ' me' : ''}`}>
+                      <td className="tiny muted">{r.mine ? mine.tag : opp?.tag}</td>
+                      <td>{r.ign}<span className="tiny muted"> {r.role}</span></td>
+                      <td className="num">{r.k}</td><td className="num">{r.d}</td><td className="num">{r.a}</td>
+                      <td className="num">{r.acs}</td><td className="num">{r.firstKills}</td><td className="num">{r.clutches}</td>
+                      <td className={`num rt ${r.rating >= 1.15 ? 'up' : r.rating < 0.85 ? 'dn' : ''}`}>{r.rating.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {rec.nodes.length > 0 && (
           <div className="panel" style={{ marginTop: 10 }}>
             <div className="panel-head"><h2>你的决定 · {rec.nodes.length} 次</h2></div>

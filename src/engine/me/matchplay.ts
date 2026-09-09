@@ -10,6 +10,7 @@ import type { NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
 import { bondNoteMatch } from './bond'
+import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 
@@ -25,6 +26,9 @@ export interface Friendly {
 }
 
 /** at most this many calls a map, and never two within this many rounds */
+/** how many matches back keep the full all-ten table; older ones keep only the words */
+const BOX_KEEP = 12
+
 const NODES_PER_MAP = 3
 const NODE_GAP = 4
 
@@ -333,10 +337,19 @@ export class MeMatch {
       highlights: this.myHighlights(result.highlights),
       mapLog: this.mapLog.slice(),
     }
+    // why it went that way — the engine already added these terms up when it
+    // decided the round win rate; until now nothing read them back out
+    const theirIds = (this.mineIsA ? result.lineups?.b : result.lineups?.a) ?? []
+    rec.edge = seriesEdgeRows(result.maps, this.mineIsA)
+    rec.verdict = verdict(rec, rec.edge)
+    rec.box = boxScore(state, result.maps, mineIds, theirIds)
+    rec.blame = blameLine(rec.box, rec)
     this.finished = rec
     if (this.friendly) {
       me.matches.push(rec)
       if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
+      // ten rows a match adds up; only the recent ones keep the full table
+      for (let i = 0; i < me.matches.length - BOX_KEEP; i++) delete me.matches[i].box
       me.heat += won ? 4 : 1
       this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
@@ -347,6 +360,8 @@ export class MeMatch {
     if (f.comp !== 'scrim') {
       me.matches.push(rec)
       if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
+      // ten rows a match adds up; only the recent ones keep the full table
+      for (let i = 0; i < me.matches.length - BOX_KEEP; i++) delete me.matches[i].box
       me.seasonStart.matches++
       me.playedThisStage++
       // one more night shared with these four
