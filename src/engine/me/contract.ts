@@ -8,6 +8,7 @@ import { pushLog } from './log'
 import { pop } from './pending'
 import { expectOf, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
+import { addMoney } from './money'
 
 /** what each standing pays, against a starter's expected wage */
 export const ROLE_PAY: Record<SquadRole, number> = { star: 1.0, starter: 0.8, rotation: 0.55, bench: 0.4 }
@@ -133,7 +134,7 @@ function applyTerms(state: GameState, d: Deal): void {
   // and in this game the man is me. The buyout is kept here and read by engine/me/transfer.
   p.contract = { ...defaultContract(d.salary, d.years), signingBonus: d.signBonus, promisedRole: d.role, releaseClause: 0, noPoach: true, bonusShare: d.tier === 1 ? 10 : 6 }
   me.flags.buyout = d.buyout
-  me.money += d.signBonus
+  addMoney(state, 'sign', d.signBonus)
 }
 
 /**

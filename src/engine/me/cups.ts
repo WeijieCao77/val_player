@@ -6,6 +6,7 @@ import { recomputeOverall } from '../player'
 import type { CupRun, PickupMate } from './types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
+import { addMoney } from './money'
 
 /**
  * The amateur calendar: what a player with no club can enter, week by week.
@@ -137,7 +138,7 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   if (me.pre.cup) return '你已经在打一项赛事了。'
   if (me.money < cup.fee) return `报名费 $${cup.fee}，你的钱不够。`
   if (me.fans < cup.minFans) return `这是邀请赛，要有 ${cup.minFans} 以上的粉丝。`
-  me.money -= cup.fee
+  addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
   me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [] }
   pop(state, 'cup', key)
@@ -168,7 +169,7 @@ export function afterCupMatch(state: GameState, won: boolean, score: string, rng
   const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize }
   me.pre.cups.push(rec)
   me.pre.cup = undefined
-  me.money += prize
+  addMoney(state, 'prize', prize)
   me.heat += cup.heat * (0.4 + reached / cup.rounds.length)
   me.pre.tac = clamp(me.pre.tac + 1.5 + reached, 0, 60)
   const line = rec.won

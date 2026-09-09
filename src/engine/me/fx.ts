@@ -2,6 +2,7 @@ import { Rng, clamp } from '../rng'
 import type { GameState } from '../types'
 import { duoBonded } from '../bonds'
 import { addXp } from './growth'
+import { addMoney } from './money'
 import type { EffectSpec } from './types'
 import { ATTR_CN } from '../types'
 
@@ -17,7 +18,7 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
   const out: string[] = []
   const r = rng ?? new Rng((state.seed ^ state.day ^ 0x9e37) >>> 0)
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
-  if (e.money) { me.money += e.money; out.push(`存款 ${num(e.money, ' $')}`) }
+  if (e.money) { addMoney(state, e.money > 0 ? 'inother' : 'outother', e.money); out.push(`存款 ${num(e.money, ' $')}`) }
   if (e.heat) { me.heat = Math.max(0, me.heat + e.heat); out.push(`热度 ${num(e.heat)}`) }
   if (e.fans) { me.fans = Math.max(0, me.fans + e.fans); out.push(`粉丝 ${num(e.fans)}`) }
   if (e.tilt) { me.tilt = clamp(me.tilt + e.tilt, 0, 100); out.push(`气压 ${num(e.tilt)}`) }

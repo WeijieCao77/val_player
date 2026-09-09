@@ -1,5 +1,7 @@
 import { useGame } from '../ctx'
-import { Panel, money } from '../common'
+import { Panel, money, moneyFull } from '../common'
+import { KIND_CN, LEDGER_IN, LEDGER_OUT, PRIZE_ROWS, ledgerSum, prizePreview } from '../../engine/me/money'
+import type { MeState } from '../../engine/me/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, RELAX, buyCourse, buyGear, buyRelax, hireAgent } from '../../engine/me/shop'
 import { STREAM_CUTS, streamCut, streamIncome } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
@@ -13,12 +15,40 @@ export default function EconomyScreen() {
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
-        <Panel title="账本" actions={<span className="tag t1">{money(me.money)}</span>}>
+        <Panel title="账本" actions={<span className="tag t1">{moneyFull(me.money)}</span>}>
           <p className="small" style={{ marginTop: 0 }}>
-            {me.phase === 'pro' ? `年薪 ${money(p.salary)}，税与开销 30%${me.agentTier ? `、经纪人 ${Math.round((AGENTS[me.agentTier]?.cut ?? 0) * 100)}%` : ''}，每周到手 ${money(p.salary / 52 * (1 - (AGENTS[me.agentTier]?.cut ?? 0) - 0.3))}` : '没有薪水'}
-            {me.upkeep ? ` · 每周寄家 $${me.upkeep}` : ''} · 一场直播约 {money(streamIncome(game))}
+            {me.phase === 'pro' ? `年薪 ${moneyFull(p.salary)}，每周发 ${moneyFull(p.salary / 52)}——下面这张表是它去了哪里` : '没有薪水'}
+            {me.upkeep ? ` · 每周固定支出 $${me.upkeep}` : ''} · 一场直播约 {money(streamIncome(game))}
           </p>
-          <p className="tiny faint" style={{ margin: 0 }}>钱不会变成能力：外设和课程买的是训练速度、心态和门路，到第二档为止。</p>
+          <LedgerTable me={me} />
+          <p className="tiny faint" style={{ margin: '8px 0 0' }}>钱只从这一个口进出，每一笔都记在这里。钱不会变成能力：外设和课程买的是训练速度、心态和门路，到第二档为止。</p>
+        </Panel>
+        <Panel title="奖金标准" actions={<span className="tiny muted">按名次发，每次都发</span>}>
+          {me.phase === 'pro' && (p.contract?.bonusShare ?? 0) > 0 ? (
+            <>
+              <p className="small" style={{ marginTop: 0 }}>
+                合同里的奖金分成是 <b>{p.contract!.bonusShare}%</b>，全队按人头分。下面是<b>你</b>能拿到的数，不是赛事总奖金。
+              </p>
+              <table className="small">
+                <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">四强</th></tr></thead>
+                <tbody>
+                  {PRIZE_ROWS.map((r) => {
+                    const v = prizePreview(game, r.stage)
+                    if (!v.some((x) => x > 0)) return null
+                    return (
+                      <tr key={r.stage}>
+                        <td>{r.name}</td>
+                        {v.map((x, i) => <td key={i} className="num">{x ? moneyFull(x) : '—'}</td>)}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>不是一次性的成就奖励——每年、每项赛事、走到哪一档就发哪一档，钱在赛事结束当周到账。</p>
+            </>
+          ) : (
+            <p className="small" style={{ margin: 0 }}>还没有职业合同，赛事奖金分成也就无从谈起。业余赛事的奖金是全额归你的。</p>
+          )}
         </Panel>
         <Panel title="粉丝与直播">
           <p className="small" style={{ marginTop: 0 }}>
@@ -78,5 +108,44 @@ export default function EconomyScreen() {
         </Panel>
       </div>
     </div>
+  )
+}
+
+/**
+ * Where the money went this stage. Every row here was written by addMoney();
+ * nothing can reach the balance without appearing on it.
+ */
+function LedgerTable({ me }: { me: MeState }) {
+  const led = me.ledger
+  const cur = led?.cur ?? { in: {}, out: {} }
+  const inSum = ledgerSum(cur.in), outSum = ledgerSum(cur.out)
+  const net = inSum - outSum
+  const prevNet = led?.prev ? ledgerSum(led.prev.in) - ledgerSum(led.prev.out) : null
+  const rows: [string, number, boolean][] = [
+    ...LEDGER_IN.filter(([k]) => cur.in[k]).map(([k]) => [KIND_CN[k], cur.in[k]!, false] as [string, number, boolean]),
+    ...LEDGER_OUT.filter(([k]) => cur.out[k]).map(([k]) => [KIND_CN[k], cur.out[k]!, true] as [string, number, boolean]),
+  ]
+  if (!rows.length) return <p className="small muted" style={{ margin: 0 }}>本赛段还没有进出账。</p>
+  return (
+    <>
+      <div className="ledger">
+        {rows.map(([name, v, out]) => (
+          <div key={name} className="ledger-r">
+            <span>{name}</span>
+            <span className={`mono ${out ? 'bad' : 'good'}`}>{out ? '−' : '+'}{moneyFull(v)}</span>
+          </div>
+        ))}
+        <div className="ledger-r net">
+          <span>本赛段净{led?.label ? ` · ${led.label}` : ''}</span>
+          <span className={`mono ${net >= 0 ? 'good' : 'bad'}`}>{net >= 0 ? '+' : '−'}{moneyFull(Math.abs(net))}</span>
+        </div>
+      </div>
+      {prevNet !== null && (
+        <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+          上赛段（{led!.prevLabel || '—'}）净 {prevNet >= 0 ? '+' : '−'}{moneyFull(Math.abs(prevNet))}。
+          生涯累计进 {moneyFull(led!.lifetimeIn)}、出 {moneyFull(led!.lifetimeOut)}。
+        </p>
+      )}
+    </>
   )
 }

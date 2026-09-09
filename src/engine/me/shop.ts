@@ -1,6 +1,7 @@
 import { clamp } from '../rng'
 import type { GameState } from '../types'
 import { pushLog } from './log'
+import { addMoney } from './money'
 
 /**
  * Where the money goes. The rule from 破晓: nothing here turns money into the
@@ -42,7 +43,7 @@ export function buyGear(state: GameState, slot: string): string | null {
   if (cur >= 2) return '已经是定制级了。'
   const price = GEAR_PRICE[cur + 1]
   if (me.money < price) return `要 $${price.toLocaleString()}，钱不够。`
-  me.money -= price
+  addMoney(state, 'gear', -price)
   me.gear[slot] = cur + 1
   const name = GEAR_SLOTS.find((s) => s.key === slot)?.name ?? slot
   pushLog(state, 'money', `买了${GEAR_TIER_CN[cur + 1]}${name}（$${price.toLocaleString()}）。`)
@@ -55,7 +56,7 @@ export function buyCourse(state: GameState, key: string): string | null {
   if (!c) return '没有这门课。'
   if (me.courses.includes(key)) return '已经上过了。'
   if (me.money < c.price) return `要 $${c.price.toLocaleString()}，钱不够。`
-  me.money -= c.price
+  addMoney(state, 'course', -c.price)
   me.courses.push(key)
   if (key === 'lang') me.flags.lang = 1
   if (key === 'psych') me.mental = clamp(me.mental + 5, 0, 100)
@@ -71,7 +72,7 @@ export function buyRelax(state: GameState, key: string): string | null {
   if (r.once && me.flags[`relax_${key}`]) return '已经有了。'
   if (me.money < r.price) return `要 $${r.price.toLocaleString()}，钱不够。`
   if (!r.once && me.relaxUsed >= 2) return '这周已经放松过两次了。'
-  me.money -= r.price
+  addMoney(state, 'relax', -r.price)
   if (r.once) me.flags[`relax_${key}`] = 1
   else me.relaxUsed++
   p.fatigue = clamp(p.fatigue + r.fatigue, 0, 100)
@@ -87,7 +88,7 @@ export function hireAgent(state: GameState, tier: number): string | null {
   if (!a) return '没有这一档。'
   if (me.agentTier === tier) return '已经是这一档了。'
   if (tier > me.agentTier && me.money < a.fee) return `签约费 $${a.fee.toLocaleString()}，钱不够。`
-  if (tier > me.agentTier) me.money -= a.fee
+  if (tier > me.agentTier) addMoney(state, 'agent', -a.fee)
   me.agentTier = tier
   pushLog(state, 'money', tier ? `签了${a.name}（$${a.fee.toLocaleString()}），以后抽你 ${Math.round(a.cut * 100)}% 的薪水。` : '和经纪人解约了。')
   return null

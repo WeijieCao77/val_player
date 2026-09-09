@@ -9,6 +9,27 @@ export type NodeDim = keyof Attrs | 'mental'
 
 export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | 'bad' | 'season' | 'event' | 'cup' | 'deal'
 
+/** The rows a dollar can land on — see me/money.ts for what each one means. */
+export type MoneyKind =
+  | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
+  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'fee' | 'fine' | 'outother'
+
+export interface LedgerBook {
+  in: Partial<Record<MoneyKind, number>>
+  out: Partial<Record<MoneyKind, number>>
+}
+
+export interface Ledger {
+  /** this stage */
+  cur: LedgerBook
+  /** the stage before, kept so the screen can compare */
+  prev: LedgerBook | null
+  label: string
+  prevLabel: string
+  lifetimeIn: number
+  lifetimeOut: number
+}
+
 export interface MeLog { day: number; year: number; kind: LogKind; text: string }
 
 /** Where the career is: chasing a contract, under one, between two, or done. */
@@ -360,6 +381,10 @@ export interface MeState {
   fans: number
   heat: number
   money: number
+  /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
+  ledger?: Ledger
+  /** competitions whose prize share has already been paid, as `year:compKey` */
+  prizePaid?: string[]
   /** weekly outgoing the background left me with */
   upkeep: number
   log: MeLog[]

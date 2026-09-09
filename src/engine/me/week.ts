@@ -13,6 +13,7 @@ import { primaryFocus, settleTraining } from './growth'
 import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
+import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -205,6 +206,8 @@ function syncTitles(state: GameState): void {
 function onStageChange(state: GameState, rng: Rng): void {
   const me = state.me!
   streamClauseCheck(state)
+  // the stage's books close with the stage
+  ledgerRotate(state)
   if (me.phase !== 'pro') return
   // Champions has just been settled? then whoever lost the final is written down
   const champs = state.comps['champions']
@@ -223,12 +226,22 @@ export function settleWeek(state: GameState): void {
   const pro = me.phase === 'pro'
   settleTraining(state, rng, notes)
 
-  // pay, less the agent; the background's weekly bill
+  // The pay slip, itemised. The net is unchanged — the agent's cut and the
+  // 30% that goes on living have always come off the top — but they used to
+  // come off in silence, so the ledger now books all three separately and the
+  // player can see where a third of the wage goes.
   if (pro) {
     const cut = AGENTS[me.agentTier]?.cut ?? 0
-    me.money += Math.round((p.salary / 52) * (1 - cut - LIVING))
+    const gross = Math.round(p.salary / 52)
+    const net = Math.round((p.salary / 52) * (1 - cut - LIVING))
+    const agentFee = Math.round((p.salary / 52) * cut)
+    // living takes the rounding, so gross − agent − living is exactly the old net
+    addMoney(state, 'salary', gross)
+    if (agentFee) addMoney(state, 'agent', -agentFee)
+    if (gross - agentFee - net) addMoney(state, 'living', -(gross - agentFee - net))
   }
-  if (me.upkeep) me.money -= me.upkeep
+  if (me.upkeep) addMoney(state, 'upkeep', -me.upkeep)
+  prizeWeek(state)
   if (me.money < 0 && !me.flags.brokeWarned) {
     me.flags.brokeWarned = 1
     notes.push('存款见底了。')

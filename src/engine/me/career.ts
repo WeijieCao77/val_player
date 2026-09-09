@@ -12,6 +12,8 @@ import { beginWeek } from './week'
 import { pushLog } from './log'
 import { originOf } from './origins'
 import { makeDeal, joinClub } from './contract'
+import { stageName } from '../season'
+import { initLedger } from './money'
 
 export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
@@ -134,6 +136,7 @@ export function createCareer(o: CareerOpts): GameState {
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
+  initLedger(state, stageName(state.stage))
   // the ladder starts where the skill puts it, less a season of not having played the top
   me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)
   me.pre.ladderPeak = me.pre.ladder

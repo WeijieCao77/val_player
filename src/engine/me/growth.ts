@@ -12,6 +12,7 @@ import { courseMul, gearTrainMul } from './shop'
 import { playRanked } from './prepro'
 import { streamIncome } from './stream'
 import { questProgress } from './quests'
+import { addMoney } from './money'
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -123,7 +124,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
       }
       case 'content': {
         const income = Math.round((80 + me.fans * 1.2) * n)
-        me.money += income
+        addMoney(state, 'media', income)
         me.heat += 6 * n
         notes.push(`做了 ${n} 期内容，热度涨了，收入 $${income.toLocaleString()}。`)
         break
@@ -146,7 +147,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
       case 'stream': {
         let income = 0
         for (let i = 0; i < n; i++) income += streamIncome(state)
-        me.money += income
+        addMoney(state, 'media', income)
         me.heat += 9 * n
         me.stream.total += n
         me.stream.thisStage += n

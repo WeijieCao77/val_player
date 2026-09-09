@@ -2,6 +2,7 @@ import { clamp, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
+import { addMoney } from './money'
 
 /** the platform's share climbs with the following; each step is announced */
 export const STREAM_CUTS: { at: number; cut: number }[] = [
@@ -84,7 +85,7 @@ export function answerStreamOffer(state: GameState, choice: 'club' | 'rival' | '
     platform: club ? o.clubPlatform : o.platform, club, guarantee,
     clubCut: pro ? (club ? 0.2 : 0.4) : 0, minPerStage: MIN_STREAMS_PER_STAGE, untilYear: state.year + 2,
   }
-  me.money += sign
+  addMoney(state, 'sign', sign)
   if (pro) me.gmTrust = clamp(me.gmTrust + (club ? 6 : -12), 0, 100)
   pushLog(state, 'money', `签了 ${me.stream.deal.platform} 的独家：签字费 $${sign.toLocaleString()}，每场保底 $${guarantee.toLocaleString()}${pro ? `，俱乐部抽 ${Math.round(me.stream.deal.clubCut * 100)}%` : ''}。每个赛段至少播 ${MIN_STREAMS_PER_STAGE} 次。`)
   return '签了。'
@@ -95,7 +96,7 @@ export function streamClauseCheck(state: GameState): void {
   const me = state.me!
   const d = me.stream.deal
   if (d && me.phase === 'pro' && me.stream.thisStage < d.minPerStage) {
-    me.money -= CLAUSE_FINE
+    addMoney(state, 'fine', -CLAUSE_FINE)
     pushLog(state, 'bad', `这个赛段只播了 ${me.stream.thisStage} 次，不到合同要求的 ${d.minPerStage} 次，平台扣了 $${CLAUSE_FINE}。`)
   }
   me.stream.thisStage = 0
