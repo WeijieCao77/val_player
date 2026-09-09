@@ -15,6 +15,7 @@ import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from '.
 import { injuryTick } from './injury'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
+import { cloutStage } from './clout'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -219,6 +220,7 @@ function onStageChange(state: GameState, rng: Rng): void {
   streamClauseCheck(state)
   // the stage's books close with the stage
   ledgerRotate(state)
+  cloutStage(state)
   if (me.phase !== 'pro') return
   // Champions has just been settled? then whoever lost the final is written down
   const champs = state.comps['champions']

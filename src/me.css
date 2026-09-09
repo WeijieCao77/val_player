@@ -260,3 +260,13 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .cer-tier.gold { color: var(--gold); }
 .cer-tier.silver { color: var(--muted); }
 .cer-tier.bronze { color: var(--neg-ink); }
+
+/* 话语权（engine/me/clout.ts）：一个读数和两个很难用的动作 */
+.clout-parts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--t-tiny); color: var(--muted); }
+.clout-parts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.clout-parts b.bad { color: var(--neg-ink); }
+.clout-list { margin-top: 4px; border-top: 1px solid var(--line-soft); }
+.clout-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); }
+.clout-row:last-child { border-bottom: 0; }
+.clout-row .muted { font-size: var(--t-tiny); }

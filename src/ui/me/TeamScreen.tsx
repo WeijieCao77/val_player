@@ -4,6 +4,12 @@ import { bondBetween } from '../../engine/bonds'
 import { trustLabel } from '../../engine/trust'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, EDGE_NEED } from '../../engine/me/coach'
+import {
+  LIST_GATE, SIGN_GATE, attrAvg, canList, canSign, cloutBreakdown, cloutTier,
+  doList, doSign, listOdds, signTargets,
+} from '../../engine/me/clout'
+import { moneyFull } from '../common'
+import { useState } from 'react'
 
 const bondWord = (v: number) => v >= 45 ? '很铁' : v >= 20 ? '不错' : v >= 0 ? '一般' : v >= -30 ? '有点疏远' : '闹掰了'
 
@@ -81,6 +87,7 @@ export default function TeamScreen() {
             </Panel>
           )
         })()}
+        <CloutPanel />
         <Panel title="首发之争">
           {/* the people I am actually racing: same slot, on this roster */}
           {(() => {
@@ -113,5 +120,83 @@ export default function TeamScreen() {
         </Panel>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * 威望, and the two things it lets you ask for.
+ *
+ * Both gates print the threshold and where you actually stand, because a
+ * greyed-out button that does not say why is just a hidden button. Neither
+ * action is a market: one is a sentence to the coach, the other a sentence to
+ * the manager, and both can blow up in the room.
+ */
+function CloutPanel() {
+  const { game, commit, toast } = useGame()
+  const me = game.me!
+  const [open, setOpen] = useState<'' | 'list' | 'sign'>('')
+  const { total, parts } = cloutBreakdown(game)
+  const tier = cloutTier(total)
+  const listGate = canList(game)
+  const signGate = canSign(game)
+  const team = game.teams[game.myTeam]
+  const mates = team.roster.map((id) => game.players[id]).filter((x) => x && x.id !== me.id)
+  const targets = signGate.ok ? signTargets(game) : []
+
+  const act = (line: string) => { toast(line); setOpen(''); commit() }
+
+  return (
+    <Panel title="话语权" actions={<span className={`tag${total >= 62 ? ' t1' : ''}`}>{tier.name} {total}</span>}>
+      <p className="small" style={{ marginTop: 0 }}>{tier.blurb}</p>
+      <div className="clout-parts">
+        {parts.map((x) => (
+          <span key={x.label}>{x.label} <b className={x.value < 0 ? 'bad' : ''}>{x.value > 0 ? '+' : ''}{x.value}</b></span>
+        ))}
+      </div>
+      <p className="tiny faint" style={{ margin: '6px 0 10px' }}>
+        威望是算出来的，不是攒出来的——冠军、人气、你比队友强多少、生涯胜率、教练组和经理怎么看你。下面两件事只查它，不花它。
+      </p>
+
+      <div className="row" style={{ gap: 8 }}>
+        <button className="sm" disabled={!listGate.ok} onClick={() => setOpen(open === 'list' ? '' : 'list')}>提出换人</button>
+        <button className="sm" disabled={!signGate.ok} onClick={() => setOpen(open === 'sign' ? '' : 'sign')}>要求签人</button>
+      </div>
+      {!listGate.ok && <p className="tiny muted" style={{ margin: '6px 0 0' }}>提出换人：{listGate.why}</p>}
+      {!signGate.ok && <p className="tiny muted" style={{ margin: '4px 0 0' }}>要求签人：{signGate.why}</p>}
+
+      {open === 'list' && (
+        <div className="clout-list">
+          <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+            跟教练组说队里该换人了。<b>说成了，他被放走，全队都知道是你提的；说不成，消息一样会走漏。</b>
+          </p>
+          {mates.map((t) => (
+            <div key={t.id} className="clout-row">
+              <span><b>{t.ign}</b> <span className="muted">{t.role} · {t.age} 岁 · 综合 {t.overall} · 八项均值 {attrAvg(t).toFixed(0)}</span></span>
+              <button className="sm" onClick={() => act(doList(game, t.id))}>提（成功率 {Math.round(listOdds(game, t) * 100)}%）</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open === 'sign' && (
+        <div className="clout-list">
+          <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+            你能开口要的人就这几个——档次跟着你的威望和经理对你的信任走。<b>谈崩了，经理会觉得你不懂行情。</b>
+          </p>
+          {targets.length ? targets.map((t) => (
+            <div key={t.id} className="clout-row">
+              <span><b>{t.ign}</b> <span className="muted">{t.role} · 综合 {t.overall} · {t.teamName}{t.abroad ? ' · 外赛区' : ''} · 身价 {moneyFull(t.fee)}</span></span>
+              <button className="sm" onClick={() => act(doSign(game, t.id))}>要</button>
+            </div>
+          )) : <p className="small muted" style={{ margin: 0 }}>现在没有你够得着、又比队里现有的人强的目标。</p>}
+        </div>
+      )}
+
+      <p className="tiny faint" style={{ margin: '10px 0 0' }}>
+        提出换人要威望 {LIST_GATE.clout} 且教练信任 {LIST_GATE.coach}（或威望 {LIST_GATE.vetClout} 用功勋压过教练组）；
+        要求签人要威望 {SIGN_GATE.clout}、经理信任 {SIGN_GATE.gm}，而且转会窗得开着。两件事各有几个赛段的冷却。
+      </p>
+    </Panel>
   )
 }

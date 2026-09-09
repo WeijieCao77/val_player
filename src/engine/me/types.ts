@@ -395,6 +395,8 @@ export interface MeState {
   fans: number
   heat: number
   money: number
+  /** 话语权的两个动作各自的冷却，按赛段计 — see me/clout.ts */
+  cloutCd?: { list: number; sign: number }
   /** the ceremony on screen right now */
   cer?: Ceremony
   /** ceremonies already held, as keys - each fires once */
