@@ -4,6 +4,9 @@ import { Crest, Modal, OvrBadge, Roles } from '../common'
 import RoundRibbon, { RibbonLegend } from '../RoundRibbon'
 import MapSchematic from './MapSchematic'
 import { agentCn, mapCn } from '../../engine/content'
+import { loadRecords, recordsNow } from '../../engine/dossier'
+import type { Records } from '../../engine/dossier'
+import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
 import type { NodeLogEntry } from '../../engine/me/types'
@@ -73,6 +76,12 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
     const id = window.setInterval(step, TICK_MS)
     return () => window.clearInterval(id)
   }, [phase, step])
+
+  // the other side's names and what they have won — records.json is the heavy
+  // half of the data, so it is fetched once and only when a match opens
+  const [recs, setRecs] = useState<Records | null>(recordsNow())
+  useEffect(() => { if (!recs) loadRecords().then(setRecs).catch(() => {}) }, [recs])
+  const lights = spotlights(game, oppId, game.players[me.id].role, recs)
 
   const startedAt = useRef(0)
   const skip = () => {
@@ -144,6 +153,19 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         </div>
+        {lights.length > 0 && (
+          <div className="panel" style={{ marginTop: 10 }}>
+            <div className="panel-head"><h2>今晚对面有谁</h2></div>
+            <div className="panel-body">
+              {lights.map((s) => (
+                <div key={s.id} className={`light${s.opposite ? ' opposite' : ''}`}>
+                  <div className="n"><b>{s.ign}</b> <span className="muted">{s.role}</span>{s.opposite && <span className="tag t1">你的对位</span>}</div>
+                  <div className="cv muted">{s.cv}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
             ? '比赛里会有几次要你拿主意的时刻。每次决定后立刻能看到本图赢面怎么变，以及是你的哪一项对上了对方的哪一项。'
@@ -196,6 +218,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         )}
+        {rec.starBeat && <div className={`node-line ${rec.starBeat.includes('上了一课') ? 'bad' : 'ok'}`}>{rec.starBeat}</div>}
         {/* why it went that way — every row is a term the engine actually used */}
         {rec.verdict && (
           <div className="panel" style={{ marginTop: 10 }}>

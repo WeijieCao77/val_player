@@ -180,3 +180,11 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .poster-me .nums b { font-size: 22px; }
 .poster-me .nums span { font-size: var(--t-tiny); color: var(--muted); }
 .poster-me .sig { font-size: var(--t-tiny); color: var(--faint); border-top: 1px solid var(--line-soft); padding-top: 8px; }
+
+/* the names on the other side, and what they have won */
+.light { padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.light:last-child { border-bottom: 0; }
+.light.opposite { padding-left: 8px; border-left: 2px solid var(--accent); }
+.light .n { display: flex; align-items: baseline; gap: 6px; font-size: var(--t-small); }
+.light .n .tag { margin-left: auto; }
+.light .cv { font-size: var(--t-tiny); margin-top: 1px; }

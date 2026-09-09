@@ -144,6 +144,8 @@ export interface MeMatchRecord {
   blame?: string | null
   /** all ten, from the engine's real lines — kept only for recent matches */
   box?: BoxRow[]
+  /** how the direct matchup with a name went, if there was one */
+  starBeat?: string
   /** per map: what the win estimate was when it began, and how it went */
   mapLog?: { map: string; before: number; won: boolean }[]
   /** a cup or exhibition rather than a league fixture */

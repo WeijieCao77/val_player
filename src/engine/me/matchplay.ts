@@ -11,6 +11,7 @@ import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
 import { bondNoteMatch } from './bond'
 import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
+import { starBeat, starBeatLine } from './stars'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 
@@ -344,6 +345,15 @@ export class MeMatch {
     rec.verdict = verdict(rec, rec.edge)
     rec.box = boxScore(state, result.maps, mineIds, theirIds)
     rec.blame = blameLine(rec.box, rec)
+    // the man in my position on the other side, if he is anybody
+    const beat = starBeat(state, rec, this.me.role)
+    if (beat) {
+      rec.starBeat = starBeatLine(beat, won)
+      if (beat.won && started) {
+        me.heat += 6
+        me.fans += 40
+      }
+    }
     this.finished = rec
     if (this.friendly) {
       me.matches.push(rec)
