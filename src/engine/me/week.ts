@@ -12,6 +12,7 @@ import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
 import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
+import { injuryTick } from './injury'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -237,6 +238,7 @@ export function settleWeek(state: GameState): void {
   fanWeek(state)
   streamTick(state)
   questWeek(state)
+  injuryTick(state)
   if (!pro) {
     ladderWeekly(state, (me.plan.ranked ?? 0) > 0)
     rollInvites(state, rng)

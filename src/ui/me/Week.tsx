@@ -3,6 +3,7 @@ import { Crest, Panel, fmtDay } from '../common'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
 import { planBlock, setPlan, staminaLeft } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
+import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
@@ -49,6 +50,16 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         <Panel
           title={`本周行动 · 剩 ${me.ap}/${me.apMax} 点`}
         >
+          {/* hurt: say what it is and how long, not just fewer action points */}
+          {(() => {
+            const inj = injuryStatus(game)
+            return inj ? (
+              <div className="node-line bad" style={{ marginBottom: 10 }}>
+                <b>{inj.note}</b> · 还要 {inj.weeksLeft} 周
+                <div className="tiny muted" style={{ marginTop: 2 }}>{inj.text}</div>
+              </div>
+            ) : null
+          })()}
           {/* the other budget: what the body has left after this week's plan */}
           {(() => {
             const left = staminaLeft(game)
