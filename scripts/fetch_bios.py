@@ -190,7 +190,8 @@ def main() -> int:
                     continue
                 info = parse_infobox(wt)
                 if (info.get('vlr') or '').strip() == pid:
-                    out[pid] = {'ign': people[pid], 'page': title, **info}
+                    out[pid] = {'ign': people[pid], 'page': title,
+                                'matchedBy': 'search', **info}
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
                 print(f'  ! {pid}: {e}', flush=True)
             if n % 50 == 0:
