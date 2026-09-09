@@ -14,6 +14,20 @@ export type MoneyKind =
   | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
   | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'fee' | 'fine' | 'outother'
 
+/** The nights that are not matches - see me/ceremony.ts. */
+export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
+export type CerTier = 'gold' | 'silver' | 'bronze'
+
+export interface Ceremony {
+  kind: CerKind
+  /** 0 story, 1 the little game, 2 the result */
+  step: number
+  tier?: CerTier
+  /** the competition, the city, the injury - whatever this night is about */
+  about?: string
+  detail?: { tone?: string; score?: number; ms?: number; hits?: number }
+}
+
 export interface LedgerBook {
   in: Partial<Record<MoneyKind, number>>
   out: Partial<Record<MoneyKind, number>>
@@ -332,7 +346,7 @@ export interface EffectSpec {
 export type Axis = 'hard' | 'warm' | 'grind' | 'show'
 
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released'
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony'
   id?: string
   day: number
 }
@@ -381,6 +395,14 @@ export interface MeState {
   fans: number
   heat: number
   money: number
+  /** the ceremony on screen right now */
+  cer?: Ceremony
+  /** ceremonies already held, as keys - each fires once */
+  cerSeen?: string[]
+  /** 出征 changed how fast the body comes back, until this day */
+  cerRest?: { until: number; mul: number }
+  /** 决赛入场 left something on the next match */
+  cerMatch?: { fixture: string; nudge: number; node: number; until: number }
   /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
   ledger?: Ledger
   /** competitions whose prize share has already been paid, as `year:compKey` */

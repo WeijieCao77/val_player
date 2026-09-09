@@ -14,6 +14,7 @@ import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
+import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -29,6 +30,7 @@ import { fireEvent, tryRandomEvent } from './events'
 import { checkAchievements } from './achievements'
 import { noteScoutInterest, rollOffers, seasonContractCheck, windowOpensToday } from './transfer'
 import { retirementTick } from './endings'
+import { compCn } from './compname'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -178,6 +180,15 @@ export function advanceWeek(state: GameState): WeekStop {
     syncTitles(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng)
     if (state.gameOver && !sacked(state.gameOver)) return { kind: 'game-over' }
+    // A final is worth stopping for before the doors open. This has to be
+    // queued *before* the generic pending check, not after: anything else
+    // raised the same day would return first and the fixture would slip past
+    // — which is exactly why it fired zero times the first time round. The
+    // engine re-offers a deferred fixture the next day, so the match is not
+    // lost by stopping for the ceremony.
+    if (r.pendingMine && pro) {
+      ceremonyBeforeMatch(state, r.pendingMine.label, state.comps[r.pendingMine.comp]?.name ?? r.pendingMine.comp)
+    }
     if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
     if (r.pendingMine && pro) {
       me.pendingFixture = r.pendingMine.id
@@ -198,7 +209,7 @@ function syncTitles(state: GameState): void {
     me.titles.push({ year: t.year, title: t.title, started })
     // whoever was in the room shares it
     bondNoteTitle(state, t.title)
-    pushLog(state, 'good', `冠军：${t.title}${started ? '' : '（你没有出场）'}。`)
+    pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? '' : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }
 }
@@ -252,6 +263,7 @@ export function settleWeek(state: GameState): void {
   streamTick(state)
   questWeek(state)
   injuryTick(state)
+  ceremonyTick(state)
   if (!pro) {
     ladderWeekly(state, (me.plan.ranked ?? 0) > 0)
     rollInvites(state, rng)

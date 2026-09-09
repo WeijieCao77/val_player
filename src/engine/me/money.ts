@@ -3,6 +3,7 @@ import { stageName } from '../season'
 import type { GameState, StageKey } from '../types'
 import { pushLog } from './log'
 import type { LedgerBook, MoneyKind } from './types'
+import { compCn } from './compname'
 
 /**
  * Every dollar goes through one door.
@@ -140,22 +141,23 @@ export function prizeWeek(state: GameState): void {
     const cut = prizeShare(state, comp.stage, place)
     if (!cut) continue
     addMoney(state, 'prize', cut)
-    pushLog(state, 'money', `${comp.name} 第 ${place + 1} 名，奖金分成到账 $${cut.toLocaleString()}。`)
+    pushLog(state, 'money', `${compCn(comp.name)} 第 ${place + 1} 名，奖金分成到账 $${cut.toLocaleString()}。`)
   }
   if (me.prizePaid.length > 60) me.prizePaid.splice(0, me.prizePaid.length - 60)
 }
 
-/** The published table, for the screen that says what a placing is worth. */
-export const PRIZE_ROWS: { stage: StageKey; name: string }[] = [
-  { stage: 'challengers1', name: '挑战者联赛第一赛段' },
-  { stage: 'challengers2', name: '挑战者联赛第二赛段' },
-  { stage: 'kickoff', name: '启航赛' },
-  { stage: 'stage1', name: '第一赛段' },
-  { stage: 'stage2', name: '第二赛段' },
-  { stage: 'masters1', name: '第一次大师赛' },
-  { stage: 'masters2', name: '第二次大师赛' },
-  { stage: 'champions', name: '冠军赛' },
-]
+/**
+ * The published table, for the screen that says what a placing is worth.
+ *
+ * The names come from season.ts's own stage table rather than being typed
+ * again here — written out by hand they had already drifted (「启航赛」 and
+ * 「第一次大师赛」 against the calendar's 「揭幕赛」 and 「第一站大师赛」).
+ */
+export const PRIZE_STAGES: StageKey[] =
+  ['challengers1', 'challengers2', 'kickoff', 'stage1', 'stage2', 'masters1', 'masters2', 'champions']
+
+export const PRIZE_ROWS: { stage: StageKey; name: string }[] =
+  PRIZE_STAGES.map((stage) => ({ stage, name: stageName(stage) }))
 
 /** What the top three places pay a player on my contract, for the prize table. */
 export function prizePreview(state: GameState, stage: StageKey): number[] {

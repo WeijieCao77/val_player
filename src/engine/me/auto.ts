@@ -18,6 +18,8 @@ import { buyCourse, buyGear, buyRelax, GEAR_SLOTS } from './shop'
 import { fanCap } from './fans'
 import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
+import { CEREMONIES, cerSkip } from './ceremony'
+import { compCn } from './compname'
 
 /**
  * The steady plan — never the best plan. Rest when worn, chase a trial when
@@ -70,6 +72,13 @@ export function autoResolve(state: GameState, item: PendingItem): string {
   const p = state.players[me.id]
   const rng = new Rng(hashStr(`auto:${state.seed}:${state.year}:${state.day}:${item.kind}:${item.id ?? ''}`))
   switch (item.kind) {
+    case 'ceremony': {
+      // the autopilot does not play reflex games; skipping is silver, and
+      // silver is the neutral middle, so nothing is lost by being away
+      const name = me.cer ? CEREMONIES[me.cer.kind].name : '仪式'
+      cerSkip(state)
+      return `${name}：没参加那个环节`
+    }
     case 'cup': {
       const cup = cupOf(item.id!)
       if (!cup || me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup?.name ?? '杯赛'}` }
@@ -217,7 +226,7 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
       // the skipped way — two rosters' numbers, no decisions of mine
       if (until === 'match') return { stop, weeks, notes }
       const rec = new MeMatch(state, stop.fixture).runOut()
-      notes.push(`${rec.comp} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)
+      notes.push(`${compCn(rec.comp)} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)
       continue
     }
     if (stop.kind === 'pending') { if (!settle()) return { stop, weeks, notes }; continue }

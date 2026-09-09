@@ -18,6 +18,7 @@ import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
 import Poster from './Poster'
 import ShareCard from './ShareCard'
+import CeremonyModal from './Ceremony'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
 export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
@@ -32,6 +33,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'season': return <SeasonModal year={item.id!} onDone={onDone} />
     case 'released': return <ReleasedModal onDone={onDone} />
     case 'ending': return <EndingModal onDone={onDone} />
+    case 'ceremony': return <CeremonyModal onDone={onDone} />
   }
   return null
 }

@@ -6,6 +6,9 @@ import { agentCn } from '../content'
 import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine } from '../types'
 import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
+import { cerMatchEdge } from './ceremony'
+
+const clamp01 = (v: number) => Math.max(0.03, Math.min(0.97, v))
 import type { NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
@@ -14,6 +17,7 @@ import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
 import { starBeat, starBeatLine } from './stars'
 import { pushLog } from './log'
 import { questProgress } from './quests'
+import { compCn } from './compname'
 
 export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
 
@@ -180,6 +184,11 @@ export class MeMatch {
         this.mapStarted = true
         this.started = this.playing
       }
+      // 决赛入场的热身：每张图开局带着它进去
+      if (this.side) {
+        const { nudge } = cerMatchEdge(this.state)
+        if (nudge) this.sim.current!.nudge[this.side] += nudge
+      }
       this.mapLog.push({ map: this.sim.current!.map, before: Math.round(this.winProb() * 100), won: false })
       return 'map-start'
     }
@@ -224,7 +233,7 @@ export class MeMatch {
     if (!pend) throw new Error('no decision pending')
     const m = this.map!
     const opt = pend.node.a[i] ?? pend.node.a[pend.node.rec]
-    const p = nodeChance(this.state, opt, this.myTeamId)
+    const p = clamp01(nodeChance(this.state, opt, this.myTeamId) + cerMatchEdge(this.state).node)
     const ok = this.nodeRng.chance(p)
     const before = this.winProb()
     const side = this.side!
@@ -363,7 +372,7 @@ export class MeMatch {
       me.heat += won ? 4 : 1
       this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
-      pushLog(state, 'cup', `${rec.comp} ${rec.label} vs ${rec.opp} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
+      pushLog(state, 'cup', `${compCn(rec.comp)} ${rec.label} vs ${rec.opp} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
       me.pendingFixture = undefined
       return
     }
@@ -391,8 +400,8 @@ export class MeMatch {
         if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)
       }
       const line = started
-        ? `${rec.comp} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
-        : `${rec.comp} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} —— 你在替补席看完了这场。`
+        ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
+        : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} —— 你在替补席看完了这场。`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)
     }

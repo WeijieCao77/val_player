@@ -2,6 +2,7 @@ import { useGame } from '../ctx'
 import { fansCn, fanTier } from '../../engine/me/fans'
 import { traitOf } from '../../engine/me/traits'
 import { bondCardLines } from '../../engine/me/bond'
+import { compCn } from '../../engine/me/compname'
 
 /** The career on one card, made to be screenshotted. */
 export default function Poster() {
@@ -24,7 +25,7 @@ export default function Poster() {
       <div className="wall">
         {titles.length ? titles.map((t, i) => (
           <span key={i} className={`trophy ${/Champions/.test(t.title) ? 'c' : /Masters/.test(t.title) ? 'm' : 'r'}${t.started ? '' : ' ring'}`}>
-            {t.year} {t.title}{t.started ? '' : '（随队）'}
+            {t.year} {compCn(t.title)}{t.started ? '' : '（随队）'}
           </span>
         )) : <span className="faint">没有奖杯</span>}
       </div>

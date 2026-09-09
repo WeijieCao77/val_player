@@ -3,6 +3,7 @@ import { bondCardLines } from '../../engine/me/bond'
 import { fanTier, fansCn } from '../../engine/me/fans'
 import { originOf } from '../../engine/me/origins'
 import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
+import { compCn } from '../../engine/me/compname'
 
 /**
  * The career card as a picture you can keep.
@@ -173,7 +174,7 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
     // the rest, because a trophy list ending in 「…」 says nothing
     const big = titles.slice(0, 5)
     const rest = titles.length - big.length
-    const text = big.map((t) => `${t.year} ${t.title}${t.started ? '' : '（随队）'}`).join('、')
+    const text = big.map((t) => `${t.year} ${compCn(t.title)}${t.started ? '' : '（随队）'}`).join('、')
       + (rest > 0 ? `，另有 ${rest} 个` : '')
     y += wrap(g, text, PAD, y + 40, W - PAD * 2, 40, 3) * 40 + 40
   } else {

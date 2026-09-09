@@ -216,5 +216,47 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .share-tip { font-size: var(--t-tiny); color: var(--muted); flex: 1 1 150px; min-width: 0; }
 .share-acts { display: flex; align-items: center; gap: 8px; flex: none; }
 .share-dl { display: inline-block; padding: 4px 9px; font-size: var(--t-small); text-decoration: none;
-  color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; }
+  color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; }
 .share-dl:hover { background: var(--panel-3); border-color: var(--line-hi); }
+
+/* 仪式与小游戏（engine/me/ceremony.ts）：一届生涯里出现四五次的夜晚，
+   也是全游戏唯一由你的手而不是角色数值决定的地方。 */
+.cer-story { font-size: 15px; line-height: 1.75; margin: 4px 0 0; }
+.cer-game { padding: 4px 0; }
+.cer-hint { font-size: var(--t-small); color: var(--muted); margin: 0 0 10px; text-align: center; }
+.cer-hint b { color: var(--text); font-variant-numeric: tabular-nums; }
+.cer-stage { position: relative; height: 240px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel-2); overflow: hidden;
+  touch-action: none; cursor: crosshair; }
+.cer-dot { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+  border-radius: 50%; background: rgba(255, 70, 85, .16); border: 2px solid var(--accent);
+  box-shadow: 0 0 18px rgba(255, 70, 85, .35); }
+.cer-dot::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: var(--accent); }
+.cer-target-dot { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  padding: 0; border-radius: 50%; border: 2px solid var(--gold);
+  background: rgba(232, 181, 89, .2); cursor: crosshair; }
+.cer-target-dot::after { content: ''; position: absolute; inset: 15px; border-radius: 50%; background: var(--gold); }
+.cer-barrage { position: absolute; inset: 0; pointer-events: none; }
+.cer-barrage span { position: absolute; left: 100%; white-space: nowrap;
+  font-size: 12px; color: var(--faint); animation: cer-fly linear infinite; }
+@keyframes cer-fly { from { transform: translateX(0); } to { transform: translateX(-160%); } }
+@media (prefers-reduced-motion: reduce) { .cer-barrage { display: none; } }
+
+.cer-bar { position: relative; height: 64px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel-2); cursor: pointer; touch-action: none; }
+.cer-target { position: absolute; left: 50%; top: 8px; bottom: 8px; width: 3px;
+  margin-left: -1.5px; background: var(--gold); }
+.cer-runner { position: absolute; top: 4px; bottom: 4px; width: 5px; margin-left: -2.5px;
+  background: var(--text); border-radius: 3px; }
+.cer-taps { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+  font-size: var(--t-tiny); font-variant-numeric: tabular-nums; }
+
+.cer-tones { display: flex; flex-direction: column; gap: 8px; }
+.cer-tone { display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  text-align: left; padding: 10px 12px; width: 100%; }
+.cer-tone b { font-weight: 600; }
+
+.cer-tier { text-align: center; font-size: 34px; font-weight: 700; letter-spacing: 3px; margin: 6px 0 10px; }
+.cer-tier.gold { color: var(--gold); }
+.cer-tier.silver { color: var(--muted); }
+.cer-tier.bronze { color: var(--neg-ink); }

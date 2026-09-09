@@ -13,6 +13,7 @@ import { playRanked } from './prepro'
 import { streamIncome } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
+import { cerRestMul } from './ceremony'
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -172,7 +173,8 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   // a week passes: the body gets some of it back on its own, more with a
   // better constitution — so an idle week is never a dead week, and a full
   // week of training is a real choice against it
-  fatigue -= clamp(6 + (me.body - 50) / 10, 3, 12)
+  // 出征仪式的时差：国际赛期间身体回得快一点或慢一点
+  fatigue -= clamp(6 + (me.body - 50) / 10, 3, 12) * cerRestMul(state)
   p.fatigue = clamp(p.fatigue + fatigue, 0, 100)
   if (rose.length) {
     const cn: Record<keyof Attrs, string> = {
