@@ -22,6 +22,11 @@ export const ENDINGS_ME: EndingDef[] = [
   { key: 'oneclub', title: '一队终老', text: '六个赛季，一家俱乐部。这在这个行业里比冠军还少见。', cond: (s) => s.me!.tenure >= 6 },
   { key: 'evergreen', title: '常青树', text: '八个赛季。天赋比你高的人来了又走，你还在名单上。', cond: (s) => proSeasons(s) >= 8 },
   { key: 'abroad', title: '远征', text: '在外赛区打了两个赛季以上。语言、时差、想家——你都熬过了。', cond: (s) => (s.me!.flags.abroadSeasons ?? 0) >= 2 },
+  // A player with one regional title used to fall through to 「没有冠军」,
+  // which the career card contradicts on the same screen — it lists the trophy
+  // right above the verdict. 3+ is 赛区功勋; 1–2 is still a trophy.
+  { key: 'titled', title: '拿过冠军', text: '赛区冠军捧过，国际赛没走远。奖杯柜里不空——这一行里，这已经把你和绝大多数人分开了。',
+    cond: (s) => s.me!.titles.some((t) => t.started) },
   { key: 'journeyman', title: '泯然众人', text: '三个赛季以上的职业生涯，没有冠军。大多数职业选手的故事就是这样，而且不丢人。', cond: (s) => proSeasons(s) >= 3 },
   { key: 'flash', title: '昙花一现', text: '签过约，打过正赛，然后没有下一份合同。这行的门槛在门外，也在门里。', cond: (s) => proSeasons(s) >= 1 },
   { key: 'shore', title: '没能上岸', text: '几年的天梯和杯赛，电话没有响。你比绝大多数人打得都好，只是不够。', cond: () => true },

@@ -197,3 +197,24 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .ledger-r .mono { font-variant-numeric: tabular-nums; }
 .ledger-r.net { margin-top: 3px; border-top: 1px solid var(--line-hi); border-bottom: 0;
   padding-top: 6px; font-weight: 650; }
+
+/* 生涯名片图（ui/me/share.ts）：浮层里放渲染好的 1080×1620 PNG，
+   手机长按或走系统菜单存相册，桌面点下载。这里只负责缩放显示。 */
+.share-overlay { align-items: center; padding: 16px; }
+.share-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  max-width: min(440px, 94vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: var(--shadow-pop); }
+.share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line); flex: none; }
+.share-head b { font-size: 15px; }
+.share-body { overflow: auto; padding: 12px; min-height: 140px;
+  display: flex; align-items: center; justify-content: center; }
+.share-img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.share-loading { color: var(--muted); font-size: var(--t-small); padding: 32px 8px; text-align: center; }
+.share-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; border-top: 1px solid var(--line); flex: none; flex-wrap: wrap; }
+.share-tip { font-size: var(--t-tiny); color: var(--muted); flex: 1 1 150px; min-width: 0; }
+.share-acts { display: flex; align-items: center; gap: 8px; flex: none; }
+.share-dl { display: inline-block; padding: 4px 9px; font-size: var(--t-small); text-decoration: none;
+  color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; }
+.share-dl:hover { background: var(--panel-3); border-color: var(--line-hi); }

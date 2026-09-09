@@ -17,6 +17,7 @@ import { DIM_CN } from '../../engine/me/nodes'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
 import Poster from './Poster'
+import ShareCard from './ShareCard'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
 export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
@@ -332,11 +333,19 @@ function ReleasedModal({ onDone }: { onDone: () => void }) {
 
 function EndingModal({ onDone }: { onDone: () => void }) {
   const { game, commit } = useGame()
+  const [card, setCard] = useState(false)
   const close = () => { pop(game, 'ending'); commit(); onDone() }
   return (
-    <Modal wide title="生涯结束" onClose={close} onBgClose={() => {}}>
-      <Poster />
-      <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}><button className="primary" onClick={close}>合上</button></div>
-    </Modal>
+    <>
+      <Modal wide title="生涯结束" onClose={close} onBgClose={() => {}}>
+        <Poster />
+        {/* a screenshot comes with the address bar and no way in for whoever sees it */}
+        <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 12 }}>
+          <button onClick={() => setCard(true)}>生成生涯名片图</button>
+          <button className="primary" onClick={close}>合上</button>
+        </div>
+      </Modal>
+      {card && <ShareCard onClose={() => setCard(false)} />}
+    </>
   )
 }

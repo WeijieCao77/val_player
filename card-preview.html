@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>生涯名片图 · 预览</title>
+  <style>
+    body { margin: 0; background: #05080d; color: #9FB2C6; font: 13px system-ui, sans-serif; }
+    .bar { padding: 10px 14px; border-bottom: 1px solid #1E3247; }
+    #out { padding: 16px; }
+    canvas { width: 540px; height: auto; display: block; border: 1px solid #1E3247; }
+  </style>
+</head>
+<body>
+  <!-- Dev-only. Not an entry point of the build: `npm run dev` then open
+       /card-preview.html to look at the career card without playing to
+       retirement. See scripts/card_preview.ts. -->
+  <div class="bar" id="bar">正在跑一段生涯…</div>
+  <div id="out"></div>
+  <script type="module" src="/scripts/card_preview.ts"></script>
+</body>
+</html>

@@ -1942,6 +1942,11 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   // First, those who said last winter this season would be their final one:
   const departed: string[] = []
   for (const p of Object.values(state.players)) {
+    // never the career player: me/endings.ts decides when he hangs them up.
+    // retirePlayer() deletes the Player, and every me-layer read of
+    // state.players[me.id] then throws — a career that reached its
+    // thirties died on a white screen instead of getting its ending.
+    if (p.id === state.me?.id) continue
     if (p.retiring) {
       const line = retirePlayer(state, p, notes)
       if (line) departed.push(line)
@@ -1961,6 +1966,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   // signed it because he intends to play it.
   const noticed: string[] = []
   for (const p of Object.values(state.players)) {
+    if (p.id === state.me?.id) continue
     if (p.retiring) continue
     let announceP = p.age >= 33 ? 0.45 : p.age >= 31 ? 0.2 : p.age >= 29 ? 0.06 : 0
     if (p.contractYears >= 3) announceP = 0
