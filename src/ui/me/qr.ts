@@ -9,6 +9,11 @@
  *
  * Regenerate with `python scripts/make_qr.py <url>` if the address changes —
  * the matrix *is* the URL, and a stale one sends people somewhere else.
+ *
+ * Scanned on a real phone on 2026-09-09; it opens the site. That was the one
+ * check nobody could do from here — the drawn pixels were verified against
+ * the library's own output bit for bit, but bits matching is not the same as
+ * a camera reading them.
  */
 export const QR_URL = 'https://valplayer-production.up.railway.app'
 export const QR_SIZE = 33
