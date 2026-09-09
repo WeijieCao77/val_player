@@ -9,6 +9,7 @@ import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } fro
 import type { NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
+import { bondNoteMatch } from './bond'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 
@@ -348,6 +349,8 @@ export class MeMatch {
       if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
       me.seasonStart.matches++
       me.playedThisStage++
+      // one more night shared with these four
+      bondNoteMatch(state, mineIds)
       if (started) {
         me.startedThisStage++
         me.seasonStart.starts++

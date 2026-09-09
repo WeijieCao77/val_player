@@ -55,6 +55,18 @@
 .map-read .win { color: var(--win); } .map-read .loss { color: var(--loss); }
 @media (max-width: 720px) { .map-board { grid-template-columns: 1fr; } .map-real { width: 100%; height: auto; aspect-ratio: 1; } }
 
+/* the names on the career card */
+.poster-me .mates { margin: 10px 0 0; padding: 10px 12px; border-left: 2px solid var(--accent-line); background: var(--accent-wash); border-radius: 0 8px 8px 0; }
+.poster-me .mates p { margin: 0 0 4px; font-size: var(--t-small); }
+.poster-me .mates p:last-child { margin-bottom: 0; }
+/* the roster ledger on the team screen */
+.bond-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); }
+.bond-row:last-child { border-bottom: 0; }
+.bond-tag { font-size: var(--t-tiny); padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line-hi); color: var(--muted); white-space: nowrap; }
+.bond-tag.mentor { border-color: var(--win); color: var(--win); }
+.bond-tag.passed, .bond-tag.carried { border-color: var(--accent-line); color: var(--accent); }
+.bond-gone { opacity: .55; }
+
 /* the corner stack: changelog sits at 62px, the numbers switch above it */
 .pins-fab { bottom: 108px; }
 .support-fab.pins-fab.on .ico { color: var(--win); }

@@ -2,6 +2,7 @@ import { useGame } from '../ctx'
 import { Condition, OvrBadge, Panel, Roles } from '../common'
 import { bondBetween } from '../../engine/bonds'
 import { trustLabel } from '../../engine/trust'
+import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, EDGE_NEED } from '../../engine/me/coach'
 
 const bondWord = (v: number) => v >= 45 ? '很铁' : v >= 20 ? '不错' : v >= 0 ? '一般' : v >= -30 ? '有点疏远' : '闹掰了'
@@ -48,6 +49,38 @@ export default function TeamScreen() {
           </p>
           <p className="small" style={{ margin: 0 }}>他对你的信任：<b>{Math.round(me.coachTrust)}</b>（{trustLabel(me.coachTrust)}）</p>
         </Panel>
+        {/* who you have played beside, and which of you was carrying */}
+        {(() => {
+          const all = bondAll(game)
+          if (!all.length) return null
+          const here = all.filter((e) => !e.gone)
+          const gone = all.filter((e) => e.gone).slice(0, 6)
+          const row = (e: ReturnType<typeof bondAll>[number]) => {
+            const role = bondMainRole(e)
+            const years = Math.max(1, e.lastYear - e.firstYear + 1)
+            return (
+              <div key={e.id} className={`bond-row${e.gone ? ' bond-gone' : ''}`}>
+                <span><b>{e.ign}</b> <span className="muted">{e.role}</span>{e.gone && <span className="muted"> · {e.gone === 'retired' ? '已退役' : '已离队'}</span>}</span>
+                <span className="muted">{years} 年 · {e.matches} 场{e.titles.length ? ` · ${e.titles.length} 冠` : ''}</span>
+                {role ? <span className={`bond-tag ${role}`}>{BOND_ROLE_TEXT[role]}</span> : <span className="bond-tag">还看不出</span>}
+              </div>
+            )
+          }
+          return (
+            <Panel title="共事">
+              {here.map(row)}
+              {gone.length > 0 && (
+                <>
+                  <p className="tiny muted" style={{ margin: '10px 0 2px' }}>走过的人</p>
+                  {gone.map(row)}
+                </>
+              )}
+              <p className="tiny faint" style={{ margin: '8px 0 0' }}>
+                「带人」是你比他强、他比你年轻；「被带飞」是他比你强、也比你年轻。一个赛段至少打三场才算数。
+              </p>
+            </Panel>
+          )
+        })()}
         <Panel title="首发之争">
           {/* the people I am actually racing: same slot, on this roster */}
           {(() => {

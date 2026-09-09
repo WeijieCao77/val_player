@@ -1,6 +1,7 @@
 import { useGame } from '../ctx'
 import { fansCn, fanTier } from '../../engine/me/fans'
 import { traitOf } from '../../engine/me/traits'
+import { bondCardLines } from '../../engine/me/bond'
 
 /** The career on one card, made to be screenshotted. */
 export default function Poster() {
@@ -44,6 +45,11 @@ export default function Poster() {
         <div><b>{fansCn(me.fans)}</b><span>粉丝 · {fanTier(me.fans).name}</span></div>
         <div><b>{clubs.length}</b><span>效力俱乐部 · {clubs.join(' ')}</span></div>
       </div>
+      {/* the people, by name — the ledger exists so this line is not "your teammates" */}
+      {(() => {
+        const lines = bondCardLines(game)
+        return lines.length ? <div className="mates">{lines.map((l, i) => <p key={i}>{l}</p>)}</div> : null
+      })()}
       <div className="sig">{me.traits.map((k) => traitOf(k)?.name).filter(Boolean).join(' · ') || '没有形成特质'} · 成就 {me.achievements.length} · 事件 {me.eventsSeen}</div>
     </div>
   )

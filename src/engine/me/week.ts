@@ -11,6 +11,7 @@ import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
 import { weekReport } from './press'
+import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { coachStarters, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -45,7 +46,13 @@ export function beginWeek(state: GameState): void {
   const me = state.me!
   me.duelsThisWeek = 0
   me.relaxUsed = 0
-  if (me.phase === 'pro') weeklyLineup(state)
+  if (me.phase === 'pro') {
+    // who is on the roster this week — and a word for anyone who is not any more
+    const before = [...(state.teams[state.myTeam]?.roster ?? [])]
+    weeklyLineup(state)
+    bondSync(state)
+    bondReportDepartures(state, before)
+  }
 }
 
 const PRO_ONLY: MeAction[] = ['scrim', 'duo', 'duel']
@@ -187,6 +194,8 @@ function syncTitles(state: GameState): void {
     if (me.titles.some((x) => x.year === t.year && x.title === t.title)) continue
     const started = me.startedThisStage > 0 || me.seasonStart.starts >= 4
     me.titles.push({ year: t.year, title: t.title, started })
+    // whoever was in the room shares it
+    bondNoteTitle(state, t.title)
     pushLog(state, 'good', `冠军：${t.title}${started ? '' : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }
@@ -200,6 +209,8 @@ function onStageChange(state: GameState, rng: Rng): void {
   const champs = state.comps['champions']
   if (champs?.champion && champs.finished?.[1] === state.myTeam && me.startedThisStage > 0) me.flags.champFinalLost = 1
   noteScoutInterest(state, rng)
+  // a stage's worth of evidence is enough to say who was carrying whom
+  bondCloseStage(state)
   if (me.traits.includes('star')) me.coachTrust = clamp(me.coachTrust - 2, 0, 100)
 }
 

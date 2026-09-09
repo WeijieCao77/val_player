@@ -35,6 +35,32 @@ export interface NodeLogEntry {
   hl?: string
 }
 
+/** Which of us was carrying, on the older/younger × stronger/weaker axes. */
+export type BondRole = 'carried' | 'anchor' | 'passed' | 'mentor' | 'equal'
+
+/** One person I shared a roster with. Written once, kept for the whole career. */
+export interface BondEntry {
+  id: string
+  ign: string
+  role: string
+  firstYear: number
+  lastYear: number
+  /** the club we met at */
+  team: string
+  /** stages we finished together */
+  stages: number
+  /** matches played alongside */
+  matches: number
+  /** trophies won while both of us were on the roster */
+  titles: string[]
+  /** the closest we ever got */
+  peakBond: number
+  /** stage key → what I was to him that stage */
+  roles: Record<string, BondRole>
+  gone?: 'left' | 'retired'
+  goneYear?: number
+}
+
 /** One scene of a practice duel, answered. */
 export interface DuelSceneLog {
   r: number
@@ -294,6 +320,10 @@ export interface MeState {
   badStreak: number
   /** losses with me near the bottom, in a row — the coach starts trying other fives */
   rotateHeat?: number
+  /** everyone who ever shared a roster with me — see me/bond.ts, never pruned */
+  mates?: Record<string, BondEntry>
+  /** matches played this stage, so a two-game stage cannot define a role */
+  bondStageMatches?: number
   /** a practice duel in progress, scene by scene */
   duelLive?: DuelLive
   /** confirmed as a starter: selection reads my full rating, not the rookie discount */
