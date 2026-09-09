@@ -29,3 +29,7 @@ tsconfig.tsbuildinfo
 
 # scraped vlr.gg pages (18 MB); regenerate with scripts/fetch_history.py
 .cache
+
+# 13.5 MB of raw per-event statlines; rebuild with scripts/fetch_stats.py
+# (the aggregate scripts/build_stats.py produces IS committed)
+src/data/stats_history.json
