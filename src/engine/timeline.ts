@@ -1,4 +1,5 @@
 import raw from '../data/timeline.json'
+import lineageRaw from '../data/lineage.json'
 import { canonAgents } from './content'
 import { regionIn } from './era'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
@@ -259,7 +260,7 @@ function judgeSeat(state: GameState, mine: string | null, Y: TYear, notes: strin
   if (!mine || state.seat) return
   const t = state.teams[mine]
   if (!t) return
-  if (mine.startsWith('V21T') && Y.clubs[mine.slice(4)]?.l) return
+  if (bookClubOf(state, Y, mine)?.l) return
   const league = regionIn(t.region, 2023)
   if (league !== 'Americas' && league !== 'EMEA' && league !== 'Pacific') return
   const reached = Object.values(state.comps).filter((c) => c.format === 'circuit' && c.teams.includes(mine)
@@ -292,6 +293,58 @@ function applySeat(state: GameState, year: number): void {
   if (out) { out.tier = 2; out.league = `Challengers ${out.scene ?? out.region}` }
 }
 
+interface Lineage {
+  from: string
+  to: string
+  year: number
+  day: number
+  kind: 'rebrand' | 'merger' | 'roster'
+  fromName: string
+  toName: string
+  source: string
+}
+const LINEAGE = (lineageRaw as unknown as { entries: Lineage[] }).entries
+
+/** The book's record of a club this year: the club history carried it on as, else its own. */
+function bookClubOf(state: GameState, Y: TYear, teamId: string): TClub | undefined {
+  const heirs = Object.entries(state.heirs ?? {}).filter(([, to]) => to === teamId).map(([id]) => id.slice(4))
+  for (const v of heirs.reverse()) if (Y.clubs[v]) return Y.clubs[v]
+  return teamId.startsWith('V21T') ? Y.clubs[teamId.slice(4)] : undefined
+}
+
+/**
+ * A club history carried on under another name — a rebrand, a merger, a roster
+ * bought whole (src/data/lineage.json, every entry with its source). Out of the
+ * player's reach the book already moves the people. Inside it, the player's
+ * club is the one that carries on: it takes the new name on the day history
+ * did, and every event that seeds the successor seeds it.
+ */
+function inherit(state: GameState, mine: string | null, year: number, day: number, notes: string[]): void {
+  if (!mine || !state.teams[mine]) return
+  for (const e of LINEAGE) {
+    const from = clubId(e.from)
+    const to = clubId(e.to)
+    if (from !== mine && state.heirs?.[from] !== mine) continue
+    if (state.heirs?.[to] === mine || to === mine) continue
+    if (year < e.year || (year === e.year && day < e.day)) continue
+    const t = state.teams[mine]
+    const successor: Team | undefined = state.teams[to]
+    if (successor && successor.id !== mine) {
+      for (const pid of [...successor.roster]) release(state, state.players[pid])
+      successor.dormant = true
+    }
+    state.heirs = { ...(state.heirs ?? {}), [to]: mine }
+    const book = BOOK.years[String(year)]?.clubs[e.to]
+    const old = t.name
+    t.name = book?.n ?? e.toName
+    if (book?.t) t.tag = book.t
+    const verb = e.kind === 'rebrand' ? '更名为' : e.kind === 'merger' ? '合并为' : '整队加入'
+    const line = `🔁 ${old} ${verb} ${t.name}——真实历史里 ${e.fromName} 在 ${e.year} 年${verb} ${e.toName}，你的俱乐部跟着走。`
+    notes.push(line)
+    state.news.push({ day: state.day, kind: 'club', important: true, text: line })
+  }
+}
+
 export interface YearSync {
   moved: number
   founded: string[]
@@ -309,6 +362,7 @@ export function syncYear(state: GameState, year: number): YearSync {
   if (!Y || !isTimelineWorld(state)) return out
   const { club: mine, people } = reachOf(state)
   const rng = new Rng(hashStr(`timeline:${state.seed}:${year}`))
+  inherit(state, mine, year, LATE_START, out.notes)
   if (year === 2023) judgeSeat(state, mine, Y, out.notes)
 
   for (const [vlr, r] of Object.entries(Y.ratings)) {
@@ -320,7 +374,7 @@ export function syncYear(state: GameState, year: number): YearSync {
   for (const [vlr, c] of Object.entries(Y.clubs)) {
     const id = clubId(vlr)
     active.add(id)
-    if (id === mine) continue
+    if (id === mine || (mine && state.heirs?.[id] === mine)) continue
     let t = state.teams[id]
     if (!t) {
       if (c.d > LATE_START) continue
@@ -340,6 +394,7 @@ export function syncYear(state: GameState, year: number): YearSync {
   }
 
   for (const [vlr, ids] of Object.entries(Y.rosters)) {
+    if (mine && state.heirs?.[clubId(vlr)] === mine) continue
     const t = state.teams[clubId(vlr)]
     if (!t || t.id === mine) continue
     const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && !people.has(p.id))
@@ -368,7 +423,7 @@ export function syncYear(state: GameState, year: number): YearSync {
   applySeat(state, year)
   const own = mine ? state.teams[mine] : undefined
   if (own && year >= 2023 && state.seat?.club !== mine) {
-    const book = mine!.startsWith('V21T') ? Y.clubs[mine!.slice(4)] : undefined
+    const book = bookClubOf(state, Y, mine!)
     own.tier = book?.l ? 1 : 2
     own.scene = book?.s ?? sceneFor(state, own)
     own.league = leagueLabel({ l: book?.l ?? null, s: own.scene ?? null, r: own.region })
@@ -394,9 +449,10 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
   const Y = BOOK.years[String(year)]
   const { club: mine, people } = reachOf(state)
   const rng = new Rng(hashStr(`timeline-ev:${state.seed}:${year}:${state.day}`))
+  inherit(state, mine, year, state.day, [])
   for (const [vlr, ids] of Object.entries(rosters)) {
     const id = clubId(vlr)
-    if (id === mine) continue
+    if (id === mine || (mine && state.heirs?.[id] === mine)) continue
     let t = state.teams[id]
     if (!t) {
       const c = Y?.clubs[vlr]

@@ -24,7 +24,8 @@
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { advanceDay } from '../src/engine/season'
+import { advanceDay, setupSeason } from '../src/engine/season'
+import { createNewGame } from '../src/engine/world'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
 import type { Competition, GameState, Region } from '../src/engine/types'
 
@@ -175,10 +176,51 @@ function bystander(): void {
   void eventOf
 }
 
+/**
+ * A club history carried on under another name (src/data/lineage.json): the
+ * player's club takes the new name the day history did, and the events that
+ * seeded the successor seed it. Two managers — Vision Strikers, which DRX
+ * bought in January 2022, and DAMWON, which became Dplus in January 2023.
+ */
+function lineage(): void {
+  for (const [label, club, successor, year, want] of [
+    ['Vision Strikers → DRX', 'V21T198', 'V21T8185', 2022, 'KIWOOM DRX'],
+    ['DAMWON → Dplus', 'V21T2542', 'V21T11348', 2023, 'Dplus Esports'],
+  ] as [string, string, string, number, string][]) {
+    const state = createNewGame(club, 'Probe', seed, undefined, 2021)
+    setupSeason(state)
+    const day = () => {
+      state.boardConfidence = 90
+      advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
+    }
+    let guard = 0
+    try {
+      while (state.year < year && !state.gameOver && guard++ < 900) day()
+      while (state.year === year && state.day < 80 && !state.gameOver && guard++ < 1000) day()
+    } catch (e) {
+      fail(`传承 ${label}：第 ${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+      continue
+    }
+    const t = state.teams[club]
+    const seeded = Object.values(state.comps)
+      .filter((c) => c.circuit?.mode && eventOf(c.circuit.id)?.seeds.includes(successor.slice(4)))
+    const inIt = seeded.filter((c) => c.teams.includes(club))
+    console.log(`\n== 传承：${label}：${state.year} 年第 ${state.day} 天，你的俱乐部叫 ${t?.name}；`
+      + `真实种子里有它的已开赛事 ${seeded.length} 场，你在其中 ${inIt.length} 场`)
+    if (state.gameOver) fail(`传承 ${label}：${state.gameOver}`)
+    if (t?.name !== want) fail(`传承 ${label}：${year} 年应该改名为 ${want}，实际 ${t?.name}`)
+    if (state.heirs?.[successor] !== club) fail(`传承 ${label}：没有记下 ${successor} 由你的俱乐部承接`)
+    const other = state.teams[successor]
+    if (other && !other.dormant && other.roster.length) fail(`传承 ${label}：${other.name} 还作为另一家俱乐部在打`)
+    if (inIt.length < seeded.length) fail(`传承 ${label}：${seeded.length - inIt.length} 场本该由你承接的赛事里没有你`)
+  }
+}
+
 run('北美 · Challengers 首发', 'North America', 'chal')
 run('中国 · 从天梯开始', 'China', 'pre')
 run('欧洲 · 强队替补', 'Europe', 't1')
 bystander()
+lineage()
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 如实停下。')
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 如实停下；你的俱乐部跟着真实的改名、合并、整队收购走。')
 process.exit(bad ? 1 : 0)

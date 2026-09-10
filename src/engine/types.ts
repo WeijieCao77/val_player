@@ -896,6 +896,11 @@ export interface GameState {
    * partner that went without it — see engine/timeline.ts judgeSeat
    */
   seat?: { club: string; displaced: string; league: string; from: number }
+  /**
+   * Clubs the player's club carried on as — successor world id to the player's
+   * club — when history rebranded, merged or bought it whole (engine/timeline.ts inherit)
+   */
+  heirs?: Record<string, string>
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
   /** day index since career start */

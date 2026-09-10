@@ -99,6 +99,9 @@ export const worldIdOf = (vlr: string): string | null => (vlr.startsWith('N:') ?
 const idIn = (state: GameState, vlr: string | null | undefined): string | null => {
   if (!vlr) return null
   const id = worldIdOf(vlr)
+  // a club the player's club carried on as (engine/timeline.ts inherit) is the player's club
+  const heir = id ? state.heirs?.[id] : undefined
+  if (heir && state.teams[heir]) return heir
   return id && state.teams[id] ? id : null
 }
 
