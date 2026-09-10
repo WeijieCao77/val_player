@@ -345,6 +345,9 @@ function inherit(state: GameState, mine: string | null, year: number, day: numbe
   }
 }
 
+/** The same moves the timeline makes, for engine/bridge.ts's turn into 2026. */
+export { sign as signForHistory, release as releaseForHistory }
+
 export interface YearSync {
   moved: number
   founded: string[]

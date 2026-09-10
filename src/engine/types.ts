@@ -901,6 +901,8 @@ export interface GameState {
    * club — when history rebranded, merged or bought it whole (engine/timeline.ts inherit)
    */
   heirs?: Record<string, string>
+  /** the year a world that entered in 2021 was handed over to today's (engine/bridge.ts) */
+  bridged?: number
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
   /** day index since career start */

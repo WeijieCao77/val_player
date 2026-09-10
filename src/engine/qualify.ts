@@ -299,7 +299,7 @@ export function qualification(state: GameState): QualStatus | null {
   const lines = [rule]
   if (state.stage === 'stage2') {
     const rank = Object.values(state.teams)
-      .filter((t) => t.region === me.region && t.tier === 1)
+      .filter((t) => t.region === me.region && t.tier === 1 && !t.dormant)
       .sort((a, b) => b.champPoints - a.champPoints || b.rating - a.rating)
     const pr = rank.findIndex((t) => t.id === state.myTeam) + 1
     lines.push(`全年冠军积分：${me.champPoints} 分，赛区第 ${pr}。积分名额给季后赛前 2 之外积分最高的 2 队，所以积分排在前 4 附近就有机会。`)

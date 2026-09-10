@@ -26,6 +26,7 @@ import type { StartPoint } from '../src/engine/me/career'
 import { advanceUntil, autoWeek, quietAhead } from '../src/engine/me/auto'
 import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
+import { WORLD_TEAMS } from '../src/engine/teams'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
 import type { Competition, GameState, Region } from '../src/engine/types'
 
@@ -166,11 +167,30 @@ function bystander(): void {
     console.log(`  → ${state.year}：俱乐部 ${teams.filter((t) => !t.dormant).length} 家在打（休眠 ${teams.filter((t) => t.dormant).length}）· 选手 ${Object.keys(state.players).length} 人`
       + (state.year >= 2023 && state.year <= 2025 ? `；联赛 ${leagues(state, state.year)}` : ''))
   }
-  if (state.year !== 2026 || !state.timelinePause) {
-    fail(`旁观者：2025 年底应该停在「时间线暂停」，实际 ${state.year} 年，${state.gameOver ?? '没有停'}`)
-  } else {
-    console.log(`  → 停在 ${state.year} 年 1 月 1 日：${state.timelinePause.slice(0, 30)}…`)
+  // 2026: the timeline hands over to the world the game ships
+  if (state.year !== 2026 || state.timelinePause || state.bridged !== 2026) {
+    fail(`旁观者：2025 年底应该接上 2026 的现代赛季，实际 ${state.year} 年，${state.timelinePause ?? state.gameOver ?? '没有接上'}`)
+    return
   }
+  const modern = Object.values(state.teams).filter((t) => /^T\d+$/.test(t.id) && !t.dormant)
+  const kickoffs = Object.values(state.comps).filter((c) => c.stage === 'kickoff')
+  const sen = WORLD_TEAMS.find((t) => t.name === 'Sentinels')
+  const same = !!sen && [...sen.roster].sort().join() === [...(state.teams[sen.id]?.roster ?? [])].sort().join()
+  const loose = Object.values(state.teams).filter((t) => !/^T\d+$/.test(t.id) && !t.dormant)
+  console.log(`  → 2026：接上现在的世界，${modern.length} 家俱乐部开季（其余 ${Object.values(state.teams).filter((t) => t.dormant).length} 家休眠）；`
+    + `揭幕赛 ${kickoffs.length} 个赛区；Sentinels 的名单${same ? '和 2026 真实名单一致' : '和真实名单不一致'}`)
+  if (modern.length !== WORLD_TEAMS.length) fail(`旁观者：2026 应该有 ${WORLD_TEAMS.length} 家现代俱乐部开季，实际 ${modern.length}`)
+  if (loose.length) fail(`旁观者：没有俱乐部的旁观者世界里，2026 还有 ${loose.length} 家时间线俱乐部在打：${loose.slice(0, 4).map((t) => t.name).join('、')}`)
+  if (kickoffs.length !== 4) fail(`旁观者：2026 揭幕赛应该有 4 个赛区，实际 ${kickoffs.length}`)
+  for (const c of kickoffs) {
+    const want = WORLD_TEAMS.filter((t) => t.region === c.region && t.tier === 1).length
+    if (c.teams.length !== want) fail(`旁观者：2026 ${c.name} 应该是今天这个赛区的 ${want} 支一线队，实际 ${c.teams.length} 支`)
+  }
+  if (!same) fail('旁观者：Sentinels 2026 的名单应该是真实的开季名单')
+  if (!playYear(state, '旁观者', 2026, day, 400)) return
+  if (!cross(state, '旁观者', 2026, day, 40)) return
+  if (state.year !== 2027 || state.gameOver) fail(`旁观者：2026 打完应该进入 2027，实际 ${state.year} 年，${state.gameOver ?? ''}`)
+  else console.log(`  → 2027：${Object.keys(state.comps).length} 项赛事排上日历，选手 ${Object.keys(state.players).length} 人`)
   const size = JSON.stringify(state).length
   console.log(`  存档体积 ${(size / 1024 / 1024).toFixed(1)} MB（未压缩）· ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   void eventOf
@@ -250,5 +270,5 @@ bystander()
 lineage()
 quiet()
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 如实停下；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 接上现在的世界、打进 2027；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

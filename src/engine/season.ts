@@ -35,6 +35,7 @@ import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
 import { circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { bookCovers, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
+import { bridgeTo2026 } from './bridge'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
 import {
@@ -122,15 +123,16 @@ function makeComp(
   return comp
 }
 
+// a club history closed (engine/timeline.ts) keeps its record and plays nothing
 const tier1Of = (state: GameState, region: Region) =>
   Object.values(state.teams)
-    .filter((t) => t.region === region && t.tier === 1)
+    .filter((t) => t.region === region && t.tier === 1 && !t.dormant)
     .sort((a, b) => b.rating - a.rating)
     .map((t) => t.id)
 
 const tier2Of = (state: GameState, region: Region) =>
   Object.values(state.teams)
-    .filter((t) => t.region === region && t.tier === 2)
+    .filter((t) => t.region === region && t.tier === 2 && !t.dormant)
     .sort((a, b) => b.rating - a.rating)
     .map((t) => t.id)
 
@@ -2097,7 +2099,21 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
     }
     ensureMinimumRosters(state, rng)
   }
-  if (isTimelineWorld(state) && !eventsOf(state.year).length) {
+  // 2026: the timeline's world arrives in today's (engine/bridge.ts)
+  if (isTimelineWorld(state) && !state.bridged && state.year === 2026) {
+    const b = bridgeTo2026(state, notes)
+    const gone: string[] = []
+    for (const id of b.retire) {
+      const p = state.players[id]
+      const line = p ? retirePlayer(state, p, notes) : ''
+      if (line) gone.push(line)
+    }
+    if (gone.length) {
+      state.news.push({ day: state.day, kind: 'player', text: `👋 离开职业赛场：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 人` : ''}。` })
+    }
+    ensureMinimumRosters(state, rng)
+  }
+  if (isTimelineWorld(state) && !state.bridged && !eventsOf(state.year).length) {
     state.timelinePause = `时间线目前做到 ${state.year - 1} 年底。${state.year} 年要接回现代赛季——现在的世界、`
       + '联赛与赛制——这一段还在做。存档停在这里，更新后从这一天接着打。'
     state.gameOver = state.timelinePause
@@ -2109,7 +2125,8 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
 
 /** A save that stopped at the edge of the timeline carries on from the same day once the build can play that year. */
 export function resumeTimeline(state: GameState): boolean {
-  if (!state.timelinePause || !eventsOf(state.year).length) return false
+  // a year this build can play: one on the real calendar, or 2026, where the timeline hands over
+  if (!state.timelinePause || (!eventsOf(state.year).length && state.year !== 2026)) return false
   state.timelinePause = undefined
   state.gameOver = undefined
   openYear(state, new Rng(hashStr(`resume:${state.seed}:${state.year}`)), [])

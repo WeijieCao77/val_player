@@ -30,7 +30,7 @@ export default defineConfig({
           if (id.includes('src/data/circuit.json') || id.includes('src/data/routes.json')
             || id.includes('src/data/routes_partnered.json')) return 'circuit'
           // the roster book past 2021: only a career that entered in 2021 and plays on reads it
-          if (id.includes('src/data/timeline.json')) return 'timeline'
+          if (id.includes('src/data/timeline.json') || id.includes('src/data/bridge_2026.json')) return 'timeline'
           if (id.includes('src/data/dossier.json')) return 'dossier'
           if (id.includes('src/data/prospects.json')) return 'world'
           if (id.includes('src/data/changelog')) return 'changelog'
