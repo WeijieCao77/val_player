@@ -791,6 +791,42 @@ def main() -> int:
 
     for evs in years.values():
         evs.sort(key=lambda e: (e['start'] if e['start'] is not None else 999, e['id']))
+
+    # ---- 2023 on: the way into a closed Challengers league. A split ends with its
+    # own promotion/relegation stage, or a year opens with a qualifier event; either
+    # sends its top few into the league's next split. Mark that stage with how many
+    # it really sent there (`promotes`) and where (`feeds`), so the game can offer a
+    # club outside the league the match for the last of those places.
+    PROMO = re.compile(r'Promotion|Relegation|Up and Down|Pro/Rel|Acesso|Repescagem|Last Chance', re.I)
+    # a whole event of open rounds that is a qualifier (NA's 2023 Challengers League Qualifiers)
+    QUALIFIER_EVENT = re.compile(r'Qualif', re.I)
+    SPLIT = re.compile(r'Split|Stage|Kickoff|North America$|Challengers League: ', re.I)
+    ordered = [(int(y), e) for y in sorted(years) for e in years[y]]
+    promoted_marks = 0
+    for i, (y, e) in enumerate(ordered):
+        if y < 2023 or not e.get('scene'):
+            continue
+        unit_at = None
+        for ui in range(len(e['units']) - 1, -1, -1):
+            u = e['units'][ui]
+            if u['type'] == 'open' and (u.get('side') or PROMO.search(u['label'] + ' ' + (u.get('phase') or ''))
+                                        or (all(x['type'] == 'open' for x in e['units']) and QUALIFIER_EVENT.search(e['name']))):
+                unit_at = ui
+                break
+        if unit_at is None:
+            continue
+        nxt = next((x for yy, x in ordered[i + 1:] if x.get('scene') == e['scene'] and x['start'] is not None
+                    and x['start'] > (e['end'] or 0) - (365 if yy > y else 0) and SPLIT.search(x['name'])
+                    and not PROMO.search(x['name']) and not QUALIFIER_EVENT.search(x['name'])), None)
+        if not nxt:
+            continue
+        u = e['units'][unit_at]
+        k = len([t for t in u.get('ranked', []) if t in nxt['seeds']])
+        if k:
+            u['promotes'] = k
+            u['feeds'] = nxt['id']
+            promoted_marks += 1
+    report['升降级/资格赛阶段标出晋级名额'] = promoted_marks
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(years, f, ensure_ascii=False, separators=(',', ':'))
 

@@ -61,6 +61,12 @@ interface CUnit {
   side?: boolean
   /** 2023 on: a bracket that ends with two sides unbeaten ranks the one from the upper side first */
   upperFirst?: boolean
+  /**
+   * 2023 on: a promotion/relegation stage, or a qualifier's last round — how many of its
+   * sides really went up into the league's next split (`feeds`)
+   */
+  promotes?: number
+  feeds?: string
 }
 
 export interface CEvent {
@@ -777,7 +783,12 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   const c = comp.circuit!
   if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club)) return
   if (!isHome(state, ev, state.teams[club], club)) return
-  const best = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
+  let best: { ui: number; rank: number } | undefined = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
+  if (!best && state.year >= 2023) {
+    // a closed league: the way in is its promotion stage, for the last place it sends up
+    const ui = ev.units.findIndex((u) => isOpen(u) && (u.promotes ?? 0) > 0)
+    if (ui >= 0) best = { ui, rank: ev.units[ui].promotes! }
+  }
   if (!best) return
   const u = ev.units[best.ui]
   const key = `${best.ui}:${best.rank}`
@@ -965,8 +976,11 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
   if (nodes.some((n) => !games.has(n.at))) return false
   if (ev.units.some((u) => isOpen(u) && state.day < (u.last ?? 0))) return false
   if (playIn && !gameOf(playIn)) return false
+  const playInWon = playIn ? gameOf(playIn)?.w : undefined
   const tiers = ev.units.map((u, ui) => (isOpen(u)
-    ? uniq((u.ranked ?? []).map((v) => teamOf(state, ev, v)).filter((t): t is string => !!t)).map((t) => [t])
+    // a promotion place won in the decider is the winner's, whoever held it in history
+    ? uniq((u.ranked ?? []).map((v, r) => (c.playin?.key === `${ui}:${r + 1}` && playInWon ? playInWon : teamOf(state, ev, v)))
+      .filter((t): t is string => !!t)).map((t) => [t])
     : rankPhase(u.type as 'rr' | 'bracket', unitGames(ui)!, u.upperFirst).tiers))
   finish(comp, placesFrom(ev.units, tiers))
   return true
