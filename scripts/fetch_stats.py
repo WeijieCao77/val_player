@@ -41,7 +41,10 @@ DELAY = 1.5
 
 KEEP = re.compile(
     r'champions tour|valorant champions|masters|last chance|lcq|ascension|'
-    r'fgc|china evolution|challengers league|vct ', re.I)
+    # the Chinese scene before VCT China existed: two streaming-platform
+    # cups and an invitational were the entire 2021 calendar, and leaving
+    # them out would make that year look emptier than it actually was
+    r'fgc|china evolution|panghu|huya|challengers league|vct ', re.I)
 DROP = re.compile(
     r'open \d|qualifier weekly|nerd street|college|university|academy|'
     r'contenders|showdown|invitational series', re.I)

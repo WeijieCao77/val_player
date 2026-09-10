@@ -32,7 +32,8 @@ D = os.path.join(ROOT, 'src', 'data')
 # how many doors were above you.
 REGION_OF = re.compile(r'Champions Tour ([A-Za-z& ]+?) Stage', re.I)
 ALIAS = {'Hong Kong and Taiwan': 'Hong Kong & Taiwan'}
-CN_EVENT = re.compile(r'\bFGC\b|China Evolution|China: Ascension|Champions China', re.I)
+CN_EVENT = re.compile(
+    r'\bFGC\b|China Evolution|China: Ascension|Champions China|PangHu|Huya', re.I)
 
 # Which regions had a way out in 2021, and where it led.
 DOORS_2021 = {
@@ -51,7 +52,7 @@ DOORS_2021 = {
     'Philippines': '先打进 SEA 区域赛，才谈国际赛',
     'Vietnam': '先打进 SEA 区域赛，才谈国际赛',
     'Hong Kong & Taiwan': '先打进 SEA 区域赛，才谈国际赛',
-    'China': '没有。这一年中国队只有 FGC 邀请赛，一扇门都没有',
+    'China': '没有。全年只有虎牙胖虎杯春/夏两站和 FGC 邀请赛，一扇国际赛的门都没有',
 }
 
 
