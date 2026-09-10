@@ -3,7 +3,7 @@ import { RULESET_CN, currentRuleset } from '../engine/ruleset'
 import { ask } from './confirm'
 import { createNewGame, WORLD_PLAYERS } from '../engine/world'
 import { WORLD_TEAMS } from '../engine/teams'
-import { setupSeason } from '../engine/season'
+import { resumeTimeline, setupSeason } from '../engine/season'
 import { importSave, listSaves, loadGame, protectAutosaveFrom } from '../engine/save'
 import { track } from '../engine/telemetry'
 import { hashStr } from '../engine/rng'
@@ -177,7 +177,7 @@ export default function NewGame({ onHome,
                 <span className="small muted">{m.team} · {m.year} 年 D{m.day}</span>
                 <button className="sm right" onClick={() => {
                   const g = loadGame(m.slot)
-                  if (g) onStart(g)
+                  if (g) { resumeTimeline(g); onStart(g) }
                   else setErr(`存档「${m.slot}」已损坏，读不出来。`)
                 }}>
                   读取

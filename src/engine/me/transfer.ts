@@ -85,7 +85,7 @@ function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
   const me = state.me!
   const p = state.players[me.id]
   const mine = state.teams[state.myTeam]
-  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !me.declined.includes(t.id))
+  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant)
   const fit = rut
     ? pool.filter((t) => t.tier === 2 || t.rating <= mine.rating - 4)
     : pool.filter((t) => expectOf(t) <= p.overall + 4 && (t.tier === 1 || mine.tier === 2))

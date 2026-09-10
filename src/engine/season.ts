@@ -33,7 +33,8 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
-import { circuitAward, progressCircuit, setupCircuitSeason } from './circuit'
+import { circuitAward, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { bookCovers, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
 import {
@@ -139,8 +140,8 @@ export function setupSeason(state: GameState, notes?: string[]): void {
   resetFixtureSeq(0)
   state.fixtures = []
   state.comps = {}
-  // 2021–2022: the season is the one that really happened, event by event
-  if (formatOf(state.year) === 'open') {
+  // 2021–2025: the season is the one that really happened, event by event
+  if (eventsOf(state.year).length) {
     setupCircuitSeason(state)
     seedMarket(state, notes)
     return
@@ -319,17 +320,18 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
 
   awardPrize(state, comp.stage, comp.finished)
 
-  // the open era paid Riot's circuit points, and joint places were paid alike
-  if (formatOf(state.year) === 'open') {
+  // a real event pays what it really paid, and joint places were paid alike
+  if (comp.format === 'circuit' || formatOf(state.year) === 'open') {
     comp.finished.forEach((teamId, i) => {
       const t = state.teams[teamId]
       const place = comp.places?.[i] ?? i + 1
-      // the event's own prize table where Liquipedia has it; Riot's 2021 chart otherwise
-      const v = (comp.format === 'circuit' ? circuitAward(comp, place) : null) ?? circuitPointsFor(comp.stage, place)
+      // the event's own prize table where Liquipedia has it; Riot's 2021 chart for the open era otherwise
+      const v = (comp.format === 'circuit' ? circuitAward(comp, place) : null)
+        ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, place) : 0)
       if (t && v) t.champPoints += v
     })
   }
-  const pts = formatOf(state.year) === 'open' ? undefined : CHAMP_POINTS[comp.stage]
+  const pts = comp.format === 'circuit' || formatOf(state.year) === 'open' ? undefined : CHAMP_POINTS[comp.stage]
   if (pts) {
     comp.finished.forEach((teamId, i) => {
       const t = state.teams[teamId]
@@ -1982,9 +1984,13 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   // did — announced at 33, gone at 34. A man who just signed a long deal
   // signed it because he intends to play it.
   const noticed: string[] = []
+  const reach = reachOf(state)
   for (const p of Object.values(state.players)) {
     if (p.id === state.me?.id) continue
     if (p.retiring) continue
+    // a real person who really played on is not retiring in this world either —
+    // unless he is inside the player's reach, where the world is the player's
+    if ((lastYearOf(p) ?? 0) > state.year && !reach.people.has(p.id)) continue
     let announceP = p.age >= 33 ? 0.45 : p.age >= 31 ? 0.2 : p.age >= 29 ? 0.06 : 0
     if (p.contractYears >= 3) announceP = 0
     else if (p.contractYears === 2) announceP *= 0.5
@@ -2039,19 +2045,68 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   state.lastChampionsTeams = state.comps.champions?.teams ?? state.lastChampionsTeams
   state.draws = (state.draws ?? []).filter((d) => d.year >= state.year - 1)
   state.pendingDrawId = undefined
-  // A world that began in the open era has 2021's sixteen circuits, not
-  // 2023's three partnered leagues, and the partnered transition — the
-  // thirty licensed clubs, China's qualifier, Challengers leagues and
-  // Ascension — is not built yet. Drawing a 2026-shaped season over that
-  // world gives a calendar with almost nothing on it. Say so, and stop.
-  if (formatOf(state.year) === 'partnered' && Object.keys(state.teams).some((id) => id.startsWith('V21T'))) {
-    state.timelinePause = `时间线目前做到 ${state.year - 1} 年底。${state.year} 年联盟制落地——30 支合作战队、`
-      + '中国的资格赛、Challengers 联赛和 Ascension——这一段还在做。存档停在这里，更新后从这一天接着打。'
+  openYear(state, rng, notes)
+}
+
+/**
+ * The new year's world, then its calendar.
+ *
+ * A world that entered in 2021 is first brought up to the year as history had
+ * it (engine/timeline.ts) — clubs founded and gone, rosters as they opened,
+ * ratings off that year's numbers — everywhere out of the player's reach. Then
+ * the year's real events go on the books. The book reaches 2025; 2026, where
+ * the modern season takes over, is not joined yet, and a save that gets there
+ * stops honestly rather than drawing a season over a world that does not fit it.
+ */
+function openYear(state: GameState, rng: Rng, notes: string[]): void {
+  if (isTimelineWorld(state) && bookCovers(state.year)) {
+    const r = syncYear(state, state.year)
+    notes.push(...r.notes)
+    const gone: string[] = []
+    for (const id of r.retire) {
+      const p = state.players[id]
+      const line = p ? retirePlayer(state, p, notes) : ''
+      if (line) gone.push(line)
+    }
+    if (r.moved || r.founded.length) {
+      state.news.push({
+        day: state.day, kind: 'transfer',
+        text: `📜 ${state.year} 赛季开始前，${r.moved} 名选手按真实历史换了东家`
+          + (r.founded.length ? `；新俱乐部：${r.founded.slice(0, 8).join('、')}${r.founded.length > 8 ? ` 等 ${r.founded.length} 家` : ''}` : '') + '。',
+      })
+    }
+    for (const line of r.renamed.slice(0, 8)) state.news.push({ day: state.day, kind: 'club', text: `🔁 ${line}。` })
+    if (r.folded.length) {
+      state.news.push({
+        day: state.day, kind: 'club',
+        text: `🕯️ 这一年不再参赛：${r.folded.slice(0, 8).join('、')}${r.folded.length > 8 ? ` 等 ${r.folded.length} 家` : ''}。`,
+      })
+    }
+    if (gone.length) {
+      state.news.push({
+        day: state.day, kind: 'player',
+        text: `👋 离开职业赛场：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 人` : ''}。`,
+      })
+    }
+    ensureMinimumRosters(state, rng)
+  }
+  if (isTimelineWorld(state) && !eventsOf(state.year).length) {
+    state.timelinePause = `时间线目前做到 ${state.year - 1} 年底。${state.year} 年要接回现代赛季——现在的世界、`
+      + '联赛与赛制——这一段还在做。存档停在这里，更新后从这一天接着打。'
     state.gameOver = state.timelinePause
     notes.push(state.timelinePause)
     return
   }
   setupSeason(state, notes)
+}
+
+/** A save that stopped at the edge of the timeline carries on from the same day once the build can play that year. */
+export function resumeTimeline(state: GameState): boolean {
+  if (!state.timelinePause || !eventsOf(state.year).length) return false
+  state.timelinePause = undefined
+  state.gameOver = undefined
+  openYear(state, new Rng(hashStr(`resume:${state.seed}:${state.year}`)), [])
+  return true
 }
 
 /**
@@ -2130,7 +2185,7 @@ export function seedMarket(state: GameState, notes?: string[]): void {
 export function ensureMinimumRosters(state: GameState, rng: Rng): void {
   const short: string[] = []
   for (const team of Object.values(state.teams)) {
-    if (team.id === state.myTeam) continue
+    if (team.id === state.myTeam || team.dormant) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
       const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)

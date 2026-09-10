@@ -13,7 +13,7 @@ import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
 import { currentRuleset } from './ruleset'
 
-interface RawPlayer {
+export interface RawPlayer {
   id: string; ign: string; teamId: string | null; region: string; role: string
   roles?: string[]; flex?: boolean; agentPool?: string[]; roleSource?: string
   traits?: { key: string; label: string; good: boolean }[]
@@ -140,6 +140,77 @@ function startingFunds(m?: Manager): number {
   return o?.startingFunds ?? 0
 }
 
+/**
+ * A roster-book person as the game holds him — a new world's, and the
+ * timeline's debutants (engine/timeline.ts), made the same way.
+ */
+export function playerFromRaw(rp: RawPlayer, year: number, seed: number): Player {
+  const prng = new Rng(hashStr(rp.id + 'init') ^ seed)
+  // world.json was built before the player pages were scraped and is missing
+  // a nationality for 178 of the 518, and a real name for rather more. The
+  // dossier has both for everyone. Overlaid here rather than rewritten into
+  // world.json so the two files keep their jobs — world.json is what the
+  // simulation reads, dossier.json is who these people are.
+  const d = dossierOf(rp.id)
+  return {
+    ...rp,
+    nat: rp.nat || d?.nat || undefined,
+    realName: rp.realName ?? d?.real ?? null,
+    // The spread is shallow. Nested objects that the game MUTATES must be
+    // copied, or every career in one page session shares them with the
+    // imported world file — the roster array taught this lesson below, and
+    // attrs re-taught it when a test that rolled many worlds watched its
+    // "fresh" players arrive pre-trained by the previous world's seasons.
+    attrs: { ...rp.attrs },
+    traits: rp.traits ? [...rp.traits] : rp.traits,
+    // the scrape leaves this null when vlr does not record a join date
+    joined: rp.joined ?? undefined,
+    region: rp.region as Player['region'],
+    role: rp.role as Role,
+    roles: (rp.roles as Role[] | undefined) ?? [rp.role as Role],
+    // the agents this player really used, where we have them; otherwise a
+    // plausible pool for the roles they cover
+    agentPool: rp.agentPool?.length
+      ? canonAgents(rp.agentPool)
+      : ((rp.roles as Role[] | undefined) ?? [rp.role as Role])
+          .flatMap((r) => pickAgents(r, prng)),
+    season: emptyStats(),
+    career: emptyStats(),
+    injuredUntil: 0,
+    xp: {},
+    // the in-save CV starts on day one — the farewell card reads this,
+    // never the real-world record
+    clubHist: rp.teamId ? [{ team: rp.teamId, from: year, to: year }] : [],
+  }
+}
+
+/** A roster-book club as the game holds it — a new world's, and a club the timeline founds. */
+export function teamFromRaw(rt: RawTeam, seed: number): Team {
+  const trng = new Rng(hashStr(rt.id + 'team') ^ seed)
+  const mapPrefs: Record<string, number> = {}
+  for (const m of MAPS) {
+    mapPrefs[m] = Math.round(clamp(trng.norm(50, 14), 15, 92))
+  }
+  return {
+    ...rt,
+    // A spread is shallow, so every game shared one roster array with the
+    // imported world file. Signing someone in one career pushed him into the
+    // next one — where his teamId was still null, leaving a name on a roster
+    // that belonged to nobody. Anything that walks the roster counted him;
+    // anything that went via teamId did not.
+    roster: [...rt.roster],
+    coach: rt.coach ? { ...rt.coach } : rt.coach,
+    region: rt.region as Team['region'],
+    tier: rt.tier as Team['tier'],
+    starters: [],
+    tactics: defaultTactics(),
+    sponsors: makeSponsors(rt, trng),
+    mapPrefs,
+    seasonPrize: 0,
+    champPoints: 0,
+  }
+}
+
 export function createNewGame(
   myTeamId: string, managerName: string, seed?: number, manager?: Manager,
   /** the year the save enters the one timeline at — see engine/era.ts ENTRY_YEARS */
@@ -149,45 +220,7 @@ export function createNewGame(
   const rng = new Rng(s)
 
   const players: Record<string, Player> = {}
-  for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) {
-    const prng = new Rng(hashStr(rp.id + 'init') ^ s)
-    // world.json was built before the player pages were scraped and is missing
-    // a nationality for 178 of the 518, and a real name for rather more. The
-    // dossier has both for everyone. Overlaid here rather than rewritten into
-    // world.json so the two files keep their jobs — world.json is what the
-    // simulation reads, dossier.json is who these people are.
-    const d = dossierOf(rp.id)
-    players[rp.id] = {
-      ...rp,
-      nat: rp.nat || d?.nat || undefined,
-      realName: rp.realName ?? d?.real ?? null,
-      // The spread is shallow. Nested objects that the game MUTATES must be
-      // copied, or every career in one page session shares them with the
-      // imported world file — the roster array taught this lesson below, and
-      // attrs re-taught it when a test that rolled many worlds watched its
-      // "fresh" players arrive pre-trained by the previous world's seasons.
-      attrs: { ...rp.attrs },
-      traits: rp.traits ? [...rp.traits] : rp.traits,
-      // the scrape leaves this null when vlr does not record a join date
-      joined: rp.joined ?? undefined,
-      region: rp.region as Player['region'],
-      role: rp.role as Role,
-      roles: (rp.roles as Role[] | undefined) ?? [rp.role as Role],
-      // the agents this player really used, where we have them; otherwise a
-      // plausible pool for the roles they cover
-      agentPool: rp.agentPool?.length
-        ? canonAgents(rp.agentPool)
-        : ((rp.roles as Role[] | undefined) ?? [rp.role as Role])
-            .flatMap((r) => pickAgents(r, prng)),
-      season: emptyStats(),
-      career: emptyStats(),
-      injuredUntil: 0,
-      xp: {},
-      // the in-save CV starts on day one — the farewell card reads this,
-      // never the real-world record
-      clubHist: rp.teamId ? [{ team: rp.teamId, from: year, to: year }] : [],
-    }
-  }
+  for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) players[rp.id] = playerFromRaw(rp, year, s)
 
   // The rest of the professional scene: real players from below the simulated
   // leagues, without a club. They are ordinary free agents from day one — the
@@ -201,31 +234,7 @@ export function createNewGame(
   }
 
   const teams: Record<string, Team> = {}
-  for (const rt of (year <= 2021 ? RAW_2021.teams : WORLD_TEAMS)) {
-    const trng = new Rng(hashStr(rt.id + 'team') ^ s)
-    const mapPrefs: Record<string, number> = {}
-    for (const m of MAPS) {
-      mapPrefs[m] = Math.round(clamp(trng.norm(50, 14), 15, 92))
-    }
-    teams[rt.id] = {
-      ...rt,
-      // A spread is shallow, so every game shared one roster array with the
-      // imported world file. Signing someone in one career pushed him into the
-      // next one — where his teamId was still null, leaving a name on a roster
-      // that belonged to nobody. Anything that walks the roster counted him;
-      // anything that went via teamId did not.
-      roster: [...rt.roster],
-      coach: rt.coach ? { ...rt.coach } : rt.coach,
-      region: rt.region as Team['region'],
-      tier: rt.tier as Team['tier'],
-      starters: [],
-      tactics: defaultTactics(),
-      sponsors: makeSponsors(rt, trng),
-      mapPrefs,
-      seasonPrize: 0,
-      champPoints: 0,
-    }
-  }
+  for (const rt of (year <= 2021 ? RAW_2021.teams : WORLD_TEAMS)) teams[rt.id] = teamFromRaw(rt, s)
 
   const state: GameState = {
     version: 1,

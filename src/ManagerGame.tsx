@@ -23,7 +23,7 @@ import RetireCard from './ui/RetireCard'
 import QualifyPoster from './ui/QualifyPoster'
 import { autosave, claimAutosave, hasAutosave, loadAutosave, loadGame, packState } from './engine/save'
 import { syncCallersWithWorld } from './engine/world'
-import { dateLabel, nextRealFixtureFor, nextScrimFor } from './engine/season'
+import { dateLabel, nextRealFixtureFor, nextScrimFor, resumeTimeline } from './engine/season'
 import { stageNameIn } from './engine/era'
 import { actionsForTurn, actionsLeft } from './engine/actions'
 import Tutorial, { tutorialSeen } from './ui/Tutorial'
@@ -218,7 +218,7 @@ export default function ManagerGame({ onHome, ruleset = 'vct-2025' }: { onHome: 
       openPlayer: (id: string, renew = false) => { setPlayerRenew(renew); setPlayerId(id) },
       loadSlot: (slot: string) => {
         const g = loadGame(slot)
-        if (g) { start(g); toast(`已读取「${slot === 'autosave' ? '自动存档' : slot}」。`) }
+        if (g) { resumeTimeline(g); start(g); toast(`已读取「${slot === 'autosave' ? '自动存档' : slot}」。`) }
         else toast(`存档「${slot}」读不出来。`)
       },
       openMatch: setFixture,
@@ -263,6 +263,8 @@ export default function ManagerGame({ onHome, ruleset = 'vct-2025' }: { onHome: 
           conf: Math.round(g.boardConfidence),
           over: !!g.gameOver,
         })
+        // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
+        resumeTimeline(g)
         start(g)
         } else toast('没有找到自动存档。')
       }} />

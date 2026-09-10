@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/ctx'
 import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/save'
-import { dateLabel } from './engine/season'
+import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
@@ -147,7 +147,8 @@ export default function PlayerGame() {
         canContinue={hasAutosave()}
         onContinue={() => {
           const g = loadAutosave()
-          if (g?.me) start(g)
+          // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
+          if (g?.me) { resumeTimeline(g); start(g) }
           else toast('没有找到可用的存档。')
         }}
       />

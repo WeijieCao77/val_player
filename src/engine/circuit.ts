@@ -1,8 +1,9 @@
 import raw from '../data/circuit.json'
 import routesRaw from '../data/routes.json'
 import { stageAtIn } from './era'
+import { sceneFor, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
-import type { Competition, Fixture, GameState, Region, StageKey } from './types'
+import type { Competition, Fixture, GameState, Region, StageKey, Team } from './types'
 
 /**
  * The open era's season: the events that really happened, in the formats they
@@ -69,6 +70,8 @@ export interface CEvent {
   region: string | null
   /** the club regions a combining layer draws on */
   layer: string[] | null
+  /** 2023 on: the Challengers league a tier-two event belongs to */
+  scene?: string | null
   stage: StageKey | null
   start: number | null
   end: number | null
@@ -159,7 +162,7 @@ const isOpen = (u: CUnit): boolean => u.type === 'open'
 const phaseOf = (u: CUnit): string => u.label.replace(/ · [A-Z0-9]+组$/, ' · 组')
 
 /** Events that paid circuit points and fed an international. */
-const TOP: StageKey[] = ['s1masters', 's2finals', 's3finals', 'masters1', 'masters2', 'lcq', 'champions']
+const TOP: StageKey[] = ['s1masters', 's2finals', 's3finals', 'masters1', 'masters2', 'lcq', 'champions', 'kickoff', 'stage1', 'stage2']
 const tierOf = (ev: CEvent): 1 | 2 => ((ev.stage && TOP.includes(ev.stage)) || /FGC/.test(ev.name) ? 1 : 2)
 
 const scopeOf = (ev: CEvent): string[] | null => ev.layer ?? (ev.region ? [ev.region] : null)
@@ -591,14 +594,53 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
   return { seeds: out, swaps }
 }
 
+/** A partnered league's own events: closed to everyone without a seat, whatever region they are in. */
+export function isLeagueEvent(year: number, ev: CEvent): boolean {
+  return year >= 2023 && !ev.scene && !!ev.region && ['Americas', 'EMEA', 'Pacific', 'China'].includes(ev.region)
+    && (ev.stage === 'kickoff' || ev.stage === 'stage1' || ev.stage === 'stage2' || ev.stage === 'lcq')
+    // China had no league in 2023: its FGC acts and Champions qualifier were open to its clubs
+    && !(year === 2023 && ev.region === 'China')
+}
+
+/**
+ * The player's own scene. Until 2022 a region was one circuit. From 2023 it is
+ * not: a French club plays France Revolution, not DACH Evolution; a Challengers
+ * club does not play the league above it; and the world does not move for a
+ * player with no club to move it.
+ */
+function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: string | null): boolean {
+  // a player with no club moves nothing, in any year: the world is his only once he is in it
+  if (!team || !club) return false
+  if (state.year < 2023) return inScope(ev, team.region)
+  if (ev.scene) return sceneFor(state, team) === ev.scene
+  if (isLeagueEvent(state.year, ev)) return false
+  return inScope(ev, team.region)
+}
+
+/** 方案 C: the seat the player's club took stays taken, in every event that seat plays. */
+function takeSeat(state: GameState, ev: CEvent, seeds: (string | null)[]): (string | null)[] {
+  const s = state.seat
+  if (!s || state.year < s.from) return seeds
+  const seatEvent = (isLeagueEvent(state.year, ev) && ev.region === s.league) || /LOCK\/\/IN/i.test(ev.name)
+  const i = seeds.indexOf(s.displaced)
+  if (!seatEvent || i < 0 || seeds.includes(s.club)) return seeds
+  const out = seeds.slice()
+  out[i] = s.club
+  return out
+}
+
 function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[]): void {
   const c = comp.circuit!
+  // out of the player's reach, each side takes the field with the people it really brought
+  const founded = syncEvent(state, ev.rosters ?? {})
+  if (founded.length) {
+    state.news.push({ day: state.day, kind: 'club', text: `🆕 ${founded.slice(0, 6).join('、')}${founded.length > 6 ? ` 等 ${founded.length} 家` : ''} 以新俱乐部的身份登场（${ev.cn}）。` })
+  }
   const { seeds, swaps } = seedsFor(state, ev)
-  c.seeds = seeds
+  c.seeds = takeSeat(state, ev, seeds)
   const club = playerClub(state)
-  const home = state.teams[state.myTeam]?.region
   const mine = !!club && c.seeds.includes(club)
-  c.why = mine ? 'mine' : inScope(ev, home) ? 'home' : swaps.length ? 'ripple' : undefined
+  c.why = mine ? 'mine' : isHome(state, ev, state.teams[state.myTeam], club) ? 'home' : swaps.length ? 'ripple' : undefined
   if (swaps.length) c.swaps = swaps.slice(0, 8)
   c.mode = c.why ? 'sim' : 'history'
   // a side that is here under its own real name takes it, rebrand and all
@@ -672,7 +714,7 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
 function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: string | null, notes: string[]): void {
   const c = comp.circuit!
   if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club)) return
-  if (!inScope(ev, state.teams[club]?.region)) return
+  if (!isHome(state, ev, state.teams[club], club)) return
   const best = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
   if (!best) return
   const u = ev.units[best.ui]

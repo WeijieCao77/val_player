@@ -616,6 +616,10 @@ export interface Team {
    * flagged. Older saves lack it and are settled on their next day.
    */
   igl?: string | null
+  /** 2023 on: the Challengers league this club plays in — France Revolution, not all of Europe */
+  scene?: string
+  /** fielded nobody at a Riot event this year, as history had it: kept for the record, out of every market */
+  dormant?: boolean
 }
 
 /** How a single round played out — drives the broadcast-style round ribbon. */
@@ -887,6 +891,11 @@ export interface GameState {
    * clears it and carries on from the same day.
    */
   timelinePause?: string
+  /**
+   * 方案 C: the partnered seat the player's club earned on its 2022, and the
+   * partner that went without it — see engine/timeline.ts judgeSeat
+   */
+  seat?: { club: string; displaced: string; league: string; from: number }
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
   /** day index since career start */

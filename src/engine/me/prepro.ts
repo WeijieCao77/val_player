@@ -123,8 +123,8 @@ export function clubBars(state: GameState): ClubBar[] {
     { key: 't1low', name: '弱队', pick: (t) => t.tier === 1 && t.rating < 79 },
     { key: 't2', name: '挑战者联赛', pick: (t) => t.tier === 2 },
   ]
-  const home = Object.values(state.teams).filter((t) => t.region === me.region && !t.id.startsWith('CUP_'))
-  const pool = home.length ? home : Object.values(state.teams).filter((t) => !t.id.startsWith('CUP_'))
+  const home = Object.values(state.teams).filter((t) => t.region === me.region && !t.id.startsWith('CUP_') && !t.dormant)
+  const pool = home.length ? home : Object.values(state.teams).filter((t) => !t.id.startsWith('CUP_') && !t.dormant)
   const out: ClubBar[] = []
   for (const g of groups) {
     const ts = pool.filter(g.pick)
@@ -142,7 +142,7 @@ export function reachableClubs(state: GameState, slack = 6): Team[] {
   const me = state.me!
   const skill = tryoutSkill(state)
   return Object.values(state.teams)
-    .filter((t) => t.roster.length <= 7 && !me.declined.includes(t.id))
+    .filter((t) => t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant)
     .filter((t) => expectOf(t) <= skill + slack)
     .sort((a, b) => (Number(b.region === me.region) - Number(a.region === me.region)) || b.rating - a.rating)
 }

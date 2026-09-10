@@ -495,7 +495,7 @@ function weakestRole(state: GameState, team: Team): { role: Player['role']; stre
 export function aiTransferTick(state: GameState, rng: Rng, notes?: string[]): void {
   if (!windowOpen(state.day)) return
 
-  const teams = Object.values(state.teams).filter((t) => t.id !== state.myTeam)
+  const teams = Object.values(state.teams).filter((t) => t.id !== state.myTeam && !t.dormant)
   // a free agent on his farewell season is done job-hunting
   // the human, while still unsigned, is not on the market for AI clubs — see engine/me
   const agents = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
@@ -685,7 +685,7 @@ export function bidForOurPlayers(state: GameState, rng: Rng, notes?: string[]): 
   // five together is supposed to cost something.
   const rivalry = Math.min(state.rivalry ?? 0, 2)
   for (const team of Object.values(state.teams)) {
-    if (team.id === state.myTeam) continue
+    if (team.id === state.myTeam || team.dormant) continue
     // a club with no room cannot complete the deal, so it must not open one:
     // the bid arrived, 接受 failed, and the toast never said why
     if (rosterBlock(state, team.id)) continue
