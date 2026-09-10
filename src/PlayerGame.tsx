@@ -277,7 +277,7 @@ export default function PlayerGame() {
         {playerId && <PlayerModal playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}
         {summary && (
-          <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
+          <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             <p className="small muted" style={{ marginTop: 0 }}>
               现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage)}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
             </p>

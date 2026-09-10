@@ -23,8 +23,8 @@
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
-import { autoWeek } from '../src/engine/me/auto'
-import { advanceDay, setupSeason } from '../src/engine/season'
+import { advanceUntil, autoWeek, quietAhead } from '../src/engine/me/auto'
+import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
 import type { Competition, GameState, Region } from '../src/engine/types'
@@ -216,11 +216,39 @@ function lineage(): void {
   }
 }
 
+/**
+ * 策划稿 §3.5 A: the Chinese ladder in 2021 has three events in the year. On New
+ * Year's Day nothing is coming for a month, so the clock can run a month at a time,
+ * and it stops as soon as something is. A North American starter has Challengers
+ * every few weeks and is never offered it.
+ */
+function quiet(): void {
+  const cn = createCareer({ name: 'Q', region: 'China', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year: 2021 })
+  const na = createCareer({ name: 'Q', region: 'North America', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2021 })
+  if (!quietAhead(cn, 28)) fail('空窗期：2021 年 1 月 1 日的中国天梯应该是「接下来四周没有比赛」')
+  if (quietAhead(na, 28)) fail('空窗期：2021 年 1 月 1 日的北美二线首发不该被当成空窗')
+  const log: string[] = []
+  let runs = 0
+  try {
+    while (quietAhead(cn, 28) && runs < 12 && !cn.gameOver) {
+      runs++
+      const r = advanceUntil(cn, 'month')
+      if (r.weeks < 1 && r.stop.kind === 'week-end') { fail('空窗期：按月推进一周都没走'); break }
+      log.push(`${r.weeks} 周 → ${dateLabel(cn)}`)
+    }
+  } catch (e) {
+    fail(`空窗期：按月推进崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 4).join(' | ')}`)
+  }
+  console.log(`\n== 空窗期（中国天梯 2021）：按月推进 ${runs} 次（${log.join('，')}），停在 ${dateLabel(cn)}——接下来四周有事了`)
+  if (!runs) fail('空窗期：一次按月推进都没有发生')
+}
+
 run('北美 · Challengers 首发', 'North America', 'chal')
 run('中国 · 从天梯开始', 'China', 'pre')
 run('欧洲 · 强队替补', 'Europe', 't1')
 bystander()
 lineage()
+quiet()
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 如实停下；你的俱乐部跟着真实的改名、合并、整队收购走。')
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 如实停下；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

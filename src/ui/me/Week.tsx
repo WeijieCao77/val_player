@@ -7,7 +7,7 @@ import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
-import { autoPlan } from '../../engine/me/auto'
+import { autoPlan, quietAhead } from '../../engine/me/auto'
 import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
@@ -28,6 +28,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const mates = team ? team.roster.filter((id) => id !== me.id).map((id) => game.players[id]).filter(Boolean) : []
   const est = opp && team ? 1 / (1 + Math.exp(-((team.rating - opp.rating) / 9))) : 0.5
   const week = Math.floor(game.day / 7)
+  // 策划稿 §3.5 A: nothing of mine for four weeks — the clock can run a month at a time
+  const quiet = quietAhead(game, 28)
 
   const plan = (k: typeof ACTIONS[number]['key'], d: 1 | -1) => {
     const why = setPlan(game, k, d)
@@ -134,11 +136,15 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           {me.duelLive && <DuelPlay onDone={() => commit()} />}
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
-            <button className="primary" onClick={onAdvance}>推进一周 →</button>
+            <button className={quiet ? undefined : 'primary'} onClick={onAdvance}>推进一周 →</button>
+            {quiet && (
+              <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title="四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停">推进一个月 →</button>
+            )}
             <button onClick={() => onAdvanceUntil('match')}>到下一场比赛</button>
             <button onClick={() => onAdvanceUntil('stage')}>到赛段末</button>
             <button onClick={() => onAdvanceUntil('season')}>到赛季末</button>
             <span className="hint">
+              {quiet && '接下来四周你这里没有比赛：可以一次推一个月，训练、排位、直播照常，有事会停下来。'}
               {me.ap > 0 ? `还有 ${me.ap} 点没用，推进后作废。` : '行动点已用完。'}
               {pro ? '一周里遇到你队的比赛会停下来打。' : '杯赛、邀请、事件都会停下来等你。'}
               自动推进的周按推荐安排，遇到你的比赛或要你拿主意的事就停。

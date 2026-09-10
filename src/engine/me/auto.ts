@@ -20,6 +20,7 @@ import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
 import { CEREMONIES, cerSkip } from './ceremony'
 import { compCn } from './compname'
+import { eventOf as circuitEventOf } from '../circuit'
 
 /**
  * The steady plan — never the best plan. Rest when worn, chase a trial when
@@ -190,7 +191,36 @@ export function autoBuy(state: GameState): string[] {
 }
 
 /** One whole week the steady way, matches and everything waiting included. */
-export type AdvanceUntil = 'match' | 'stage' | 'season'
+export type AdvanceUntil = 'match' | 'stage' | 'season' | 'month'
+
+/**
+ * Nothing of mine in the next `days`: no match for my club, and no event in my
+ * own scene starting or under way — my region's circuit until 2022, my club's
+ * Challengers league from 2023, or anything my club is already in.
+ *
+ * The Chinese ladder in 2021 is three events in a year, and 策划稿 §3.5 A is
+ * the author's answer to it: say so, and let the clock run a month at a time
+ * through the gaps, with the training, the ladder and the streams filling them
+ * — never an invented match.
+ */
+export function quietAhead(state: GameState, days = 28): boolean {
+  const me = state.me
+  if (!me) return false
+  const club = me.phase === 'pro' ? state.myTeam : null
+  const until = state.day + days
+  if (club && state.fixtures.some((f) => !f.played && f.day >= state.day && f.day <= until && (f.teamA === club || f.teamB === club))) return false
+  const region = club ? state.teams[club]?.region : state.players[me.id]?.region
+  const scene = club ? state.teams[club]?.scene : undefined
+  return !Object.values(state.comps).some((c) => {
+    if (c.champion || !c.circuit || c.circuit.done) return false
+    if (c.circuit.start > until || c.circuit.end < state.day) return false
+    if (club && c.teams.includes(club)) return true
+    const ev = circuitEventOf(c.circuit.id)
+    if (!ev) return false
+    if (state.year >= 2023) return !!scene && ev.scene === scene
+    return !!region && (ev.layer ?? (ev.region ? [ev.region] : [])).includes(region)
+  })
+}
 
 /**
  * Let the clock run: each week is planned the steady way unless I already
@@ -224,7 +254,7 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     if (stop.kind === 'match') {
       // the next match is what "到下一场比赛" runs to; a longer run plays it
       // the skipped way — two rosters' numbers, no decisions of mine
-      if (until === 'match') return { stop, weeks, notes }
+      if (until === 'match' || until === 'month') return { stop, weeks, notes }
       const rec = new MeMatch(state, stop.fixture).runOut()
       notes.push(`${compCn(rec.comp)} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)
       continue
@@ -234,6 +264,8 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     weeks++
     if (until === 'stage' && state.stage !== stage0) break
     if (until === 'season' && state.year !== year0) break
+    // a month of nothing, or less if something of mine starts within the week
+    if (until === 'month' && (weeks >= 4 || !quietAhead(state, 7))) break
   }
   return { stop, weeks, notes }
 }
