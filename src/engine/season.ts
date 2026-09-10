@@ -32,6 +32,8 @@ import type { DrawEvent } from './draw'
 import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
+import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
+import { progressCircuit, setupCircuitSeason } from './circuit'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
 import {
@@ -76,23 +78,11 @@ export const LEAGUE_DAYS: Record<'kickoff' | 'stage1' | 'stage2' | 'challengers1
 /** Days between an international's last match and the next league's first. */
 export const BREAK_AFTER_INTERNATIONAL = 14
 
-export interface StageDef {
-  key: StageKey
-  name: string
-  start: number
-  end: number
-}
-
-export const STAGES: StageDef[] = [
-  { key: 'preseason', name: '季前准备', start: 0, end: 20 },
-  { key: 'kickoff', name: '揭幕赛', start: 21, end: 62 },
-  { key: 'masters1', name: '第一站大师赛', start: 63, end: 98 },
-  { key: 'stage1', name: '第一赛段', start: 99, end: 164 },
-  { key: 'masters2', name: '第二站大师赛', start: 165, end: 214 },
-  { key: 'stage2', name: '第二赛段', start: 215, end: 280 },
-  { key: 'champions', name: '冠军赛', start: 281, end: 322 },
-  { key: 'offseason', name: '休赛期', start: 323, end: SEASON_DAYS - 1 },
-]
+/*
+ * The calendar lives in era.ts, keyed on the year: 2021 ran three stages of
+ * open qualifiers, 2022 two, and 2023 onward the shape that used to sit here.
+ * Those numbers moved across unchanged, so an existing save keeps its dates.
+ */
 
 /**
  * The earliest day each international opens on — the Swiss round of a
@@ -103,14 +93,6 @@ export const STAGES: StageDef[] = [
 export const INTERNATIONAL_OPEN: Record<'masters1' | 'masters2' | 'champions', number> = {
   masters1: 76, masters2: 184, champions: 296,
 }
-
-export const stageAt = (day: number): StageKey =>
-  STAGES.find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
-
-export const stageName = (key: StageKey): string =>
-  STAGES.find((s) => s.key === key)?.name ??
-  ({ challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', ascension: '晋升赛' } as Record<string, string>)[key] ??
-  key
 
 /** Display a day index as an in-fiction date. */
 export function dateLabel(state: GameState): string {
@@ -157,6 +139,12 @@ export function setupSeason(state: GameState, notes?: string[]): void {
   resetFixtureSeq(0)
   state.fixtures = []
   state.comps = {}
+  // 2021–2022: the season is the one that really happened, event by event
+  if (formatOf(state.year) === 'open') {
+    setupCircuitSeason(state)
+    seedMarket(state, notes)
+    return
+  }
   const rng = new Rng(hashStr(`season:${state.seed}:${state.year}`))
   resetDrawSeq(0)
 
@@ -331,7 +319,15 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
 
   awardPrize(state, comp.stage, comp.finished)
 
-  const pts = CHAMP_POINTS[comp.stage]
+  // the open era paid Riot's circuit points, and joint places were paid alike
+  if (formatOf(state.year) === 'open') {
+    comp.finished.forEach((teamId, i) => {
+      const t = state.teams[teamId]
+      const v = circuitPointsFor(comp.stage, comp.places?.[i] ?? i + 1)
+      if (t && v) t.champPoints += v
+    })
+  }
+  const pts = formatOf(state.year) === 'open' ? undefined : CHAMP_POINTS[comp.stage]
   if (pts) {
     comp.finished.forEach((teamId, i) => {
       const t = state.teams[teamId]
@@ -623,6 +619,10 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
   for (const comp of Object.values(state.comps)) {
     if (comp.champion) {
       settleCompetition(state, comp, notes)
+      continue
+    }
+    if (comp.format === 'circuit') {
+      if (progressCircuit(state, comp, notes)) concludeStage(state, comp, notes)
       continue
     }
     const own = state.fixtures.filter((f) => f.comp === comp.key)
@@ -1464,10 +1464,10 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   dailyLife(state, notes)
 
-  state.stage = stageAt(state.day)
+  state.stage = stageAtIn(state.year, state.day)
   const stageChanged = state.stage !== prevStage
   if (stageChanged) {
-    notes.push(`—— 进入 ${stageName(state.stage)} ——`)
+    notes.push(`—— 进入 ${stageNameIn(state.year, state.stage)} ——`)
     // The pool rotates when a new window opens — say which maps moved, or a
     // manager walks into a veto to find a map he trained all stage is gone.
     const prevPool = activePool(state.seed + state.year, poolPhaseOf(prevStage))
@@ -1512,25 +1512,36 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
   // vanished before the modal resolved (a phone reclaiming the tab), the day
   // moved on and that fixture was never eligible again — the whole
   // competition sat waiting for a result that could not arrive.
-  const today = state.fixtures
-    .filter((f) => f.day <= state.day && !f.played)
-    .sort((a, b) => a.day - b.day)
-  for (const f of today) {
-    const a = state.teams[f.teamA]
-    const b = state.teams[f.teamB]
-    if (!a || !b) {
-      f.played = true
-      continue
+  // A bracket can play two rounds in a day: 2021's Reykjavík opened with an
+  // upper first round and an upper quarter-final on the same afternoon, the
+  // second fed by the first. A tie written while today's games are being
+  // played is today's too, so the list is read again until nothing new is
+  // due. The 2026 formats always write their next round days ahead, so for
+  // them the second read finds nothing.
+  const tried = new Set<string>()
+  for (let pass = 0; pass < 6 && !pendingMine; pass++) {
+    const today = state.fixtures
+      .filter((f) => f.day <= state.day && !f.played && !tried.has(f.id))
+      .sort((a, b) => a.day - b.day)
+    if (!today.length) break
+    for (const f of today) {
+      tried.add(f.id)
+      const a = state.teams[f.teamA]
+      const b = state.teams[f.teamB]
+      if (!a || !b) {
+        f.played = true
+        continue
+      }
+      const isMine = f.teamA === state.myTeam || f.teamB === state.myTeam
+      if (isMine && opts.deferMine && !pendingMine && !(opts.autoScrims && isScrim(f))) {
+        // leave it for the manager to watch or skip
+        pendingMine = f
+        continue
+      }
+      const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim)
+      commitFixture(state, f, result, notes)
+      if (isMine) playedMine.push(f)
     }
-    const isMine = f.teamA === state.myTeam || f.teamB === state.myTeam
-    if (isMine && opts.deferMine && !pendingMine && !(opts.autoScrims && isScrim(f))) {
-      // leave it for the manager to watch or skip
-      pendingMine = f
-      continue
-    }
-    const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim)
-    commitFixture(state, f, result, notes)
-    if (isMine) playedMine.push(f)
   }
 
   if (!pendingMine) progressCompetitions(state, notes, !!opts.autoResolveDrawDecisions)
@@ -2022,6 +2033,18 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   state.lastChampionsTeams = state.comps.champions?.teams ?? state.lastChampionsTeams
   state.draws = (state.draws ?? []).filter((d) => d.year >= state.year - 1)
   state.pendingDrawId = undefined
+  // A world that began in the open era has 2021's sixteen circuits, not
+  // 2023's three partnered leagues, and the partnered transition — the
+  // thirty licensed clubs, China's qualifier, Challengers leagues and
+  // Ascension — is not built yet. Drawing a 2026-shaped season over that
+  // world gives a calendar with almost nothing on it. Say so, and stop.
+  if (formatOf(state.year) === 'partnered' && Object.keys(state.teams).some((id) => id.startsWith('V21T'))) {
+    state.timelinePause = `时间线目前做到 ${state.year - 1} 年底。${state.year} 年联盟制落地——30 支合作战队、`
+      + '中国的资格赛、Challengers 联赛和 Ascension——这一段还在做。存档停在这里，更新后从这一天接着打。'
+    state.gameOver = state.timelinePause
+    notes.push(state.timelinePause)
+    return
+  }
   setupSeason(state, notes)
 }
 

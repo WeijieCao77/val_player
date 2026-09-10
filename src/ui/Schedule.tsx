@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useGame } from './ctx'
 import { Panel, fmtDay, Crest } from './common'
-import { STAGES, fixturesFor, stageName } from '../engine/season'
+import { fixturesFor } from '../engine/season'
+import { formatOf, stageNameIn, stagesOf } from '../engine/era'
+import { realResultOf } from '../engine/circuit'
 import { INTERNATIONAL_START, eventRounds, nextInEvent, upcomingInternational } from '../engine/qualify'
 import { hostCity } from '../engine/hosts'
 import { CHAMPIONS, MASTERS_1, MASTERS_2 } from '../engine/endings'
@@ -35,6 +37,8 @@ interface Row {
   other?: boolean
   /** the draw does not exist yet */
   pending?: string
+  /** 2021–2022: what really happened in this tie */
+  real?: string
 }
 
 interface Group { key: string; title: string; day: number; dim?: boolean; note?: string; rows: Row[] }
@@ -51,7 +55,8 @@ export default function Schedule() {
 
   const rowOf = (f: Fixture, other = false): Row => ({
     key: f.id, day: f.day, comp: game.comps[f.comp]?.name ?? f.comp,
-    round: f.label.replace(/^(KO|SW):\d+:/, ''), a: f.teamA, b: f.teamB, bo: f.bo, fixture: f, other,
+    round: f.label.replace(/^(KO|SW):-?\d+:/, ''), a: f.teamA, b: f.teamB, bo: f.bo, fixture: f, other,
+    real: f.played && game.comps[f.comp]?.format === 'circuit' ? realResultOf(game, game.comps[f.comp], f)?.line : undefined,
   })
 
   const groups: Group[] = []
@@ -59,7 +64,7 @@ export default function Schedule() {
     const list = game.fixtures.slice().sort((a, b) => a.day - b.day).filter((f) => Math.abs(f.day - game.day) <= 10)
     const byStage = new Map<string, Row[]>()
     for (const f of list) {
-      const k = stageName(f.stage)
+      const k = stageNameIn(game.year, f.stage)
       byStage.set(k, [...(byStage.get(k) ?? []), rowOf(f, f.teamA !== me && f.teamB !== me)])
     }
     for (const [title, rows] of byStage) groups.push({ key: title, title, day: rows[0].day, rows })
@@ -70,7 +75,7 @@ export default function Schedule() {
     const byStage = new Map<string, Row[]>()
     for (const f of mine) {
       if (intlKeys.has(f.comp as 'masters1')) continue
-      const k = stageName(f.stage)
+      const k = stageNameIn(game.year, f.stage)
       byStage.set(k, [...(byStage.get(k) ?? []), rowOf(f)])
     }
     // a playoff we are out of still has a winner to find: its remaining ties
@@ -80,7 +85,7 @@ export default function Schedule() {
       const rest = game.fixtures.filter((f) => f.comp === comp.key && !f.played
         && f.label.startsWith('KO:') && f.teamA !== me && f.teamB !== me)
       if (!rest.length) continue
-      const k = stageName(comp.stage)
+      const k = stageNameIn(game.year, comp.stage)
       byStage.set(k, [...(byStage.get(k) ?? []), ...rest.map((f) => rowOf(f, true))].sort((x, y) => x.day - y.day))
     }
     // The rounds of a regional playoff that have not been drawn are on the
@@ -94,7 +99,7 @@ export default function Schedule() {
       // a bracket whose draw has not been held has no ties, but its days are
       // known — every round shows as 待定 vs 待定 until the balls are out
       if (!comp.bracketStarted && comp.plannedStart == null) continue
-      const k = stageName(comp.stage)
+      const k = stageNameIn(game.year, comp.stage)
       const rows = byStage.get(k) ?? []
       for (const r of eventRounds(game, comp)) {
         if (r.drawn) continue
@@ -114,7 +119,8 @@ export default function Schedule() {
     // every international event, whether or not we are in it
     const up = upcomingInternational(game)
     const inEv = nextInEvent(game)
-    for (const ev of INTL) {
+    // the open era's internationals are real events on the calendar like any other
+    for (const ev of formatOf(game.year) === 'open' ? [] : INTL) {
       const comp = game.comps[ev.key]
       if (comp) {
         const inIt = comp.teams.includes(me)
@@ -160,7 +166,7 @@ export default function Schedule() {
     <>
       <Panel title="赛季日历">
         <div className="row wrap" style={{ gap: 6 }}>
-          {STAGES.map((s) => {
+          {stagesOf(game.year).map((s) => {
             const active = game.stage === s.key
             const done = game.day > s.end
             return (
@@ -180,7 +186,9 @@ export default function Schedule() {
           })}
         </div>
         <p className="tiny muted" style={{ marginBottom: 0, marginTop: 10 }}>
-          次级联赛的两个赛段与一级联赛并行进行；Challengers 第二赛段冠军可通过 Ascension 升入 VCT。
+          {formatOf(game.year) === 'open'
+            ? '这一年没有联赛：每个赛段是各赛区的开放海选和挑战者赛，打进赛区决赛才去得了大师赛。所有赛事按真实日期排。'
+            : '次级联赛的两个赛段与一级联赛并行进行；Challengers 第二赛段冠军可通过 Ascension 升入 VCT。'}
         </p>
       </Panel>
 
@@ -228,7 +236,7 @@ export default function Schedule() {
                         >
                           <td className="num muted mono sticky-name at-left">{fmtDay(row.day, game.year)}</td>
                           <td className="small hide-m">{row.comp}</td>
-                          <td className="small muted">{row.round}</td>
+                          <td className="small muted">{row.round}{row.real && <div className="tiny faint">{row.real}</div>}</td>
                           <td style={{ textAlign: 'right' }} className={r && aWon ? 'pos' : ''} title={a?.name}>
                             <span className="club" style={{ justifyContent: 'flex-end' }}>
                               <span>{a?.tag ?? (row.pending && !row.a ? '待定' : '')}</span>{row.a && <Crest id={row.a} />}</span>

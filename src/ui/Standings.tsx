@@ -4,12 +4,14 @@ import { OvrBadge, Panel, Crest } from './common'
 import Bracket from './Bracket'
 import { groupTable, sortStandings } from '../engine/league'
 import { DRAW_KIND_CN, drawsOf } from '../engine/draw'
-import { PLAYOFF_CUT, STAGES } from '../engine/season'
+import { PLAYOFF_CUT } from '../engine/season'
+import { formatOf, regionsOf, stagesOf } from '../engine/era'
+import CircuitPanel, { circuitShows } from './CircuitPanel'
 import { POINTS_NOTE, qualification } from '../engine/qualify'
 import { ratingOf } from '../engine/match'
 import { statLine } from '../engine/player'
 import { REGION_CN, REGIONS } from '../engine/types'
-import type { Competition } from '../engine/types'
+import type { Competition, Region } from '../engine/types'
 
 function Table({ comp, members, cut: cutOverride }: { comp: Competition; members?: string[]; cut?: number }) {
   const { game, openPlayer } = useGame()
@@ -103,12 +105,12 @@ export default function Standings() {
   }
   // calendar position; the two Challengers splits straddle Stage 1 and Stage 2
   const order = (c: Competition): number => {
-    const i = STAGES.findIndex((s) => s.key === c.stage)
+    const i = stagesOf(game.year).findIndex((s) => s.key === c.stage)
     if (i >= 0) return i
     return c.stage === 'challengers1' ? 3.5 : c.stage === 'challengers2' ? 5.5 : 9
   }
   const shown = Object.values(game.comps)
-    .filter((c) => !c.region || c.region === region)
+    .filter((c) => (c.format === 'circuit' ? circuitShows(c, region) : !c.region || c.region === region))
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 3 ? order(b) - order(a) : order(a) - order(b)))
 
   const leaders = Object.values(game.players)
@@ -117,6 +119,10 @@ export default function Standings() {
     .slice(0, 40)
   // where this stage leads, for the club's own region only
   const qual = region === myRegion ? qualification(game) : null
+  // 2021 ran a dozen circuits; a tab for every one that has a club in it
+  const tabs: Region[] = formatOf(game.year) === 'open'
+    ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r))
+    : REGIONS
 
   return (
     <>
@@ -127,7 +133,7 @@ export default function Standings() {
         </div>
         {tab === 'leagues' && (
           <div className="seg">
-            {REGIONS.map((r) => (
+            {tabs.map((r) => (
               <button key={r} className={region === r ? 'on' : ''} onClick={() => setRegion(r)}>
                 {REGION_CN[r]}
               </button>
@@ -148,7 +154,7 @@ export default function Standings() {
             </Panel>
           )}
           {shown.length === 0 && <div className="empty">该赛区本阶段没有进行中的赛事。</div>}
-          {shown.map((c) => c.region ? (
+          {shown.map((c) => c.format === 'circuit' ? <CircuitPanel key={c.key} comp={c} /> : c.region ? (
             <Panel
               key={c.key}
               title={`${c.name}${c.champion ? ` · 冠军 ${game.teams[c.champion]?.name}` : ''}`}

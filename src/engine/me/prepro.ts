@@ -4,6 +4,7 @@ import type { CupRun, Invite } from './types'
 import { pushLog } from './log'
 import { push } from './pending'
 import { CUPS } from './cups'
+import { formatOf } from '../era'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -162,7 +163,12 @@ function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0): Team | null {
     let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
     if (prefer && t.tier === prefer) v *= 4
     if (!prefer && t.tier === 1) v *= 0.5
-    if (t.region !== me.region) v *= me.flags.lang ? 0.2 : 0.04
+    // 2021–2022: no import limits and no franchise, and the author's rule —
+    // every region's clubs can write, each to its own bar. The bar is the
+    // club's own level (expectOf), so a Thai side asks less than Sentinels.
+    if (t.region !== me.region) {
+      v *= formatOf(state.year) === 'open' ? (me.flags.lang ? 0.8 : 0.5) : (me.flags.lang ? 0.2 : 0.04)
+    }
     return v
   })
   return rng.weighted(pool, w)

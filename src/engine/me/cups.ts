@@ -49,6 +49,22 @@ export const CUPS: CupDef[] = [
 
 export const cupOf = (key: string): CupDef | undefined => CUPS.find((c) => c.key === key)
 
+/**
+ * A cup as it was in a given year. There was no Premier before 2023: in the
+ * open era the amateur door to the pro scene was the Challengers open
+ * qualifier itself — five people and an entry form.
+ */
+export function cupView(c: CupDef, year: number): CupDef {
+  if (year <= 2022 && c.key === 'premier') {
+    return { ...c, name: '挑战者赛 · 开放海选', blurb: '这一年没有联盟也没有席位，Challengers 的海选凑齐五个人就能报名。打不进正赛也没关系——俱乐部的人会看海选。' }
+  }
+  return c
+}
+export const cupOfYear = (key: string, year: number): CupDef | undefined => {
+  const c = cupOf(key)
+  return c && cupView(c, year)
+}
+
 const MATE_NAMES = ['Kite', 'Nozomi', 'Vex', 'Aki', 'Bolt', 'Rin', 'Sable', 'Juno', 'Tao', 'Miro', 'Zed', 'Lumi', 'Pako', 'Yui', 'Kuro', 'Neo', 'Sora', 'Ivo', 'Nix', 'Ollie']
 const OPP_NAMES = ['网吧联队', '路人王', '深夜车队', '高校联合', '前青训', '夜猫', '老哥们', '主播联队', '钢枪队', '三段位', '业余王朝', '断线重连']
 
@@ -133,7 +149,7 @@ export function dropTempTeams(state: GameState): void {
 export function enterCup(state: GameState, key: string, rng: Rng): string | null {
   void rng
   const me = state.me!
-  const cup = cupOf(key)
+  const cup = cupOfYear(key, state.year)
   if (!cup) return '没有这项赛事。'
   if (me.pre.cup) return '你已经在打一项赛事了。'
   if (me.money < cup.fee) return `报名费 $${cup.fee}，你的钱不够。`
@@ -158,7 +174,7 @@ export function afterCupMatch(state: GameState, won: boolean, score: string, rng
   const me = state.me!
   const run = me.pre.cup
   if (!run) return null
-  const cup = cupOf(run.key)!
+  const cup = cupOfYear(run.key, state.year)!
   run.results.push(`${cup.rounds[run.round].label} ${won ? '胜' : '负'} ${score}`)
   if (won) run.round++
   const over = !won || run.round >= cup.rounds.length

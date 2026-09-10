@@ -186,37 +186,41 @@ export interface StageDef {
 }
 
 /**
- * The 2021 calendar, taken from the real dates we scraped.
+ * The 2021 calendar, read off the real match days in circuit.json.
+ *
+ * Regions ran a few days apart, so a regional boundary sits where most of
+ * them turned over; every international sits wholly inside its own window,
+ * and scripts/check_era.ts holds that against the data.
  *
  * Three stages, each 「开放海选 → 赛区决赛 → 大师赛」. Stage 1's Masters is
  * regional only — no international — but it still pays circuit points, and for
  * a side that never leaves its region it is the biggest event of the year.
  */
 const STAGES_2021: StageDef[] = [
-  { key: 'preseason', name: '季前', start: 0, end: 25 },
-  { key: 's1chal', name: '第一赛段 · 海选', start: 26, end: 68 },
-  { key: 's1masters', name: '第一赛段 · 赛区大师赛', start: 69, end: 89 },
-  { key: 's2chal', name: '第二赛段 · 海选', start: 90, end: 121 },
-  { key: 's2finals', name: '第二赛段 · 赛区决赛', start: 122, end: 142 },
-  { key: 'masters1', name: '雷克雅未克大师赛', start: 143, end: 170 },
-  { key: 's3chal', name: '第三赛段 · 海选', start: 171, end: 222 },
-  { key: 's3finals', name: '第三赛段 · 赛区决赛', start: 223, end: 243 },
-  { key: 'masters2', name: '柏林大师赛', start: 244, end: 272 },
-  { key: 'lcq', name: '最后机会资格赛', start: 273, end: 300 },
-  { key: 'champions', name: '冠军赛', start: 301, end: 340 },
-  { key: 'offseason', name: '休赛期', start: 341, end: 363 },
+  { key: 'preseason', name: '季前', start: 0, end: 19 },
+  { key: 's1chal', name: '第一赛段 · 挑战者赛', start: 20, end: 68 },
+  { key: 's1masters', name: '第一赛段 · 赛区大师赛', start: 69, end: 81 },
+  { key: 's2chal', name: '第二赛段 · 挑战者赛', start: 82, end: 116 },
+  { key: 's2finals', name: '第二赛段 · 挑战者决赛', start: 117, end: 142 },
+  { key: 'masters1', name: '雷克雅未克大师赛', start: 143, end: 173 },
+  { key: 's3chal', name: '第三赛段 · 挑战者赛', start: 174, end: 213 },
+  { key: 's3finals', name: '第三赛段 · 挑战者决赛', start: 214, end: 243 },
+  { key: 'masters2', name: '柏林大师赛', start: 244, end: 281 },
+  { key: 'lcq', name: '最后机会资格赛', start: 282, end: 303 },
+  { key: 'champions', name: '冠军赛', start: 304, end: 345 },
+  { key: 'offseason', name: '休赛期', start: 346, end: 363 },
 ]
 
 /** 2022: two internationals instead of three, and an LCQ that matters more. */
 const STAGES_2022: StageDef[] = [
-  { key: 'preseason', name: '季前', start: 0, end: 25 },
-  { key: 's1chal', name: '第一赛段 · 海选', start: 26, end: 85 },
-  { key: 'masters1', name: '雷克雅未克大师赛', start: 86, end: 115 },
-  { key: 's2chal', name: '第二赛段 · 海选', start: 116, end: 180 },
-  { key: 'masters2', name: '哥本哈根大师赛', start: 181, end: 210 },
-  { key: 'lcq', name: '最后机会资格赛', start: 211, end: 250 },
-  { key: 'champions', name: '冠军赛', start: 251, end: 300 },
-  { key: 'offseason', name: '休赛期', start: 301, end: 363 },
+  { key: 'preseason', name: '季前', start: 0, end: 8 },
+  { key: 's1chal', name: '第一赛段 · 挑战者赛', start: 9, end: 98 },
+  { key: 'masters1', name: '雷克雅未克大师赛', start: 99, end: 118 },
+  { key: 's2chal', name: '第二赛段 · 挑战者赛', start: 119, end: 189 },
+  { key: 'masters2', name: '哥本哈根大师赛', start: 190, end: 210 },
+  { key: 'lcq', name: '最后机会资格赛', start: 211, end: 241 },
+  { key: 'champions', name: '冠军赛', start: 242, end: 260 },
+  { key: 'offseason', name: '休赛期', start: 261, end: 363 },
 ]
 
 /**
@@ -244,8 +248,19 @@ export function stagesOf(year: number): StageDef[] {
 export const stageAtIn = (year: number, day: number): StageKey =>
   stagesOf(year).find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
 
+/**
+ * Tier-2 splits and Ascension run beside the partnered calendar rather than
+ * being a slice of it, so they have names but no dates. They did not exist
+ * before 2023: an open-era year has no 挑战者联赛第一赛段 to name.
+ */
+const OFF_CALENDAR: Partial<Record<StageKey, string>> = {
+  challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', ascension: '晋升赛',
+}
+
 export const stageNameIn = (year: number, key: StageKey): string =>
-  stagesOf(year).find((s) => s.key === key)?.name ?? key
+  stagesOf(year).find((s) => s.key === key)?.name
+  ?? (formatOf(year) === 'partnered' ? OFF_CALENDAR[key] : undefined)
+  ?? key
 
 /* ------------------------------------------------------------------ */
 /*  赛区积分（2021）                                                    */

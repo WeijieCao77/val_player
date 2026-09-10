@@ -47,6 +47,29 @@ for (const year of [2021, 2022, 2026]) {
   console.log(`  ${year} 赛历 ${st.length} 段，覆盖 0–${st[st.length - 1].end} 天，无缝无重叠`)
 }
 
+/* ---- 1b. and it must hold the real events: every international inside its own window ---- */
+const circuit: Record<string, { cn: string; stage: string | null; region: string | null; start: number; end: number }[]> =
+  JSON.parse(readFileSync('src/data/circuit.json', 'utf8'))
+for (const year of [2021, 2022]) {
+  const st = stagesOf(year)
+  const held = ['masters1', 'masters2', 'champions', ...(year === 2021 ? ['lcq'] : [])]
+  for (const e of circuit[String(year)] ?? []) {
+    if (!e.stage || !held.includes(e.stage)) continue
+    const w = st.find((s) => s.key === e.stage)
+    if (!w || e.start < w.start || e.end > w.end) {
+      fail(`${year} ${e.cn} 打在第 ${e.start}–${e.end} 天，赛历的「${w?.name}」窗口是 ${w?.start}–${w?.end}`)
+    }
+  }
+  // a regional stage: most of its events should open inside its window
+  for (const w of st) {
+    const starts = (circuit[String(year)] ?? []).filter((e) => e.stage === w.key && e.region).map((e) => e.start).sort((a, b) => a - b)
+    if (!starts.length || held.includes(w.key)) continue
+    const mid = starts[Math.floor(starts.length / 2)]
+    if (mid < w.start || mid > w.end) fail(`${year}「${w.name}」的赛事多数在第 ${mid} 天开打，不在窗口 ${w.start}–${w.end} 里`)
+  }
+  console.log(`  ${year} 的国际赛都落在各自的窗口里，赛区赛段的开打日多数在窗口内`)
+}
+
 /* ---- 2. the regions a year claims must appear in that year's events ---- */
 const seenNames = (year: number): string =>
   Object.values(history).filter((e) => e.year === year).map((e) => e.name).join(' | ')

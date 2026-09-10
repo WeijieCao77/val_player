@@ -1,6 +1,7 @@
 import { squadOf, wageBill } from './roster'
 import { windowOpen, TRANSFER_WINDOWS } from './transfer'
-import { nextFixtureFor, noticeHint, stageName } from './season'
+import { nextFixtureFor, noticeHint } from './season'
+import { stageNameIn } from './era'
 import { gigWindow } from './commercial'
 import { nextInEvent, qualification, upcomingInternational } from './qualify'
 import type { Activity, GameState, StageKey } from './types'
@@ -181,7 +182,7 @@ export function agendaFor(state: GameState): AgendaItem[] {
       const q = qualification(state)
       items.push({
         key: 'intl', tone: 'info', go: 'standings',
-        text: q ? q.headline : `${stageName(state.stage)} 期间，没有你的比赛时可以安排训练赛。`,
+        text: q ? q.headline : `${stageNameIn(state.year, state.stage)} 期间，没有你的比赛时可以安排训练赛。`,
       })
       if (open) {
         items.push({

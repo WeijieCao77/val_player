@@ -15,7 +15,7 @@
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { KIND_CN, PRIZE_ROWS, prizePreview } from '../src/engine/me/money'
+import { KIND_CN, prizePreview, prizeRows } from '../src/engine/me/money'
 import type { GameState } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
@@ -92,7 +92,7 @@ if (prizeLines.length > 12) console.log(`  …另有 ${prizeLines.length - 12} �
 if (state.me && me.phase === 'pro') {
   const p = state.players[me.id]
   console.log(`\n当前合同分成 ${p.contract?.bonusShare ?? 0}%，队伍 ${state.teams[p.teamId ?? '']?.roster.length ?? 0} 人，冠/亚/四强到手：`)
-  for (const r of PRIZE_ROWS) {
+  for (const r of prizeRows(state.year)) {
     const v = prizePreview(state, r.stage)
     if (!v.some((x) => x > 0)) continue
     console.log(`  ${r.name.padEnd(12)} ${v.map((x) => `$${x.toLocaleString()}`).join('  ')}`)

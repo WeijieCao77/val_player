@@ -1,5 +1,5 @@
 import { clamp } from '../rng'
-import { stageName } from '../season'
+import { stageNameIn } from '../era'
 import type { GameState } from '../types'
 import { pushLog } from './log'
 import { push } from './pending'
@@ -285,7 +285,7 @@ export function ceremonyTick(state: GameState): void {
 
   // 4. media day, once a stage, and only where there is a stage to talk about
   if (state.stage !== 'offseason' && once(`media:${state.year}:${state.stage}`)) {
-    cerStart(state, 'media', stageName(state.stage))
+    cerStart(state, 'media', stageNameIn(state.year, state.stage))
   }
 }
 

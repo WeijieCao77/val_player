@@ -9,7 +9,8 @@ import { useGame } from './ctx'
 import { countTurn, countTurnDone } from '../engine/telemetry'
 import { windowEnd, windowOpen } from '../engine/transfer'
 import { Bar, Condition, money, OvrBadge, Panel, Roles, Stat, fmtDay } from './common'
-import { advanceDay, advanceToNextMatch, acceptJob, makeScrim, scrimReply, nextRealFixtureFor, noticeHint, recentResultsFor, stageName, STAGES } from '../engine/season'
+import { advanceDay, advanceToNextMatch, acceptJob, makeScrim, scrimReply, nextRealFixtureFor, noticeHint, recentResultsFor } from '../engine/season'
+import { stageNameIn, stagesOf } from '../engine/era'
 import { nextInEvent, upcomingInternational } from '../engine/qualify'
 import type { ScrimFormat } from '../engine/season'
 import { poolFor } from '../engine/match'
@@ -161,7 +162,7 @@ export default function Dashboard() {
 
   const starters = me.starters.map((id) => game.players[id]).filter(Boolean)
   const agenda = agendaFor(game)
-  const stageDef = STAGES.find((x) => x.key === game.stage)
+  const stageDef = stagesOf(game.year).find((x) => x.key === game.stage)
   // counted the same way the transfer window counts, today included: two
   // panels giving 20 and 21 for the same span reads like a lost turn
   const daysLeft = stageDef ? stageDef.end - game.day + 1 : 0
@@ -212,7 +213,7 @@ export default function Dashboard() {
       )}
 
       <Panel
-        title={`${stageName(game.stage)}${daysLeft > 0 ? ` · 还剩 ${daysLeft} 天` : ''}`}
+        title={`${stageNameIn(game.year, game.stage)}${daysLeft > 0 ? ` · 还剩 ${daysLeft} 天` : ''}`}
         className={agenda.some((a) => a.tone === 'urgent') ? 'alert' : 'own'}
       >
         {agenda.length ? (
@@ -562,7 +563,7 @@ export default function Dashboard() {
               </table>
             </div>
           ) : (
-            <div className="empty">{stageName(game.stage)} 期间没有进行中的联赛。</div>
+            <div className="empty">{stageNameIn(game.year, game.stage)} 期间没有进行中的联赛。</div>
           )}
         </Panel>
 

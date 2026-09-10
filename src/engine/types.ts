@@ -741,6 +741,8 @@ export interface Fixture {
   pending?: boolean
   /** scrims skip the veto: the map and format are agreed in advance */
   scrim?: { map: string; format: 'first13' | 'full24' }
+  /** the circuit graph node this match plays — see engine/circuit.ts; -1 is a qualifier play-in */
+  node?: number
 }
 
 export interface StandingRow {
@@ -771,7 +773,7 @@ export interface Competition {
   bracketStarted?: boolean
   /** how the knockout is shaped — see engine/bracket.ts; absent means the
    *  old single elimination, which older saves and Challengers still run */
-  format?: 'single' | 'double' | 'masters' | 'champions' | 'triple'
+  format?: 'single' | 'double' | 'masters' | 'champions' | 'triple' | 'circuit'
   /** the playoff's seed order, once known */
   seeds?: string[]
   /** a Masters' eight Swiss-round teams, seeded */
@@ -792,6 +794,30 @@ export interface Competition {
   awarded?: boolean
   /** where an international is played — see qualify.ts hostCity */
   city?: string
+  /** 2021–2022: the real event this competition replays — see engine/circuit.ts */
+  circuit?: {
+    id: string
+    start: number
+    end: number
+    /** entry sides in the event's own seed order, as this world has them */
+    seeds: (string | null)[]
+    /** decided the day before it opens: played, or as it really went */
+    mode?: 'sim' | 'history'
+    /** nodes settled without a match, by global node index */
+    walk?: Record<number, string>
+    /** stand-ins for qualifier places whose real side is not in this world */
+    fill?: Record<string, string>
+    /** the player's club's one match for the qualifier's last place */
+    playin?: { key: string; fixture: string }
+    /** why it is played rather than replayed: his club is in it, it is his region's, or its field changed upstream */
+    why?: 'mine' | 'home' | 'ripple'
+    /** real seeds whose place went to somebody else, and the event that decided it — 「你顶掉了谁」 */
+    swaps?: { real: string; now: string | null; from: string }[]
+    /** over, with nobody in this world to place — see circuit.ts progressCircuit */
+    done?: boolean
+  }
+  /** joint placings, aligned with `finished`: two semi-final losers are both 3 */
+  places?: number[]
 }
 
 export interface NewsItem {
@@ -849,6 +875,13 @@ export interface GameState {
   draws?: import('./draw').DrawEvent[]
   /** a draw the manager has to hold — reveal or skip, or pick — before the clock moves */
   pendingDrawId?: string
+  /**
+   * Set when a save that entered the timeline in 2021 reaches a year the game
+   * cannot play yet. The clock stops with this message rather than running a
+   * season with no events in it; a later build that can play that year
+   * clears it and carries on from the same day.
+   */
+  timelinePause?: string
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
   /** day index since career start */

@@ -11,7 +11,7 @@ import { autoPlan } from '../../engine/me/auto'
 import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
-import { CUPS } from '../../engine/me/cups'
+import { CUPS, cupView } from '../../engine/me/cups'
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
@@ -235,7 +235,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               </p>
             </Panel>
             <Panel title="今年的赛事">
-              {CUPS.map((c) => {
+              {CUPS.map((raw) => {
+                const c = cupView(raw, game.year)
                 const done = me.pre.cups.find((x) => x.key === c.key && x.year === game.year)
                 const seen = me.pre.seen.includes(`${game.year}:${c.key}`)
                 return (

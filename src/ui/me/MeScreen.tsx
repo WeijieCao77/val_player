@@ -5,7 +5,7 @@ import { statLine } from '../../engine/player'
 import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
 import { fansCn, fanTier } from '../../engine/me/fans'
 import { originOf } from '../../engine/me/origins'
-import { cupOf } from '../../engine/me/cups'
+import { cupOf, cupView } from '../../engine/me/cups'
 
 export default function MeScreen() {
   const { game } = useGame()
@@ -111,7 +111,7 @@ export default function MeScreen() {
           <Panel title="杯赛" flush>
             <table><tbody>
               {me.pre.cups.slice().reverse().map((cu, i) => (
-                <tr key={i}><td>{cu.year}</td><td>{cupOf(cu.key)?.name}</td><td className="num">{cu.won ? '冠军' : `${cu.reached}/${cu.rounds}`}</td><td className="num">{cu.prize ? money(cu.prize) : ''}</td></tr>
+                <tr key={i}><td>{cu.year}</td><td>{cupOf(cu.key) && cupView(cupOf(cu.key)!, cu.year).name}</td><td className="num">{cu.won ? '冠军' : `${cu.reached}/${cu.rounds}`}</td><td className="num">{cu.prize ? money(cu.prize) : ''}</td></tr>
               ))}
             </tbody></table>
           </Panel>

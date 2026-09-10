@@ -23,7 +23,8 @@ import RetireCard from './ui/RetireCard'
 import QualifyPoster from './ui/QualifyPoster'
 import { autosave, claimAutosave, hasAutosave, loadAutosave, loadGame, packState } from './engine/save'
 import { syncCallersWithWorld } from './engine/world'
-import { dateLabel, nextRealFixtureFor, nextScrimFor, stageName } from './engine/season'
+import { dateLabel, nextRealFixtureFor, nextScrimFor } from './engine/season'
+import { stageNameIn } from './engine/era'
 import { actionsForTurn, actionsLeft } from './engine/actions'
 import Tutorial, { tutorialSeen } from './ui/Tutorial'
 import { screenLocked } from './engine/agenda'
@@ -317,7 +318,7 @@ export default function ManagerGame({ onHome, ruleset = 'vct-2025' }: { onHome: 
             </span>
           </div>
           <div className="chip">{dateLabel(game)}</div>
-          <div className="chip">{stageName(game.stage)}</div>
+          <div className="chip">{stageNameIn(game.year, game.stage)}</div>
           <div className="spacer" />
           <div className="chip" title="可用资金" aria-label="可用资金"><span aria-hidden="true">💰</span> <b>{money(game.finances.balance)}</b></div>
           <div

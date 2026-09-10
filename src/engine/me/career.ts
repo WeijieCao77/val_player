@@ -1,4 +1,5 @@
 import RAW from '../../data/world.json'
+import RAW_2021 from '../../data/world_2021.json'
 import { createNewGame } from '../world'
 import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
@@ -12,7 +13,8 @@ import { beginWeek } from './week'
 import { pushLog } from './log'
 import { originOf } from './origins'
 import { makeDeal, joinClub } from './contract'
-import { stageName } from '../season'
+import { stageNameIn } from '../era'
+import type { EntryYear } from '../era'
 import { initLedger } from './money'
 
 export const ME_ID = 'ME'
@@ -39,6 +41,16 @@ export const START_CN: Record<StartPoint, { name: string; blurb: string }> = {
   t1: { name: 'VCT 替补', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。' },
 }
 
+/** 2021 had no leagues and no academies to start in: the same three doors, as they were then. */
+export const START_CN_2021: Record<StartPoint, { name: string; blurb: string }> = {
+  pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。2021 年没有联赛也没有青训体系：排位、网吧赛、试训——哪家俱乐部看上你，哪家就给你合同。' },
+  chal: { name: '二线队首发', blurb: '18 岁，一支还没打出名堂的俱乐部的首发。开放海选一场场打上去，打进赛区决赛才有人记住你。' },
+  t1: { name: '强队替补', blurb: '18 岁，一支打进过赛区决赛的俱乐部的第六人。名单上有你，首发没有。' },
+}
+
+export const startCnOf = (year: number): Record<StartPoint, { name: string; blurb: string }> =>
+  (year <= 2021 ? START_CN_2021 : START_CN)
+
 export interface CareerOpts {
   name: string
   region: Region
@@ -50,21 +62,25 @@ export interface CareerOpts {
   teamId?: string
   seed?: number
   nat?: string
+  /** where on the one timeline the career begins — 2021 or 2026, see engine/era.ts */
+  year?: EntryYear
 }
 
 export interface ClubChoice { id: string; name: string; tag: string; rating: number; roster: number; tier: number }
 
 /** Clubs in a region, by tier. */
-export function candidateClubs(region: Region, tier: 1 | 2): ClubChoice[] {
-  return RAW.teams
+type BookClub = { id: string; name: string; tag: string; region: string; tier: number; rating: number; roster: string[] }
+
+export function candidateClubs(region: Region, tier: 1 | 2, year = 2026): ClubChoice[] {
+  return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[])
     .filter((t) => t.region === region && t.tier === tier)
     .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier }))
     .sort((a, b) => a.rating - b.rating)
 }
 
-function pickClub(region: Region, tier: 1 | 2, rng: Rng): string {
-  const pool = candidateClubs(region, tier).filter((t) => t.roster <= 6)
-  const list = pool.length ? pool : candidateClubs(region, tier)
+function pickClub(region: Region, tier: 1 | 2, rng: Rng, year = 2026): string {
+  const pool = candidateClubs(region, tier, year).filter((t) => t.roster <= 6)
+  const list = pool.length ? pool : candidateClubs(region, tier, year)
   // the weaker the club, the likelier it takes a chance on an unknown —
   // squared, so a 74 is about five times as likely as an 88
   const w = list.map((t) => Math.max(4, 100 - t.rating) ** 2)
@@ -96,10 +112,11 @@ export function createCareer(o: CareerOpts): GameState {
   const rng = new Rng(seed ^ 0x3e11)
   const origin = originOf(o.originKey)
   const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
+  const year = o.year ?? 2026
   const teamId = o.start === 'pre'
-    ? candidateClubs(o.region, 2)[0]?.id ?? candidateClubs(o.region, 1)[0].id   // a club to watch until I have one
-    : (o.teamId ?? pickClub(o.region, clubTier, rng))
-  const state = createNewGame(teamId, o.name, seed)
+    ? candidateClubs(o.region, 2, year)[0]?.id ?? candidateClubs(o.region, 1, year)[0].id   // a club to watch until I have one
+    : (o.teamId ?? pickClub(o.region, clubTier, rng, year))
+  const state = createNewGame(teamId, o.name, seed, undefined, year)
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
 
@@ -147,7 +164,7 @@ export function createCareer(o: CareerOpts): GameState {
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
-  initLedger(state, stageName(state.stage))
+  initLedger(state, stageNameIn(state.year, state.stage))
   // the ladder starts where the skill puts it, less a season of not having played the top
   me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)
   me.pre.ladderPeak = me.pre.ladder
@@ -155,7 +172,7 @@ export function createCareer(o: CareerOpts): GameState {
   pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.blurb}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。城市争霸赛在第 7 周开打，Premier 在第 15 周，主播杯要 60 个粉丝才请你。`)
+    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。城市争霸赛在第 7 周开打，${state.year <= 2022 ? '挑战者赛开放海选' : 'Premier'}在第 15 周，主播杯要 60 个粉丝才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON

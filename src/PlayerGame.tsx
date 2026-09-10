@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/ctx'
 import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/save'
-import { dateLabel, stageName } from './engine/season'
+import { dateLabel } from './engine/season'
+import { formatOf, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceWeek } from './engine/me/week'
@@ -203,7 +204,7 @@ export default function PlayerGame() {
                   <span className="muted">效力</span>
                   <Crest id={game.myTeam} size={20} />
                   <b>{team.name}</b>
-                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
+                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
                   <span className="muted">·</span>
                   {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
                   <span className="muted">· 本季首发 {me.seasonStart.starts}/{me.seasonStart.matches} · 胜 {me.seasonStart.wins}</span>
@@ -215,7 +216,7 @@ export default function PlayerGame() {
           </div>
           <div className="hero-stage">
             <small>{game.year}</small>
-            <b>{stageName(game.stage)}</b>
+            <b>{stageNameIn(game.year, game.stage)}</b>
             <span className="muted">{dateLabel(game)} · 第 {Math.floor(game.day / 7)} 周</span>
           </div>
           <div className="tiles">
@@ -227,6 +228,12 @@ export default function PlayerGame() {
             <div className={`tile ${p.form >= 78 ? 'up' : p.form <= 60 ? 'dn' : ''}`}><small>状态</small><b>{p.form >= 78 ? '火热' : p.form >= 68 ? '正常' : p.form >= 60 ? '一般' : '低迷'}<em>{Math.round(p.form)}</em></b></div>
           </div>
         </section>
+
+        {game.timelinePause && (
+          <div className="small" style={{ margin: '10px 0', padding: '10px 14px', border: '1px solid var(--accent)', borderRadius: 8 }}>
+            <b>时间线暂停</b> · {game.timelinePause}
+          </div>
+        )}
 
         {pins && (
           <div className="pinbar" role="status" aria-label="属性">
@@ -271,7 +278,7 @@ export default function PlayerGame() {
         {summary && (
           <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             <p className="small muted" style={{ marginTop: 0 }}>
-              现在是 {dateLabel(game)} · {stageName(game.stage)}。{summary.ended ? '生涯到头了。' : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
+              现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage)}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
             </p>
             {summary.notes.length === 0
               ? <p className="muted">一路没有需要拿主意的事。</p>

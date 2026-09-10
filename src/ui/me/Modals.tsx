@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Modal, money } from '../common'
 import type { PendingItem } from '../../engine/me/types'
-import { cupOf, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
+import { cupOf, cupView, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
 import { MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
+import { doorsOf, formatOf } from '../../engine/era'
+import { REGION_CN } from '../../engine/types'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
 import { Rng, hashStr } from '../../engine/rng'
 import { answerStreamOffer } from '../../engine/me/stream'
@@ -42,7 +44,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
 function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
   const { game, commit, toast } = useGame()
   const me = game.me!
-  const cup = cupOf(cupKey)!
+  const cup = cupView(cupOf(cupKey)!, game.year)
   const [live, setLive] = useState<MeMatch | null>(null)
   const run = me.pre.cup
   if (live) {
@@ -105,7 +107,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Crest id={team.id} size={40} />
         <div>
-          <b>{team.name}</b> <span className="tag">{team.tier === 1 ? 'VCT' : 'Challengers'} · {CLUB_TIER_CN(team)}</span>
+          <b>{team.name}</b> <span className="tag">{REGION_CN[team.region]} · {formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : 'Challengers'} · {CLUB_TIER_CN(team)}</span>
           <div className="tiny muted">实力 {team.rating} · 名单 {team.roster.length} 人 · 他们{via}</div>
         </div>
       </div>
@@ -113,6 +115,8 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
         他们要的水平：<b>{Math.round(expect)}</b>。你现在：<b>{Math.round(skill)}</b>（综合 {game.players[me.id].overall} + 战术素养 + 天梯）。
         {skill >= expect + 8 ? ' 绰绰有余。' : skill >= expect ? ' 够格。' : skill >= expect - 6 ? ' 差一点，四天试训里能补回来。' : ' 差得不少。'}
       </p>
+      {/* the most important line on an offer: which game you are signing up for */}
+      <p className="small" style={{ margin: '4px 0' }}>接了之后头顶的门：<b>{doorsOf(team.region, game.year)}</b></p>
       <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : '四天：枪法测试、训练赛、复盘会、经理面谈。每天一个选择，成败对称。'} {inv.expires - game.day} 天内答复；回绝的话今年他们不会再来。</p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>

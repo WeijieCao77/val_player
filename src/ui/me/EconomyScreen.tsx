@@ -1,6 +1,6 @@
 import { useGame } from '../ctx'
 import { Panel, money, moneyFull } from '../common'
-import { KIND_CN, LEDGER_IN, LEDGER_OUT, PRIZE_ROWS, ledgerSum, prizePreview } from '../../engine/me/money'
+import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizePreview, prizeRows } from '../../engine/me/money'
 import type { MeState } from '../../engine/me/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, RELAX, buyCourse, buyGear, buyRelax, hireAgent } from '../../engine/me/shop'
 import { STREAM_CUTS, streamCut, streamIncome } from '../../engine/me/stream'
@@ -32,7 +32,7 @@ export default function EconomyScreen() {
               <table className="small">
                 <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">四强</th></tr></thead>
                 <tbody>
-                  {PRIZE_ROWS.map((r) => {
+                  {prizeRows(game.year).map((r) => {
                     const v = prizePreview(game, r.stage)
                     if (!v.some((x) => x > 0)) return null
                     return (

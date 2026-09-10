@@ -1,5 +1,5 @@
 import { PRIZE } from '../finance'
-import { stageName } from '../season'
+import { stageNameIn } from '../era'
 import type { GameState, StageKey } from '../types'
 import { pushLog } from './log'
 import type { LedgerBook, MoneyKind } from './types'
@@ -70,7 +70,7 @@ export function addMoney(state: GameState, kind: MoneyKind, amount: number): num
   if (!me) return 0
   const n = Math.round(amount || 0)
   if (!n) return 0
-  if (!me.ledger) initLedger(state, stageName(state.stage))
+  if (!me.ledger) initLedger(state, stageNameIn(state.year, state.stage))
   me.money += n
   const led = me.ledger!
   const side = n > 0 ? led.cur.in : led.cur.out
@@ -83,11 +83,11 @@ export function addMoney(state: GameState, kind: MoneyKind, amount: number): num
 /** At a stage's end: this stage's book becomes last stage's, and a new one opens. */
 export function ledgerRotate(state: GameState): void {
   const me = state.me!
-  if (!me.ledger) { initLedger(state, stageName(state.stage)); return }
+  if (!me.ledger) { initLedger(state, stageNameIn(state.year, state.stage)); return }
   me.ledger.prev = me.ledger.cur
   me.ledger.prevLabel = me.ledger.label
   me.ledger.cur = emptyBook()
-  me.ledger.label = stageName(state.stage)
+  me.ledger.label = stageNameIn(state.year, state.stage)
 }
 
 export const ledgerSum = (o: Record<string, number> | undefined): number =>
@@ -149,15 +149,18 @@ export function prizeWeek(state: GameState): void {
 /**
  * The published table, for the screen that says what a placing is worth.
  *
- * The names come from season.ts's own stage table rather than being typed
+ * The names come from that year's stage table in era.ts rather than being typed
  * again here — written out by hand they had already drifted (「启航赛」 and
  * 「第一次大师赛」 against the calendar's 「揭幕赛」 and 「第一站大师赛」).
  */
 export const PRIZE_STAGES: StageKey[] =
   ['challengers1', 'challengers2', 'kickoff', 'stage1', 'stage2', 'masters1', 'masters2', 'champions']
 
-export const PRIZE_ROWS: { stage: StageKey; name: string }[] =
-  PRIZE_STAGES.map((stage) => ({ stage, name: stageName(stage) }))
+export const prizeRows = (year: number): { stage: StageKey; name: string }[] =>
+  PRIZE_STAGES
+    .map((stage) => ({ stage, name: stageNameIn(year, stage) }))
+    // a year without that stage has no row for it, rather than a raw key
+    .filter((r) => r.name !== r.stage)
 
 /** What the top three places pay a player on my contract, for the prize table. */
 export function prizePreview(state: GameState, stage: StageKey): number[] {
