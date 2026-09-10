@@ -108,6 +108,9 @@ export const MERGED_INTO: Partial<Record<Region, { into: Region; year: number }>
   Philippines: { into: 'SEA', year: 2022 },
   Vietnam: { into: 'SEA', year: 2022 },
   'Hong Kong & Taiwan': { into: 'SEA', year: 2022 },
+  MENA: { into: 'EMEA', year: 2023 },
+  'South Asia': { into: 'Pacific', year: 2023 },
+  Oceania: { into: 'Pacific', year: 2023 },
 }
 
 /** Follow the mergers forward: 'Thailand' in 2026 is 'Pacific'. */
@@ -224,7 +227,48 @@ const STAGES_2022: StageDef[] = [
 ]
 
 /**
- * 2023 onward: the shape the game already ships. Kept here rather than
+ * 2023: LOCK//IN São Paulo opens the partnered era — all thirty clubs and
+ * China's two invitees in one bracket — then one long league season, Masters
+ * Tokyo, the Last Chance Qualifiers and Champions in Los Angeles. China has
+ * no league: its FGC acts and its Champions qualifier run through the spring
+ * and summer (their events carry their own stages). Read off circuit.json.
+ */
+const STAGES_2023: StageDef[] = [
+  { key: 'preseason', name: '季前', start: 0, end: 42 },
+  { key: 'kickoff', name: 'LOCK//IN 圣保罗', start: 43, end: 63 },
+  { key: 'stage1', name: '联赛', start: 64, end: 159 },
+  { key: 'masters1', name: '东京大师赛', start: 160, end: 176 },
+  { key: 'lcq', name: '最后机会资格赛', start: 177, end: 206 },
+  { key: 'champions', name: '冠军赛', start: 207, end: 240 },
+  { key: 'offseason', name: '休赛期', start: 241, end: 363 },
+]
+
+/** 2024: four leagues, each with its Kickoff; Madrid after Kickoff, Shanghai after Stage 1. */
+const STAGES_2024: StageDef[] = [
+  { key: 'preseason', name: '季前', start: 0, end: 45 },
+  { key: 'kickoff', name: '揭幕赛', start: 46, end: 64 },
+  { key: 'masters1', name: '马德里大师赛', start: 65, end: 88 },
+  { key: 'stage1', name: '第一赛段', start: 89, end: 140 },
+  { key: 'masters2', name: '上海大师赛', start: 141, end: 163 },
+  { key: 'stage2', name: '第二赛段', start: 164, end: 210 },
+  { key: 'champions', name: '冠军赛', start: 211, end: 240 },
+  { key: 'offseason', name: '休赛期', start: 241, end: 363 },
+]
+
+/** 2025: the same shape moved earlier — Kickoff in January, Bangkok, Toronto, Champions in Paris. */
+const STAGES_2025: StageDef[] = [
+  { key: 'preseason', name: '季前', start: 0, end: 8 },
+  { key: 'kickoff', name: '揭幕赛', start: 9, end: 47 },
+  { key: 'masters1', name: '曼谷大师赛', start: 48, end: 64 },
+  { key: 'stage1', name: '第一赛段', start: 65, end: 150 },
+  { key: 'masters2', name: '多伦多大师赛', start: 151, end: 177 },
+  { key: 'stage2', name: '第二赛段', start: 178, end: 250 },
+  { key: 'champions', name: '冠军赛', start: 251, end: 281 },
+  { key: 'offseason', name: '休赛期', start: 282, end: 363 },
+]
+
+/**
+ * 2026 onward: the shape the game already ships. Kept here rather than
  * imported from season.ts so that every calendar lives in one file — but the
  * numbers are season.ts's, unchanged, so existing saves keep their dates.
  */
@@ -242,6 +286,9 @@ const STAGES_MODERN: StageDef[] = [
 export function stagesOf(year: number): StageDef[] {
   if (year <= 2021) return STAGES_2021
   if (year === 2022) return STAGES_2022
+  if (year === 2023) return STAGES_2023
+  if (year === 2024) return STAGES_2024
+  if (year === 2025) return STAGES_2025
   return STAGES_MODERN
 }
 
@@ -254,7 +301,8 @@ export const stageAtIn = (year: number, day: number): StageKey =>
  * before 2023: an open-era year has no 挑战者联赛第一赛段 to name.
  */
 const OFF_CALENDAR: Partial<Record<StageKey, string>> = {
-  challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', ascension: '晋升赛',
+  challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', challengers3: '挑战者联赛第三赛段',
+  ascension: '晋升赛',
 }
 
 export const stageNameIn = (year: number, key: StageKey): string =>

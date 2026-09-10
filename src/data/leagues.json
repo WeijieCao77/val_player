@@ -1,0 +1,1456 @@
+{
+ "pages": {
+  "2023": {
+   "Americas": [
+    {
+     "team": "100 Thieves",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Cloud9",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Evil Geniuses",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FURIA Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KRÜ Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Leviatán",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "LOUD",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "MIBR",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "NRG",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Sentinels",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    }
+   ],
+   "EMEA": [
+    {
+     "team": "BBL Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Fnatic",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FUT Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Giants",
+     "type": "Partner",
+     "first": 2023,
+     "last": 2023,
+     "note": null
+    },
+    {
+     "team": "Karmine Corp",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KOI",
+     "type": "Partner",
+     "first": 2023,
+     "last": 2025,
+     "note": null
+    },
+    {
+     "team": "Natus Vincere",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Heretics",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Liquid",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Vitality",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    }
+   ],
+   "Pacific": [
+    {
+     "team": "DetonatioN FocusMe",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "DRX",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gen.G Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Global Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Paper Rex",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Rex Regum Qeon",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "T1",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "TALON",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Secret",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "ZETA DIVISION",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    }
+   ]
+  },
+  "2024": {
+   "Americas": [
+    {
+     "team": "100 Thieves",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Cloud9",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Evil Geniuses",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FURIA Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KRÜ Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Leviatán",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "LOUD",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "MIBR",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "NRG",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Sentinels",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "G2 Esports",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    }
+   ],
+   "China": [
+    {
+     "team": "All Gamers",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Bilibili Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "EDward Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FunPlus Phoenix",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "JD Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Nova Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Titan Esports Club",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Trace Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "TYLOO",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Wolves Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Dragon Ranger Gaming",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    }
+   ],
+   "EMEA": [
+    {
+     "team": "BBL Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Fnatic",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FUT Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Karmine Corp",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KOI",
+     "type": "Partner",
+     "first": 2023,
+     "last": 2025,
+     "note": null
+    },
+    {
+     "team": "Natus Vincere",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Heretics",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Liquid",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Vitality",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gentle Mates",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "GIANTX",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    }
+   ],
+   "Pacific": [
+    {
+     "team": "DetonatioN FocusMe",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "DRX",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gen.G Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Global Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Paper Rex",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Rex Regum Qeon",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "T1",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Talon Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Secret",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "ZETA DIVISION",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Bleed eSports",
+     "type": "Ascended",
+     "first": 2024,
+     "last": 2024,
+     "note": null
+    }
+   ]
+  },
+  "2025": {
+   "Americas": [
+    {
+     "team": "100 Thieves",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Cloud9",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Evil Geniuses",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FURIA Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KRÜ Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Leviatán",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "LOUD",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "MIBR",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "NRG",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Sentinels",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "G2 Esports",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "2GAME Esports",
+     "type": "Ascended",
+     "first": 2025,
+     "last": 2025,
+     "note": null
+    }
+   ],
+   "China": [
+    {
+     "team": "All Gamers",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Bilibili Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "EDward Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FunPlus Phoenix",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "JD Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Nova Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Titan Esports Club",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Trace Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "TYLOO",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Wolves Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Dragon Ranger Gaming",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "XLG Esports",
+     "type": "Ascended",
+     "first": 2025,
+     "last": null,
+     "note": null
+    }
+   ],
+   "EMEA": [
+    {
+     "team": "BBL Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Fnatic",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FUT Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Karmine Corp",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KOI",
+     "type": "Partner",
+     "first": 2023,
+     "last": 2025,
+     "note": null
+    },
+    {
+     "team": "Natus Vincere",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Heretics",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Liquid",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Vitality",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "GIANTX",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gentle Mates",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Apeks",
+     "type": "Ascended",
+     "first": 2025,
+     "last": 2025,
+     "note": null
+    }
+   ],
+   "Pacific": [
+    {
+     "team": "DetonatioN FocusMe",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "DRX",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gen.G Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Global Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Paper Rex",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Rex Regum Qeon",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "T1",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Talon Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Secret",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "ZETA DIVISION",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Nongshim RedForce",
+     "type": "Ascended",
+     "first": 2025,
+     "last": null,
+     "note": 2
+    },
+    {
+     "team": "Boom Esports",
+     "type": "Ascended",
+     "first": 2025,
+     "last": 2025,
+     "note": 1
+    }
+   ]
+  },
+  "2026": {
+   "Americas": [
+    {
+     "team": "100 Thieves",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Cloud9",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Evil Geniuses",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FURIA Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "KRÜ Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Leviatán",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "LOUD",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "MIBR",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "NRG",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Sentinels",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "G2 Esports",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "ENVY",
+     "type": "Ascended",
+     "first": 2026,
+     "last": null,
+     "note": null
+    }
+   ],
+   "China": [
+    {
+     "team": "All Gamers",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Bilibili Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "EDward Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FunPlus Phoenix",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "JD Gaming",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Nova Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Titan Esports Club",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Trace Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "TYLOO",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Wolves Esports",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Dragon Ranger Gaming",
+     "type": "Ascended",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "XLG Esports",
+     "type": "Ascended",
+     "first": 2025,
+     "last": null,
+     "note": null
+    }
+   ],
+   "EMEA": [
+    {
+     "team": "BBL Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Fnatic",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FUT Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Karmine Corp",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Natus Vincere",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Heretics",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Liquid",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Vitality",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "GIANTX",
+     "type": "Partner",
+     "first": 2024,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gentle Mates",
+     "type": "Partner",
+     "first": null,
+     "last": null,
+     "note": 1
+    },
+    {
+     "team": "PCIFIC Esports",
+     "type": "Ascended",
+     "first": 2026,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Eternal Fire",
+     "type": "Ascended",
+     "first": 2026,
+     "last": null,
+     "note": 2
+    },
+    {
+     "team": "ULF Esports",
+     "type": "Ascended",
+     "first": 2026,
+     "last": 2026,
+     "note": 2
+    }
+   ],
+   "Pacific": [
+    {
+     "team": "DetonatioN FocusMe",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "DRX",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Gen.G Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Global Esports",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Paper Rex",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Rex Regum Qeon",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "T1",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "Team Secret",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "ZETA DIVISION",
+     "type": "Partner",
+     "first": 2023,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "FULL SENSE",
+     "type": "Partner",
+     "first": 2026,
+     "last": null,
+     "note": 1
+    },
+    {
+     "team": "Nongshim RedForce",
+     "type": "Ascended",
+     "first": 2025,
+     "last": null,
+     "note": null
+    },
+    {
+     "team": "VARREL",
+     "type": "Ascended",
+     "first": 2026,
+     "last": null,
+     "note": 2
+    }
+   ]
+  }
+ },
+ "members": {
+  "2023": {
+   "Americas": [
+    "100 Thieves",
+    "Cloud9",
+    "Evil Geniuses",
+    "FURIA Esports",
+    "KRÜ Esports",
+    "Leviatán",
+    "LOUD",
+    "MIBR",
+    "NRG",
+    "Sentinels"
+   ],
+   "EMEA": [
+    "BBL Esports",
+    "Fnatic",
+    "FUT Esports",
+    "Giants",
+    "Karmine Corp",
+    "KOI",
+    "Natus Vincere",
+    "Team Heretics",
+    "Team Liquid",
+    "Team Vitality"
+   ],
+   "Pacific": [
+    "DetonatioN FocusMe",
+    "DRX",
+    "Gen.G Esports",
+    "Global Esports",
+    "Paper Rex",
+    "Rex Regum Qeon",
+    "T1",
+    "TALON",
+    "Team Secret",
+    "ZETA DIVISION"
+   ]
+  },
+  "2024": {
+   "Americas": [
+    "100 Thieves",
+    "Cloud9",
+    "Evil Geniuses",
+    "FURIA Esports",
+    "KRÜ Esports",
+    "Leviatán",
+    "LOUD",
+    "MIBR",
+    "NRG",
+    "Sentinels",
+    "G2 Esports"
+   ],
+   "China": [
+    "All Gamers",
+    "Bilibili Gaming",
+    "EDward Gaming",
+    "FunPlus Phoenix",
+    "JD Gaming",
+    "Nova Esports",
+    "Titan Esports Club",
+    "Trace Esports",
+    "TYLOO",
+    "Wolves Esports",
+    "Dragon Ranger Gaming"
+   ],
+   "EMEA": [
+    "BBL Esports",
+    "Fnatic",
+    "FUT Esports",
+    "Karmine Corp",
+    "KOI",
+    "Natus Vincere",
+    "Team Heretics",
+    "Team Liquid",
+    "Team Vitality",
+    "Gentle Mates",
+    "GIANTX"
+   ],
+   "Pacific": [
+    "DetonatioN FocusMe",
+    "DRX",
+    "Gen.G Esports",
+    "Global Esports",
+    "Paper Rex",
+    "Rex Regum Qeon",
+    "T1",
+    "Talon Esports",
+    "Team Secret",
+    "ZETA DIVISION",
+    "Bleed eSports"
+   ]
+  },
+  "2025": {
+   "Americas": [
+    "100 Thieves",
+    "Cloud9",
+    "Evil Geniuses",
+    "FURIA Esports",
+    "KRÜ Esports",
+    "Leviatán",
+    "LOUD",
+    "MIBR",
+    "NRG",
+    "Sentinels",
+    "G2 Esports",
+    "2GAME Esports"
+   ],
+   "China": [
+    "All Gamers",
+    "Bilibili Gaming",
+    "EDward Gaming",
+    "FunPlus Phoenix",
+    "JD Gaming",
+    "Nova Esports",
+    "Titan Esports Club",
+    "Trace Esports",
+    "TYLOO",
+    "Wolves Esports",
+    "Dragon Ranger Gaming",
+    "XLG Esports"
+   ],
+   "EMEA": [
+    "BBL Esports",
+    "Fnatic",
+    "FUT Esports",
+    "Karmine Corp",
+    "KOI",
+    "Natus Vincere",
+    "Team Heretics",
+    "Team Liquid",
+    "Team Vitality",
+    "GIANTX",
+    "Gentle Mates",
+    "Apeks"
+   ],
+   "Pacific": [
+    "DetonatioN FocusMe",
+    "DRX",
+    "Gen.G Esports",
+    "Global Esports",
+    "Paper Rex",
+    "Rex Regum Qeon",
+    "T1",
+    "Talon Esports",
+    "Team Secret",
+    "ZETA DIVISION",
+    "Nongshim RedForce",
+    "Boom Esports"
+   ]
+  },
+  "2026": {
+   "Americas": [
+    "100 Thieves",
+    "Cloud9",
+    "Evil Geniuses",
+    "FURIA Esports",
+    "KRÜ Esports",
+    "Leviatán",
+    "LOUD",
+    "MIBR",
+    "NRG",
+    "Sentinels",
+    "G2 Esports",
+    "ENVY"
+   ],
+   "China": [
+    "All Gamers",
+    "Bilibili Gaming",
+    "EDward Gaming",
+    "FunPlus Phoenix",
+    "JD Gaming",
+    "Nova Esports",
+    "Titan Esports Club",
+    "Trace Esports",
+    "TYLOO",
+    "Wolves Esports",
+    "Dragon Ranger Gaming",
+    "XLG Esports"
+   ],
+   "EMEA": [
+    "BBL Esports",
+    "Fnatic",
+    "FUT Esports",
+    "Karmine Corp",
+    "Natus Vincere",
+    "Team Heretics",
+    "Team Liquid",
+    "Team Vitality",
+    "GIANTX",
+    "Gentle Mates",
+    "PCIFIC Esports",
+    "Eternal Fire",
+    "ULF Esports"
+   ],
+   "Pacific": [
+    "DetonatioN FocusMe",
+    "DRX",
+    "Gen.G Esports",
+    "Global Esports",
+    "Paper Rex",
+    "Rex Regum Qeon",
+    "T1",
+    "Team Secret",
+    "ZETA DIVISION",
+    "FULL SENSE",
+    "Nongshim RedForce",
+    "VARREL"
+   ]
+  }
+ },
+ "notes": {
+  "2023": [],
+  "2024": [],
+  "2025": [],
+  "2026": []
+ }
+}

@@ -53,6 +53,12 @@ interface CUnit {
   first?: number
   last?: number
   ranked?: string[]
+  /** the phase this unit ranks in: a stage's groups, or parallel conferences, share one */
+  phase?: string
+  /** played after the final — relegation, an access series: ranks below the phases that decided the winner */
+  side?: boolean
+  /** 2023 on: a bracket that ends with two sides unbeaten ranks the one from the upper side first */
+  upperFirst?: boolean
 }
 
 export interface CEvent {
@@ -202,7 +208,7 @@ interface Game { a: string | null; b: string | null; w: string | null; round: st
  * and two sides out in the same round share a place, so the semi-final losers
  * of a single bracket are joint third.
  */
-function rankPhase(type: 'rr' | 'bracket', games: Game[]): { ranked: string[]; tiers: string[][] } {
+function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = false): { ranked: string[]; tiers: string[][] } {
   const teams = uniq(games.flatMap((g) => [g.a, g.b]).filter((t): t is string => !!t))
   if (type === 'rr') {
     const s = new Map(teams.map((t) => [t, { pts: 0, md: 0, rd: 0 }]))
@@ -262,14 +268,18 @@ function rankPhase(type: 'rr' | 'bracket', games: Game[]): { ranked: string[]; t
     // a third-place or runner-up match is played by two sides already out
     return !!g.w && (g.w !== t || g.round.endsWith('季军赛') || g.round.endsWith('亚军赛'))
   }
+  // a bracket that ends with no grand final — 2025's Pacific Ascension — leaves
+  // two sides unbeaten, and the one that came up the upper side is ahead
+  const lower = new Set(upperFirst ? games.filter((g) => g.round.includes('败者组')).flatMap((g) => [g.a, g.b]) : [])
+  const low = (t: string) => Number(lower.has(t))
   const alive = teams.filter((t) => !out(t))
-    .sort((x, y) => (losses.get(x) ?? 0) - (losses.get(y) ?? 0) || last.get(y)! - last.get(x)!)
+    .sort((x, y) => (losses.get(x) ?? 0) - (losses.get(y) ?? 0) || low(x) - low(y) || last.get(y)! - last.get(x)!)
   const gone = teams.filter(out).sort((x, y) =>
     last.get(y)! - last.get(x)! || Number(games[last.get(y)!].w === y) - Number(games[last.get(x)!].w === x))
   const tiers: string[][] = []
   for (const t of alive) {
     const prev = tiers[tiers.length - 1]
-    if (prev && (losses.get(prev[0]) ?? 0) === (losses.get(t) ?? 0)) prev.push(t)
+    if (prev && (losses.get(prev[0]) ?? 0) === (losses.get(t) ?? 0) && low(prev[0]) === low(t)) prev.push(t)
     else tiers.push([t])
   }
   const byRound = new Map<string, string[]>()
@@ -285,12 +295,15 @@ function rankPhase(type: 'rr' | 'bracket', games: Game[]): { ranked: string[]; t
 /** The event's placings from each phase's tiers: later phases on top, parallel groups side by side. */
 function placesFrom(units: CUnit[], tiers: string[][][]): [string, number][] {
   const phases = new Map<string, number[]>()
-  units.forEach((u, ui) => phases.set(phaseOf(u), [...(phases.get(phaseOf(u)) ?? []), ui]))
-  // a relegation or promotion bracket played after the playoffs decides who
-  // stays in the league, not who won it: it ranks below every other phase
-  const side = /relegation|promotion|降级|升级/i
+  const key = (u: CUnit) => u.phase ?? phaseOf(u)
+  units.forEach((u, ui) => phases.set(key(u), [...(phases.get(key(u)) ?? []), ui]))
+  // what is played after the final — a relegation series, an access
+  // tournament — decides who plays where next year, not who won: it ranks
+  // below every phase that did (scripts/build_circuit.py marks it `side`)
+  const sideName = /relegation|promotion|降级|升级/i
+  const isSide = (k: string) => sideName.test(k) || phases.get(k)!.some((ui) => !!units[ui].side)
   const keys = [...phases.keys()]
-  const ordered = [...keys.filter((k) => !side.test(k)).reverse(), ...keys.filter((k) => side.test(k)).reverse()]
+  const ordered = [...keys.filter((k) => !isSide(k)).reverse(), ...keys.filter(isSide).reverse()]
   const out: [string, number][] = []
   const seen = new Set<string>()
   for (const group of ordered.map((k) => phases.get(k)!)) {
@@ -730,7 +743,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
     }
     const gs = unitGames(uj)
     if (!gs) return undefined
-    return rankPhase(u.type, gs).ranked[rank! - 1] ?? null
+    return rankPhase(u.type, gs, u.upperFirst).ranked[rank! - 1] ?? null
   }
 
   let moved = true
@@ -769,7 +782,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
   if (playIn && !gameOf(playIn)) return false
   const tiers = ev.units.map((u, ui) => (isOpen(u)
     ? uniq((u.ranked ?? []).map((v) => teamOf(state, ev, v)).filter((t): t is string => !!t)).map((t) => [t])
-    : rankPhase(u.type as 'rr' | 'bracket', unitGames(ui)!).tiers))
+    : rankPhase(u.type as 'rr' | 'bracket', unitGames(ui)!, u.upperFirst).tiers))
   finish(comp, placesFrom(ev.units, tiers))
   return true
 }

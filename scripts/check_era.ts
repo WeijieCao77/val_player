@@ -29,7 +29,7 @@ let bad = 0
 const fail = (msg: string) => { bad++; console.log(`✗ ${msg}`) }
 
 /* ---- 1. the calendar must partition the season, every year ---- */
-for (const year of [2021, 2022, 2026]) {
+for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
   const st = stagesOf(year)
   if (st[0].start !== 0) fail(`${year} 赛历不是从第 0 天开始（${st[0].start}）`)
   for (let i = 1; i < st.length; i++) {
@@ -50,9 +50,10 @@ for (const year of [2021, 2022, 2026]) {
 /* ---- 1b. and it must hold the real events: every international inside its own window ---- */
 const circuit: Record<string, { cn: string; stage: string | null; region: string | null; start: number; end: number }[]> =
   JSON.parse(readFileSync('src/data/circuit.json', 'utf8'))
-for (const year of [2021, 2022]) {
+for (const year of [2021, 2022, 2023, 2024, 2025]) {
   const st = stagesOf(year)
-  const held = ['masters1', 'masters2', 'champions', ...(year === 2021 ? ['lcq'] : [])]
+  // LOCK//IN was 2023's international kickoff; from 2024 each league holds its own
+  const held = ['masters1', 'masters2', 'champions', ...(year === 2021 ? ['lcq'] : []), ...(year === 2023 ? ['kickoff'] : [])]
   for (const e of circuit[String(year)] ?? []) {
     if (!e.stage || !held.includes(e.stage)) continue
     const w = st.find((s) => s.key === e.stage)

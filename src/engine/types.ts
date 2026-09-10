@@ -18,6 +18,8 @@ export type Region =
   | 'North America' | 'Europe' | 'Turkey' | 'CIS' | 'Brazil' | 'LATAM'
   | 'Korea' | 'Japan' | 'SEA' | 'Malaysia & Singapore' | 'Indonesia'
   | 'Thailand' | 'Philippines' | 'Vietnam' | 'Hong Kong & Taiwan'
+  // 2023 on: Challengers scenes with no circuit of their own before
+  | 'MENA' | 'South Asia' | 'Oceania'
 export type Role = '决斗者' | '先锋' | '控场' | '哨卫' | '自由人'
 export type Tier = 1 | 2
 
@@ -34,6 +36,7 @@ export const REGION_CN: Record<Region, string> = {
   Brazil: '巴西', LATAM: '拉美', Korea: '韩国', Japan: '日本', SEA: '东南亚',
   'Malaysia & Singapore': '马新', Indonesia: '印尼', Thailand: '泰国',
   Philippines: '菲律宾', Vietnam: '越南', 'Hong Kong & Taiwan': '港台',
+  MENA: '中东北非', 'South Asia': '南亚', Oceania: '大洋洲',
 }
 
 export interface Attrs {
@@ -719,7 +722,7 @@ export interface MatchResult {
 export type StageKey =
   | 'preseason' | 'kickoff' | 'masters1' | 'stage1' | 'stage2'
   | 'masters2' | 'champions' | 'offseason'
-  | 'challengers1' | 'challengers2' | 'ascension'
+  | 'challengers1' | 'challengers2' | 'challengers3' | 'ascension'
   // 2021–2022: three stages of open qualifiers, each ending in a regional
   // decider, plus the Last Chance Qualifier that fed Champions
   | 's1chal' | 's1masters' | 's2chal' | 's2finals' | 's3chal' | 's3finals' | 'lcq'

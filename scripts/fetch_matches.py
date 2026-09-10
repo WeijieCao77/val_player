@@ -102,8 +102,12 @@ def parse(html: str, event: dict) -> tuple[list[dict], list[str]]:
         n = norm(name)
         if n in by_name:
             return by_name[n]
-        # display names are often the short form of the listed one: 'ENVY' / 'Team Envy'
-        hits = {tid for k, tid in by_name.items() if len(n) >= 3 and (n in k or k in n)}
+        # display names are often the short form of the listed one: 'ENVY' / 'Team Envy'.
+        # The short one has to sit at an end of the long one — 'loud' is inside
+        # 'cloud9', and LOUD is not Cloud9
+        def at_end(short: str, long: str) -> bool:
+            return len(short) >= 3 and (long.startswith(short) or long.endswith(short))
+        hits = {tid for k, tid in by_name.items() if at_end(n, k) or at_end(k, n)}
         return hits.pop() if len(hits) == 1 else None
 
     out: list[dict] = []

@@ -45,6 +45,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import event_rosters  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
 
@@ -53,7 +56,8 @@ DATA = os.path.join(ROOT, 'src', 'data')
 # third-party cups that shared a region with the circuit but were not part of it
 THIRD_PARTY = re.compile(
     r'game on masters|bechampions|becontender|ultimasters|guns and masters|mockern|'
-    r'rog x|road to vct|thinkpro|metafy|masters pro league|valorant east', re.I)
+    # CECC is a North American college cup that vlr files beside the Challengers
+    r'rog x|road to vct|thinkpro|metafy|masters pro league|valorant east|cecc', re.I)
 
 # the region an event belongs to, most specific first: 「Asia-Pacific」 must not
 # be read as Pacific, and 「EMEA Challengers Playoffs」 is the combining layer,
@@ -75,6 +79,11 @@ REGION_BY_NAME: list[tuple[str, str]] = [
     (r'Vietnam', 'Vietnam'),
     (r'Hong Kong', 'Hong Kong & Taiwan'),
     (r'China|PangHu|Huya|FGC', 'China'),
+    # 2023's Challengers leagues: a region for every club, a scene for every league (scene_of)
+    (r'\bMENA\b', 'MENA'),
+    (r'South Asia', 'South Asia'),
+    (r'Oceania', 'Oceania'),
+    (r'DACH|France|Spain|Italy|Portugal|Northern Europe|North: Polaris|NORTH//EAST|East:? Surge|Polaris', 'Europe'),
     (r'\bSEA\b|Southeast Asia', 'SEA'),
     (r'EMEA', 'EMEA'),
     (r'Europe', 'Europe'),
@@ -87,17 +96,21 @@ REGION_BY_NAME: list[tuple[str, str]] = [
 SHOW = re.compile(r'show ?match|all-?star|exhibition', re.I)
 # a relegation or promotion bracket after the playoffs decides who stays in a
 # league, not who won it
-SIDE_PHASE = re.compile(r'relegation|promotion', re.I)
-INTERNATIONAL = re.compile(r'Masters (Reykjav|Berlin|Copenhagen|Tokyo|Madrid|Shanghai)|Valorant Champions 20|LOCK//IN', re.I)
+SIDE_PHASE = re.compile(r'relegation|promotion|pro/rel|up and down|acesso|repescagem', re.I)
+INTERNATIONAL = re.compile(r'Masters (Reykjav|Berlin|Copenhagen|Tokyo|Madrid|Shanghai|Bangkok|Toronto|Santiago|London)|Valorant Champions 20|LOCK//IN', re.I)
 
 # which clubs a combining layer draws on, for the game's qualification
 LAYER_OF = {
-    'EMEA': ['Europe', 'Turkey', 'CIS'],
+    'EMEA': ['Europe', 'Turkey', 'CIS', 'MENA'],
     'SEA': ['SEA', 'Malaysia & Singapore', 'Indonesia', 'Thailand', 'Philippines', 'Vietnam', 'Hong Kong & Taiwan'],
     'APAC': ['Korea', 'Japan', 'SEA', 'Malaysia & Singapore', 'Indonesia', 'Thailand', 'Philippines', 'Vietnam',
              'Hong Kong & Taiwan'],
     'South America': ['Brazil', 'LATAM'],
     'East Asia': ['Korea', 'Japan', 'China'],
+    # 2023 on: the partnered leagues
+    'Americas': ['North America', 'Brazil', 'LATAM'],
+    'Pacific': ['Korea', 'Japan', 'SEA', 'Malaysia & Singapore', 'Indonesia', 'Thailand', 'Philippines', 'Vietnam',
+                'Hong Kong & Taiwan', 'South Asia', 'Oceania'],
 }
 
 REGION_CN = {
@@ -106,21 +119,155 @@ REGION_CN = {
     'Indonesia': '印尼', 'Thailand': '泰国', 'Philippines': '菲律宾', 'Vietnam': '越南',
     'Hong Kong & Taiwan': '港台', 'China': '中国', 'EMEA': 'EMEA', 'APAC': '亚太', 'South America': '南美',
     'Americas': '美洲', 'Pacific': '太平洋', 'East Asia': '东亚',
+    'MENA': '中东北非', 'South Asia': '南亚', 'Oceania': '大洋洲',
 }
 CN_NUM = {'1': '一', '2': '二', '3': '三', '4': '四', '5': '五', '6': '六', '7': '七', '8': '八'}
+
+
+# ---------------------------------------------------------------- 2023 on
+# the partnered leagues and China's are regions of their own, ahead of any club
+# region their names also contain: 「Champions Tour 2023 EMEA: Ascension」
+# (not 「Asia-Pacific: Last Chance」, 2021's APAC)
+LEAGUE_EVENT = re.compile(r'(?<!-)\b(Americas|EMEA|Pacific|China)\b:? (?:League|Kickoff|Stage \d|Ascension|Last Chance)', re.I)
+LEAGUE_NAME = {'americas': 'Americas', 'emea': 'EMEA', 'pacific': 'Pacific', 'china': 'China'}
+# the tier-two circuit: national Challengers leagues, and China's Evolution Series
+CHALLENGERS = re.compile(r'Challengers|Evolution Series|FGC .*Qualifiers', re.I)
+# the scene a Challengers league belongs to, most specific first. A French club
+# plays France Revolution, not DACH Evolution, though both are 「Europe」
+SCENES = [
+    (r'LATAM North', 'LATAM North'), (r'LATAM South', 'LATAM South'), (r'Latin America|LATAM', 'LATAM'),
+    (r'NORTH//EAST', 'NORTH//EAST'), (r'Northern Europe|North: Polaris|Polaris', 'Northern Europe'),
+    (r'East:? Surge|\bEast\b', 'East'), (r'DACH', 'DACH'), (r'France', 'France'), (r'Spain', 'Spain'),
+    (r'Italy', 'Italy'), (r'Portugal', 'Portugal'), (r'Turkey|Türkiye', 'Turkey'), (r'\bMENA\b', 'MENA'),
+    (r'North America', 'North America'), (r'Brazil', 'Brazil'), (r'Japan', 'Japan'), (r'Korea', 'Korea'),
+    (r'South Asia', 'South Asia'), (r'Vietnam', 'Vietnam'), (r'Thailand', 'Thailand'),
+    (r'Philippines', 'Philippines'), (r'Indonesia', 'Indonesia'), (r'Malaysia', 'Malaysia & Singapore'),
+    (r'Taiwan|Hong Kong', 'Hong Kong & Taiwan'), (r'Southeast Asia|\bSEA\b', 'SEA'), (r'Oceania', 'Oceania'),
+    (r'China', 'China'), (r'EMEA', 'EMEA'),
+]
+SCENE_CN = {
+    'LATAM North': '拉美北区', 'LATAM South': '拉美南区', 'LATAM': '拉美', 'NORTH//EAST': '北欧与东欧',
+    'Northern Europe': '北欧', 'East': '东欧', 'DACH': '德语区', 'France': '法国', 'Spain': '西班牙',
+    'Italy': '意大利', 'Portugal': '葡萄牙', 'Turkey': '土耳其', 'MENA': '中东北非', 'North America': '北美',
+    'Brazil': '巴西', 'Japan': '日本', 'Korea': '韩国', 'South Asia': '南亚', 'Vietnam': '越南',
+    'Thailand': '泰国', 'Philippines': '菲律宾', 'Indonesia': '印尼', 'Malaysia & Singapore': '马新',
+    'Hong Kong & Taiwan': '港台', 'SEA': '东南亚', 'Oceania': '大洋洲', 'China': '中国', 'EMEA': 'EMEA',
+}
+MASTERS_CN = {'Tokyo': '东京', 'Madrid': '马德里', 'Shanghai': '上海', 'Bangkok': '曼谷', 'Toronto': '多伦多'}
+LEAGUE_CN = {'Americas': '美洲联赛', 'EMEA': 'EMEA 联赛', 'Pacific': '太平洋联赛', 'China': '中国联赛'}
+
+
+def scene_of(name: str) -> str | None:
+    for pat, scene in SCENES:
+        if re.search(pat, name, re.I):
+            return scene
+    return None
+
+
+def stage_partnered(name: str, year: int, start: int | None) -> str | None:
+    """2023 on: the partnered calendar, and the Challengers splits that run beside it."""
+    d = start if start is not None else 0
+    # a split's finals and relegations have no number: May and August are where splits turn over
+    by_date = 'challengers1' if d < 120 else 'challengers2' if d < 212 else 'challengers3'
+    if re.search(r'Valorant Champions 20', name, re.I):
+        return 'champions'
+    if re.search(r'LOCK//IN', name, re.I):
+        return 'kickoff'
+    m = re.search(r'Masters (Tokyo|Madrid|Bangkok|Shanghai|Toronto)', name, re.I)
+    if m:
+        return 'masters1' if m.group(1).lower() in ('tokyo', 'madrid', 'bangkok') else 'masters2'
+    if CHALLENGERS.search(name):
+        m = re.search(r'(?:Split|Stage|Act) (\d)', name)
+        if m:
+            return f'challengers{min(3, int(m.group(1)))}'
+        if re.search(r'Kickoff', name, re.I):
+            return 'challengers1'
+        # 2023's autumn cups — Coupe de France, Arcade — are off-season events, not splits
+        if year == 2023 and d > 240 and not re.search(r'Qualif|Final|Relegation|Promotion', name, re.I):
+            return 'offseason'
+        return by_date
+    if re.search(r'Ascension', name, re.I):
+        return 'ascension'
+    if re.search(r'Last Chance', name, re.I):
+        return 'lcq'
+    if re.search(r'Kickoff', name, re.I):
+        return 'kickoff'
+    m = re.search(r'Stage (\d)', name)
+    if m:
+        return f'stage{m.group(1)}'
+    if re.search(r'(Americas|EMEA|Pacific) League|Champions China Qualifier', name, re.I):
+        return 'stage1'
+    if re.search(r'FGC', name, re.I):
+        act = re.search(r'Act (\d)', name)
+        # 2023's FGC was China's top flight; from 2024 it is an off-season invitational
+        return f'stage{min(2, int(act.group(1)))}' if act else 'offseason'
+    return None
+
+
+def cn_partnered(ev: dict, region: str | None, stage: str | None) -> str:
+    n = ev['name']
+    y = ev['year']
+    m = re.search(r'Masters (Tokyo|Madrid|Shanghai|Bangkok|Toronto)', n)
+    if m:
+        return f'{MASTERS_CN[m.group(1)]}大师赛'
+    if stage == 'champions':
+        return f'{y} 全球冠军赛'
+    if re.search(r'LOCK//IN', n):
+        return 'LOCK//IN 圣保罗'
+    if re.search(r'FGC', n):
+        act = re.search(r'Act (\d)', n)
+        base = f'FGC 邀请赛 {y}' + (f' · 第{CN_NUM.get(act.group(1), act.group(1))}幕' if act else '')
+        return base + (' · 资格赛' if re.search(r'Qualif', n) else '')
+    if re.search(r'Evolution Series', n):
+        act = re.search(r'Act (\d)', n)
+        tail = f'第{CN_NUM.get(act.group(1), act.group(1))}幕' if act else '终章' if re.search(r'Epilogue', n) else ''
+        return '中国进化系列赛' + (f' · {tail}' if tail else '')
+    if re.search(r'Champions China Qualifier', n):
+        return '中国 · 冠军赛资格赛'
+    rc = REGION_CN.get(region or '', region or '')
+    if CHALLENGERS.search(n):
+        sc = SCENE_CN.get(scene_of(n) or '', rc)
+        sub = n.split(':', 1)[1].strip() if ':' in n else ''
+        if stage == 'offseason':
+            return f'挑战者赛 · {sc} · {sub}'
+        num = re.search(r'(?:Split|Stage) (\d)', n)
+        part = f'第{CN_NUM.get(num.group(1), num.group(1))}赛段' if num else ''
+        extras = [(r'Relegation', '保级赛'), (r'Promotion', '升级赛'), (r'Regional Playoffs', '区域季后赛'),
+                  (r'LAN Finals', '线下总决赛'), (r'Finals', '总决赛'), (r'Road to Ascension|Ascension Qualifier', '晋级赛资格赛'),
+                  (r'Last Chance', '最后机会资格赛'), (r'Qualifier', '资格赛'), (r'Kickoff', '揭幕赛'), (r'Consolidation', '排位赛')]
+        tail = next((cn for pat, cn in extras if re.search(pat, n, re.I)), '')
+        if not part and not tail and sub:
+            tail = sub
+        return ' · '.join(x for x in ('挑战者联赛', sc, part, tail) if x)
+    if stage == 'lcq':
+        return f'{rc} · 最后机会资格赛'
+    if stage == 'ascension':
+        return f'{rc} · 晋级赛'
+    league = LEAGUE_CN.get(region or '')
+    if league:
+        if stage == 'kickoff':
+            return f'{league} · 揭幕赛'
+        m = re.search(r'Stage (\d)', n)
+        return f'{league} · 第{CN_NUM.get(m.group(1), m.group(1))}赛段' if m else league
+    return n
 
 
 def region_of(name: str) -> str | None:
     if INTERNATIONAL.search(name):
         return None
+    m = LEAGUE_EVENT.search(name)
+    if m:
+        return LEAGUE_NAME[m.group(1).lower()]
     for pat, region in REGION_BY_NAME:
         if re.search(pat, name, re.I):
             return region
     return None
 
 
-def stage_of(name: str, year: int = 2021) -> str | None:
+def stage_of(name: str, year: int = 2021, start: int | None = None) -> str | None:
     """The calendar slice an event belongs to, read off its name."""
+    if year >= 2023:
+        return stage_partnered(name, year, start)
     if re.search(r'Last Chance', name, re.I):
         return 'lcq'
     if re.search(r'Valorant Champions 20', name, re.I):
@@ -143,6 +290,8 @@ def stage_of(name: str, year: int = 2021) -> str | None:
 
 
 def cn_name(ev: dict, region: str | None, stage: str | None) -> str:
+    if ev['year'] >= 2023:
+        return cn_partnered(ev, region, stage)
     n = ev['name']
     if re.search(r'PangHu Cup: Spring', n):
         return '虎牙胖虎杯 · 春季赛'
@@ -286,7 +435,7 @@ def team_index(history: dict) -> tuple[dict[str, set[str]], dict[tuple[int, str]
 # ---------------------------------------------------------------- ranking
 
 
-def rank_unit(rr: bool, nodes: list[dict]) -> tuple[list[str], list[list[str]]]:
+def rank_unit(rr: bool, nodes: list[dict], upper_first: bool = False) -> tuple[list[str], list[list[str]]]:
     """Order a phase's sides, and group the ones its format cannot tell apart.
 
     Mirrors engine/circuit.ts rankPhase: the two must agree, or a `g` slot
@@ -344,11 +493,14 @@ def rank_unit(rr: bool, nodes: list[dict]) -> tuple[list[str], list[list[str]]]:
         # a third-place (or runner-up) match is played by two sides already out
         return nd['winner'] is not None and (nd['winner'] != t or nd['round'].endswith(('季军赛', '亚军赛')))
 
-    alive = sorted((t for t in teams if not out(t)), key=lambda t: (losses[t], -last[t]))
+    # a bracket that ends with no grand final — 2025's Pacific Ascension — leaves
+    # two sides unbeaten, and the one that came up the upper side is ahead
+    lower = {t for nd in nodes if '败者组' in nd['round'] for t in nd['teams']} if upper_first else set()
+    alive = sorted((t for t in teams if not out(t)), key=lambda t: (losses[t], t in lower, -last[t]))
     gone = sorted((t for t in teams if out(t)), key=lambda t: (-last[t], 0 if nodes[last[t]]['winner'] == t else 1))
     tiers = []
     for t in alive:
-        if tiers and losses[tiers[-1][0]] == losses[t]:
+        if tiers and (losses[tiers[-1][0]], tiers[-1][0] in lower) == (losses[t], t in lower):
             tiers[-1].append(t)
         else:
             tiers.append([t])
@@ -472,12 +624,14 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
             })
             last[a] = last[b] = i
 
-        ranked, tiers = rank_unit(rr, nodes)
+        ranked, tiers = rank_unit(rr, nodes, year >= 2023)
         rank_in.append({t: r + 1 for r, t in enumerate(ranked)})
         ghost_nodes = sum(1 for nd in nodes if any(t.startswith('N:') for t in nd['teams']))
         is_open = is_qualifier(stage_name) or ghost_nodes * 2 > len(nodes)
         unit = {'label': unit_label(stage_name, grp), 'type': 'open' if is_open else ('rr' if rr else 'bracket'),
                 'size': n, '_phase': phase_key(stage_name, grp), '_tiers': tiers}
+        if year >= 2023 and not rr and not is_open:
+            unit['upperFirst'] = True
         if is_open:
             unit.update({'first': min(nd['day'] for nd in nodes), 'last': max(nd['day'] for nd in nodes),
                          'ranked': ranked})
@@ -488,11 +642,50 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
     # ---- the event's placings: the last phase decides the top, every earlier
     # phase ranks the sides it knocked out below everyone who went on, and a
     # stage's parallel groups are one phase — every group's third is joint
+    if year >= 2023:
+        # parallel conferences inside one event — MENA's Levant and GCC leagues —
+        # are one phase, like a stage's groups: each crowns its own winner
+        def span(u: dict) -> tuple[int, int]:
+            ds = [nd['day'] for nd in u.get('nodes', [])] or [u['first'], u['last']]
+            return min(ds), max(ds)
+
+        def sides(u: dict) -> set[str]:
+            return {t for nd in u.get('nodes', []) for t in nd['teams']}
+
+        def has_final(u: dict) -> bool:
+            return any(nd['round'] == '总决赛' for nd in u.get('nodes', []))
+
+        for j, uj in enumerate(units):
+            feeds = {s[1] for nd in uj.get('nodes', []) for s in (nd['a'], nd['b']) if s[0] == 'g'}
+            for i in range(j):
+                ui_ = units[i]
+                if (ui_['_phase'] == uj['_phase'] or 'open' in (ui_['type'], uj['type']) or i in feeds
+                        or SIDE_PHASE.search(ui_['_phase']) or SIDE_PHASE.search(uj['_phase'])
+                        or has_final(ui_) != has_final(uj)):
+                    continue
+                (a0, a1), (b0, b1) = span(ui_), span(uj)
+                if a0 <= b1 and b0 <= a1 and not (sides(ui_) & sides(uj)):
+                    uj['_phase'] = ui_['_phase']
+                    break
+    # what comes after the grand final — a relegation series, an access
+    # tournament, a seeding match for Ascension — decides who plays where next
+    # year, not who won: it ranks below every phase that did
+    final_at = max((i for i, u in enumerate(units) if any(nd['round'] == '总决赛' for nd in u.get('nodes', []))),
+                   default=None)
+    final_units = {i for i, u in enumerate(units) if final_at is not None and u['_phase'] == units[final_at]['_phase']}
+    for i, u in enumerate(units):
+        # …unless the final's winner plays on in it: Japan's 2025 Advance Stage has
+        # a grand final of its own and sends its winner into the league proper
+        fed = any(s[0] == 'g' and s[1] in final_units and s[2] == 1
+                  for nd in u.get('nodes', []) for s in (nd['a'], nd['b']))
+        after_final = (year >= 2023 and final_at is not None and i > final_at
+                       and u['_phase'] != units[final_at]['_phase'] and not fed)
+        u['_side'] = bool(SIDE_PHASE.search(u['_phase'])) or after_final
     phases: dict[str, list[dict]] = {}
     for u in units:
         phases.setdefault(u['_phase'], []).append(u)
-    main = [g for k, g in phases.items() if not SIDE_PHASE.search(k)]
-    side = [g for k, g in phases.items() if SIDE_PHASE.search(k)]
+    main = [g for g in phases.values() if not any(u['_side'] for u in g)]
+    side = [g for g in phases.values() if any(u['_side'] for u in g)]
     places: list[list] = []
     seen: set[str] = set()
     for group in list(reversed(main)) + list(reversed(side)):
@@ -505,15 +698,22 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
                 seen.add(t)
                 places.append([t, place])
     for u in units:
-        del u['_phase'], u['_tiers']
+        # the phase each unit ranks in, and whether it came after the final:
+        # engine/circuit.ts placesFrom reads both rather than guessing again
+        u['phase'] = u.pop('_phase')
+        if u.pop('_side'):
+            u['side'] = True
+        del u['_tiers']
 
     region = region_of(ev['name'])
-    stage = stage_of(ev['name'], ev['year'])
     days = [nd['day'] for u in units for nd in u.get('nodes', [])] + \
            [d for u in units if u['type'] == 'open' for d in (u['first'], u['last'])]
+    stage = stage_of(ev['name'], ev['year'], min(days) if days else None)
     out = {
         'id': ev['id'], 'name': ev['name'], 'cn': cn_name(ev, region, stage),
         'region': region, 'layer': LAYER_OF.get(region or ''), 'stage': stage,
+        # 2023 on, the Challengers league a tier-two event belongs to
+        'scene': scene_of(ev['name']) if ev['year'] >= 2023 and CHALLENGERS.search(ev['name']) else None,
         'start': min(days) if days else None, 'end': max(days) if days else None,
         'prize': ev.get('prize'),
         'seeds': seeds, 'units': units, 'places': places,
@@ -527,7 +727,8 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
     # ---- against vlr's own standings. Several Challengers weekends crowned
     # nobody: vlr lists every side that went through as joint first.
     firsts = {s['teamId'] for s in ev.get('standings', []) if s['place'] == 1}
-    if firsts and places and places[0][0] not in firsts:
+    tops = {t for t, p in places if p == 1}
+    if firsts and places and not (tops & firsts):
         problems.append(f'冠军对不上：图里是 {names.get(places[0][0])}，vlr 第一名是 '
                         + '、'.join(s['name'] for s in ev['standings'] if s['place'] == 1))
     return out, problems, notes
@@ -546,6 +747,10 @@ def main() -> int:
         history = json.load(f)
     with open(a.matches, encoding='utf-8') as f:
         all_matches = json.load(f)
+    # the statlines fill the rosters vlr's event pages leave out (scripts/event_rosters.py)
+    stats_path = os.path.join(DATA, 'stats_history.json')
+    stats = json.load(open(stats_path, encoding='utf-8')) if os.path.exists(stats_path) else {}
+    carded = event_rosters.carded_by_year(history)
     by_name, by_year = team_index(history)
 
     years: dict[str, list] = collections.defaultdict(list)
@@ -563,6 +768,12 @@ def main() -> int:
             report['没有比赛记录'] += 1
             continue
         out, problems, n = infer_event(ev, all_matches[eid], by_name, by_year)
+        sides = set(out['seeds']) | {t for u in out['units'] for nd in u.get('nodes', []) for t in nd['teams']}
+        clubs = {t: out['names'].get(t, t) for t in sides if not t.startswith('N:')}
+        before = len(out['rosters'])
+        out['rosters'] = event_rosters.rosters_for(clubs, out['rosters'], stats.get(eid, {}).get('rows', []),
+                                                   carded[ev['year']])
+        report['名单从数据行补上的队'] += len(out['rosters']) - before
         # a Challengers League split that opens in November is the next
         # year's format, played early; it is not this season's event
         if out['end'] is not None and out['end'] > 363:

@@ -32,6 +32,7 @@ export const NAT_DEFAULT: Record<Region, string> = {
   Brazil: 'br', LATAM: 'ar', Korea: 'kr', Japan: 'jp', SEA: 'sg',
   'Malaysia & Singapore': 'my', Indonesia: 'id', Thailand: 'th',
   Philippines: 'ph', Vietnam: 'vn', 'Hong Kong & Taiwan': 'tw',
+  MENA: 'sa', 'South Asia': 'in', Oceania: 'au',
 }
 
 export type StartPoint = 'pre' | 'chal' | 't1'
