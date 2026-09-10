@@ -55,12 +55,17 @@ missing ages from debut year. On 2021 rosters, real birthdates cover 94% of
 players at clubs that reached an international, 75% at clubs that reached a
 regional decider, and 40% at clubs that only ever played open qualifiers.
 
-So the policy is a flag, and it defaults to the author's instruction:
+So the policy is a flag. **Decided 2026-09-10: debut.** Strict was built
+first, to the letter of the instruction, and shown to the author: 39 clubs
+left, 175 dissolved because a team-mate had no public birthday, Indonesia,
+the Philippines and Vietnam with no club at all, and cNed, nAts and Jinggg
+all free agents. Debut keeps 218 clubs whose rosters match history. The
+author chose debut on those numbers.
 
-    --ages strict   only people with a real, full birthdate are in the world;
-                    a club left with fewer than five dissolves    (default)
     --ages debut    everyone is in; a missing age is taken from debut year,
-                    flagged ageEstimated, and never shown as a birthdate
+                    flagged ageEstimated, and never shown as a birthdate (default)
+    --ages strict   only people with a real, full birthdate are in the world;
+                    a club left with fewer than five dissolves
 
 Usage
 -----
@@ -250,7 +255,7 @@ def load(name: str):
 def main() -> int:
     sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser()
-    ap.add_argument('--ages', choices=['strict', 'debut'], default='strict')
+    ap.add_argument('--ages', choices=['strict', 'debut'], default='debut')
     ap.add_argument('--out', default=os.path.join(DATA, 'world_2021.json'))
     a = ap.parse_args()
 
