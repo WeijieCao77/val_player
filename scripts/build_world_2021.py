@@ -272,6 +272,10 @@ def main() -> int:
     # ---- 2. who was where: each person's first club, each club's best level
     first_club: dict[str, tuple] = {}
     club_best = collections.defaultdict(lambda: 'open')
+    # who played for which club at each event, so the stats rows (which carry
+    # only a tag) can be tied back to a club id and give it its real tag
+    club_in_event = collections.defaultdict(dict)
+    club_tags = collections.defaultdict(collections.Counter)
     club_meta: dict[str, dict] = {}
     rank = {'open': 0, 'top': 1, 'intl': 2}
     for when, eid, region, tier, e in events:
@@ -281,6 +285,7 @@ def main() -> int:
                 club_best[t['id']] = tier
             for p in t['players']:
                 first_club.setdefault(p['id'], (t['id'], when, p))
+                club_in_event[eid][p['id']] = t['id']
 
     # ---- 3. each person's 2021 line, split into top-tier and sub-tier halves
     line = collections.defaultdict(lambda: {'top': collections.defaultdict(float),
@@ -295,6 +300,12 @@ def main() -> int:
             continue
         half = 'sub' if ev_tier[eid] == 'open' else 'top'
         for r in ev['rows']:
+            # the real tag: history says which club this man played for at this
+            # event, the stats row says what tag he played under. The first pass
+            # made tags from the first four letters of the name (SENT, EDWA).
+            cid = club_in_event.get(eid, {}).get(r['id'])
+            if cid and r.get('team'):
+                club_tags[cid][r['team']] += 1
             rnd = r.get('rnd') or 0
             if not rnd:
                 continue
@@ -505,7 +516,9 @@ def main() -> int:
         rating = int(round(sum(sorted((q['overall'] for q in squad), reverse=True)[:5]) / 5))
         tid = f'V21T{club}'
         teams.append({
-            'id': tid, 'name': meta['name'], 'tag': meta['name'][:4].upper(),
+            'id': tid, 'name': meta['name'],
+            'tag': (club_tags[club].most_common(1)[0][0] if club_tags[club]
+                    else meta['name'][:4].upper()),
             'region': meta['region'], 'tier': tier,
             'league': f"Challengers {meta['region']}",
             'rating': rating,

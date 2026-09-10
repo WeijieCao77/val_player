@@ -133,6 +133,12 @@ def main() -> int:
     for ign in ('TenZ', 'ShahZaM', 'cNed', 'nAts', 'Jinggg', 'Life', 'Haodong', 'ZmjjKK'):
         print(f'    {ign:<9} {where(ign)}')
 
+    by_name = {t['name']: t for t in teams}
+    print('\n  队伍简称抽查：' + ' · '.join(
+        f"{n} {by_name[n]['tag']}" for n in ('Sentinels', 'EDward Gaming', 'Team Liquid', 'FNATIC', 'Gambit Esports')
+        if n in by_name))
+    if 'Sentinels' in by_name and by_name['Sentinels']['tag'] != 'SEN':
+        fail(f"Sentinels 的简称应该是 SEN，实际是 {by_name['Sentinels']['tag']}")
     tenz = by_ign.get('tenz')
     if tenz:
         if T.get(tenz['teamId'], {}).get('name') != 'Sentinels':
