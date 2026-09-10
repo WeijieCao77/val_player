@@ -19,7 +19,18 @@ export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
 export const TALENT_MAX = 8
 
-export const NAT_DEFAULT: Record<Region, string> = { China: 'cn', Pacific: 'kr', Americas: 'us', EMEA: 'gb' }
+/**
+ * Where a player from this region is assumed to be from, when nothing better
+ * is known. The historical regions are single countries, so most of these are
+ * exact rather than a guess.
+ */
+export const NAT_DEFAULT: Record<Region, string> = {
+  China: 'cn', Pacific: 'kr', Americas: 'us', EMEA: 'gb',
+  'North America': 'us', Europe: 'gb', Turkey: 'tr', CIS: 'ru',
+  Brazil: 'br', LATAM: 'ar', Korea: 'kr', Japan: 'jp', SEA: 'sg',
+  'Malaysia & Singapore': 'my', Indonesia: 'id', Thailand: 'th',
+  Philippines: 'ph', Vietnam: 'vn', 'Hong Kong & Taiwan': 'tw',
+}
 
 export type StartPoint = 'pre' | 'chal' | 't1'
 export const START_CN: Record<StartPoint, { name: string; blurb: string }> = {

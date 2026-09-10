@@ -1,13 +1,39 @@
 import type { Manager } from './manager'
 
-export type Region = 'Americas' | 'EMEA' | 'Pacific' | 'China'
+/**
+ * Every region the circuit has ever had, not just today's four.
+ *
+ * 2021 had sixteen separate circuits and no leagues at all; by 2023 they had
+ * been folded into three partnered leagues plus China. Since the game is one
+ * timeline rather than two rule-sets, the union has to hold all of them and
+ * the *year* decides which are live — see engine/era.ts `regionsOf()`.
+ *
+ * Kept as a union rather than widened to `string`: nineteen files take a
+ * Region, and losing the check to gain sixteen names is a bad trade.
+ */
+export type Region =
+  // the modern four
+  | 'Americas' | 'EMEA' | 'Pacific' | 'China'
+  // 2021–2022, when every one of these ran its own Challengers circuit
+  | 'North America' | 'Europe' | 'Turkey' | 'CIS' | 'Brazil' | 'LATAM'
+  | 'Korea' | 'Japan' | 'SEA' | 'Malaysia & Singapore' | 'Indonesia'
+  | 'Thailand' | 'Philippines' | 'Vietnam' | 'Hong Kong & Taiwan'
 export type Role = '决斗者' | '先锋' | '控场' | '哨卫' | '自由人'
 export type Tier = 1 | 2
 
+/**
+ * The regions of the *present* era. Everything that loops over "all regions"
+ * without caring about the year still means these four, so this stays exactly
+ * as it was; a year-aware caller asks engine/era.ts instead.
+ */
 export const REGIONS: Region[] = ['Americas', 'EMEA', 'Pacific', 'China']
 export const ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫', '自由人']
 export const REGION_CN: Record<Region, string> = {
   Americas: '美洲', EMEA: '欧非中东', Pacific: '太平洋', China: '中国',
+  'North America': '北美', Europe: '欧洲', Turkey: '土耳其', CIS: '独联体',
+  Brazil: '巴西', LATAM: '拉美', Korea: '韩国', Japan: '日本', SEA: '东南亚',
+  'Malaysia & Singapore': '马新', Indonesia: '印尼', Thailand: '泰国',
+  Philippines: '菲律宾', Vietnam: '越南', 'Hong Kong & Taiwan': '港台',
 }
 
 export interface Attrs {
@@ -682,10 +708,21 @@ export interface MatchResult {
   highlights: string[]
 }
 
+/**
+ * A segment of a season's calendar.
+ *
+ * The modern keys and the 2021–2022 ones live in the same union because the
+ * game is one timeline: `masters1` means Reykjavík in 2021 and 第一站大师赛 in
+ * 2026, and which calendar a year uses is engine/era.ts's business, not the
+ * type's. The `s1chal` family only ever appears in the open era.
+ */
 export type StageKey =
   | 'preseason' | 'kickoff' | 'masters1' | 'stage1' | 'stage2'
   | 'masters2' | 'champions' | 'offseason'
   | 'challengers1' | 'challengers2' | 'ascension'
+  // 2021–2022: three stages of open qualifiers, each ending in a regional
+  // decider, plus the Last Chance Qualifier that fed Champions
+  | 's1chal' | 's1masters' | 's2chal' | 's2finals' | 's3chal' | 's3finals' | 'lcq'
 
 export interface Fixture {
   id: string

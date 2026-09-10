@@ -15,6 +15,7 @@
  * renewals are retention, not recruitment — it simply cannot add more.
  */
 import type { GameState, Player, Region, Team } from './types'
+import { REGION_CN } from './types'
 
 export const IMPORT_MAX = 2
 
@@ -81,5 +82,6 @@ export function importBlock(state: GameState, teamId: string, p: Player): string
     : `${team.name} 的外援名额已满。`
 }
 
-const regionCn = (r: Region): string =>
-  ({ Americas: '美洲', EMEA: '欧非中东', Pacific: '太平洋', China: '中国' })[r]
+// was a second copy of REGION_CN; a private duplicate is exactly the thing
+// that goes stale when the region list grows
+const regionCn = (r: Region): string => REGION_CN[r]
