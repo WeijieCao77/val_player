@@ -33,7 +33,7 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
-import { circuitAward, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { bookCovers, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
@@ -330,6 +330,13 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
         ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, place) : 0)
       if (t && v) t.champPoints += v
     })
+  }
+  // and from 2024, what its matches, groups and byes paid on top
+  if (comp.format === 'circuit') {
+    for (const [teamId, v] of circuitBonus(state, comp)) {
+      const t = state.teams[teamId]
+      if (t) t.champPoints += v
+    }
   }
   const pts = comp.format === 'circuit' || formatOf(state.year) === 'open' ? undefined : CHAMP_POINTS[comp.stage]
   if (pts) {

@@ -84,6 +84,14 @@ for _region, _codes in {
     for _c in _codes.split():
         COUNTRY_REGION[_c] = _region
 LEAGUE_HOME = {'Americas': 'North America', 'EMEA': 'Europe', 'Pacific': 'Korea', 'China': 'China'}
+# the club regions each league draws on (engine/era.ts MERGED_INTO)
+LEAGUE_REGIONS = {
+    'Americas': {'North America', 'Brazil', 'LATAM'},
+    'EMEA': {'Europe', 'Turkey', 'CIS', 'MENA'},
+    'Pacific': {'Korea', 'Japan', 'SEA', 'Malaysia & Singapore', 'Indonesia', 'Thailand', 'Philippines', 'Vietnam',
+                'Hong Kong & Taiwan', 'South Asia', 'Oceania'},
+    'China': {'China'},
+}
 
 
 def event_tier(ev: dict) -> str | None:
@@ -370,16 +378,17 @@ def main() -> int:
             call_the_shots(people, ids)
 
         def region_for(tid: str) -> str:
-            if club_regions[tid]:
-                return club_regions[tid].most_common(1)[0][0]
-            if tid in prev_region:
-                return prev_region[tid]
             codes = collections.Counter(COUNTRY_REGION.get((who.get(p, {}).get('country') or '')[:2].lower())
                                         for p in club_roster.get(tid, []))
             codes.pop(None, None)
-            if codes:
-                return codes.most_common(1)[0][0]
-            return LEAGUE_HOME.get(league_of.get(tid, ''), 'Europe')
+            candidates = ([r for r, _ in club_regions[tid].most_common()] + ([prev_region[tid]] if tid in prev_region else [])
+                          + [r for r, _ in codes.most_common()])
+            # a club with a league seat is in that league's part of the world: Gen.G fielded
+            # a North American five under the same id in 2021 and a Korean one in Pacific
+            allowed = LEAGUE_REGIONS.get(league_of.get(tid, ''))
+            if allowed:
+                return next((r for r in candidates if r in allowed), LEAGUE_HOME[league_of[tid]])
+            return candidates[0] if candidates else 'Europe'
 
         def tier_for(tid: str) -> int:
             if Y >= 2023:

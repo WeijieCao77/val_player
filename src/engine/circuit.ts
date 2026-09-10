@@ -1,6 +1,7 @@
 import raw from '../data/circuit.json'
 import routesRaw from '../data/routes.json'
-import { stageAtIn } from './era'
+import partneredRaw from '../data/routes_partnered.json'
+import { regionIn, stageAtIn } from './era'
 import { sceneFor, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import type { Competition, Fixture, GameState, Region, StageKey, Team } from './types'
@@ -392,12 +393,31 @@ interface Swap { real: string; now: string | null; from: string }
 /*  how each seat was really won — scripts/build_routes.py            */
 /* ------------------------------------------------------------------ */
 
-interface Route { kind: 'keep' | 'top' | 'points' | 'winner'; event?: string; k?: number; pool?: string; rank?: number | null }
-interface RouteBook {
-  events: Record<string, { routes?: Record<string, Route>; award?: Record<string, number> }>
-  pools: Record<string, Record<string, { regions: string[]; standings: { team: string | null; rank: number | null }[] }>>
+/**
+ * `rest`: 2023's Last Chance Qualifiers took a league's sides not already through to Champions.
+ * `league`: EMEA's 2023 Champions places went to its three best-placed sides at Masters Tokyo.
+ */
+interface Route { kind: 'keep' | 'top' | 'points' | 'winner' | 'rest'; event?: string; k?: number; pool?: string; rank?: number | null; league?: string }
+interface EventRules {
+  routes?: Record<string, Route>
+  award?: Record<string, number>
+  /** 2024–2025: points a match win, which matches, a group topped, a playoff bye */
+  wins?: number
+  winsIn?: 'groups' | 'playoffs' | 'all'
+  groupWin?: number
+  bye?: number
 }
-const ROUTES = routesRaw as unknown as RouteBook
+interface RouteBook {
+  events: Record<string, EventRules>
+  pools: Record<string, Record<string, { regions: string[]; league?: string; standings: { team: string | null; rank: number | null }[] }>>
+}
+const OPEN_ROUTES = routesRaw as unknown as RouteBook
+// 2023–2025, from scripts/build_routes_partnered.py
+const PARTNERED_ROUTES = partneredRaw as unknown as RouteBook
+const ROUTES: RouteBook = {
+  events: { ...OPEN_ROUTES.events, ...PARTNERED_ROUTES.events },
+  pools: { ...OPEN_ROUTES.pools, ...PARTNERED_ROUTES.pools },
+}
 
 /** What a placing at this event really paid in circuit points — null where no prize table is on record. */
 export function circuitAward(comp: Competition, place: number): number | null {
@@ -424,13 +444,17 @@ function poolTouched(state: GameState, pool: string): boolean {
 /** A pool's table in this world: points, then the order history had, then strength. */
 function poolRanking(state: GameState, pool: string): string[] {
   const regions = new Set(poolRegions(state.year, pool))
+  // from 2024 a pool is a league: the clubs that hold its seats, wherever they are from
+  const league = ROUTES.pools[String(state.year)]?.[pool]?.league
   const realOrder = new Map<string, number>()
   ;(ROUTES.pools[String(state.year)]?.[pool]?.standings ?? []).forEach((r, i) => {
     const id = r.team ? worldIdOf(r.team) : null
     if (id && !realOrder.has(id)) realOrder.set(id, i)
   })
   return Object.values(state.teams)
-    .filter((t) => regions.has(t.region) && t.roster.length >= 5)
+    .filter((t) => t.roster.length >= 5 && (league
+      ? t.tier === 1 && !t.dormant && regionIn(t.region, state.year) === league
+      : regions.has(t.region)))
     .sort((a, b) => b.champPoints - a.champPoints
       || (realOrder.get(a.id) ?? 999) - (realOrder.get(b.id) ?? 999)
       || b.rating - a.rating)
@@ -449,14 +473,31 @@ function championsDirect(state: GameState): Set<string> {
   const out = new Set<string>()
   if (!champs || !book) return out
   const perPool = new Map<string, number>()
+  // a placing in a league event, or EMEA's at Tokyo: taken off the feeder as it went in this world
+  const perFeeder = new Map<string, { event: string; league?: string; n: number; real: string[] }>()
   for (const v of champs.seeds) {
     const r = book[v]
+    if (r?.kind === 'top' && r.event && eventOf(r.event)?.stage !== 'lcq') {
+      const key = `${r.event}|${r.league ?? ''}`
+      const f = perFeeder.get(key) ?? { event: r.event, league: r.league, n: 0, real: [] }
+      f.n++
+      const t = teamOf(state, champs, v)
+      if (t) f.real.push(t)
+      perFeeder.set(key, f)
+    }
     if (r?.kind === 'winner' && r.event) {
       const c = state.comps[`ev:${r.event}`]
       const w = c?.champion ?? teamOf(state, champs, v)
       if (w) out.add(w)
     }
     if (r?.kind === 'points' && r.pool) perPool.set(r.pool, (perPool.get(r.pool) ?? 0) + 1)
+  }
+  for (const f of perFeeder.values()) {
+    const c = state.comps[`ev:${f.event}`]
+    if (c?.champion && c.circuit?.mode === 'sim') {
+      const inLeague = (t: string) => !f.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === f.league
+      for (const t of c.finished.filter(inLeague).slice(0, f.n)) out.add(t)
+    } else for (const t of f.real) out.add(t)
   }
   for (const [pool, n] of perPool) {
     if (!poolTouched(state, pool)) {
@@ -501,7 +542,10 @@ function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swa
   const out = real.slice()
   const used = new Set<string>()
   const swaps: Swap[] = []
-  const order: Record<Route['kind'], number> = { winner: 0, points: 1, top: 2, keep: 3 }
+  // from 2023 a league's own placings are through before its points are counted
+  const order: Record<Route['kind'], number> = state.year >= 2023
+    ? { winner: 0, top: 1, rest: 2, points: 3, keep: 4 }
+    : { winner: 0, points: 1, top: 2, keep: 3, rest: 4 }
   const items = ev.seeds.map((v, i) => ({ v, i, r: book[v] ?? ({ kind: 'keep' } as Route) }))
   for (const x of items) if (x.r.kind === 'keep' && out[x.i]) used.add(out[x.i]!)
   items.sort((a, b) => order[a.r.kind] - order[b.r.kind] || (a.r.rank ?? 99) - (b.r.rank ?? 99) || (a.r.k ?? 0) - (b.r.k ?? 0))
@@ -515,7 +559,22 @@ function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swa
       now = c?.champion && c.circuit?.mode === 'sim' ? c.champion : real[x.i]
     } else if (x.r.kind === 'top' && x.r.event) {
       const c = state.comps[`ev:${x.r.event}`]
-      now = c?.champion && c.circuit?.mode === 'sim' ? c.finished.find((t) => !used.has(t)) : real[x.i]
+      const inLeague = (t: string) => !x.r.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === x.r.league
+      now = c?.champion && c.circuit?.mode === 'sim' ? c.finished.find((t) => !used.has(t) && inLeague(t)) : real[x.i]
+    } else if (x.r.kind === 'rest' && x.r.event) {
+      // the league's sides not already through to Champions. Each real entrant keeps
+      // its place unless it has since gone through; only then does the league's next
+      // side not in the field take it — a league's table below the playoffs is joint
+      // places, and reading the whole field off it would change a field nothing changed
+      const c = state.comps[`ev:${x.r.event}`]
+      if (!direct) direct = championsDirect(state)
+      const through = direct
+      const keep = real[x.i]
+      if (keep && !through.has(keep) && !used.has(keep)) now = keep
+      else if (c?.champion) {
+        const field = new Set(items.filter((y) => y.r.kind === 'rest').map((y) => real[y.i]).filter((t): t is string => !!t))
+        now = c.finished.find((t) => !used.has(t) && !through.has(t) && !field.has(t))
+      } else now = keep
     } else if (x.r.kind === 'points' && x.r.pool) {
       if (!poolTouched(state, x.r.pool)) now = real[x.i]
       else {
@@ -729,6 +788,87 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   state.fixtures.push(f)
   c.playin = { key, fixture: f.id }
   notes.push(`📝 ${comp.name} 开放报名，${state.teams[club].name} 报了海选：打赢 ${state.teams[rival].name} 就进正赛。`)
+}
+
+/**
+ * The championship points a stage paid on top of its placings, 2024 and 2025:
+ * a point a match win, a point for topping a group, a point for a playoff bye
+ * (src/data/routes_partnered.json has each event's rules). Counted off this
+ * world's results — the fixtures where the event was played, history's where
+ * it was not — so a pool reads the same way whichever it was.
+ */
+export function circuitBonus(state: GameState, comp: Competition): Map<string, number> {
+  const out = new Map<string, number>()
+  const c = comp.circuit
+  const rules = c ? ROUTES.events[c.id] : undefined
+  const ev = c ? eventOf(c.id) : undefined
+  if (!c || !rules || !ev || !(rules.wins || rules.groupWin || rules.bye)) return out
+  const add = (t: string | null | undefined, v: number) => { if (t && v) out.set(t, (out.get(t) ?? 0) + v) }
+  const { nodes, base } = flat(ev)
+  const fx = new Map<number, Fixture>()
+  for (const f of state.fixtures) if (f.comp === comp.key && f.node != null && f.node >= 0) fx.set(f.node, f)
+  const resultOf = (n: Flat): { a: string | null; b: string | null; w: string | null; md: number } => {
+    if (c.mode === 'sim') {
+      const f = fx.get(n.at)
+      const g = f ? gameOf(f) : null
+      return g ? { a: g.a, b: g.b, w: g.w, md: g.mapsA - g.mapsB } : { a: null, b: null, w: null, md: 0 }
+    }
+    return {
+      a: teamOf(state, ev, n.teams[0]), b: teamOf(state, ev, n.teams[1]),
+      w: n.winner ? teamOf(state, ev, n.winner) : null, md: (n.score[0] ?? 0) - (n.score[1] ?? 0),
+    }
+  }
+  const where = rules.winsIn ?? 'groups'
+  ev.units.forEach((u, ui) => {
+    const ns = (u.nodes ?? []).map((_, i) => nodes[base[ui] + i])
+    if (!ns.length) return
+    const games = ns.map(resultOf)
+    const playoffs = /Playoff|季后赛|Main Event|正赛/.test((u.phase ?? '') + u.label)
+    if (rules.wins && (playoffs ? where !== 'groups' : where !== 'playoffs')) for (const g of games) add(g.w, rules.wins)
+    if (playoffs) {
+      // a bye: straight into the upper bracket's later rounds, against someone who came through
+      if (rules.bye) {
+        ns.forEach((n, i) => {
+          const entry = (s: Slot) => s[0] === 'g' || s[0] === 's'
+          const fed = (s: Slot) => s[0] === 'w' || s[0] === 'l'
+          if (!n.round.includes('胜者组')) return
+          if (entry(n.a) && fed(n.b)) add(games[i].a, rules.bye!)
+          else if (entry(n.b) && fed(n.a)) add(games[i].b, rules.bye!)
+        })
+      }
+      return
+    }
+    if (rules.groupWin) {
+      // the groups are the match graph's connected parts; the group's winner has the most wins, then the best map difference
+      const adj = new Map<string, Set<string>>()
+      const wins = new Map<string, number>()
+      const md = new Map<string, number>()
+      for (const g of games) {
+        if (!g.a || !g.b) continue
+        adj.set(g.a, (adj.get(g.a) ?? new Set<string>()).add(g.b))
+        adj.set(g.b, (adj.get(g.b) ?? new Set<string>()).add(g.a))
+        if (g.w) wins.set(g.w, (wins.get(g.w) ?? 0) + 1)
+        md.set(g.a, (md.get(g.a) ?? 0) + g.md)
+        md.set(g.b, (md.get(g.b) ?? 0) - g.md)
+      }
+      const seen = new Set<string>()
+      for (const start of adj.keys()) {
+        if (seen.has(start)) continue
+        const group: string[] = []
+        const stack = [start]
+        while (stack.length) {
+          const x = stack.pop()!
+          if (seen.has(x)) continue
+          seen.add(x)
+          group.push(x)
+          for (const y of adj.get(x) ?? []) if (!seen.has(y)) stack.push(y)
+        }
+        const top = group.sort((x, y) => (wins.get(y) ?? 0) - (wins.get(x) ?? 0) || (md.get(y) ?? 0) - (md.get(x) ?? 0))[0]
+        add(top, rules.groupWin)
+      }
+    }
+  })
+  return out
 }
 
 function gameOf(f: Fixture): Game | null {

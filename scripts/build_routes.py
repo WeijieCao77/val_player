@@ -31,6 +31,9 @@ belong to three players, not to the badge).
     python scripts/build_routes.py --debug 2021:EMEA,2021:KR
 
 Output: src/data/routes.json
+
+2023–2025 are scripts/build_routes_partnered.py's (src/data/routes_partnered.json),
+read beside this file by engine/circuit.ts.
 """
 from __future__ import annotations
 

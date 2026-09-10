@@ -27,7 +27,8 @@ export default defineConfig({
           if (id.includes('src/data/world.json')) return 'world'
           // the open era's roster book and its real calendar: only a 2021 career reads them
           if (id.includes('src/data/world_2021.json')) return 'world2021'
-          if (id.includes('src/data/circuit.json') || id.includes('src/data/routes.json')) return 'circuit'
+          if (id.includes('src/data/circuit.json') || id.includes('src/data/routes.json')
+            || id.includes('src/data/routes_partnered.json')) return 'circuit'
           // the roster book past 2021: only a career that entered in 2021 and plays on reads it
           if (id.includes('src/data/timeline.json')) return 'timeline'
           if (id.includes('src/data/dossier.json')) return 'dossier'
