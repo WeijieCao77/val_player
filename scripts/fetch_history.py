@@ -60,10 +60,17 @@ KEEP = re.compile(
     # the Chinese scene before VCT China existed: two streaming-platform
     # cups and an invitational were the entire 2021 calendar, and leaving
     # them out would make that year look emptier than it actually was
-    r'fgc|china evolution|panghu|huya|challengers league|vct ', re.I)
+    r'fgc|china evolution|panghu|huya|challengers league|challengers 20[0-9][0-9]|vct ', re.I)
 DROP = re.compile(
     r'open \d|qualifier weekly|nerd street|college|university|academy|'
     r'contenders|showdown|invitational series', re.I)
+
+# 2024 on, the calendar is crowded with third-party cups that borrow the
+# circuit's words (Masters, Champions, Challengers); none of them feed VCT
+LATER_DROP = re.compile(
+    r'game changers|project v|shanghai esports masters|funpay|funhaver|outking|red bull|'
+    r'esports world cup|china esports festival|china-asean|national competition|'
+    r'off//season|spotlight series', re.I)
 
 
 def fetch(url: str, cache_name: str) -> str:
@@ -163,6 +170,9 @@ def main() -> int:
     ap.add_argument('--years', default='2021,2022,2023')
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--out', default=os.path.join(ROOT, 'src', 'data', 'history.json'))
+    # events vlr's index never listed (scripts/find_vlr_events.py): fetched by id and merged in
+    ap.add_argument('--ids', default='')
+    ap.add_argument('--year', type=int, default=0)
     a = ap.parse_args()
     years = {int(y) for y in a.years.split(',') if y.strip()}
 
@@ -172,12 +182,19 @@ def main() -> int:
 
     todo = sorted(
         (int(k), v[0], v[1]) for k, v in index.items()
-        if v[1] in years and KEEP.search(v[0]) and not DROP.search(v[0]))
+        if v[1] in years and KEEP.search(v[0]) and not DROP.search(v[0])
+            and not (v[1] >= 2024 and LATER_DROP.search(v[0])))
     if a.limit:
         todo = todo[:a.limit]
+    if a.ids:
+        todo = [(int(i), index.get(i, ['', a.year])[0], a.year or index.get(i, ['', 0])[1])
+                for i in a.ids.split(',') if i.strip()]
     print(f'{len(todo)} 场要抓（{sorted(years)}）', flush=True)
 
     out: dict = {}
+    if a.ids and os.path.exists(a.out):
+        with open(a.out, encoding='utf-8') as f:
+            out = json.load(f)
     fresh = 0
     for i, (eid, name, year) in enumerate(todo, 1):
         cache_name = f'e{eid}.html'

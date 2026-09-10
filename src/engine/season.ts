@@ -33,7 +33,7 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
-import { progressCircuit, setupCircuitSeason } from './circuit'
+import { circuitAward, progressCircuit, setupCircuitSeason } from './circuit'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
 import {
@@ -323,7 +323,9 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
   if (formatOf(state.year) === 'open') {
     comp.finished.forEach((teamId, i) => {
       const t = state.teams[teamId]
-      const v = circuitPointsFor(comp.stage, comp.places?.[i] ?? i + 1)
+      const place = comp.places?.[i] ?? i + 1
+      // the event's own prize table where Liquipedia has it; Riot's 2021 chart otherwise
+      const v = (comp.format === 'circuit' ? circuitAward(comp, place) : null) ?? circuitPointsFor(comp.stage, place)
       if (t && v) t.champPoints += v
     })
   }
@@ -1282,8 +1284,11 @@ export function commitFixture(
     const room: string[] = []
     const isA = f.teamA === state.myTeam
     const won = (result.mapsWonA > result.mapsWonB) === isA
-    trustAfterMatch(state, won, (isA ? result.lineups?.a : result.lineups?.b) ?? [])
-    applyMatchBonds(state, result, state.myTeam, isA, rng, room)
+    // a level Bo2 is neither a win to trust nor a defeat to fall out over
+    if (result.mapsWonA !== result.mapsWonB) {
+      trustAfterMatch(state, won, (isA ? result.lineups?.a : result.lineups?.b) ?? [])
+      applyMatchBonds(state, result, state.myTeam, isA, rng, room)
+    }
     for (const t of room) {
       state.news.push({ day: state.day, kind: 'club', important: true, text: t })
       notes.push(t)
@@ -1374,10 +1379,11 @@ export function commitFixture(
   if (comp && !f.label.startsWith('KO:')) applyResultToStandings(comp, f)
 
   const aWon = result.mapsWonA > result.mapsWonB
+  const drawn = result.mapsWonA === result.mapsWonB
   for (const [teamId, won] of [[f.teamA, aWon], [f.teamB, !aWon]] as [string, boolean][]) {
     for (const pid of played(state, f, teamId, result)) {
       const p = state.players[pid]
-      if (p) p.morale = clamp(p.morale + (won ? rng.range(1, 5) : -rng.range(1, 5)), 10, 100)
+      if (p && !drawn) p.morale = clamp(p.morale + (won ? rng.range(1, 5) : -rng.range(1, 5)), 10, 100)
     }
   }
 
@@ -1385,7 +1391,7 @@ export function commitFixture(
     state.lastResults.push(f.id)
     const mine = f.teamA === state.myTeam
     const myWin = mine ? aWon : !aWon
-    state.boardConfidence = clamp(state.boardConfidence + (myWin ? 1.2 : -1.4), 0, 100)
+    state.boardConfidence = clamp(state.boardConfidence + (drawn ? 0 : myWin ? 1.2 : -1.4), 0, 100)
   }
 
   state.news.push({

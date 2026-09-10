@@ -404,7 +404,7 @@ export default function Dashboard() {
                   const foe = game.teams[mine ? f.teamB : f.teamA]?.tag
                   return (
                     <button key={f.id} className="recent-row" onClick={() => openMatch(f)}>
-                      <span className={won ? 'pos' : 'neg'} style={{ width: 14 }}>{won ? '胜' : '负'}</span>
+                      <span className={r.mapsWonA === r.mapsWonB ? 'muted' : won ? 'pos' : 'neg'} style={{ width: 14 }}>{r.mapsWonA === r.mapsWonB ? '平' : won ? '胜' : '负'}</span>
                       <span className="mono" style={{ width: 34 }}>
                         {mine ? r.mapsWonA : r.mapsWonB}–{mine ? r.mapsWonB : r.mapsWonA}
                       </span>

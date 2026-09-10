@@ -44,10 +44,17 @@ KEEP = re.compile(
     # the Chinese scene before VCT China existed: two streaming-platform
     # cups and an invitational were the entire 2021 calendar, and leaving
     # them out would make that year look emptier than it actually was
-    r'fgc|china evolution|panghu|huya|challengers league|vct ', re.I)
+    r'fgc|china evolution|panghu|huya|challengers league|challengers 20[0-9][0-9]|vct ', re.I)
 DROP = re.compile(
     r'open \d|qualifier weekly|nerd street|college|university|academy|'
     r'contenders|showdown|invitational series', re.I)
+
+# 2024 on, the calendar is crowded with third-party cups that borrow the
+# circuit's words (Masters, Champions, Challengers); none of them feed VCT
+LATER_DROP = re.compile(
+    r'game changers|project v|shanghai esports masters|funpay|funhaver|outking|red bull|'
+    r'esports world cup|china esports festival|china-asean|national competition|'
+    r'off//season|spotlight series', re.I)
 
 # the column order of the stats table, after the player cell
 COLS = ['agents', 'maps', 'rnd', 'rating', 'acs', 'kd', 'kast', 'adr', 'kpr',
@@ -126,7 +133,8 @@ def main() -> int:
     with open(RECORDS, encoding='utf-8') as f:
         index = json.load(f)['events']
     todo = sorted((int(k), v[0], v[1]) for k, v in index.items()
-                  if v[1] in years and KEEP.search(v[0]) and not DROP.search(v[0]))
+                  if v[1] in years and KEEP.search(v[0]) and not DROP.search(v[0])
+            and not (v[1] >= 2024 and LATER_DROP.search(v[0])))
     if a.limit:
         todo = todo[:a.limit]
     print(f'{len(todo)} 场要抓 stats（{sorted(years)}）', flush=True)

@@ -268,7 +268,7 @@ export interface ArenaResult {
 /** Play one card-mode match against a real club and read the scoreboard back. */
 export function playArenaMatch(
   squad: ArenaSquad, level: (cardId: string) => number, opponentId: string,
-  bo: 1 | 3 | 5, seed: number, oppBump = 0,
+  bo: 1 | 2 | 3 | 5, seed: number, oppBump = 0,
 ): ArenaResult {
   const { state, cardOf } = buildArena(squad, level, seed)
 
@@ -375,7 +375,7 @@ export interface RivalSquad {
  */
 export function playRivalMatch(
   mine: ArenaSquad, level: (cardId: string) => number,
-  rival: RivalSquad, bo: 1 | 3 | 5, seed: number,
+  rival: RivalSquad, bo: 1 | 2 | 3 | 5, seed: number,
 ): ArenaResult {
   const state = createNewGame(WORLD_TEAMS[0].id, '卡组', seed)
   const cardOf: Record<string, string> = {}

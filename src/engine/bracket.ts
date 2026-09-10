@@ -29,7 +29,7 @@ import { makeFixture, sortStandings } from './league'
 import type { Competition, Fixture, GameState, StageKey } from './types'
 
 type Src = { seed: number } | { w: [string, number] } | { l: [string, number] }
-interface Slot { a: Src; b: Src; bo?: 1 | 3 | 5 }
+interface Slot { a: Src; b: Src; bo?: 1 | 2 | 3 | 5 }
 interface Round { name: string; slots: Slot[] }
 export type Wave = Round[]
 
@@ -273,7 +273,7 @@ function noteEliminated(comp: Competition, played: Fixture[]): void {
 
 export function advanceTemplate(
   state: GameState, comp: Competition, template: Wave[], places: Src[] | null,
-  seeds: string[], day: number, bo: 1 | 3 | 5, offset = 0, stage?: StageKey,
+  seeds: string[], day: number, bo: 1 | 2 | 3 | 5, offset = 0, stage?: StageKey,
 ): Fixture[] {
   const ko = koOf(state, comp)
   const mine = ko.filter((f) => waveOf(f) > offset)

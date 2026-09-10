@@ -83,6 +83,11 @@ REGION_BY_NAME: list[tuple[str, str]] = [
     (r'Americas', 'Americas'),
     (r'Pacific', 'Pacific'),
 ]
+# an all-star game or a showmatch sits in an event's match list and decides nothing
+SHOW = re.compile(r'show ?match|all-?star|exhibition', re.I)
+# a relegation or promotion bracket after the playoffs decides who stays in a
+# league, not who won it
+SIDE_PHASE = re.compile(r'relegation|promotion', re.I)
 INTERNATIONAL = re.compile(r'Masters (Reykjav|Berlin|Copenhagen|Tokyo|Madrid|Shanghai)|Valorant Champions 20|LOCK//IN', re.I)
 
 # which clubs a combining layer draws on, for the game's qualification
@@ -306,10 +311,21 @@ def rank_unit(rr: bool, nodes: list[dict]) -> tuple[list[str], list[list[str]]]:
             if sa is not None and sb is not None:
                 mapd[a] += sa - sb
                 mapd[b] += sb - sa
-        ranked = sorted(teams, key=lambda t: (-pts[t], -mapd[t]))
+        # engine/circuit.ts rankPhase: points, then head-to-head maps among the
+        # sides level on points, then overall map difference
+        def h2h(t: str) -> int:
+            tied = {u for u in teams if pts[u] == pts[t]}
+            d = 0
+            for nd in nodes:
+                a, b = nd['teams']
+                sa, sb = nd['score']
+                if a in tied and b in tied and sa is not None and sb is not None:
+                    d += (sa - sb) if a == t else (sb - sa) if b == t else 0
+            return d
+        ranked = sorted(teams, key=lambda t: (-pts[t], -h2h(t), -mapd[t]))
         tiers: list[list[str]] = []
         for t in ranked:
-            if tiers and (pts[tiers[-1][0]], mapd[tiers[-1][0]]) == (pts[t], mapd[t]):
+            if tiers and (pts[tiers[-1][0]], h2h(tiers[-1][0]), mapd[tiers[-1][0]]) == (pts[t], h2h(t), mapd[t]):
                 tiers[-1].append(t)
             else:
                 tiers.append([t])
@@ -374,7 +390,8 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
         return 'N:' + norm(side['name'])
 
     ms = [m for m in matches if m.get('date') and m['a']['name'] and m['b']['name']
-          and m['a']['name'].upper() != 'TBD' and m['b']['name'].upper() != 'TBD']
+          and m['a']['name'].upper() != 'TBD' and m['b']['name'].upper() != 'TBD'
+          and not SHOW.search((m.get('stage') or '') + ' ' + (m.get('series') or ''))]
     ms.sort(key=lambda m: (m['date'], int(m['id'])))
 
     order: list[tuple[str, str | None]] = []
@@ -474,9 +491,11 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
     phases: dict[str, list[dict]] = {}
     for u in units:
         phases.setdefault(u['_phase'], []).append(u)
+    main = [g for k, g in phases.items() if not SIDE_PHASE.search(k)]
+    side = [g for k, g in phases.items() if SIDE_PHASE.search(k)]
     places: list[list] = []
     seen: set[str] = set()
-    for group in reversed(list(phases.values())):
+    for group in list(reversed(main)) + list(reversed(side)):
         fresh = [[[t for t in tier if t not in seen] for tier in u['_tiers']] for u in group]
         fresh = [[tier for tier in u if tier] for u in fresh]
         for k in range(max((len(u) for u in fresh), default=0)):

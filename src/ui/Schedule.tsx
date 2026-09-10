@@ -244,7 +244,7 @@ export default function Schedule() {
                           <td className="center mono">
                             {r ? <b>{r.mapsWonA} : {r.mapsWonB}</b> : <span className="muted">{row.bo ? `BO${row.bo}` : 'vs'}</span>}
                           </td>
-                          <td className={r && !aWon ? 'pos' : ''} title={b?.name}>
+                          <td className={r && !aWon && r.mapsWonA !== r.mapsWonB ? 'pos' : ''} title={b?.name}>
                             {row.pending
                               ? <span className="muted">{row.a ? row.pending : '待定'}</span>
                               : <span className="club">{row.b && <Crest id={row.b} />}<span>{b?.tag}</span></span>}

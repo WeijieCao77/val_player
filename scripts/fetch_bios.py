@@ -62,7 +62,22 @@ def get(params: dict, cache_name: str) -> dict:
     os.makedirs(CACHE, exist_ok=True)
     url = API + '?' + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept-Encoding': 'gzip'})
-    with urllib.request.urlopen(req, timeout=45) as r:
+    # Liquipedia answers a crawler that is going too fast with 429. The first
+    # version raised straight away and the caller moved on to the next request
+    # without waiting, which is exactly the wrong response to being told to
+    # slow down. Now a refusal is waited out, longer each time.
+    for attempt in range(6):
+        try:
+            r = urllib.request.urlopen(req, timeout=45)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
+                time.sleep(DELAY)
+                raise
+            wait = 60 * (attempt + 1)
+            print(f'    （Liquipedia {e.code}，{wait} 秒后再试）', flush=True)
+            time.sleep(wait)
+    with r:
         raw = r.read()
         if r.headers.get('Content-Encoding') == 'gzip':
             import gzip

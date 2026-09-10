@@ -62,7 +62,7 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
             {c.swaps.map((s, i) => (
               <span key={i}>
                 {i ? '；' : ''}<b>{game.teams[s.now ?? '']?.name ?? '空缺'}</b> 拿走了原本属于 {ev?.names[s.real] ?? s.real} 的位置
-                （{game.comps[s.from]?.name ?? '上一站'} 的名次变了）
+                （{s.from.startsWith('pool:') ? `${s.from.slice(5)} 赛区积分排名变了` : `${game.comps[s.from]?.name ?? '上一站'} 的名次变了`}）
               </span>
             ))}
           </p>
@@ -88,7 +88,7 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
                       <span className="club" style={{ justifyContent: 'flex-end' }}><span>{game.teams[f.teamA]?.tag}</span><Crest id={f.teamA} /></span>
                     </td>
                     <td className="center mono">{r ? <b>{r.mapsWonA} : {r.mapsWonB}</b> : <span className="muted">BO{f.bo}</span>}</td>
-                    <td className={r && !aWon ? 'pos' : ''} title={game.teams[f.teamB]?.name}>
+                    <td className={r && !aWon && r.mapsWonA !== r.mapsWonB ? 'pos' : ''} title={game.teams[f.teamB]?.name}>
                       <span className="club"><Crest id={f.teamB} /><span>{game.teams[f.teamB]?.tag}</span></span>
                     </td>
                   </tr>

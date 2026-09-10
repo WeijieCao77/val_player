@@ -732,7 +732,7 @@ export interface Fixture {
   comp: string
   teamA: string
   teamB: string
-  bo: 1 | 3 | 5
+  bo: 1 | 2 | 3 | 5
   /** bracket label, e.g. '常规赛 W3' / '胜者组决赛' */
   label: string
   played: boolean
@@ -749,6 +749,8 @@ export interface StandingRow {
   teamId: string
   w: number
   l: number
+  /** level Bo2 series — a point each */
+  d?: number
   mapW: number
   mapL: number
   roundW: number

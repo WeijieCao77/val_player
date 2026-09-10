@@ -27,7 +27,7 @@ export default defineConfig({
           if (id.includes('src/data/world.json')) return 'world'
           // the open era's roster book and its real calendar: only a 2021 career reads them
           if (id.includes('src/data/world_2021.json')) return 'world2021'
-          if (id.includes('src/data/circuit.json')) return 'circuit'
+          if (id.includes('src/data/circuit.json') || id.includes('src/data/routes.json')) return 'circuit'
           if (id.includes('src/data/dossier.json')) return 'dossier'
           if (id.includes('src/data/prospects.json')) return 'world'
           if (id.includes('src/data/changelog')) return 'changelog'

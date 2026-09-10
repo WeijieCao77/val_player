@@ -1,0 +1,3784 @@
+{
+ "VALORANT Champions Tour/2021/Circuit Points/Brazil": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: Brazil Stage 1 Masters",
+    "label": "Masters 1",
+    "page": "VALORANT Champions Tour/2021/Brazil/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Brazil Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/Brazil/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Brazil Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Brazil/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Team Vikings",
+    "total": 350,
+    "points": [
+     100,
+     0,
+     200,
+     50,
+     0
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Keyd Stars",
+    "total": 225,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     225
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "Sharks Esports",
+    "total": 215,
+    "points": [
+     20,
+     0,
+     150,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "Gamelanders Blue",
+    "total": 135,
+    "points": [
+     70,
+     25,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "NOORG 2.0 (page does not exist)",
+    "total": 65,
+    "points": [
+     45,
+     20,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Stars Horizon",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Jaguares Esports",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "SLICK",
+    "total": 40,
+    "points": [
+     20,
+     20,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "INGAMING Esports",
+    "total": 25,
+    "points": [
+     0,
+     25,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "Extenzy Gaming (page does not exist)",
+    "total": 20,
+    "points": [
+     20,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "FURIA",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Liberty",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/EMEA": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: Europe Stage 1 Masters",
+    "label": "EU Masters 1",
+    "page": "VALORANT Champions Tour/2021/Europe/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Turkey Stage 1 Masters",
+    "label": "TR Masters 1",
+    "page": "VALORANT Champions Tour/2021/Turkey/Stage 1/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Turkey Stage 1 Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: CIS Stage 1 Masters",
+    "label": "CIS Masters 1",
+    "page": "VALORANT Champions Tour/2021/CIS/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: EMEA Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/EMEA/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Stage 2 Masters - Reykjavík"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: EMEA Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/EMEA/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Gambit Esports",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     100,
+     45,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "byeup"
+   },
+   {
+    "rank": 2,
+    "team": "Acend",
+    "total": 375,
+    "points": [
+     100,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     275
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "Fnatic",
+    "total": 350,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     350,
+     0,
+     0,
+     0
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 4,
+    "team": "G2 Esports",
+    "total": 325,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     325
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Team Liquid",
+    "total": 300,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     250,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Oxygen Esports",
+    "total": 120,
+    "points": [
+     0,
+     45,
+     0,
+     0,
+     45,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Guild Esports",
+    "total": 115,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     30,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 8,
+    "team": "FunPlus Phoenix",
+    "total": 105,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     30,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 9,
+    "team": "BBL Esports",
+    "total": 90,
+    "points": [
+     0,
+     70,
+     0,
+     0,
+     20,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "AG (Russian team) (page does not exist)",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     0,
+     45,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "GMT Esports",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     0,
+     45,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "Rare Esports",
+    "total": 45,
+    "points": [
+     0,
+     45,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "Fire Flux Esports",
+    "total": 30,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "Natus Vincere",
+    "total": 30,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Ninjas in Pyjamas",
+    "total": 20,
+    "points": [
+     20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "One Breath Gaming",
+    "total": 20,
+    "points": [
+     0,
+     0,
+     0,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Team BDS",
+    "total": 20,
+    "points": [
+     20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Team Singularity",
+    "total": 20,
+    "points": [
+     0,
+     0,
+     0,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "İstanbul Wildcats",
+    "total": 20,
+    "points": [
+     0,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 20,
+    "team": "Alliance",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 20,
+    "team": "Divinity",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     0,
+     10,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 20,
+    "team": "OtherSide Esports",
+    "total": 10,
+    "points": [
+     0,
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 20,
+    "team": "Zero Zone",
+    "total": 10,
+    "points": [
+     0,
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "FUT Esports",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "ForZe",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "Giants",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "Papara SuperMassive",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "Team Heretics",
+    "total": 0,
+    "points": [
+     70,
+     0,
+     0,
+     0,
+     0,
+     0,
+     -70,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "Tyeasy",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 24,
+    "team": "Cyber Skull Esports",
+    "total": 0,
+    "points": [
+     0,
+     20,
+     -20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/Japan": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: Japan Stage 1 Masters",
+    "label": "Masters 1",
+    "page": "VALORANT Champions Tour/2021/Japan/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Japan Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/Japan/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Stage 2 Masters - Reykjavík"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Japan Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Japan/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Crazy Raccoon",
+    "total": 475,
+    "points": [
+     100,
+     0,
+     150,
+     0,
+     0,
+     225
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "ZETA DIVISION",
+    "total": 305,
+    "points": [
+     70,
+     60,
+     0,
+     0,
+     0,
+     175
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 3,
+    "team": "REJECT",
+    "total": 140,
+    "points": [
+     50,
+     50,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "Northeption",
+    "total": 90,
+    "points": [
+     0,
+     30,
+     0,
+     0,
+     60,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "FENNEL",
+    "total": 80,
+    "points": [
+     10,
+     20,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Feeling (page does not exist)",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "BlackBird Ignis",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "Lag Gaming",
+    "total": 40,
+    "points": [
+     20,
+     20,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "SCARZ",
+    "total": 30,
+    "points": [
+     0,
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "BLUE BEES",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "FAV gaming",
+    "total": 0,
+    "points": [
+     35,
+     40,
+     0,
+     -75,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "FIRST Gaming (page does not exist)",
+    "total": 0,
+    "points": [
+     20,
+     0,
+     0,
+     -20,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "INSOMNIA",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/Korea": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: Korea Stage 1 Masters",
+    "label": "Masters 1",
+    "page": "VALORANT Champions Tour/2021/Korea/Stage 1/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Korea Stage 1 Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Korea Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VALORANT Champions Tour/2021/Korea/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Stage 2 Masters - Reykjavík"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Korea Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Korea/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Vision Strikers",
+    "total": 415,
+    "points": [
+     100,
+     0,
+     40,
+     0,
+     0,
+     0,
+     275
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "NUTURN Gaming",
+    "total": 410,
+    "points": [
+     70,
+     0,
+     0,
+     300,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "F4Q",
+    "total": 255,
+    "points": [
+     10,
+     0,
+     20,
+     0,
+     0,
+     0,
+     225
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "TNL Esports",
+    "total": 95,
+    "points": [
+     20,
+     0,
+     20,
+     0,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Prince",
+    "total": 60,
+    "points": [
+     0,
+     0,
+     20,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 6,
+    "team": "GochuGaru (page does not exist)",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 6,
+    "team": "World Game Star",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "APEX PEOPLE",
+    "total": 0,
+    "points": [
+     10,
+     -10,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Dplus",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Rio Company",
+    "total": 0,
+    "points": [
+     45,
+     0,
+     40,
+     0,
+     -85,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "TUBEPLE Gaming",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     20,
+     0,
+     -20,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/Latin America": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: LATAM North Stage 1 Masters",
+    "label": "LAN Masters 1",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 1/Masters/North"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: LATAM South Stage 1 Masters",
+    "label": "LAS Masters 1",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 1/Masters/South"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: LATAM South Stage 1 Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Latin America Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: LAN Stage 3 Challengers Playoffs",
+    "label": "LAN Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 3/Challengers Playoffs/North"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: LAS Stage 3 Challengers Playoffs",
+    "label": "LAS Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 3/Challengers Playoffs/South"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: LATAM Stage 3 Challengers Playoffs",
+    "label": "LATAM Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Latin America/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "KRÜ Esports",
+    "total": 495,
+    "points": [
+     0,
+     45,
+     0,
+     0,
+     175,
+     0,
+     0,
+     0,
+     275
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Six Karma",
+    "total": 200,
+    "points": [
+     100,
+     0,
+     0,
+     50,
+     0,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "Australs",
+    "total": 175,
+    "points": [
+     0,
+     100,
+     0,
+     0,
+     0,
+     0,
+     0,
+     75,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "Infinity",
+    "total": 170,
+    "points": [
+     45,
+     0,
+     0,
+     75,
+     0,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "LAZER",
+    "total": 150,
+    "points": [
+     70,
+     0,
+     0,
+     40,
+     0,
+     40,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Border Monsters",
+    "total": 115,
+    "points": [
+     45,
+     0,
+     0,
+     35,
+     0,
+     35,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "9z Team",
+    "total": 110,
+    "points": [
+     0,
+     20,
+     0,
+     50,
+     0,
+     0,
+     40,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Furious Gaming",
+    "total": 45,
+    "points": [
+     0,
+     45,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Meta Gaming",
+    "total": 45,
+    "points": [
+     0,
+     10,
+     0,
+     35,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "VELOX (page does not exist)",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "Pana.Rabbit (page does not exist)",
+    "total": 35,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     35,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Akave Esports",
+    "total": 20,
+    "points": [
+     20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Stampede Gaming (page does not exist)",
+    "total": 20,
+    "points": [
+     0,
+     20,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 14,
+    "team": "Funkboings",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 14,
+    "team": "Kaizen Esports (page does not exist)",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 14,
+    "team": "Optix",
+    "total": 10,
+    "points": [
+     0,
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 17,
+    "team": "REVEN ECLUB",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 17,
+    "team": "Wygers Argentina",
+    "total": 0,
+    "points": [
+     0,
+     70,
+     -70,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/North America": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: North America Stage 1 Masters",
+    "label": "Masters 1",
+    "page": "VALORANT Champions Tour/2021/North America/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: North America Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/North America/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: North America Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/North America/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Sentinels",
+    "total": 775,
+    "points": [
+     100,
+     0,
+     400,
+     0,
+     275
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "100 Thieves",
+    "total": 375,
+    "points": [
+     20,
+     30,
+     0,
+     0,
+     325
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "Version1",
+    "total": 200,
+    "points": [
+     0,
+     0,
+     200,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "FaZe Clan",
+    "total": 120,
+    "points": [
+     70,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "XSET",
+    "total": 90,
+    "points": [
+     10,
+     20,
+     0,
+     60,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Luminosity Gaming",
+    "total": 60,
+    "points": [
+     20,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Gen.G Esports",
+    "total": 50,
+    "points": [
+     50,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Rise",
+    "total": 50,
+    "points": [
+     0,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 9,
+    "team": "TSM",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "NRG",
+    "total": 30,
+    "points": [
+     0,
+     30,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 11,
+    "team": "Immortals",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Cloud9",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "ENVY",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "New York Fury",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VALORANT Champions Tour/2021/Circuit Points/Southeast Asia": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2021: Southeast Asia Stage 1 Masters",
+    "label": "Masters 1",
+    "page": "VALORANT Champions Tour/2021/Southeast Asia/Stage 1/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Southeast Asia Stage 1 Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Southeast Asia Stage 2 Challengers Finals",
+    "label": "Challengers Finals 2",
+    "page": "VALORANT Champions Tour/2021/Southeast Asia/Stage 2/Challengers Finals"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 2 Masters - Reykjavík",
+    "label": "Masters 2",
+    "page": "VALORANT Champions Tour/2021/Stage 2/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2021: Stage 2 Masters - Reykjavík"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Southeast Asia Stage 3 Challengers Playoffs",
+    "label": "Challengers Playoffs 3",
+    "page": "VALORANT Champions Tour/2021/Southeast Asia/Stage 3/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2021: Stage 3 Masters - Berlin",
+    "label": "Masters 3",
+    "page": "VALORANT Champions Tour/2021/Stage 3/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "X10 Esports",
+    "total": 295,
+    "points": [
+     100,
+     0,
+     0,
+     175,
+     0,
+     20,
+     0
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Team Secret",
+    "total": 225,
+    "points": [
+     20,
+     0,
+     30,
+     0,
+     0,
+     0,
+     175
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Paper Rex",
+    "total": 225,
+    "points": [
+     0,
+     0,
+     50,
+     0,
+     0,
+     0,
+     175
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "FULL SENSE",
+    "total": 140,
+    "points": [
+     20,
+     0,
+     60,
+     0,
+     0,
+     60,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "BOOM Esports",
+    "total": 115,
+    "points": [
+     45,
+     0,
+     20,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Alter Ego",
+    "total": 80,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     80,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "Team SMG",
+    "total": 70,
+    "points": [
+     70,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "CBT Gaming",
+    "total": 60,
+    "points": [
+     0,
+     0,
+     20,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "CERBERUS Esports",
+    "total": 50,
+    "points": [
+     0,
+     0,
+     10,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "Team Big BAAM",
+    "total": 50,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     50,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "KPC (page does not exist)",
+    "total": 45,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Zeal Esports",
+    "total": 30,
+    "points": [
+     0,
+     0,
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "ONIC Esports",
+    "total": 20,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "UwU (page does not exist)",
+    "total": 20,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "EGO (page does not exist)",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     10,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "FearUs (page does not exist)",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     10,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Five Ace e-Sports",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     10,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Oasis Gaming",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     10,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "Nigma Galaxy",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "Sharper Esports",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "Team nxl",
+    "total": 0,
+    "points": [
+     20,
+     0,
+     40,
+     0,
+     -60,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/APAC": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: APAC Stage 1 Challengers",
+    "label": "Challengers 1",
+    "page": "VCT/2022/APAC/Stage 1/Challengers"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2022: APAC Stage 1 Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: APAC Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VCT/2022/APAC/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Paper Rex",
+    "total": 1050,
+    "points": [
+     0,
+     0,
+     300,
+     0,
+     750
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "XERXIA",
+    "total": 300,
+    "points": [
+     0,
+     0,
+     150,
+     0,
+     150
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "ONIC Esports",
+    "total": 100,
+    "points": [
+     35,
+     0,
+     0,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "BOOM Esports",
+    "total": 95,
+    "points": [
+     50,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Made in Thailand",
+    "total": 75,
+    "points": [
+     40,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Team Secret",
+    "total": 75,
+    "points": [
+     0,
+     0,
+     0,
+     75,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Fancy United Esports",
+    "total": 70,
+    "points": [
+     30,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Griffin E-Sports",
+    "total": 70,
+    "points": [
+     25,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 9,
+    "team": "CERBERUS Esports",
+    "total": 65,
+    "points": [
+     35,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "Alter Ego",
+    "total": 55,
+    "points": [
+     0,
+     0,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "Global Esports",
+    "total": 55,
+    "points": [
+     20,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 12,
+    "team": "FULL SENSE",
+    "total": 45,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Persija Esports (page does not exist)",
+    "total": 45,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "Team Big BAAM",
+    "total": 45,
+    "points": [
+     20,
+     0,
+     0,
+     25,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Gaimin Gladiators",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "ORDER",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Rex Regum Qeon",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "South Built Esports",
+    "total": 40,
+    "points": [
+     40,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "FW ESPORTS",
+    "total": 35,
+    "points": [
+     0,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "Oasis Gaming",
+    "total": 35,
+    "points": [
+     0,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 19,
+    "team": "Velocity Gaming",
+    "total": 35,
+    "points": [
+     35,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 22,
+    "team": "Ghetto Artist (page does not exist)",
+    "total": 30,
+    "points": [
+     0,
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 22,
+    "team": "NAOS Esports",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 22,
+    "team": "No Namers",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 22,
+    "team": "Oblivion Force",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 26,
+    "team": "Action PH",
+    "total": 25,
+    "points": [
+     25,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 26,
+    "team": "Enigma Gaming",
+    "total": 25,
+    "points": [
+     0,
+     0,
+     0,
+     25,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 28,
+    "team": "Bleed Esports",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 28,
+    "team": "Bonkers",
+    "total": 0,
+    "points": [
+     35,
+     -35,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/Brazil": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: Brazil Stage 1 Challengers",
+    "label": "Challengers 1",
+    "page": "VCT/2022/Brazil/Stage 1/Challengers"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2022: Brazil Stage 1 Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Brazil Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VCT/2022/Brazil/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters - Copenhagen",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "LOUD",
+    "total": 650,
+    "points": [
+     0,
+     0,
+     500,
+     0,
+     150
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Ninjas in Pyjamas",
+    "total": 225,
+    "points": [
+     55,
+     -55,
+     150,
+     75,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "Keyd Stars",
+    "total": 115,
+    "points": [
+     50,
+     0,
+     0,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "TBK Esports",
+    "total": 80,
+    "points": [
+     40,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Gamelanders Blue",
+    "total": 75,
+    "points": [
+     40,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Stars Horizon",
+    "total": 75,
+    "points": [
+     35,
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "Liberty",
+    "total": 70,
+    "points": [
+     35,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "MIBR",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "Sharks Esports",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "Team Vikings",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "FURIA",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "LOS",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/EMEA": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: EMEA Stage 1 Challengers",
+    "label": "Challengers 1",
+    "page": "VCT/2022/EMEA/Stage 1/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: EMEA Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VCT/2022/EMEA/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "FunPlus Phoenix",
+    "total": 1200,
+    "points": [
+     0,
+     200,
+     0,
+     1000
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Fnatic",
+    "total": 525,
+    "points": [
+     0,
+     125,
+     0,
+     400
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "G2 Esports",
+    "total": 305,
+    "points": [
+     0,
+     250,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "Guild Esports",
+    "total": 300,
+    "points": [
+     50,
+     0,
+     0,
+     250
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Team Liquid",
+    "total": 265,
+    "points": [
+     0,
+     200,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "M3 Champions",
+    "total": 125,
+    "points": [
+     50,
+     0,
+     75,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 7,
+    "team": "Acend",
+    "total": 105,
+    "points": [
+     40,
+     0,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 8,
+    "team": "BBL Esports",
+    "total": 100,
+    "points": [
+     45,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 9,
+    "team": "Natus Vincere",
+    "total": 90,
+    "points": [
+     45,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "OG LDN UTD",
+    "total": 85,
+    "points": [
+     40,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 11,
+    "team": "BIG",
+    "total": 75,
+    "points": [
+     35,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 12,
+    "team": "FOKUS",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "Papara SuperMassive",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/Japan": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: Japan Stage 1 Challengers Playoffs",
+    "label": "Challengers 1",
+    "page": "VCT/2022/Japan/Stage 1/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Japan Stage 2 Challengers Playoffs",
+    "label": "Challengers 2",
+    "page": "VCT/2022/Japan/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "ZETA DIVISION",
+    "total": 475,
+    "points": [
+     0,
+     400,
+     75,
+     0
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Northeption",
+    "total": 240,
+    "points": [
+     40,
+     0,
+     0,
+     200
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "Crazy Raccoon",
+    "total": 120,
+    "points": [
+     55,
+     0,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "REJECT",
+    "total": 95,
+    "points": [
+     40,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "FAV gaming",
+    "total": 90,
+    "points": [
+     45,
+     0,
+     45,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 6,
+    "team": "IGZIST",
+    "total": 50,
+    "points": [
+     50,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "BLUE BEES",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Jadeite",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     40,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "Crest Gaming Zst",
+    "total": 35,
+    "points": [
+     35,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "QT DIG",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "REIGNITE",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/Korea": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: Korea Stage 1 Challengers",
+    "label": "Challengers 1",
+    "page": "VCT/2022/Korea/Stage 1/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Korea Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VCT/2022/Korea/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "DRX",
+    "total": 550,
+    "points": [
+     0,
+     250,
+     0,
+     300
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "Maru Gaming",
+    "total": 115,
+    "points": [
+     40,
+     0,
+     75,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "On Sla2ers",
+    "total": 100,
+    "points": [
+     55,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "World Game Star",
+    "total": 95,
+    "points": [
+     40,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "HolyMolly (page does not exist)",
+    "total": 50,
+    "points": [
+     50,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 6,
+    "team": "Spear Gaming",
+    "total": 45,
+    "points": [
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "CNJ esports",
+    "total": 35,
+    "points": [
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Tartarus (page does not exist)",
+    "total": 30,
+    "points": [
+     0,
+     0,
+     30,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 8,
+    "team": "Team T5 (page does not exist)",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "Desperado (page does not exist)",
+    "total": 25,
+    "points": [
+     25,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "Dplus",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/Latin America": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: LAN Stage 1 Challengers",
+    "label": "LAN Challengers 1",
+    "page": "VCT/2022/Latin America/Stage 1/Challengers/North"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: LAS Stage 1 Challengers",
+    "label": "LAS Challengers 1",
+    "page": "VCT/2022/Latin America/Stage 1/Challengers/South"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: LATAM Stage 1 Challengers Playoffs",
+    "label": "Challengers Finals 1",
+    "page": "VCT/2022/Latin America/Stage 1/Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: LAN Stage 2 Challengers",
+    "label": "LAN Challengers 2",
+    "page": "VCT/2022/Latin America/Stage 2/Challengers/North"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: LAS Stage 2 Challengers",
+    "label": "LAS Challengers 2",
+    "page": "VCT/2022/Latin America/Stage 2/Challengers/South"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: LATAM Stage 2 Challengers Playoffs",
+    "label": "Challengers Finals 2",
+    "page": "VCT/2022/Latin America/Stage 2/Challengers Playoffs"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2022: LATAM Stage 2 Challengers Playoffs"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters - Copenhagen",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "Leviatán",
+    "total": 355,
+    "points": [
+     0,
+     0,
+     55,
+     0,
+     0,
+     0,
+     0,
+     0,
+     300
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "KRÜ Esports",
+    "total": 325,
+    "points": [
+     0,
+     0,
+     0,
+     125,
+     0,
+     0,
+     75,
+     -75,
+     200
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 3,
+    "team": "FUSION",
+    "total": 110,
+    "points": [
+     0,
+     0,
+     45,
+     0,
+     0,
+     0,
+     65,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "9z Team",
+    "total": 70,
+    "points": [
+     0,
+     30,
+     0,
+     0,
+     0,
+     40,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Six Karma",
+    "total": 60,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 6,
+    "team": "Optix",
+    "total": 50,
+    "points": [
+     0,
+     20,
+     0,
+     0,
+     0,
+     30,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "Infinity",
+    "total": 40,
+    "points": [
+     20,
+     0,
+     0,
+     0,
+     20,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 7,
+    "team": "Team Cruelty",
+    "total": 40,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     40,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 9,
+    "team": "Pampas",
+    "total": 20,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     20,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 10,
+    "team": "Border Monsters",
+    "total": 15,
+    "points": [
+     5,
+     0,
+     0,
+     0,
+     10,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "EBRO",
+    "total": 10,
+    "points": [
+     0,
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "Ryze Gaming",
+    "total": 10,
+    "points": [
+     10,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "SunXet Club (page does not exist)",
+    "total": 10,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     10,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 14,
+    "team": "Meta Gaming",
+    "total": 5,
+    "points": [
+     0,
+     5,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "LAZER",
+    "total": 0,
+    "points": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ },
+ "VCT/2022/Circuit Points/North America": {
+  "columns": [
+   {
+    "kind": "event",
+    "name": "VCT 2022: North America Stage 1 Challengers",
+    "label": "Challengers 1",
+    "page": "VCT/2022/North America/Stage 1/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 1 Masters - Reykjavík",
+    "label": "Masters 1",
+    "page": "VCT/2022/Stage 1/Masters"
+   },
+   {
+    "kind": "deduction",
+    "after": "VCT 2022: Stage 1 Masters - Reykjavík"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: North America Stage 2 Challengers",
+    "label": "Challengers 2",
+    "page": "VCT/2022/North America/Stage 2/Challengers"
+   },
+   {
+    "kind": "event",
+    "name": "VCT 2022: Stage 2 Masters",
+    "label": "Masters 2",
+    "page": "VCT/2022/Stage 2/Masters"
+   }
+  ],
+  "rows": [
+   {
+    "rank": 1,
+    "team": "OpTic Gaming",
+    "total": 1250,
+    "points": [
+     0,
+     750,
+     0,
+     0,
+     500
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 2,
+    "team": "XSET",
+    "total": 295,
+    "points": [
+     45,
+     0,
+     0,
+     0,
+     250
+    ],
+    "status": "up"
+   },
+   {
+    "rank": 3,
+    "team": "The Guard",
+    "total": 220,
+    "points": [
+     0,
+     200,
+     0,
+     20,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 4,
+    "team": "FaZe Clan",
+    "total": 75,
+    "points": [
+     0,
+     0,
+     0,
+     65,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Cloud9",
+    "total": 70,
+    "points": [
+     50,
+     0,
+     0,
+     20,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "Luminosity Gaming",
+    "total": 70,
+    "points": [
+     35,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 5,
+    "team": "NRG",
+    "total": 70,
+    "points": [
+     15,
+     0,
+     0,
+     55,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 8,
+    "team": "100 Thieves",
+    "total": 60,
+    "points": [
+     15,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 9,
+    "team": "Evil Geniuses",
+    "total": 55,
+    "points": [
+     10,
+     0,
+     0,
+     45,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 10,
+    "team": "Sentinels",
+    "total": 45,
+    "points": [
+     30,
+     0,
+     0,
+     15,
+     0
+    ],
+    "status": "stayup"
+   },
+   {
+    "rank": 11,
+    "team": "Ghost Gaming",
+    "total": 35,
+    "points": [
+     0,
+     0,
+     0,
+     35,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 11,
+    "team": "Version1",
+    "total": 35,
+    "points": [
+     35,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 13,
+    "team": "Knights",
+    "total": 30,
+    "points": [
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 14,
+    "team": "TSM",
+    "total": 15,
+    "points": [
+     0,
+     0,
+     0,
+     15,
+     0
+    ],
+    "status": "down"
+   },
+   {
+    "rank": 15,
+    "team": "Rise",
+    "total": 0,
+    "points": [
+     10,
+     0,
+     -10,
+     0,
+     0
+    ],
+    "status": "down"
+   }
+  ]
+ }
+}

@@ -87,7 +87,7 @@ export default function MapVeto({
     <>
       <p className="small muted" style={{ marginTop: 0 }}>
         当前图池 7 张（Stage 1 和 Stage 2 开打时会各轮换一两张），
-        {fixture.bo === 3 ? 'BO3：各 ban 一张，各选一张，再各 ban 一张，剩下的是决胜图'
+        {fixture.bo === 2 ? 'BO2：各 ban 一张，各选一张，两张都打完，一比一就是平局' : fixture.bo === 3 ? 'BO3：各 ban 一张，各选一张，再各 ban 一张，剩下的是决胜图'
           : fixture.bo === 5 ? 'BO5：各 ban 一张，然后轮流选图' : 'BO1：轮流 ban 到只剩一张'}。
         <b>ban 掉对手擅长的，留下自己擅长的。</b>
       </p>

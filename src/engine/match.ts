@@ -347,9 +347,11 @@ export function activePool(seed: number, phase: PoolPhase = 0): string[] {
 export const poolFor = (state: Pick<GameState, 'seed' | 'year' | 'stage'>): string[] =>
   activePool(state.seed + state.year, poolPhaseOf(state.stage))
 
-export function vetoOrder(bo: 1 | 3 | 5): ('ban' | 'pick')[] {
+export function vetoOrder(bo: 1 | 2 | 3 | 5): ('ban' | 'pick')[] {
   // 7-map pool
   if (bo === 1) return ['ban', 'ban', 'ban', 'ban', 'ban', 'ban']
+  // Bo2 (2021's Korean, Japanese and SEA groups): two bans, two picks, no decider
+  if (bo === 2) return ['ban', 'ban', 'pick', 'pick']
   if (bo === 3) return ['ban', 'ban', 'pick', 'pick', 'ban', 'ban']
   return ['ban', 'ban', 'pick', 'pick', 'pick', 'pick']
 }
@@ -379,7 +381,7 @@ export function runVeto(
   state: GameState,
   aId: string,
   bId: string,
-  bo: 1 | 3 | 5,
+  bo: 1 | 2 | 3 | 5,
   pool: string[],
   rng: Rng,
 ): { maps: string[]; log: string[] } {
@@ -897,6 +899,7 @@ export class MatchSim {
   readonly maps: string[]
   readonly vetoLog: string[]
   readonly need: number
+  readonly bo: 1 | 2 | 3 | 5
   readonly aId: string
   readonly bId: string
   wonA = 0
@@ -914,13 +917,14 @@ export class MatchSim {
   readonly format: 'first13' | 'full24'
 
   constructor(
-    state: GameState, aId: string, bId: string, bo: 1 | 3 | 5, rng: Rng,
+    state: GameState, aId: string, bId: string, bo: 1 | 2 | 3 | 5, rng: Rng,
     agreed?: { map: string; format: 'first13' | 'full24' },
   ) {
     this.state = state
     this.aId = aId
     this.bId = bId
     this.rng = rng
+    this.bo = bo
     this.need = Math.ceil(bo / 2)
     this.format = agreed?.format ?? 'first13'
     if (agreed) {
@@ -940,6 +944,8 @@ export class MatchSim {
   }
 
   get decided(): boolean {
+    // a Bo2 plays both maps whatever the first one did, and can end level
+    if (this.bo === 2) return this.played.length >= 2
     return this.wonA >= this.need || this.wonB >= this.need
   }
 
@@ -986,7 +992,7 @@ export class MatchSim {
         t.maps++
       }
     }
-    const winnerIds = new Set(
+    const winnerIds = new Set(this.wonA === this.wonB ? [] :
       (this.wonA > this.wonB ? this.state.teams[this.aId] : this.state.teams[this.bId])?.roster ?? [],
     )
     let mvp: string | null = null
@@ -1141,7 +1147,7 @@ export function simulateMatch(
   state: GameState,
   aId: string,
   bId: string,
-  bo: 1 | 3 | 5,
+  bo: 1 | 2 | 3 | 5,
   rng: Rng,
   agreed?: { map: string; format: 'first13' | 'full24' },
 ): MatchResult {

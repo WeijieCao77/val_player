@@ -156,6 +156,10 @@ def main() -> int:
     ids = [i for i in a.ids.split(',') if i] or sorted(history, key=int)
 
     result: dict = {}
+    # a handful of ids is an addition to the file, not a replacement for it
+    if a.ids and os.path.exists(a.out):
+        with open(a.out, encoding='utf-8') as f:
+            result = json.load(f)
     fresh = 0
     bad: dict[str, list[str]] = {}
     for n, eid in enumerate(ids, 1):

@@ -152,6 +152,8 @@ export interface MeMatchRecord {
   oppTag: string
   started: boolean
   won: boolean
+  /** a level Bo2 — `won` is false and so is a loss */
+  drawn?: boolean
   score: string
   maps: number
   rounds: number

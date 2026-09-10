@@ -25,7 +25,7 @@ export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
 export interface Friendly {
   aId: string
   bId: string
-  bo: 1 | 3 | 5
+  bo: 1 | 2 | 3 | 5
   comp: string
   label: string
 }
@@ -302,6 +302,7 @@ export class MeMatch {
     const mineIds = (this.mineIsA ? result.lineups?.a : result.lineups?.b) ?? []
     const started = mineIds.includes(me.id)
     const won = this.mineIsA ? result.mapsWonA > result.mapsWonB : result.mapsWonB > result.mapsWonA
+    const drawn = result.mapsWonA === result.mapsWonB
 
     const sum: MapLine = { kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0, clutches: 0, rounds: 0, acs: 0 }
     const acsBy: Record<string, { d: number; r: number }> = {}
@@ -338,7 +339,7 @@ export class MeMatch {
       fixtureId: f.id, day: state.day, year: state.year,
       comp: this.friendly ? this.friendly.comp : (comp?.name ?? f.comp), label: f.label.replace(/^(KO|SW):\d+:/, ''),
       opp: opp?.name ?? '?', oppTag: opp?.tag ?? '?', friendly: !!this.friendly,
-      started, won, score, maps: result.maps.length,
+      started, won, drawn: drawn || undefined, score, maps: result.maps.length,
       rounds: sum.rounds, kills: sum.kills, deaths: sum.deaths, assists: sum.assists,
       firstKills: sum.firstKills, clutches: sum.clutches,
       acs: Math.round(acs), rating: Math.round(rating * 100) / 100,
@@ -372,7 +373,7 @@ export class MeMatch {
       me.heat += won ? 4 : 1
       this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
-      pushLog(state, 'cup', `${compCn(rec.comp)} ${rec.label} vs ${rec.opp} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
+      pushLog(state, 'cup', `${compCn(rec.comp)} ${rec.label} vs ${rec.opp} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
       me.pendingFixture = undefined
       return
     }
@@ -396,12 +397,12 @@ export class MeMatch {
       this.me.fatigue = clamp(this.me.fatigue + (started ? 5 : 1.5) * result.maps.length, 0, 100)
       if (started && won) questProgress(state, 'win', 1)
       if (started) {
-        me.tilt = clamp(me.tilt + (won ? -6 : rank >= 5 ? 14 : 8), 0, 100)
+        me.tilt = clamp(me.tilt + (won ? -6 : drawn ? 2 : rank >= 5 ? 14 : 8), 0, 100)
         if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)
       }
       const line = started
-        ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
-        : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${won ? '胜' : '负'} —— 你在替补席看完了这场。`
+        ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
+        : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— 你在替补席看完了这场。`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)
     }

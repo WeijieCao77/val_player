@@ -40,7 +40,7 @@ export function resetFixtureSeq(n = 0) {
 
 export function makeFixture(
   day: number, stage: StageKey, comp: string,
-  teamA: string, teamB: string, bo: 1 | 3 | 5, label: string,
+  teamA: string, teamB: string, bo: 1 | 2 | 3 | 5, label: string,
 ): Fixture {
   return {
     id: `F${fixtureSeq++}`, day, stage, comp, teamA, teamB, bo, label, played: false,
@@ -62,7 +62,7 @@ export function cyclesFor(teamCount: number, targetGames = 10): number {
 /** Spread round-robin rounds across the days available in a stage window. */
 export function scheduleRegularSeason(
   comp: Competition, stage: StageKey, startDay: number, endDay: number,
-  bo: 1 | 3 | 5, rng: Rng, labelPrefix = '常规赛', targetGames = 10,
+  bo: 1 | 2 | 3 | 5, rng: Rng, labelPrefix = '常规赛', targetGames = 10,
 ): Fixture[] {
   // An odd league gives one club a bye every round, so a schedule cut off
   // part-way through a cycle leaves whoever has not had their bye yet a game
@@ -135,7 +135,7 @@ export function respaceRounds(unplayed: Fixture[], startDay: number, endDay: num
  */
 export function scheduleGroupSeason(
   comp: Competition, group: string[], groupName: string, stage: StageKey,
-  startDay: number, endDay: number, bo: 1 | 3 | 5, rng: Rng,
+  startDay: number, endDay: number, bo: 1 | 2 | 3 | 5, rng: Rng,
 ): Fixture[] {
   const rounds = roundRobin(group, rng)
   if (!rounds.length) return []
@@ -160,6 +160,7 @@ export function sortStandings(comp: Competition): string[] {
   return Object.values(comp.standings)
     .slice()
     .sort((x, y) =>
+      y.pts - x.pts ||
       y.w - x.w ||
       y.mapW - y.mapL - (x.mapW - x.mapL) ||
       y.roundW - y.roundL - (x.roundW - x.roundL) ||
@@ -173,8 +174,13 @@ export function applyResultToStandings(comp: Competition, f: Fixture): void {
   const b = comp.standings[f.teamB]
   if (!a || !b) return
   const { mapsWonA, mapsWonB, maps } = f.result
-  const aWon = mapsWonA > mapsWonB
-  if (aWon) {
+  if (mapsWonA === mapsWonB) {
+    // a level Bo2: a point each, as 2021's groups scored it
+    a.d = (a.d ?? 0) + 1
+    b.d = (b.d ?? 0) + 1
+    a.pts += 1
+    b.pts += 1
+  } else if (mapsWonA > mapsWonB) {
     a.w++
     b.l++
     a.pts += 3
@@ -220,7 +226,7 @@ export function pairSeeds(seeds: string[]): [string, string][] {
  * Returns new fixtures (possibly empty).
  */
 export function advanceBracket(
-  state: GameState, comp: Competition, day: number, bo: 1 | 3 | 5,
+  state: GameState, comp: Competition, day: number, bo: 1 | 2 | 3 | 5,
 ): Fixture[] {
   const bracketFixtures = state.fixtures.filter(
     (f) => f.comp === comp.key && f.label.startsWith('KO:'),
@@ -269,7 +275,7 @@ export function advanceBracket(
  * two give the top seeds a bye into round 2.
  */
 export function startBracket(
-  comp: Competition, seeds: string[], stage: StageKey, day: number, bo: 1 | 3 | 5,
+  comp: Competition, seeds: string[], stage: StageKey, day: number, bo: 1 | 2 | 3 | 5,
 ): Fixture[] {
   comp.bracketStarted = true
   const n = seeds.length

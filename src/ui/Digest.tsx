@@ -63,7 +63,7 @@ export default function Digest({
             const won = (r.mapsWonA > r.mapsWonB) === mine
             return (
               <button key={f.id} className="recent-row" onClick={() => { onClose(); openMatch(f) }}>
-                <span className={won ? 'pos' : 'neg'} style={{ width: 16 }}>{won ? '胜' : '负'}</span>
+                <span className={r.mapsWonA === r.mapsWonB ? 'muted' : won ? 'pos' : 'neg'} style={{ width: 16 }}>{r.mapsWonA === r.mapsWonB ? '平' : won ? '胜' : '负'}</span>
                 <span className="mono" style={{ width: 36 }}>
                   {mine ? r.mapsWonA : r.mapsWonB}–{mine ? r.mapsWonB : r.mapsWonA}
                 </span>
