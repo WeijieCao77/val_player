@@ -33,6 +33,9 @@ import PlayerModal from './ui/PlayerModal'
 import ThemeToggle from './ui/ThemeToggle'
 import { attrWord, bodyWord, fatigueWord, mentalWord, tiltWord, useNumbers } from './ui/me/words'
 import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
+import HelpScreen from './ui/me/HelpScreen'
+import Tour from './ui/me/Tour'
+import { openTour, weekTourOf } from './ui/me/guide'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
@@ -45,6 +48,7 @@ const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = 
   { key: 'awards', label: '成就' },
   { key: 'log', label: '日志' },
   { key: 'auto', label: '托管', sep: true },
+  { key: 'help', label: '帮助' },
 ]
 
 /**
@@ -157,7 +161,8 @@ export default function PlayerGame() {
     openMatch: setFixture,
     playLive: () => {},
     go: setScreen,
-    startTutorial: () => {},
+    // the week screen's tour for where the career is now (ui/me/guide.ts); 帮助 opens the others
+    startTutorial: () => openTour(weekTourOf(gameRef.current)),
     openDraw: () => {},
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [commit, toast, gameRef.current, screen])
@@ -197,7 +202,8 @@ export default function PlayerGame() {
               : screen === 'awards' ? AchievementsScreen
                 : screen === 'log' ? LogScreen
                   : screen === 'auto' ? AutoScreen
-                    : null
+                    : screen === 'help' ? HelpScreen
+                      : null
 
   return (
     <GameCtx.Provider value={ctxValue}>
@@ -340,6 +346,8 @@ export default function PlayerGame() {
             }}
           />
         )}
+        {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
+        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>
