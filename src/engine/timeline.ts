@@ -68,6 +68,10 @@ export const bookCovers = (year: number): boolean => !!BOOK.years[String(year)]
 /** The league a club held a seat in that year, as the book has it. */
 export const bookLeague = (year: number, vlr: string): string | null => BOOK.years[String(year)]?.clubs[vlr]?.l ?? null
 
+/** A club holding a seat in this season's VCT leagues — a partner, or one of China's visitors — from 2023, when the leagues closed. */
+export const inVctLeague = (state: GameState, t: Team | undefined): boolean =>
+  state.year >= 2023 && !!t && t.tier === 1 && !!t.league?.startsWith('VCT ')
+
 /**
  * Whether a club has somewhere to play this year. From 2023 the leagues are
  * closed: a club with no seat, that history does not have in any Challengers
@@ -271,6 +275,10 @@ for (const [scenes, codes] of [
  * NORTH//EAST league that replaced it.
  */
 export function sceneFor(state: GameState, t: Team): string | undefined {
+  // a league club plays in no Challengers league: it keeps the one history gave it (China's partners
+  // played the Evolution Series) and is never given one off its players' passports — Team Liquid,
+  // read as NORTH//EAST, entered that league's Kickoff through the open decider
+  if (inVctLeague(state, t)) return t.scene
   // past the book the Challengers leagues are its last year's: the seasons after it play that year's again (engine/circuit.ts)
   const Y = BOOK.years[String(Math.min(state.year, LAST_BOOK))]
   if (!Y) return t.scene
@@ -577,7 +585,8 @@ export function syncYear(state: GameState, year: number): YearSync {
   if (own && year >= 2023 && state.seat?.club !== mine) {
     const book = bookClubOf(state, Y, mine!)
     own.tier = book?.l ? 1 : 2
-    own.scene = book?.s ?? sceneFor(state, own)
+    // a seat this year means no Challengers league; own.league is still last year's here, so ask the book
+    own.scene = book?.s ?? (book?.l ? undefined : sceneFor(state, own))
     own.league = leagueLabel({ l: book?.l ?? null, s: own.scene ?? null, r: own.region })
   }
 
