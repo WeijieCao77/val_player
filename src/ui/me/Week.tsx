@@ -14,6 +14,7 @@ import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
 import { CUPS, cupView } from '../../engine/me/cups'
 import { attrWord, useNumbers } from './words'
+import { chainLine } from '../../engine/me/story'
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
@@ -67,6 +68,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 <div className="tiny muted" style={{ marginTop: 2 }}>{inj.text}</div>
               </div>
             ) : null
+          })()}
+          {/* a chain under way: one line — what it wants and how long is left (me/story.ts) */}
+          {(() => {
+            const line = chainLine(game)
+            return line ? <div className="node-line" style={{ margin: '0 0 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div> : null
           })()}
           {/* the other budget: what the body has left after this week's plan */}
           {(() => {

@@ -7,8 +7,19 @@ import { push, pop } from './pending'
 import { applyEffect } from './fx'
 import { addAxis } from './traits'
 import { addQuest } from './quests'
+import { storyChoice } from './story'
+import type { ChainOp } from './story'
+import { MORE_EVENTS } from './events_more'
 
-export interface EventOpt { t: string; g: Axis; e: EffectSpec }
+export interface EventOpt {
+  t: string
+  g: Axis
+  e: EffectSpec
+  /** 伏笔: `key:value`, read back by an echo weeks later — see me/story.ts */
+  seed?: string
+  /** what this answer does to the chain the card belongs to */
+  ch?: ChainOp
+}
 export interface EventDef {
   id: string
   /** weight in the weekly draw; 0 = only fired by a hook */
@@ -21,6 +32,10 @@ export interface EventDef {
   a: EventOpt[]
   /** the steady choice — what 按推荐 and 托管 take */
   rec: number
+  /** the seed this card echoes, so it can quote the choice back */
+  echo?: string
+  /** the chain this card is a step of */
+  chain?: string
 }
 
 /** how often the dice roll at all; the content pool decides the rest */
@@ -43,8 +58,8 @@ export const EVENTS: EventDef[] = [
   // ---- life
   { id: 'family_call', w: 8, max: 6, when: () => true, rec: 0,
     q: '妈妈打电话来，问你什么时候回家一趟。', ctx: '你已经三个月没回去了。',
-    a: [{ t: '这周回去两天', g: 'warm', e: { fatigue: -10, mental: 2, tilt: -8, note: '这周少两个行动点的时间，但人轻了' } },
-      { t: '等打完这个赛段', g: 'grind', e: { mental: -1, xp: { awareness: 8 } } },
+    a: [{ t: '这周回去两天', g: 'warm', e: { fatigue: -10, mental: 2, tilt: -8, note: '这周少两个行动点的时间，但人轻了' }, seed: 'home:went' },
+      { t: '等打完这个赛段', g: 'grind', e: { mental: -1, xp: { awareness: 8 } }, seed: 'home:later' },
       { t: '寄点钱回去', g: 'warm', e: { money: -1500, mental: 1 } }] },
   { id: 'old_friend', w: 6, max: 3, when: () => true, rec: 1,
     q: '一个初中同学突然找你，说想借五千。', ctx: '他知道你现在有收入。',
@@ -61,7 +76,7 @@ export const EVENTS: EventDef[] = [
   // ---- the room
   { id: 'locker_blame', w: 0, max: 6, when: pro, rec: 1,
     q: '输掉比赛之后，一个队友在语音里把责任推给了你。', ctx: '所有人都听见了。',
-    a: [{ t: '当场怼回去', g: 'hard', e: { bond: -12, mental: 1, tilt: 5 } }, { t: '先认，回头私下说', g: 'warm', e: { bond: 4, tilt: 3 } }, { t: '不说话，用下一场回答', g: 'grind', e: { quest: 'rumor', tilt: 6 } }] },
+    a: [{ t: '当场怼回去', g: 'hard', e: { bond: -12, mental: 1, tilt: 5 }, seed: 'blame:fight' }, { t: '先认，回头私下说', g: 'warm', e: { bond: 4, tilt: 3 } }, { t: '不说话，用下一场回答', g: 'grind', e: { quest: 'rumor', tilt: 6 } }] },
   { id: 'locker_dinner', w: 7, max: 9, when: pro, rec: 0,
     q: '队友约了聚餐，你今晚本来想加练。', ctx: '关系是聚出来的。',
     a: [{ t: '去', g: 'warm', e: { bond: 8, money: -300, fatigue: 2 } }, { t: '练完再去', g: 'grind', e: { bond: 3, xp: { aim: 10 }, fatigue: 5 } }, { t: '不去', g: 'grind', e: { bond: -4, xp: { aim: 16 } } }] },
@@ -99,10 +114,10 @@ export const EVENTS: EventDef[] = [
   // ---- the ladder years
   { id: 'cafe_coach', w: 6, max: 1, when: pre, rec: 0,
     q: '网吧里一个老哥看你打了一下午，说他以前打过职业。', ctx: '他说的东西有一半你没听过。',
-    a: [{ t: '听他讲两小时', g: 'warm', e: { xp: { awareness: 18, utility: 10 }, fatigue: 2 } }, { t: '客气两句继续排', g: 'grind', e: { ladder: 1 } }] },
+    a: [{ t: '听他讲两小时', g: 'warm', e: { xp: { awareness: 18, utility: 10 }, fatigue: 2 }, seed: 'cafe:listened' }, { t: '客气两句继续排', g: 'grind', e: { ladder: 1 } }] },
   { id: 'boost', w: 5, max: 1, when: pre, rec: 1,
     q: '有人私信你：代练一单三千，一周内。', ctx: '钱是真的，风险也是。',
-    a: [{ t: '接', g: 'hard', e: { money: 3000, fatigue: 8, mental: -1, note: '这件事以后可能被翻出来' } }, { t: '不接', g: 'grind', e: { mental: 1 } }] },
+    a: [{ t: '接', g: 'hard', e: { money: 3000, fatigue: 8, mental: -1, note: '这件事以后可能被翻出来' }, seed: 'boost:took' }, { t: '不接', g: 'grind', e: { mental: 1 }, seed: 'boost:no' }] },
   { id: 'scout_dm', w: 4, max: 2, when: (s) => pre(s) && s.me!.pre.ladder >= 60, rec: 0,
     q: '一个自称青训教练的人加你，说想看你打几把。', ctx: '真的假的不知道。',
     a: [{ t: '打给他看', g: 'show', e: { scoutSeen: 1, fatigue: 3 } }, { t: '先问清楚是哪家', g: 'hard', e: { scoutSeen: 1, mental: 1 } }, { t: '不理', g: 'grind', e: { tilt: -3, mental: 1, note: '真假都不重要，你把这周的排位打完了' } }] },
@@ -163,6 +178,8 @@ export const EVENTS: EventDef[] = [
   { id: 'ranked_flame', w: 6, max: 5, when: pre, rec: 1,
     q: '排位里遇到一个职业选手，他挂机骂人。', ctx: '你认出他了。',
     a: [{ t: '录下来发出去', g: 'show', e: { heat: 35, mental: -1 } }, { t: '打完这把，不理', g: 'grind', e: { ladder: 1 } }, { t: '私聊问他要不要一起排', g: 'warm', e: { scoutSeen: 1 } }] },
+  // ---- by phase and region, the echoes and the chains (me/events_more.ts)
+  ...MORE_EVENTS,
 ]
 
 export const eventOf = (id: string) => EVENTS.find((e) => e.id === id)
@@ -241,6 +258,8 @@ export function resolveEvent(state: GameState, id: string, choice: number): stri
   const rng = new Rng(hashStr(`event:${state.seed}:${state.year}:${state.day}:${id}`))
   const lines = applyEffect(state, opt.e, rng)
   if (opt.e.quest) addQuest(state, opt.e.quest)
+  // a seed planted, a chain moved on (me/story.ts)
+  lines.push(...storyChoice(state, ev, opt))
   const trait = addAxis(state, opt.g)
   me.eventsSeen++
   me.pendingEvent = undefined

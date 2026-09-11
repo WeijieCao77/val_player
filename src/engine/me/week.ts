@@ -36,6 +36,7 @@ import { compCn } from './compname'
 import { leaveClub } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
+import { storyWeek } from './storyweek'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -479,6 +480,8 @@ export function settleWeek(state: GameState): void {
     else if (p.form <= 56) fireEvent(state, 'cold_week')
     clubUpkeep(state, rng)
   }
+  // a chain's next card, a seed coming back, or a new chain — before the draw, which steps aside for it
+  storyWeek(state)
   tryRandomEvent(state, rng)
   checkAchievements(state)
   // who took my place, which losses ended a run, and the cooling (me/rivals.ts)
