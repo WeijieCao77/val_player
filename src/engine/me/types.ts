@@ -187,6 +187,8 @@ export interface MeMatchRecord {
   mapLog?: { map: string; before: number; won: boolean }[]
   /** a cup or exhibition rather than a league fixture */
   friendly?: boolean
+  /** the one line about a rival or my direct counterpart — see me/rivals.ts */
+  rivalNote?: { t: string; ok: boolean }
 }
 
 export interface MeSeason {
@@ -409,6 +411,8 @@ export interface MeState {
   rotateHeat?: number
   /** everyone who ever shared a roster with me — see me/bond.ts, never pruned */
   mates?: Record<string, BondEntry>
+  /** 宿敌, read off what happened in this save — see me/rivals.ts; absent until the first pro week */
+  rivals?: import('./rivals').RivalBook
   /** matches played this stage, so a two-game stage cannot define a role */
   bondStageMatches?: number
   /** a practice duel in progress, scene by scene */

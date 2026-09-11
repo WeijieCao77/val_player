@@ -15,6 +15,7 @@ import { afterMyMatch, refreshMyRounds } from './coach'
 import { bondNoteMatch } from './bond'
 import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
 import { starBeat, starBeatLine } from './stars'
+import { rivalAfterMatch, rivalNodeEdge } from './rivals'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 import { compCn } from './compname'
@@ -237,7 +238,7 @@ export class MeMatch {
     if (!pend) throw new Error('no decision pending')
     const m = this.map!
     const opt = pend.node.a[i] ?? pend.node.a[pend.node.rec]
-    const p = clamp01(nodeChance(this.state, opt, this.myTeamId) + cerMatchEdge(this.state).node)
+    const p = clamp01(nodeChance(this.state, opt, this.myTeamId) + cerMatchEdge(this.state).node + rivalNodeEdge(this.state, this.oppTeamId))
     const ok = this.nodeRng.chance(p)
     const before = this.winProb()
     const side = this.side!
@@ -368,6 +369,8 @@ export class MeMatch {
         me.fans += 40
       }
     }
+    // a rival, or the man in my position, in one line (me/rivals.ts)
+    if (!this.friendly && f.comp !== 'scrim') rivalAfterMatch(state, rec, { oppTeamId: this.oppTeamId, maps: result.maps, fixture: f })
     this.finished = rec
     if (this.friendly) {
       me.matches.push(rec)

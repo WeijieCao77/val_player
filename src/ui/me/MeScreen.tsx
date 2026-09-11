@@ -8,6 +8,7 @@ import { originOf } from '../../engine/me/origins'
 import { cupOf, cupView } from '../../engine/me/cups'
 import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
+import RivalsPanel from './Rivals'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -155,6 +156,7 @@ export default function MeScreen() {
           </div>
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>生涯：{p.career.maps} 张图 · ACS {c.acs.toFixed(0)} · K/D {c.kd.toFixed(2)} · MVP {p.career.mvps} · 冠军 {me.titles.length}</p>
         </Panel>
+        <RivalsPanel />
         <Panel title="最近的比赛" flush>
           {recent.length === 0 ? <p className="muted" style={{ padding: 12, margin: 0 }}>还没打过比赛。</p> : (
             // a long event name wraps and a narrow screen scrolls: the table never spills out of its panel

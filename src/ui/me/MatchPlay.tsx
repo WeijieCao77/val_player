@@ -12,6 +12,7 @@ import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nod
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
 import { sayDim, useNumbers } from './words'
+import { RivalNode, RivalPost, RivalPre } from './Rivals'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -206,6 +207,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         </div>
+        <RivalPre oppId={oppId} />
         {lights.length > 0 && (
           <div className="panel" style={{ marginTop: 10 }}>
             <div className="panel-head"><h2>今晚对面有谁</h2></div>
@@ -272,6 +274,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           </div>
         )}
         {rec.starBeat && <div className={`node-line ${rec.starBeat.includes('上了一课') ? 'bad' : 'ok'}`}>{rec.starBeat}</div>}
+        <RivalPost rec={rec} />
         {/* why it went that way — every row is a term the engine actually used */}
         {rec.verdict && (
           <div className="panel" style={{ marginTop: 10 }}>
@@ -409,6 +412,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       ) : phase === 'node' && pend ? (
         <div className="node-box">
           {pend.ctx.agent && <p className="tiny muted" style={{ margin: '0 0 6px' }}>你今晚打 <b>{pend.ctx.agent}</b> · {pend.ctx.role}</p>}
+          <RivalNode oppId={oppId} />
           <p className="q">{pend.node.q}</p>
           <p className="ctx">{pend.node.ctx}</p>
           <div className="node-opt">

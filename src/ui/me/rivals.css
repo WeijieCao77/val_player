@@ -1,0 +1,13 @@
+/* 宿敌 and 称号 — see ui/me/Rivals.tsx */
+.rv-pre { margin-top: 10px; }
+.rv-line { font-size: var(--t-small); padding: 3px 0 3px 8px; border-left: 2px solid var(--line-hi); margin: 4px 0; overflow-wrap: anywhere; }
+.rv-line.foe { border-left-color: var(--loss); }
+.rv-node { margin: 0 0 6px; }
+.rv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); cursor: pointer; }
+.rv-row:last-child { border-bottom: 0; }
+.rv-why { grid-column: 1 / -1; font-size: var(--t-tiny); color: var(--muted); overflow-wrap: anywhere; }
+.rv-heat { font-size: var(--t-tiny); padding: 0 6px; border-radius: 99px; border: 1px solid var(--line-hi); color: var(--muted); white-space: nowrap; }
+.rv-heat.h1 { border-color: var(--warn); color: var(--warn); }
+.rv-heat.h2 { border-color: var(--loss); color: var(--loss); }
+.rv-wl { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-tag { white-space: nowrap; }

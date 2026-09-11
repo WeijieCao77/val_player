@@ -35,6 +35,7 @@ import { retirementTick } from './endings'
 import { compCn } from './compname'
 import { leaveClub } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
+import { rivalWeek } from './rivals'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -479,6 +480,8 @@ export function settleWeek(state: GameState): void {
   }
   tryRandomEvent(state, rng)
   checkAchievements(state)
+  // who took my place, which losses ended a run, and the cooling (me/rivals.ts)
+  rivalWeek(state)
 
   // a player has no board behind him
   state.boardConfidence = Math.max(state.boardConfidence, 45)
