@@ -15,7 +15,7 @@ import { ladderLabel } from './engine/me/prepro'
 import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, Modal, money } from './ui/me/common'
 import NewCareer from './ui/me/NewCareer'
-import Week from './ui/me/Week'
+import Week, { advanceOf } from './ui/me/Week'
 import MatchPlay from './ui/me/MatchPlay'
 import MeScreen from './ui/me/MeScreen'
 import TeamScreen from './ui/me/TeamScreen'
@@ -227,15 +227,6 @@ export default function PlayerGame() {
           <div className="spacer" />
         </header>
 
-        {/* the corner: the numbers switch, and what changed in this build — at the top bar's right end (me.css .corner) */}
-        <div className="corner">
-          <button className={`support-fab pins-fab${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
-            <span className="ico" aria-hidden="true">🔢</span>
-            <span className="lbl">数值 {nums ? '开' : '关'}</span>
-          </button>
-          <Changelog />
-        </div>
-
         {/* who I am, where I am, and the six numbers that matter — the rest
             live one row down, as numbers or as words */}
         <section className="hero" aria-label="总览">
@@ -261,6 +252,12 @@ export default function PlayerGame() {
           <div className="hero-stage">
             <b>{stageNameIn(game.year, game.stage, onTimeline(game))}</b>
             <span className="muted">{dateLabel(game)}</span>
+            {/* the week's button, mirrored where the page opens — shown on a phone only (me.css .hero-go), where the
+                real one is a long scroll down at the end of the week's panel; 破晓's HUD carries the same copy */}
+            {!Screen && me.phase !== 'retired' && (() => {
+              const go = advanceOf(game)
+              return <button className="primary hero-go" onClick={go.month ? () => advanceMany('month') : advance} title={go.title}>{go.label}</button>
+            })()}
           </div>
           <div className="tiles">
             <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
@@ -281,15 +278,21 @@ export default function PlayerGame() {
 
         {/* One line under the tiles, not a row of every dimension (asked 2026-09-11: 「段位下方有足足13个维度」).
             The eight, 心态, 体质, 疲劳 and 气压 all still drive every sum; they are read in full on 我的. */}
-        {screen !== 'me' && (
+        {/* The numbers switch rides the end of this line on every screen, 我的 included, the way 破晓 keeps 「数值」 on its attribute bar. */}
         <div className="pinbar" role="status" aria-label="能力">
-          <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
-          {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
-            <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
+          {screen !== 'me' && (
+            <>
+              <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
+              {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
+                <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
+              )}
+              <button className="sm ghost to-me" onClick={() => setScreen('me')}>看八项属性 →</button>
+            </>
           )}
-          <button className="sm ghost" onClick={() => setScreen('me')}>看八项属性 →</button>
+          <button className={`sm ghost num-switch${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
+            数值 {nums ? '开' : '关'}
+          </button>
         </div>
-        )}
 
         <div className="body">
           <nav className={`nav${more ? ' more-open' : ''}`}>
@@ -322,6 +325,8 @@ export default function PlayerGame() {
             ) : Screen ? <Screen /> : <Week onAdvance={advance} onAdvanceUntil={advanceMany} />}
           </main>
         </div>
+        {/* what changed in this build: the bottom-right corner, where 破晓 keeps its corner tools (me.css .log-fab) */}
+        <Changelog />
         {more && <div className="nav-scrim" aria-hidden="true" onClick={() => setMore(false)} />}
 
         {playerId && <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} />}

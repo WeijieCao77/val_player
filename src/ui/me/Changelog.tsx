@@ -49,6 +49,7 @@ export default function Changelog() {
         className={`support-fab log-fab${open ? ' on' : ''}`}
         onClick={toggle}
         aria-expanded={open}
+        aria-label="更新日志"
         title="看看这版改了什么"
       >
         <span className="ico" aria-hidden="true">📋</span>
