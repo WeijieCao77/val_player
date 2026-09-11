@@ -37,6 +37,7 @@ import { compCn } from './compname'
 import { leaveClub } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
+import { compClass } from './compclass'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -426,8 +427,9 @@ function onStageChange(state: GameState, rng: Rng): void {
   bottleneckStage(state)
   if (me.phase !== 'pro') return
   // Champions has just been settled? then whoever lost the final is written down
-  const champs = state.comps['champions']
-  if (champs?.champion && champs.finished?.[1] === state.myTeam && me.startedThisStage > 0) me.flags.champFinalLost = 1
+  // on the timeline Champions is 「2026 全球冠军赛」, not a comp keyed 'champions': the old lookup never found it, so 无冕之王 never came
+  const champs = Object.values(state.comps).find((c) => !!c.champion && compClass(c.name) === 'champions' && c.finished?.[1] === state.myTeam)
+  if (champs && me.startedThisStage > 0) me.flags.champFinalLost = 1
   noteScoutInterest(state, rng)
   // a stage's worth of evidence is enough to say who was carrying whom
   bondCloseStage(state)

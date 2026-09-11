@@ -4,6 +4,7 @@ import type { Attrs, GameState, Player } from '../types'
 import { recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
+import { compClass, isIntlComp } from './compclass'
 
 /**
  * 瓶颈: each of the eight has a ceiling, and hours past it go nowhere.
@@ -189,7 +190,7 @@ function veteranOf(state: GameState): Player | undefined {
     .find((q) => !!q && q.id !== me.id && q.age >= VET_AGE)
 }
 const strongClub = (state: GameState) => state.me!.phase === 'pro' && (state.teams[state.myTeam]?.rating ?? 0) >= STRONG_TEAM
-const playedIntl = (state: GameState) => state.me!.matches.some((m) => m.started && /Masters|Champions/.test(m.comp))
+const playedIntl = (state: GameState) => state.me!.matches.some((m) => m.started && isIntlComp(state.comps[m.comp]?.name ?? m.comp))
 
 /**
  * Every attribute's own way through, 破晓's BREAK_PATHS on this game's eight.
@@ -419,10 +420,11 @@ export function bottleneckSeason(state: GameState, played: boolean): void {
 
 /** A trophy I was on the floor for opens the ceilings that big nights are about, from the milestone pool. */
 export function bottleneckTitle(state: GameState, title: string): void {
-  if (/Champions/.test(title)) {
+  const kind = compClass(title)
+  if (kind === 'champions') {
     breakthrough(state, 'clutch', 3, '你在世界最高的舞台上赢过一次，没有什么再能让你手抖。', 'mile')
     breakthrough(state, 'communication', 3, '世界冠军喊的每一句，队友都愿意跟。', 'mile')
-  } else if (/Masters/.test(title)) {
+  } else if (kind === 'masters' || kind === 'lockin') {
     breakthrough(state, 'clutch', 2, '大师赛的领奖台你站上去过了，大场面再也吓不到你。', 'mile')
     breakthrough(state, 'communication', 2, '拿过国际冠军的人说话，队友会听。', 'mile')
   } else {

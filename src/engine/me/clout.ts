@@ -6,6 +6,7 @@ import type { GameState, Player } from '../types'
 import { compCn } from './compname'
 import { pushLog } from './log'
 import { inWindow, nextWindow } from './transfer'
+import { isIntlComp } from './compclass'
 
 /**
  * How much of a say you have in your own club.
@@ -46,7 +47,7 @@ export function attrAvg(p: Player): number {
   return ATTR_KEYS.reduce((s, k) => s + p.attrs[k], 0) / ATTR_KEYS.length
 }
 
-const isIntl = (t: string) => /Masters|Champions/.test(t)
+const isIntl = (t: string) => isIntlComp(t)
 
 export interface CloutParts { label: string; value: number }
 

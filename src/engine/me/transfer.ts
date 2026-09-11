@@ -7,6 +7,7 @@ import { makeDeal, leaveClub } from './contract'
 import { gradeOf } from './tryout'
 import { expectOf, tryoutSkill } from './prepro'
 import { hasPlace } from '../timeline'
+import { isIntlComp } from './compclass'
 
 /**
  * How the market reads a professional: 破晓's proPerf, on this game's scale.
@@ -25,7 +26,7 @@ export function proPerf(state: GameState): number {
   const rating = started.length ? started.reduce((s, m) => s + m.rating, 0) / started.length : 0.9
   const carries = started.filter((m) => m.carried).length
   const titles = me.titles.filter((t) => t.year === state.year)
-  const intl = titles.filter((t) => /Masters|Champions/.test(t.title)).length
+  const intl = titles.filter((t) => isIntlComp(t.title)).length
   const regional = titles.length - intl
   let v = (p.overall - level) * 1.2
   v += (wr - 0.5) * 20 * 0.55
@@ -120,7 +121,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
   // a club does not shop a man who signed this season unless he is rotting on the bench
   if (me.tenure < 1 && !benched && !listed) { me.intents = []; return 0 }
   let p = clamp(0.10 + perf * 0.03 + me.heat / 1500 + Math.min(me.intents.length, 3) * 0.12, 0.02, 0.85)
-  if (me.titles.some((t) => t.year === state.year && /Masters|Champions/.test(t.title))) p = 1
+  if (me.titles.some((t) => t.year === state.year && isIntlComp(t.title))) p = 1
   else if (me.titles.some((t) => t.year === state.year)) p = Math.max(p, 0.96)
   if (perf >= 13 && (me.flags.dryWindows ?? 0) >= 2) p = Math.max(p, 0.92)
   if (listed) p = Math.min(0.97, p * 1.3 + 0.15)

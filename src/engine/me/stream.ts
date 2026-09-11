@@ -81,6 +81,8 @@ export function answerStreamOffer(state: GameState, choice: 'club' | 'rival' | '
   const club = choice === 'club'
   const sign = Math.round(o.sign * (club ? 0.8 : 1.4))
   const guarantee = Math.round(o.guarantee * (club ? 1.0 : 1.15))
+  // remembered after the deal ends: 「签了独家」 asked for it and nothing ever wrote it
+  me.flags.hadStreamDeal = 1
   me.stream.deal = {
     platform: club ? o.clubPlatform : o.platform, club, guarantee,
     clubCut: pro ? (club ? 0.2 : 0.4) : 0, minPerStage: MIN_STREAMS_PER_STAGE, untilYear: state.year + 2,
