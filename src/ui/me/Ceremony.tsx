@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
 import { Modal } from '../common'
 import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip, mediaMoment } from '../../engine/me/ceremony'
+import { speechOf } from '../../engine/me/nights'
 import type { CerTier } from '../../engine/me/types'
+import { AceGame, PickGame, SpeechGame } from './CeremonyGames'
 
 /**
  * The one place in the game where your own hand decides something.
@@ -43,13 +45,13 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
               : <>
                 <button onClick={skip}>直接过去</button>
                 <button className="primary" onClick={() => { cerNext(game); bump() }}>
-                  {def.game === 'choice' ? '面对镜头' : '上'}
+                  {def.go ?? (def.game === 'choice' ? '面对镜头' : '上')}
                 </button>
               </>}
           </div>
           {def.game !== 'none' && (
             <p className="tiny faint" style={{ textAlign: 'center', margin: '10px 0 0' }}>
-              「直接过去」按银档算，不扣任何东西——只是拿不到金档。
+              {def.skipNote ?? '「直接过去」按银档算，不扣任何东西——只是拿不到金档。'}
             </p>
           )}
         </>
@@ -59,19 +61,25 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
       {step === 1 && def.game === 'rhythm' && <RhythmGame onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
       {step === 1 && def.game === 'react' && <ReactGame onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
       {step === 1 && def.game === 'choice' && <MediaChoice onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
+      {step === 1 && def.game === 'speech' && <SpeechGame {...speechOf(game)} onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
+      {step === 1 && def.game === 'ace' && <AceGame onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
+      {step === 1 && def.game === 'pick' && <PickGame hint={def.ask ?? ''} picks={def.picks?.(game, cer) ?? []} onEnd={(t, d) => { cerFinish(game, t, d); bump() }} />}
 
       {step === 2 && (
         <>
           {/* A tone is not a grade. Printing 金档 over 「冠军」 would say it was
               the right answer, when the whole point is that it costs something. */}
-          <div className={`cer-tier ${cer.tier ?? 'silver'}`}>
-            {def.game === 'choice'
-              ? (TONES.find((t) => t.key === cer.detail?.tone)?.name ?? '说完了')
-              : TIER_CN[cer.tier ?? 'silver']}
-          </div>
-          <p className="cer-story" style={{ textAlign: 'center' }}>{def.blurb[cer.tier ?? 'silver']}</p>
+          {def.game === 'pick'
+            // a choice is not a grade either: what was chosen goes up there
+            ? <div className="cer-tier pick">{def.picks?.(game, cer).find((x) => x.key === cer.detail?.pick)?.label ?? '定了'}</div>
+            : <div className={`cer-tier ${cer.tier ?? 'silver'}`}>
+              {def.game === 'choice'
+                ? (TONES.find((t) => t.key === cer.detail?.tone)?.name ?? '说完了')
+                : TIER_CN[cer.tier ?? 'silver']}
+            </div>}
+          <p className="cer-story" style={{ textAlign: 'center' }}>{def.after ? def.after(game, cer) : def.blurb[cer.tier ?? 'silver']}</p>
           <div className="row" style={{ justifyContent: 'center', marginTop: 14 }}>
-            <button className="primary" onClick={close}>走了</button>
+            <button className="primary" onClick={close}>{def.done ?? '走了'}</button>
           </div>
         </>
       )}

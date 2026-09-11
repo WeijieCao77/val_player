@@ -14,8 +14,9 @@ export type MoneyKind =
   | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
   | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'fee' | 'fine' | 'outother'
 
-/** The nights that are not matches - see me/ceremony.ts. */
+/** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
+  | 'awards' | 'retire' | 'patch' | 'showmatch' | 'tryout'
 export type CerTier = 'gold' | 'silver' | 'bronze'
 
 export interface Ceremony {
@@ -25,7 +26,23 @@ export interface Ceremony {
   tier?: CerTier
   /** the competition, the city, the injury - whatever this night is about */
   about?: string
-  detail?: { tone?: string; score?: number; ms?: number; hits?: number }
+  detail?: { tone?: string; score?: number; ms?: number; hits?: number; pick?: string; stumbles?: number; aces?: number }
+}
+
+/** A category I was read out for at a year's awards night - see me/nights.ts. */
+export interface MeAward {
+  year: number
+  key: 'mvp' | 'rookie' | 'role'
+  name: string
+  /** what it was judged over: a league, or a region's tier in the open era */
+  league: string
+  won: boolean
+  winner: string
+  winnerTeam: string
+  /** everyone read out, me included, best first */
+  nominees: string[]
+  /** my season rating, as it was judged */
+  rating: number
 }
 
 export interface LedgerBook {
@@ -438,6 +455,8 @@ export interface MeState {
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */
   cerMatch?: { fixture: string; nudge: number; node: number; until: number }
+  /** categories I was up for at awards nights; absent in older saves */
+  awards?: MeAward[]
   /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
   ledger?: Ledger
   /** competitions whose prize share has already been paid, as `year:compKey` */
