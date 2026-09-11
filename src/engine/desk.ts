@@ -64,8 +64,8 @@ export type StayApproach = 'heart' | 'raise' | 'bench' | 'transfer' | 'accept'
 
 export interface ManagerDesk {
   // ---- the world's day, in the order it runs
-  /** a season is being set up: the manager's contract for it */
-  seasonSetup(state: GameState): void
+  /** a season is being set up: the manager's contract for it, and the market's first listings */
+  seasonSetup(state: GameState, notes?: string[]): void
   /** the clock waits on a question only the manager can answer (the five-year settlement) */
   holdsClock(state: GameState): boolean
   /** the day opens, before its fixtures */
@@ -84,7 +84,7 @@ export interface ManagerDesk {
   weekOpened(state: GameState, notes: string[]): void
   /** after training and every club's weekly books; `grumbling` are the managed club's players with a broken promise of minutes */
   weekTrained(state: GameState, grumbling: Player[], notes: string[]): void
-  /** after the AI clubs have been to the market */
+  /** weekly, after the clubs' books: the manager game's market — the AI clubs' bids and listings, bids for his players */
   weekMarket(state: GameState, notes: string[]): void
   /** the season has ended, before the winter; true when the season stops here */
   seasonEnding(state: GameState, notes: string[]): boolean

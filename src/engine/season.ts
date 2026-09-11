@@ -1,4 +1,4 @@
-import { Rng, clamp, dayStream, hashStr } from './rng'
+import { Rng, clamp, hashStr } from './rng'
 import {
   activePool, applyMatchStats, poolFor, poolPhaseOf, pruneMatchDetail, simulateMatch, stripRoundLogs,
 } from './match'
@@ -8,13 +8,12 @@ import {
   resetFixtureSeq, scheduleRegularSeason, sortStandings, startBracket, respaceRounds, groupTable, scheduleGroupSeason
 } from './league'
 import { awardPrize, sponsorWorth, weeklyBudgets } from './budget'
-import { aiTransferTick, refreshListings } from './transfer'
 import { mapCn } from './content'
 import { FAM_MATCH, FAM_SCRIM, learnComp } from './comp'
 import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './endings'
 import { hostCity } from './hosts'
 import { applyMatchBonds } from './bonds'
-import { titleLoyalty } from './loyalty'
+import { titleLoyalty } from './attachment'
 import { applyMatchFatigue, seasonRollover, weeklyTick } from './training'
 import { deskOf } from './desk'
 import type { ContractsRun, StayApproach } from './desk'
@@ -136,7 +135,7 @@ const tier2Of = (state: GameState, region: Region) =>
 /** Build every fixture that can be known before a ball is thrown. */
 export function setupSeason(state: GameState, notes?: string[]): void {
   // a manager's save: his contract for the new season (engine/desk.ts)
-  deskOf(state)?.seasonSetup(state)
+  deskOf(state)?.seasonSetup(state, notes)
   resetFixtureSeq(0)
   state.fixtures = []
   state.comps = {}
@@ -144,7 +143,6 @@ export function setupSeason(state: GameState, notes?: string[]): void {
   // and past the last real one the same calendar again (engine/circuit.ts projectedOf)
   if (isTimelineWorld(state) && eventsOf(state.year).length) {
     setupCircuitSeason(state)
-    seedMarket(state, notes)
     return
   }
   const rng = new Rng(hashStr(`season:${state.seed}:${state.year}`))
@@ -196,7 +194,6 @@ export function setupSeason(state: GameState, notes?: string[]): void {
       state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
     }
   }
-  seedMarket(state, notes)
 }
 
 export const PLAYOFF_CUT: Partial<Record<StageKey, number>> = {
@@ -1196,11 +1193,8 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
     notes.push(...weeklyTick(state, rng, grumbling))
     weeklyBudgets(state)
     desk?.weekTrained(state, grumbling, notes)
-    // the manager game's market, on streams of its own: a player's world
-    // does not run it, and the winter that follows rolls the same either way
-    aiTransferTick(state, dayStream(state.seed, state.year, state.day, 'market'), notes)
+    // the manager game's market: the AI clubs' bids and listings, and bids for his own players (engine/desk.ts)
     desk?.weekMarket(state, notes)
-    refreshListings(state, dayStream(state.seed, state.year, state.day, 'listings'), notes)   // runs all year so stale listings expire
   }
 
   if (state.news.length > 400) state.news.splice(0, state.news.length - 400)
@@ -1600,14 +1594,10 @@ export function resumeTimeline(state: GameState): boolean {
  */
 function rebaseSeasonClock(state: GameState, shift: number): void {
   if (shift <= 0) return
-  const move = (v: number | undefined): number | undefined =>
-    v == null ? v : v - shift
-
   // a club told us it closes on a day of the old calendar
   if (state.foldNotice) state.foldNotice.day -= shift
   for (const p of Object.values(state.players)) {
     if (p.injuredUntil > 0) p.injuredUntil = Math.max(0, p.injuredUntil - shift)
-    if (p.listedOn != null) p.listedOn = move(p.listedOn)
   }
   // a manager's save: sponsors, staff, job offers, bids, the drill and the physio room (engine/desk.ts)
   deskOf(state)?.clockRebased(state, shift)
@@ -1620,10 +1610,6 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
  * the market is empty a club simply runs short and the shortage is reported,
  * rather than conjuring a fictional prospect to paper over it.
  */
-/** Give the market a starting state, so the first window is not empty. */
-export function seedMarket(state: GameState, notes?: string[]): void {
-  refreshListings(state, new Rng(hashStr(`market:${state.seed}:${state.year}`)), notes)
-}
 
 export function ensureMinimumRosters(state: GameState, rng: Rng): void {
   const short: string[] = []

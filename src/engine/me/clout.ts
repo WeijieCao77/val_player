@@ -1,7 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { askingPrice, doTransfer, releasePlayer, squadFloorBlock } from '../transfer'
+import { importBlock } from '../imports'
+import { squadOf } from '../roster'
+import { CLUB_CEILING, feeOf, floorBlock, joinRoster, leaveRoster } from './club'
 import { duoBonded } from '../bonds'
-import { defaultContract } from '../types'
 import type { GameState, Player } from '../types'
 import { compCn } from './compname'
 import { pushLog } from './log'
@@ -140,7 +141,7 @@ export function canList(state: GameState): Gate {
   // Ask before rolling, not after: a five-man squad cannot lose anybody, and
   // finding that out only once the coach has already said yes is a dead end
   // with no reason attached.
-  const floor = squadFloorBlock(state, state.players[me.id].teamId ?? '')
+  const floor = floorBlock(state, state.players[me.id].teamId ?? '')
   if (floor) return { ok: false, why: floor }
   return { ok: true }
 }
@@ -187,11 +188,13 @@ export function doList(state: GameState, targetId: string): string {
     return `没同意。${target.ign} 知道是你提的。`
   }
 
-  const blocked = releasePlayer(state, target)
-  if (blocked) {
+  const floor = floorBlock(state, team.id)
+  if (floor) {
     me.cloutCd.list = 0
-    return blocked
+    return floor
   }
+  leaveRoster(state, target)
+  state.news.push({ day: state.day, kind: 'transfer', important: true, text: `${team.name} 与 ${target.ign} 解约，该选手成为自由人。` })
   me.coachTrust = clamp(me.coachTrust - 4, 0, 100)
   for (const id of team.roster) if (id !== me.id) duoBonded(state, me.id, id, -6)
   pushLog(state, 'team', `你向教练组提出换掉 ${target.ign}，成功了。他被放走，位置空了出来。<b>基地安静了很久——他们知道这是你提的。</b>`)
@@ -248,7 +251,7 @@ export function signTargets(state: GameState): SignTarget[] {
   const band = Object.values(state.players)
     .filter((q) => q.teamId && q.teamId !== myTeam.id && !q.retiring)
     .map((q) => ({ q, a: attrAvg(q) }))
-    .filter((x) => x.a <= reach + 4 && x.a >= teamAvg - 1 && askingPrice(x.q) <= purse)
+    .filter((x) => x.a <= reach + 4 && x.a >= teamAvg - 1 && feeOf(x.q) <= purse)
     .sort((a, b) => b.a - a.a)
   if (!band.length) return []
   const pick = band.length <= SIGN_SLOTS
@@ -258,7 +261,7 @@ export function signTargets(state: GameState): SignTarget[] {
     id: q.id, ign: q.ign, role: q.role, overall: q.overall,
     teamName: state.teams[q.teamId!]?.name ?? '—',
     abroad: state.teams[q.teamId!]?.region !== myTeam.region,
-    fee: askingPrice(q),
+    fee: feeOf(q),
   }))
 }
 
@@ -301,18 +304,34 @@ export function doSign(state: GameState, targetId: string): string {
     return `谈崩了。经理觉得你不太懂行情。`
   }
 
-  const fee = askingPrice(target)
+  const fee = feeOf(target)
   if (fee > myTeam.budget) {
     me.gmTrust = clamp(me.gmTrust - 5, 0, 100)
     pushLog(state, 'bad', `你向经理提出签下 ${target.ign}。他看了一眼账，没接话。「这个价信不是不想，是真没钱。」`)
     return `俱乐部出不起这个价（要 ${fee.toLocaleString()}，队里只有 ${Math.round(myTeam.budget).toLocaleString()}）。`
   }
-  const ok = doTransfer(state, target, myTeam.id, fee, defaultContract(target.salary, 2))
-  if (!ok) {
-    // the engine refused — a full roster, an import limit, a squad floor
+  const seller = state.teams[target.teamId ?? '']
+  // One for one when the roster is full, the way 破晓's clubs deal: the club's
+  // weakest man in that job goes the other way.
+  const full = myTeam.roster.length >= CLUB_CEILING
+  const out = full
+    ? squadOf(state, myTeam.id)
+      .filter((q) => q.id !== me.id && (q.roles ?? [q.role]).includes(target.role))
+      .sort((a, b) => a.overall - b.overall)[0]
+    : undefined
+  if (!seller || importBlock(state, myTeam.id, target) || (full && !out)) {
+    // a full roster with nobody in that job to send back, or the import limit
     me.cloutCd.sign = 0
     return '俱乐部去谈了，但这笔转会办不下来（名单已满或名额受限）。'
   }
+  if (out) joinRoster(state, out, seller, rng)
+  joinRoster(state, target, myTeam, rng)
+  myTeam.budget -= fee
+  seller.budget += fee
+  state.news.push({
+    day: state.day, kind: 'transfer', important: true,
+    text: `${myTeam.name} 以 $${fee.toLocaleString()} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
+  })
   me.gmTrust = clamp(me.gmTrust - 3, 0, 100)
   pushLog(state, 'team', `俱乐部按你的要求把 <b>${target.ign}</b> 签了下来。<b>这是你的话语权换来的——现在成绩得对得起它。</b>`)
   return `${target.ign} 来了。`

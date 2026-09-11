@@ -1,4 +1,4 @@
-import { clamp, dayStream, hashStr } from './rng'
+import { Rng, clamp, dayStream, hashStr } from './rng'
 import { mountDesk } from './desk'
 import type { ClubMods, ContractsRun, ManagerDesk, StayApproach } from './desk'
 import { skillMod } from './manager'
@@ -8,7 +8,7 @@ import { offerGigs, resolveSponsorTalks, runGigsToday, settleSponsorDemands, str
 import { offerBundle, settleLeagueSeason, tickLeagueOffer } from './leagueShare'
 import { prizeLedger, weeklyLedger } from './finance'
 import { doPhysio, drillTick, physioBlock, reviewIglXp } from './drill'
-import { bidForOurPlayers, resolveDueOffers, resolveEnquiries, windowOpen } from './transfer'
+import { aiTransferTick, bidForOurPlayers, refreshListings, resolveDueOffers, resolveEnquiries, windowOpen } from './transfer'
 import { trustAfterMatch, weeklyTrust } from './trust'
 import { dailyLife, weeklyLife } from './life'
 import {
@@ -112,8 +112,10 @@ function persuadeStay(state: GameState, playerId: string, approach: StayApproach
 }
 
 export const managerDesk: ManagerDesk = {
-  seasonSetup(state: GameState): void {
+  seasonSetup(state: GameState, notes?: string[]): void {
     state.managerContract ??= defaultContract(state)
+    // give the market a starting state, so the first window is not empty
+    refreshListings(state, new Rng(hashStr(`market:${state.seed}:${state.year}`)), notes)
   },
 
   holdsClock(state: GameState): boolean {
@@ -240,7 +242,10 @@ export const managerDesk: ManagerDesk = {
   },
 
   weekMarket(state: GameState, notes: string[]): void {
+    // the AI clubs work the market, bid for his players, and list or withdraw their own
+    aiTransferTick(state, side(state, 'market'), notes)
     if (windowOpen(state.day)) bidForOurPlayers(state, side(state, 'bids'), notes)
+    refreshListings(state, side(state, 'listings'), notes)   // runs all year so stale listings expire
   },
 
   seasonEnding(state: GameState, notes: string[]): boolean {
@@ -310,6 +315,7 @@ export const managerDesk: ManagerDesk = {
     // the turn budget re-mints itself whenever its day is in the future or past
     state.actions = undefined
     for (const p of Object.values(state.players)) {
+      if (p.listedOn != null) p.listedOn -= shift
       if (p.payAskedOn != null) p.payAskedOn -= shift
       if (p.rumourOn != null) p.rumourOn -= shift
       if (p.stream) {
