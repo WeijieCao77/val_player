@@ -5,6 +5,7 @@ import { commitFixture, fixtureRng } from '../season'
 import { agentCn } from '../content'
 import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine } from '../types'
+import { deskLine } from './press'
 import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
 import { cerMatchEdge } from './ceremony'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
@@ -340,7 +341,7 @@ export class MeMatch {
       // booked with me counted as having played, not as a short club's injured man (me/hurtplay.ts)
       hurtBook(state, f.id, () => commitFixture(state, f, result, notes))
       // a lay-off with a diagnosis and a count of days is said in words when the week opens instead
-      me.weekNotes.push(...notes.filter((n) => !n.includes('⚕')))
+      me.weekNotes.push(...notes.filter((n) => !n.includes('⚕') && !deskLine(n)))
     }
 
     const comp = state.comps[f.comp]

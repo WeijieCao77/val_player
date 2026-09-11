@@ -51,22 +51,10 @@ const isSharedUi = (f: string) => f.startsWith('src/ui/') && !f.startsWith('src/
  * Manager modules the career may still reach, and why. Only ever delete lines here.
  */
 const ALLOWED_FOR_NOW: Record<string, string> = {
-  // The engine split (a separate branch) takes these out of the career's week:
-  // season.ts runs the club's books, the board, sponsors, staff and the
-  // manager's wages; match.ts reads staff and the manager's skills; training
-  // and transfer read trust, loyalty and staff; the endings' event names move
-  // into the world core (rules 1, 7, 8 and 13 in the separation notes).
-  'src/engine/finance.ts': 'engine split: season.ts',
-  'src/engine/commercial.ts': 'engine split: season.ts',
-  'src/engine/leagueShare.ts': 'engine split: season.ts',
-  'src/engine/staff.ts': 'engine split: match.ts, training.ts, season.ts',
-  'src/engine/manager.ts': 'engine split: match.ts, training.ts, season.ts',
-  'src/engine/career.ts': 'engine split: season.ts',
-  'src/engine/loyalty.ts': 'engine split: season.ts, training.ts, transfer.ts',
-  'src/engine/life.ts': 'engine split: season.ts',
-  'src/engine/endings.ts': 'engine split: season.ts; the event names ui/me/Schedule.tsx reads move to the world core',
-  'src/engine/trust.ts': 'engine split: season.ts, training.ts',
-  'src/engine/telemetry.ts': 'engine split: season.ts:42',
+  // Empty: the engine split is done. The manager's desk is mounted by the
+  // manager game only (engine/desk.ts), a match reads a manager's skills and
+  // analysts through it, the event names live in the world core (engine/era.ts)
+  // and a career's save is its own (engine/me/save.ts). Nothing goes back on.
 }
 
 type Kind = 'static' | 'dynamic' | 'reexport' | 'side-effect' | 'type'

@@ -5,8 +5,7 @@ import { DIAL_SCALE, callBoost, compStyle, famBonus, familiarity, tacticEdge } f
 import type { CompStyle } from './comp'
 import { callerOf, coachOr } from './roster'
 import { NEUTRAL, squadHarmony } from './bonds'
-import { analystEdge } from './staff'
-import { skillMod } from './manager'
+import { deskOf, managedClub } from './desk'
 import type {
   EdgeBreakdown, GameState, MapLine, MapScore, MatchResult, Player, Role, RoundLog, StageKey, Team,
 } from './types'
@@ -243,12 +242,11 @@ export function buildLineup(
   const rapport = squadHarmony(state, team.id)
   const chem = clamp((avg('teamwork') + avg('communication')) / 2 + (rapport - NEUTRAL) * 0.18, 20, 99)
   const chemBonus = (chem - 65) * 0.07
-  // 战术: the manager's own read of the game, on top of the coach's
-  const mine = team.id === state.myTeam
-  const coachBonus = (coachOr(team, 'tactics') - 60) * 0.05 +
-    (mine ? (skillMod(state.manager, 'tactics', 0.06) - 1) : 0) +
-    // 对手研究: knowing what they run is worth about half a head coach
-    (mine ? analystEdge(state, 'opponent') * 2.4 : 0)
+  // 战术 and 对手研究: a manager's own read of the game and his opponent analyst,
+  // at the club he runs — handed in by his desk (engine/desk.ts ClubMods), not
+  // imported, and nobody else's
+  const mods = team.id === managedClub(state) ? deskOf(state)?.clubMods(state) : undefined
+  const coachBonus = (coachOr(team, 'tactics') - 60) * 0.05 + (mods?.coach ?? 0)
   const comp = compositionScore(players)
   const mapPref = ((team.mapPrefs[map] ?? 50) - 50) * 0.07
 
@@ -257,9 +255,8 @@ export function buildLineup(
   // a double-duelist five and a double-sentinel one.
   const t = tacticsFor(state, teamId, map)
   const te = tacticEdge(t, style, oppStyle, avg('utility'))
-  // 经济分析: better buys and better utility timing, all game
-  const utilBonus = te.utility + (avg('utility') - 65) * 0.05 +
-    (mine ? analystEdge(state, 'economy') * 1.8 : 0)
+  // 经济分析: better buys and better utility timing, all game — his analyst's, handed in the same way
+  const utilBonus = te.utility + (avg('utility') - 65) * 0.05 + (mods?.utility ?? 0)
   // how well the club knows these five agents on this map — a drilled sheet
   // plays above neutral, a sheet built last night plays below it
   const fam = familiarity(state, teamId, map, picks)
@@ -1136,7 +1133,8 @@ export function stripToTheBone(state: GameState): void {
     }
   }
   if (state.news.length > 100) state.news.splice(0, state.news.length - 100)
-  if (state.finances.log.length > 100) {
+  // a manager's save keeps a ledger; a player's has none
+  if (state.finances?.log && state.finances.log.length > 100) {
     state.finances.log.splice(0, state.finances.log.length - 100)
   }
 }

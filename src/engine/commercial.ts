@@ -354,11 +354,9 @@ export const SPONSOR_SLOT_TIERS = [65, 70, 80]
 export const sponsorSlots = (team: Team): number =>
   SPONSOR_MAX + SPONSOR_SLOT_TIERS.filter((r) => team.reputation >= r).length
 
-/** What a sponsorship in this club's league is actually worth per season. */
-export function sponsorWorth(team: Team): number {
-  const tierBase = team.tier === 1 ? 320000 : 72000
-  return tierBase * (1 + team.reputation / 160)
-}
+import { sponsorWorth } from './budget'
+/** What a sponsorship in this club's league is actually worth per season — the world's number (engine/budget.ts). */
+export { sponsorWorth }
 
 export function pitchSponsor(state: GameState): string {
   if (state.pitchCooldown != null && state.pitchCooldown > state.day) {

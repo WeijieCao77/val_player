@@ -27,18 +27,14 @@
 import { clamp } from './rng'
 import type { GameState, LeagueDeal } from './types'
 
-/** What being in the league pays a club per season, by tier. */
-export const LEAGUE_STIPEND: Record<number, number> = { 1: 600_000, 2: 100_000 }
+/** What being in the league pays a club per season, by tier — the world's number (engine/budget.ts). */
+export { LEAGUE_STIPEND } from './budget'
 
 export const SHARE_MIN = 50
 export const SHARE_MAX = 80
 
 export const leagueDealOf = (state: GameState): LeagueDeal =>
   (state.leagueDeal ??= { share: 55, mode: 'fixed' })
-
-/** The stipend as the weekly settlement pays it. */
-export const weeklyStipend = (tier: number): number =>
-  Math.round((LEAGUE_STIPEND[tier] ?? 0) / 48)
 
 /**
  * The season's bundle pot, before the club's share is applied.

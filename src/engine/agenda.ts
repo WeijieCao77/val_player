@@ -1,6 +1,7 @@
 import { squadOf, wageBill } from './roster'
 import { windowOpen, TRANSFER_WINDOWS } from './transfer'
-import { nextFixtureFor, noticeHint } from './season'
+import { nextFixtureFor } from './season'
+import { noticeHint } from './board'
 import { onTimeline, stageNameIn } from './era'
 import { gigWindow } from './commercial'
 import { nextInEvent, qualification, upcomingInternational } from './qualify'

@@ -23,6 +23,7 @@ import RetireCard from './ui/RetireCard'
 import QualifyPoster from './ui/QualifyPoster'
 import { autosave, claimAutosave, hasAutosave, loadAutosave, loadGame, packState } from './engine/save'
 import { syncCallersWithWorld } from './engine/world'
+import { mountManagerDesk } from './engine/managerDesk'
 import { dateLabel, nextRealFixtureFor, nextScrimFor, resumeTimeline } from './engine/season'
 import { onTimeline, stageNameIn } from './engine/era'
 import { actionsForTurn, actionsLeft } from './engine/actions'
@@ -43,6 +44,9 @@ import { ENDINGS } from './engine/endings'
 import Dossier from './ui/Dossier'
 import ThemeToggle from './ui/ThemeToggle'
 import { nextInEvent, qualifiedEvent, upcomingInternational } from './engine/qualify'
+
+// the manager's desk — books, board, sponsors, staff, bids — which the world calls for the club a person runs (engine/desk.ts)
+mountManagerDesk()
 
 const SCREENS: { key: string; label: string; group?: string }[] = [
   { key: 'dashboard', label: '总览', group: '俱乐部' },

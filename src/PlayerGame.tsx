@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/save'
+import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/me/save'
 import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'

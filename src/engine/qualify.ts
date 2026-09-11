@@ -12,7 +12,7 @@
 import { INTERNATIONAL_OPEN, PLAYOFF_CUT, championsField, compKey, mastersField } from './season'
 import { drawRules } from './ruleset'
 import { sortStandings } from './league'
-import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './endings'
+import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './era'
 import { swissRecord, MASTERS_8, STAGE_8, TRIPLE_12, projectNext
 } from './bracket'
 import { hostCity } from './hosts'

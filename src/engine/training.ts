@@ -1,15 +1,11 @@
-import { Rng, clamp } from './rng'
+import { Rng, clamp, dayStream } from './rng'
 import { INJURIES } from './content'
 import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
-import { coachOr, squadOf } from './roster'
-import { duoBonded, weeklyBonds } from './bonds'
-import { analystEdge, staffBonus } from './staff'
-import { weeklyTrust } from './trust'
-import { growLoyalty } from './loyalty'
-import { skillMod } from './manager'
-import { AGENTS, mapCn } from './content'
-import { FAM_DRILL, learnComp } from './comp'
-import { sheetFor } from './match'
+import { coachOr } from './roster'
+import { weeklyBonds } from './bonds'
+import { growLoyalty } from './attachment'
+import { deskOf, managedClub } from './desk'
+import type { ClubMods } from './desk'
 import { ATTR_KEYS } from './types'
 import type { Attrs, GameState, Player, Team } from './types'
 
@@ -61,14 +57,16 @@ export function aiGrowthMultiplier(state: GameState, p: Player, team: Team): num
   return 1 + 0.10 * Math.min(Math.max(state.rivalry ?? 0, 0), 2)
 }
 
-/** One week of practice for a single player. */
-function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng): string | null {
+/**
+ * One week of practice for a single player. `mods` are a manager's skills and
+ * staff at his own club (engine/desk.ts ClubMods); every other club trains
+ * without them.
+ */
+function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng, mods?: ClubMods): string | null {
   const focus = state.training[p.id] ?? 'rest'
 
   if (focus === 'rest') {
-    // 体能: rest gives back more
-    const heal = team.id === state.myTeam ? skillMod(state.manager, 'medical', 0.008) : 1
-    p.fatigue = clamp(p.fatigue - rng.range(18, 30) * heal, 0, 100)
+    p.fatigue = clamp(p.fatigue - rng.range(18, 30) * (mods?.rest ?? 1), 0, 100)
     p.morale = clamp(p.morale + rng.range(0.5, 2.5), 0, 100)
     p.form = clamp(p.form + rng.range(-1, 2), 30, 99)
     return null
@@ -77,8 +75,7 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng): string 
   const attr = focus as keyof Attrs
   const headroom = p.potential - p.overall
   // days spent on commercial work are days not spent practising
-  const booked = state.commercialDays?.[p.id] ?? 0
-  const available = clamp(1 - booked * 0.25, 0, 1)
+  const available = clamp(1 - (mods?.booked(p) ?? 0) * 0.25, 0, 1)
   if (available <= 0) {
     p.form = clamp(p.form - rng.range(0, 2), 30, 99)
     return null
@@ -90,20 +87,13 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng): string 
     return null
   }
 
-  // the staff behind the head coach count too
-  const help = team.id === state.myTeam ? staffBonus(state, 'development') : 0
-  const coach = (coachOr(team, 'development') - 55 + help) / 100
+  const coach = (coachOr(team, 'development') - 55 + (mods?.devHelp ?? 0)) / 100
   const facility = (team.facilities - 55) / 130
   const age = p.age <= 20 ? 1.35 : p.age <= 23 ? 1.1 : p.age <= 26 ? 0.8 : 0.45
   const tired = p.fatigue > 70 ? 0.5 : p.fatigue > 45 ? 0.8 : 1
   const motivated = 0.75 + p.morale / 200
 
-  const mine = team.id === state.myTeam
-  // 训练 lifts everything; 带新人 only pays on players young enough to grow
-  const talent = mine
-    ? skillMod(state.manager, 'training') *
-      (p.age <= 22 ? skillMod(state.manager, 'youth', 0.006) : 1)
-    : 1
+  const talent = mods ? mods.talent(p) : 1
   const chasing = aiGrowthMultiplier(state, p, team)
   const gain =
     rng.range(7, 16) * age * tired * motivated * (1 + coach + facility) *
@@ -129,7 +119,7 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng): string 
 }
 
 /** Add progress toward an attribute, converting a full bar into a point. */
-function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
+export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   // The ceiling is checked here, not only in trainPlayer. Team drills and the
   // pair drill go through this path, and they used to walk a maxed player
   // several points past his own potential — the number the whole scouting and
@@ -154,222 +144,18 @@ function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   return true
 }
 
-/**
- * Two players staying behind to drill together.
- *
- * Runs alongside the main session rather than instead of it: a pair working on
- * trades does not stop the other three doing anything. It costs those two extra
- * condition, which is the trade-off.
- */
-function runDuo(state: GameState, team: Team, rng: Rng): void {
-  const duo = state.duo
-  if (!duo) return
-  const coachDev = (coachOr(team, 'development') - 55) / 100
-  const facility = (team.facilities - 55) / 130
-  const gain = (base: number) => base * (1 + coachDev + facility) * rng.range(0.8, 1.2)
-
-  for (const id of [duo.a, duo.b]) {
-    const p = state.players[id]
-    if (!p || p.teamId !== team.id || p.injuredUntil > state.day) continue
-    addXp(p, 'teamwork', gain(10))
-    addXp(p, 'communication', gain(8))
-    addXp(p, 'reaction', gain(5))
-    p.fatigue = clamp(p.fatigue + rng.range(5, 10), 0, 100)
-    p.morale = clamp(p.morale + rng.range(0, 2), 0, 100)
-  }
-  // the direct lever on a feud: make the two of them work together
-  duoBonded(state, duo.a, duo.b, rng.range(3, 6))
-}
-
-/**
- * The squad-wide drill for this week.
- *
- * Each of these moves several things at once, which is the point: a team does
- * not improve by everyone grinding one stat in isolation.
- */
-/**
- * Run the confirmed plan once its seven days are up.
- *
- * The drill used to settle on the calendar week (day % 7) while the lock
- * lasted one turn — a single day in season. So the panel reopened every
- * morning, six days of picks were placebo, and only whatever was confirmed
- * last before the boundary counted. Now confirming starts a seven-day clock:
- * the lock IS the settlement date, the panel stays locked until it runs, and
- * tearing the plan up forfeits the progress and starts the count over.
- */
-export function drillTick(state: GameState, rng: Rng, notes: string[]): void {
-  if (state.drillLock == null || state.day < state.drillLock) return
-  runDrill(state, rng, notes)
-  state.drillLock = undefined
-}
-
-/**
- * What the numbers printed on the training cards get multiplied by.
- *
- * Exported because the panel has to be able to say how long something will
- * actually take, and a second copy of these three lines in the UI is how a
- * screen and its engine quietly stop agreeing. `dev` applies to every drill,
- * `review` on top of it to tape work only.
- */
-/**
- * What one settled 复盘 is worth to the IGL's 指挥, in experience.
- *
- * It was a flat 7, which at ordinary coaching is nine or ten experience — one
- * point of 指挥 every eleven weeks, for a drill whose entire reason to exist is
- * that it is the only way to train the caller. Setting the same player's
- * personal focus to 指挥 was strictly better, so the headline feature of the
- * card was the weakest thing on it. That is what got reported.
- *
- * Bigger, and shaped: a manager who has just handed the armband to somebody is
- * teaching a man his job and the obvious ground goes quickly, while a veteran
- * caller at 90 is refining and does not. So the gain rides how far the player
- * is from being a finished IGL rather than sitting flat — which is also the
- * case that was reported, a converted IGL whose 指挥 started low.
- *
- * Measured: a caller in the fifties takes about two rounds a point, the
- * seventies about four, the high eighties about five, and the ceiling on the
- * curve is deliberately low enough that the fastest anyone learns is a point a
- * fortnight. A season of nothing but tape work takes a poor caller to an
- * average one; it cannot take an average one to a great one, and 指挥 buys
- * 0.09 of team rating a point, so a whole season of the training slot spent
- * here is worth about half a league place.
- */
-const REVIEW_IGL_BASE = 36
-
-export function reviewIglXp(state: GameState, p: Player): number {
-  const rates = drillRates(state)
-  const learning = clamp((90 - p.attrs.igl) / 18, 0.15, 1.5)
-  return REVIEW_IGL_BASE * rates.dev * rates.review * learning
-}
-
-export function drillRates(state: GameState): { dev: number; review: number } {
-  const team = state.teams[state.myTeam]
-  if (!team) return { dev: 1, review: 1 }
-  const coachDev = (coachOr(team, 'development') - 55 + staffBonus(state, 'development')) / 100
-  const coachTac = (coachOr(team, 'tactics') - 55 + staffBonus(state, 'tactics')) / 100
-  const facility = (team.facilities - 55) / 130
-  return {
-    dev: 1 + coachDev + facility,
-    // 复盘专家: tape work is what an analyst is for
-    review: (1 + coachTac) * (1 + analystEdge(state, 'review')),
-  }
-}
-
-function runDrill(state: GameState, rng: Rng, notes: string[]): void {
-  const team = state.teams[state.myTeam]
-  if (!team) return
-  runDuo(state, team, rng)
-  const drill = state.drill
-  if (!drill || drill.kind === 'none') return
-  const squad = squadOf(state, state.myTeam).filter(
-    (p) => p.injuredUntil <= state.day && (state.commercialDays?.[p.id] ?? 0) < 4,
-  )
-  if (!squad.length) return
-
-  const rates = drillRates(state)
-  const gain = (base: number) => base * rates.dev * rng.range(0.8, 1.2)
-
-  switch (drill.kind) {
-    case 'map': {
-      // Running a map raises comfort on it and pulls the side together. A
-      // week has room for two maps, each at the full rate: the 7-map pool
-      // turns over twice a season, and one map a week could not keep up.
-      // 图池分析: a map specialist makes running the map worth far more
-      const mapEdge = 1 + analystEdge(state, 'maps') * 0.6
-      const maps = Array.from(new Set([drill.map, drill.map2].filter((m): m is string => !!m)))
-      for (const map of maps) {
-        const before = team.mapPrefs[map] ?? 50
-        // kept as a float: rounding every week swallowed the whole bonus, since
-        // +2.0 and +2.4 both land on +2 and the remainder never carried forward
-        team.mapPrefs[map] = clamp(before + gain(2.35) * mapEdge, 0, 95)
-        // and the sheet planned for this map is what the week rehearses —
-        // the five agents, not just the map. See engine/comp.ts.
-        const fam = learnComp(state, map, sheetFor(state, state.myTeam, map).agents, FAM_DRILL)
-        if (Math.round(team.mapPrefs[map]) > Math.round(before)) {
-          notes.push(`🗺 ${mapCn(map)} 熟练度提升到 ${Math.round(team.mapPrefs[map])}，这套阵容熟练度 ${Math.round(fam)}。`)
-        } else if (before >= 94.5) {
-          notes.push(`🗺 ${mapCn(map)} 熟练度已到上限 95，继续跑图只能保持手感——换张图练吧。`)
-        }
-      }
-      for (const p of squad) {
-        addXp(p, 'teamwork', gain(9))
-        addXp(p, 'awareness', gain(5))
-        p.fatigue = clamp(p.fatigue + rng.range(3, 7), 0, 100)
-      }
-      break
-    }
-    case 'review': {
-      // tape work is worth what the coach is worth
-      for (const p of squad) {
-        addXp(p, 'awareness', gain(6) * rates.review)
-        // the rng lives here, so reviewIglXp is the expectation the card prints
-        if (p.isIgl) addXp(p, 'igl', reviewIglXp(state, p) * rng.range(0.8, 1.2))
-        addXp(p, 'communication', gain(3))
-        p.fatigue = clamp(p.fatigue - rng.range(1, 4), 0, 100)
-      }
-      notes.push(team.coach ? `🎬 ${team.coach.name} 带队复盘，全队意识提升。` : '🎬 全队复盘录像。')
-      break
-    }
-    case 'agent': {
-      const p = state.players[drill.playerId]
-      // A learner who was sold, released or retired kept being coached from
-      // afar; one who is injured was coached from the treatment table. The
-      // other drills all filter their squad — this one never did.
-      if (!p || p.teamId !== state.myTeam) {
-        state.drill = { kind: 'none' }
-        notes.push('⚠️ 原定的「练新特工」对象已经不在队中，本轮团队训练没有产生效果。')
-        break
-      }
-      if (p.injuredUntil > state.day) {
-        notes.push(`⚠️ ${p.ign} 伤停中，本轮「练新特工」没有进行。`)
-        break
-      }
-      // Learning a position is a grind, not a switch. A quick learner still
-      // needs the better part of a season, which is what makes buying a real
-      // specialist worth the money.
-      const aptitude = 0.7 + (p.attrs.awareness + p.attrs.utility) / 400 + (p.flex ? 0.2 : 0)
-      const before = p.rolePro?.[drill.role] ?? 0
-      const now = clamp(before + gain(2.6) * aptitude, 0, 100)
-      p.rolePro = { ...(p.rolePro ?? {}), [drill.role]: now }
-      addXp(p, 'utility', gain(4))
-      p.fatigue = clamp(p.fatigue + rng.range(3, 7), 0, 100)
-
-      // agents come in along the way, so progress is visible before it pays off
-      const earned = Math.floor(now / 34) - Math.floor(before / 34)
-      for (let i = 0; i < earned; i++) {
-        const pool = AGENTS[drill.role].filter((a) => !p.agentPool.includes(a))
-        if (pool.length) p.agentPool = [...p.agentPool, rng.pick(pool)]
-      }
-      if (now >= 100 && before < 100) {
-        const roles = p.roles?.length ? p.roles : [p.role]
-        if (!roles.includes(drill.role)) {
-          p.roles = [...roles, drill.role]
-          p.flex = true
-        }
-        notes.push(`🎓 ${p.ign} 练成了${drill.role}，现在可以兼任这个位置。`)
-        state.drill = { kind: 'none' }
-      }
-      break
-    }
-    default:
-      break
-  }
-}
-
 /** Weekly tick: training, condition, morale drift, injury rolls. */
-export function weeklyTick(state: GameState, rng: Rng): string[] {
+export function weeklyTick(state: GameState, rng: Rng, grumbling: Player[] = []): string[] {
   const notes: string[] = []
-  weeklyBonds(state, rng, notes)
-  weeklyTrust(state, rng, notes)
-  const missed = Object.entries(state.commercialDays ?? {})
-    .filter(([, d]) => d >= 2)
-    .map(([id]) => state.players[id]?.ign)
-    .filter(Boolean)
-  if (missed.length) {
-    notes.push(`📉 本周 ${missed.join('、')} 商务占用较多，训练收益明显下降。`)
-  }
+  // One club's dressing room rolls its own dice (engine/rng.ts dayStream): the
+  // squad it reads changes with whoever is at that club, and every training and
+  // injury roll in the world below must not move with it.
+  weeklyBonds(state, dayStream(state.seed, state.year, state.day, 'bonds'), notes)
+  // a manager's skills and staff, at the club he runs (engine/desk.ts)
+  const mods = deskOf(state)?.clubMods(state)
   for (const team of Object.values(state.teams)) {
-    const isMine = team.id === state.myTeam
+    // the club a person manages trains to his plan; every other club — a player's included — to the role-aware one
+    const isMine = team.id === managedClub(state)
     for (const pid of team.roster) {
       const p = state.players[pid]
       if (!p) continue
@@ -384,7 +170,7 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
       }
 
       if (isMine) {
-        const note = trainPlayer(state, p, team, rng)
+        const note = trainPlayer(state, p, team, rng, mods)
         if (note) notes.push(note)
       } else {
         // AI clubs follow the same role-aware plan the training screen offers
@@ -396,7 +182,8 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
         // the manager's, so a player arrives at a new club with his programme
         // visible; it is a pure function of the player, so it stays put
         // until the attribute has nowhere left to go.
-        state.training[p.id] = recommendedTrainingFocus(p)
+        // the career player's own week sets his (me/week.ts)
+        if (p.id !== state.me?.id) state.training[p.id] = recommendedTrainingFocus(p)
         trainPlayer(state, p, team, rng)
       }
 
@@ -407,13 +194,10 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
         const starting = team.starters.includes(p.id)
         const expects = promised === 'star' || promised === 'starter'
         if (expects && !starting) {
-          // 更衣室: grievance builds slower when the manager handles people well
-          const soothe = isMine ? 2 - skillMod(state.manager, 'locker', 0.006) : 1
-          p.grievance = clamp((p.grievance ?? 0) + (promised === 'star' ? 7 : 4.5) * soothe, 0, 100)
+          p.grievance = clamp((p.grievance ?? 0) + (promised === 'star' ? 7 : 4.5) * (isMine ? mods?.soothe ?? 1 : 1), 0, 100)
           p.morale = clamp(p.morale - (promised === 'star' ? 3 : 2), 10, 100)
-          if (isMine && (p.grievance ?? 0) > 55 && rng.chance(0.25) && !p.listed) {
-            notes.push(`😠 ${p.ign} 对出场时间不满，已经在考虑离队（承诺是${promised === 'star' ? '核心' : '首发'}）。`)
-          }
+          // a manager hears about it from his own players (engine/desk.ts)
+          if (isMine && (p.grievance ?? 0) > 55) grumbling.push(p)
         } else {
           p.grievance = clamp((p.grievance ?? 0) - 3, 0, 100)
         }
@@ -445,7 +229,7 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
       const load = Math.max(0, p.fatigue - 45) / 55
       const grace = p.injuredUntil > 0 && state.day - p.injuredUntil < 14 ? 0.25 : 1
       const risk = (0.001 + load * (0.018 + Math.max(0, p.age - 27) * 0.002)) * grace *
-        (isMine ? 2 - skillMod(state.manager, 'medical', 0.008) : 1)
+        (isMine ? mods?.injury ?? 1 : 1)
       // The career's own player is hurt by me/injury.ts instead, which knows his
       // 体质 and his week. The roll is still drawn, so nobody else's dice move.
       if (rng.chance(risk) && p.id !== state.me?.id) {
@@ -469,12 +253,10 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
       // a normal plan settles in the fifties — where the injury curve and the
       // condition penalty both start to bite, and resting a man is a decision
       // rather than the only survivable setting.
-      const care = isMine ? skillMod(state.manager, 'medical', 0.008) : 1
+      const care = isMine ? mods?.care ?? 1 : 1
       p.fatigue = clamp(p.fatigue - (p.fatigue * 0.30 + 5) * care, 0, 100)
     }
   }
-  // the week has been settled, so commercial time starts over
-  state.commercialDays = {}
   return notes
 }
 
@@ -495,7 +277,7 @@ export function applyMatchFatigue(
   state: GameState, teamId: string, mapsPlayed: number, rng: Rng,
   notes?: string[], played?: string[],
 ) {
-  const isMine = teamId === state.myTeam
+  const isMine = teamId === managedClub(state)
   for (const pid of played?.length ? played : state.teams[teamId]?.starters ?? []) {
     const p = state.players[pid]
     if (!p) continue
@@ -509,7 +291,7 @@ export function applyMatchFatigue(
     const load = Math.max(0, p.fatigue - 40) / 60           // 0 at 40, 1 at 100
     const grace = p.injuredUntil > 0 && state.day - p.injuredUntil < 14 ? 0.25 : 1
     const risk = (0.002 + load * 0.026) * (mapsPlayed / 3) * grace *
-      (isMine ? 2 - skillMod(state.manager, 'medical', 0.008) : 1)
+      (isMine ? deskOf(state)?.clubMods(state).injury ?? 1 : 1)
     // the career's own player: me/injury.ts (see weeklyTick)
     if (!rng.chance(risk) || p.id === state.me?.id) continue
     const inj = rng.pick(INJURIES)
@@ -613,39 +395,20 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
 /** What one physio session costs. Money, not action points — it is upkeep. */
 export const PHYSIO_COST = 8000
 
-/**
- * A paid physio session for one player.
- *
- * Fatigue is the whole injury model's gate, so this is the lever the players
- * asked for by name: pay a little, get condition back. It also shaves an
- * active injury — treatment shortens recovery, it does not skip it. Once a
- * week per player, because a credit card is not a medical staff.
- */
-export function physioBlock(state: GameState, pid: string): string | null {
-  const p = state.players[pid]
-  if (!p || p.teamId !== state.myTeam) return '他不是我们的人。'
-  const last = state.physioOn?.[pid]
-  // a booking recorded after today is a leftover from before the calendar
-  // reset — stale, not binding
-  if (last !== undefined && last <= state.day && state.day - last < 7) {
-    return `本周已做过理疗（${7 - (state.day - last)} 天后可再约）。`
-  }
-  if (state.finances.balance < PHYSIO_COST) return '资金不足。'
-  return null
-}
+// ---------------------------------------------------------------- the manager game's training screen, by name
+//
+// The team drill, the pair work and the physio room are the manager's
+// (engine/drill.ts), reached through his desk. His training screen still
+// imports these from here by name; with no desk mounted each does nothing.
 
-export function doPhysio(state: GameState, pid: string): string | null {
-  if (physioBlock(state, pid)) return null
-  const p = state.players[pid]
-  state.finances.balance -= PHYSIO_COST
-  state.finances.log.push({ day: state.day, label: `理疗 · ${p.ign}`, amount: -PHYSIO_COST })
-  state.physioOn = { ...(state.physioOn ?? {}), [pid]: state.day }
-  p.fatigue = clamp(p.fatigue - 35, 0, 100)
-  if (p.injuredUntil > state.day) {
-    const left = p.injuredUntil - state.day
-    const cut = Math.max(2, Math.round(left * 0.3))
-    p.injuredUntil = Math.max(state.day + 1, p.injuredUntil - cut)
-    return `${p.ign} 完成理疗：体能恢复，伤情好转，预计提前 ${cut} 天复出。`
-  }
-  return `${p.ign} 完成理疗：体能大幅恢复。`
-}
+/** What one settled 复盘 is worth to the caller (engine/drill.ts). */
+export const reviewIglXp = (state: GameState, p: Player): number =>
+  deskOf(state)?.reviewIglXp(state, p) ?? 0
+
+/** Why this player cannot see the physio this week, or null (engine/drill.ts). */
+export const physioBlock = (state: GameState, pid: string): string | null =>
+  deskOf(state)?.physioBlock(state, pid) ?? '没有理疗室。'
+
+/** A paid physio session (engine/drill.ts). */
+export const doPhysio = (state: GameState, pid: string): string | null =>
+  deskOf(state)?.doPhysio(state, pid) ?? null

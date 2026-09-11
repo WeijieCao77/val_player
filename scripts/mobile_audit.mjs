@@ -40,7 +40,8 @@ const WIDTHS = [320, 360, 375, 390, 414, 430, 768, 820, 1024, 1280, 1440]
 // every 16px across the range, for the states a sweep covers: the in-between widths no preset names
 const SWEEP_WIDTHS = Array.from({ length: 71 }, (_, i) => 320 + i * 16)
 const heightOf = (w) => (w <= 430 ? 812 : w <= 820 ? 1024 : 900)
-const SAVE_KEY = 'valmanager:player:save:autosave'
+// the player game's own key (src/engine/me/save.ts); a career under the old manager-namespace key is copied across on first load
+const SAVE_KEY = 'val_player:save:autosave'
 
 /* ------------------------------------------------------------------ in the page */
 

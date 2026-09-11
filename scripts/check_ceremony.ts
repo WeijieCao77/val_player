@@ -182,7 +182,8 @@ else {
   cerFinish(s, 'gold', { ms: 4200, stumbles: 0 })
   cerClose(s)
   if (open(s)) fail('颁奖夜没关掉。')
-  if (m.heat - heat !== 12 || m.mental !== 52) fail(`颁奖夜金档应热度 +12、心态 +2，实际热度 +${m.heat - heat}、心态 ${m.mental}。`)
+  // heat is a float that has been through a career: +12 is +12 to within rounding
+  if (Math.abs(m.heat - heat - 12) > 1e-9 || m.mental !== 52) fail(`颁奖夜金档应热度 +12、心态 +2，实际热度 +${m.heat - heat}、心态 ${m.mental}。`)
   results.push(`颁奖夜 ${aw?.league}：${aw?.cats.map((c) => c.name).join('、')}`)
 }
 
@@ -205,7 +206,8 @@ else {
     if (!showmatchNight(s) || m.cer?.kind !== 'showmatch') fail('粉丝够、队伍没进冠军赛，却没开表演赛。')
     cerSkip(s)
     if (open(s)) fail('表演赛没关掉。')
-    if (m.heat - heat !== 8 || m.fans !== SHOWMATCH_FANS) fail(`跳过表演赛应是银档：热度 +8、粉丝不变，实际热度 +${m.heat - heat}、粉丝 ${m.fans}。`)
+    // heat is a float that has been through a career: +8 is +8 to within rounding
+    if (Math.abs(m.heat - heat - 8) > 1e-9 || m.fans !== SHOWMATCH_FANS) fail(`跳过表演赛应是银档：热度 +8、粉丝不变，实际热度 +${m.heat - heat}、粉丝 ${m.fans}。`)
     results.push(`表演赛：${comp.name} ${comp.city ?? '（没有城市）'}`)
   }
 }

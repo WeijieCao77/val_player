@@ -29,6 +29,20 @@ import type { GameState, Region, StageKey } from './types'
  */
 export const WORLD_END = 2035
 
+/**
+ * The three international trophies, spelled the way a season awards them.
+ *
+ * The world's names: the calendar hands them out (engine/season.ts), the
+ * qualification panel and the schedule read them. They lived in the manager
+ * game's endings, which still re-exports them — one spelling, so the two can
+ * never drift apart (a 'Champions' against 'VALORANT Champions' once made every
+ * Champions ending unreachable).
+ */
+export const MASTERS_1 = 'Masters I'
+export const MASTERS_2 = 'Masters II'
+export const CHAMPIONS = 'VALORANT Champions'
+export const INTL_TITLES = [MASTERS_1, MASTERS_2, CHAMPIONS] as const
+
 /** The two years a career can begin in. Decided 2026-09-10. */
 export const ENTRY_YEARS = [2021, 2026] as const
 export type EntryYear = (typeof ENTRY_YEARS)[number]

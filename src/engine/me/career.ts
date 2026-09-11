@@ -1,6 +1,6 @@
 import RAW from '../../data/world.json'
 import RAW_2021 from '../../data/world_2021.json'
-import { createNewGame } from '../world'
+import { createWorld } from '../world'
 import { bookClubsAt, openWorldAt } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
@@ -108,8 +108,8 @@ export function careerRegions(year: number): Region[] {
  * really opened (engine/timeline.ts openWorldAt), with the coaches and the
  * professionals below the leagues that 2026's own files know of (engine/today.ts).
  */
-function createWorldAt(teamId: string, name: string, seed: number, year: number): GameState {
-  const state = createNewGame((RAW_2021.teams as BookClub[])[0].id, name, seed, undefined, 2021)
+function createWorldAt(teamId: string, seed: number, year: number): GameState {
+  const state = createWorld((RAW_2021.teams as BookClub[])[0].id, seed, 2021)
   // nobody's club yet: history moves every club while the world is brought up
   state.myTeam = ''
   openWorldAt(state, year)
@@ -117,11 +117,6 @@ function createWorldAt(teamId: string, name: string, seed: number, year: number)
   state.news = []
   state.training = {}
   state.myTeam = teamId
-  const club = state.teams[teamId]
-  state.finances = { balance: club?.budget ?? 0, log: [] }
-  state.startingSquad = [...(club?.roster ?? [])]
-  state.startTier = club?.tier
-  state.startFacilities = club?.facilities
   return state
 }
 
@@ -200,9 +195,13 @@ export function createCareer(o: CareerOpts): GameState {
     ? careerRegions(year).find((r) => regionIn(r, year) === o.region) ?? o.region
     : o.region
   const teamId = o.start === 'pre'
-    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // a club to watch until I have one
+    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // the world is built around a club; I am not at it
     : (o.teamId ?? pickClub(region, clubTier, rng, year))
-  const state = year >= 2026 ? createWorldAt(teamId, o.name, seed, year) : createNewGame(teamId, o.name, seed, undefined, year)
+  const state = year >= 2026 ? createWorldAt(teamId, seed, year) : createWorld(teamId, seed, year)
+  // Nobody's club until I sign for one. The world used to keep a club "watched" for a player on the
+  // ladder, and treated it as his: its title raised the world's rivalry, it kept its name when history
+  // renamed it, its matches were his in the engine's eyes.
+  if (o.start === 'pre') state.myTeam = ''
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
 
@@ -230,7 +229,6 @@ export function createCareer(o: CareerOpts): GameState {
   p.salary = 0
   refreshValue(p)
   state.players[ME_ID] = p
-  state.manager = undefined
 
   const me: MeState = {
     id: ME_ID, originKey: o.originKey, phase: 'pre', week: 0, weekDay: 0, ap: AP_PRE, apMax: AP_PRE, plan: {},

@@ -7,21 +7,16 @@ import {
   CHAMP_POINTS, advanceBracket, applyResultToStandings, makeFixture, newStandings,
   resetFixtureSeq, scheduleRegularSeason, sortStandings, startBracket, respaceRounds, groupTable, scheduleGroupSeason
 } from './league'
-import { awardPrize, weeklyFinance } from './finance'
-import { aiTransferTick, refreshListings, resolveDueOffers, resolveEnquiries } from './transfer'
-import { offerGigs, resolveSponsorTalks, runGigsToday, streamWeek, settleSponsorDemands, sponsorWorth } from './commercial'
-import { offerBundle, settleLeagueSeason, tickLeagueOffer } from './leagueShare'
+import { awardPrize, sponsorWorth, weeklyBudgets } from './budget'
 import { mapCn } from './content'
 import { FAM_MATCH, FAM_SCRIM, learnComp } from './comp'
-import { CHAMPIONS, endingsFor, FINAL_YEAR, MASTERS_1, MASTERS_2, MID_YEAR, tenureCn } from './endings'
+import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './era'
 import { hostCity } from './hosts'
 import { applyMatchBonds } from './bonds'
-import { trustAfterMatch } from './trust'
-import { titleLoyalty } from './loyalty'
-import { resolveApproaches, resolveStaffOffers } from './staff'
-import { defaultContract, resolveApplications } from './career'
-import { applyMatchFatigue, drillTick, seasonRollover, weeklyTick } from './training'
-import { dailyLife, weeklyLife } from './life'
+import { titleLoyalty } from './attachment'
+import { applyMatchFatigue, seasonRollover, weeklyTick } from './training'
+import { deskOf, managedClub } from './desk'
+import type { ContractsRun, StayApproach } from './desk'
 import { autoStarters, ensureCaller } from './world'
 import { CHAMPIONS_2025, drawRules } from './ruleset'
 import {
@@ -39,7 +34,6 @@ import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYea
 import { historyNames } from './names'
 import { arrive2026 } from './today'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
-import { track } from './telemetry'
 import {
   DOUBLE_8, GROUPS, advanceTemplate, championsGroups, championsSeeds, decided, doubleFor,
   mastersSeeds, swissDone, swissNext, swissOutcome, templateDone, MASTERS_8, TRIPLE_12, TRIPLE_12_PLACES, STAGE_8, STAGE_8_PLACES, swissRoundOf, SWISS_ROUNDS, swissRecord
@@ -140,7 +134,8 @@ const tier2Of = (state: GameState, region: Region) =>
 
 /** Build every fixture that can be known before a ball is thrown. */
 export function setupSeason(state: GameState, notes?: string[]): void {
-  state.managerContract ??= defaultContract(state)
+  // a manager's save: his contract for the new season (engine/desk.ts)
+  deskOf(state)?.seasonSetup(state, notes)
   resetFixtureSeq(0)
   state.fixtures = []
   state.comps = {}
@@ -148,7 +143,6 @@ export function setupSeason(state: GameState, notes?: string[]): void {
   // and past the last real one the same calendar again (engine/circuit.ts projectedOf)
   if (isTimelineWorld(state) && eventsOf(state.year).length) {
     setupCircuitSeason(state)
-    seedMarket(state, notes)
     return
   }
   const rng = new Rng(hashStr(`season:${state.seed}:${state.year}`))
@@ -200,7 +194,6 @@ export function setupSeason(state: GameState, notes?: string[]): void {
       state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
     }
   }
-  seedMarket(state, notes)
 }
 
 export const PLAYOFF_CUT: Partial<Record<StageKey, number>> = {
@@ -312,12 +305,11 @@ function createChampions(state: GameState, name: string, day: number): void {
 }
 
 /**
- * Hand out the prizes when a competition ends.
- *
- * The board reacts to how we finished — a bottom-third finish at Masters costs
- * 7 confidence — and that reaction used to happen off-screen: the only line
- * written was who won the thing. Our own finish and what it cost now go into
- * the turn's digest.
+ * Hand out the prizes when a competition ends: the prize money into each
+ * club's budget, the championship points, the champion's news and the title
+ * on every winner's record. A world title for our club paints a target on it.
+ * A manager's desk then books the prize, hears from the board and pays the
+ * sponsors' bonuses (engine/desk.ts).
  */
 export function settleCompetition(state: GameState, comp: Competition, notes: string[] = []): void {
   if (comp.awarded || !comp.champion) return
@@ -372,8 +364,6 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
   if (comp.champion) titleLoyalty(state, comp.champion, !comp.region)
 
   if (comp.champion === state.myTeam) {
-    state.honours.push({ year: state.year, title: comp.name })
-    state.boardConfidence = clamp(state.boardConfidence + 14, 0, 100)
     // A world title paints a target on the club. The league answers: harder
     // training and hungrier recruitment everywhere else, so the second trophy
     // has to be earned against a better world than the first.
@@ -384,48 +374,10 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
         text: `🔥 ${champ?.name} 的 ${comp.name} 冠军震动了各赛区——多家俱乐部宣布加练备战，休赛期引援预计更加激进。`,
       })
     }
-    // winning is what actually makes your name
-    if (state.manager) {
-      const worth = comp.region ? TITLE_REP_WORTH.regional : TITLE_REP_WORTH.international
-      state.manager.reputation = clamp(state.manager.reputation + damped(state.manager.reputation, worth), 5, 96)
-    }
     notes.push(`🏆 我们夺得 ${comp.name} 冠军！`)
   }
-  // Sponsorship performance bonuses. Both screens have always printed
-  // "前 N 名另奖 $X" on every contract and the engine never read the field —
-  // the money simply did not exist. It does now: a regional stage we finish
-  // at or above the threshold pays that contract, once per season, so a good
-  // split is worth money and a sponsor is worth choosing for its terms.
-  // Regional only, or an international run would pay every contract twice.
-  if (comp.region && comp.finished.includes(state.myTeam)) {
-    const me = state.teams[state.myTeam]
-    const place = comp.finished.indexOf(state.myTeam) + 1
-    // the best regional finish of the season is what a `placing` clause reads
-    state.bestPlacing = Math.min(state.bestPlacing ?? 99, place)
-    for (const sp of me?.sponsors ?? []) {
-      if (sp.bonusPaidYear === state.year || place > sp.bonusPlacement || !sp.bonus) continue
-      sp.bonusPaidYear = state.year
-      state.finances.balance += sp.bonus
-      state.finances.log.push({
-        day: state.day, label: `赞助达标奖 · ${sp.name}（${comp.name} 第 ${place} 名）`, amount: sp.bonus,
-      })
-      notes.push(`💰 ${sp.name} 的达标奖金 $${sp.bonus.toLocaleString()} 到账——${comp.name} 第 ${place} 名，合同要求前 ${sp.bonusPlacement}。`)
-    }
-  }
-  if (comp.champion !== state.myTeam && comp.teams.includes(state.myTeam)) {
-    const place = comp.finished.indexOf(state.myTeam)
-    if (place >= 0) {
-      const share = place / Math.max(1, comp.finished.length - 1)
-      const swing = share < 0.34 ? 5 : share > 0.7 ? -7 : 0
-      state.boardConfidence = clamp(state.boardConfidence + swing, 0, 100)
-      const rank = `${comp.name} 第 ${place + 1} 名（共 ${comp.finished.length} 队）`
-      notes.push(
-        swing > 0 ? `🏅 ${rank}，董事会满意（信任 +${swing}）。`
-          : swing < 0 ? `📉 ${rank}，董事会不满（信任 ${swing}）。`
-            : `🏁 ${rank}。`,
-      )
-    }
-  }
+  // a manager's save: the prize in his books, the board, his name, the sponsors' bonuses
+  deskOf(state)?.competitionSettled(state, comp, notes)
 }
 
 // ---------------------------------------------------------------- vct-2026 draws
@@ -856,301 +808,7 @@ function keepBreaks(state: GameState): void {
 
 /** A competition has just found its champion: report it, then pay out. */
 function concludeStage(state: GameState, comp: Competition, notes: string[]): void {
-  if (comp.teams.includes(state.myTeam)) {
-    track('stage_done', {
-      stage: comp.stage, day: state.day,
-      won: comp.champion === state.myTeam,
-      place: comp.finished.indexOf(state.myTeam) + 1,
-    })
-  }
   settleCompetition(state, comp, notes)
-}
-
-/** Stages the board actually judges you on. */
-const JUDGED: StageKey[] = ['kickoff', 'stage1', 'stage2']
-
-/**
- * The competition the managed club is actually in during a judged stage.
- *
- * A Challengers side does not play `stage1:China` — it plays two splits of its
- * own that straddle the tier-1 calendar. The board was setting it a target on
- * the VCT stage anyway and settleObjective then looked up a competition the
- * club is not in, found no placing, and returned. So a tier-2 objective was
- * text that could never be met: confidence could only fall, match by match,
- * with no route back up. Any Questions Gaming improved from rating 62 to 69
- * across three seasons and sat at 5% board confidence the whole way.
- */
-function judgedCompKey(state: GameState, stage: StageKey): string | null {
-  const me = state.teams[state.myTeam]
-  if (!me) return null
-  if (me.tier === 1) return `${stage}:${me.region}`
-  // the two Challengers splits conclude around Stage 1 and Stage 2
-  if (stage === 'stage1') return `challengers1:${me.region}`
-  if (stage === 'stage2') return `challengers2:${me.region}`
-  return null   // Kickoff has no Challengers equivalent
-}
-
-/** Where in its own league does the club sit by strength? */
-function expectedPlace(state: GameState): { place: number; size: number } {
-  const me = state.teams[state.myTeam]
-  const peers = Object.values(state.teams)
-    .filter((t) => t.region === me.region && t.tier === me.tier)
-    .sort((a, b) => b.rating - a.rating)
-  return { place: peers.findIndex((t) => t.id === me.id) + 1, size: peers.length }
-}
-
-/**
- * Ask the board what it wants from this stage.
- *
- * The target is pinned to the squad you actually have — a bottom side is asked
- * to survive, a favourite to win it — so overachieving is possible from
- * anywhere and the goal never reads as arbitrary.
- */
-function setObjective(state: GameState, notes: string[]): void {
-  if (!JUDGED.includes(state.stage) || !judgedCompKey(state, state.stage)) {
-    state.objective = undefined
-    return
-  }
-  const { place, size } = expectedPlace(state)
-  // What the board asks for has to be reachable with the squad it gave you.
-  //
-  // It used to demand a 40% improvement on your expected finish every single
-  // stage — which for a club expected second meant "win it", forever. Measured
-  // over ten careers that got the manager sacked six times in three seasons
-  // while averaging third of twelve, which is not a failure by any reading.
-  //
-  // A favourite is asked to stay a favourite; everyone else is asked for a
-  // real but survivable step up. Beating the brief is still what moves your
-  // reputation, so there is no less to play for.
-  const target = place <= 2
-    ? clamp(place, 1, 2)
-    : clamp(Math.ceil(place * 0.75), 2, Math.max(1, size - 2))
-  const text =
-    target === 1 ? '董事会要求：拿下本赛段冠军。'
-      : target <= Math.ceil(size / 4) ? `董事会要求：本赛段进入前 ${target} 名。`
-        : target <= Math.ceil(size / 2) ? `董事会期望：本赛段打进前 ${target} 名（季后赛区）。`
-          : `董事会目标：本赛段不低于第 ${target} 名。`
-  state.objective = { stage: state.stage, placeAtLeast: target, text }
-  notes.push(text)
-  state.news.push({ day: state.day, kind: 'club', important: true, text })
-}
-
-/** Judge the stage that just ended, and move board confidence accordingly. */
-function settleObjective(state: GameState, endedStage: StageKey, notes: string[]): void {
-  const obj = state.objective
-  if (!obj || obj.settled || obj.stage !== endedStage) return
-  const key = judgedCompKey(state, endedStage)
-  const comp = key ? state.comps[key] : undefined
-  if (!comp) return
-
-  const order = comp.finished.length ? comp.finished : sortStandings(comp)
-  const place = order.indexOf(state.myTeam) + 1
-  if (place <= 0) return
-
-  obj.settled = true
-  obj.met = place <= obj.placeAtLeast
-  // Symmetric around the brief. It used to pay +6 for meeting the target and
-  // charge -8 for missing it by a single place, so a club landing on its brief
-  // about half the time drifted downward: 0.5*6 + 0.5*-8 = -1 a stage, on top
-  // of the -0.1 a .500 record already bleeds match by match. Doing exactly what
-  // was asked should not be a slow route to the sack, and it was — a squad
-  // trained from 75 to 80 got fired for finishing 8th while a squad left alone
-  // sat comfortably at 75% confidence.
-  const swing = obj.met
-    ? Math.min(16, 6 + (obj.placeAtLeast - place) * 3)
-    : -Math.min(18, 2 + (place - obj.placeAtLeast) * 3)
-  state.boardConfidence = clamp(state.boardConfidence + swing, 0, 100)
-  state.missedStreak = obj.met ? 0 : (state.missedStreak ?? 0) + 1
-  // beating the brief moves your standing; missing it costs you a little
-  if (state.manager) {
-    const growth = state.manager.growth
-    const raw = obj.met ? (1 + (obj.placeAtLeast - place) * 0.5) * growth : -1.5
-    const delta = raw > 0 ? damped(state.manager.reputation, raw) : raw
-    state.manager.reputation = clamp(state.manager.reputation + delta, 5, 96)
-  }
-
-  const msg = obj.met
-    ? `✅ 赛段目标达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会满意。`
-    : `❌ 赛段目标未达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会不满。`
-  notes.push(msg)
-  state.news.push({ day: state.day, kind: 'club', important: true, text: msg })
-
-  judgeTenure(state, place, obj.met, notes)
-}
-
-/**
- * How much of the board's patience a manager has to win back.
- *
- * Deliberately above the 20% that issues a warning, and deliberately below the
- * 45% the withdrawal used to want: a warning that cannot be worked off is not
- * a warning, it is a permanent penalty on every contract talk and job offer.
- * One good stage from the confidence floor gets close; two clears it.
- */
-export const NOTICE_LIFT = 35
-
-/**
- * What it will take to get the warning withdrawn, in the board's own terms.
- *
- * One sentence, shared by the news line, the agenda and the dashboard, because
- * a warning that does not say how it comes off is the thing that was reported.
- * It adapts: a manager warned for two missed briefs may already be well above
- * the confidence bar, and telling him to climb back to 35% from 43% reads as
- * nonsense.
- */
-export function noticeHint(state: GameState): string {
-  return state.boardConfidence >= NOTICE_LIFT
-    ? '达成一个赛段目标就会撤回'
-    : `达成赛段目标、并把信任度拉回 ${NOTICE_LIFT}% 以上（现在 ${Math.round(state.boardConfidence)}%）就会撤回`
-}
-
-/**
- * Whether the board keeps us.
- *
- * A career needs a way to end badly or its successes mean nothing. The board
- * warns first — it never fires without having said so — and only acts on a
- * stage boundary, where a verdict belongs.
- *
- * Everything here is judged against the brief the board actually set, which is
- * the whole point of having one. It was not, and the group chat found both
- * halves of that:
- *
- *   The warning was withdrawn only on a top-four finish. A mid-table club is
- *   asked for top eight, so a manager could meet the brief four stages
- *   running, watch confidence climb from 40% to 88%, and still be carrying a
- *   warning that costs 45 points of odds on every renewal and job offer. It
- *   never came off, and nothing on screen said what would take it off.
- *
- *   And the sack could fire on a stage that PASSED, because the confidence
- *   floor did not ask. The manager was then told he had 「又交了一个不合格
- *   的赛段」 about a stage he had just been congratulated for. The warning
- *   says one more failed stage; only a failed stage may act on it.
- *
- * Exported so scripts/check_tenure.ts can put a board through every one of
- * these paths without having to rig a season's standings to reach them.
- */
-export function judgeTenure(
-  state: GameState, place: number, met: boolean, notes: string[],
-): void {
-  const club = state.teams[state.myTeam]?.name ?? '俱乐部'
-
-  const doomed = !met && (
-    state.boardConfidence <= 6 ||
-    (state.onNotice && (state.missedStreak ?? 0) >= 2) ||
-    (state.onNotice && state.boardConfidence <= 18))
-
-  if (doomed && state.onNotice) {
-    // Say what actually ended it. There are three routes here and the message
-    // only ever described one of them, so a manager fired on a confidence
-    // floor was told "连续 1 个赛段没有达成目标" — a sentence that reads as a
-    // mistake because a streak of one is not a streak.
-    const streak = state.missedStreak ?? 0
-    const conf = Math.round(state.boardConfidence)
-    const why = streak >= 2
-      ? `连续 ${streak} 个赛段没有达成目标，信任度已经跌到 ${conf}%。`
-      : `被警告之后又交了一个不合格的赛段（本赛段第 ${place} 名），信任度只剩 ${conf}%。`
-    state.gameOver = `${club} 董事会决定解除你的职务。${why}`
-    track('sacked', {
-      day: state.day, year: state.year, stage: state.stage,
-      seasons: state.year - 2026,
-      confidence: Math.round(state.boardConfidence),
-      honours: state.honours.length,
-    })
-    notes.push(`🚪 ${state.gameOver}`)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
-    return
-  }
-
-  if (!state.onNotice && (state.boardConfidence <= 20 || (state.missedStreak ?? 0) >= 2)) {
-    state.onNotice = true
-    // say what takes it off, or 「已被警告」 reads as a permanent mark
-    const warn = `⚠ 董事会正式警告：再有一个赛段交不出成绩，就会换人。`
-      + `（当前信任度 ${Math.round(state.boardConfidence)}%——${noticeHint(state)}）`
-    notes.push(warn)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: warn })
-    return
-  }
-
-  // a good stage buys back some patience — measured against the brief, not
-  // against a placing the brief never asked for
-  if (state.onNotice && met && state.boardConfidence >= NOTICE_LIFT) {
-    state.onNotice = false
-    const ok = `董事会撤回了此前的警告（第 ${place} 名，达成目标；信任度 ${Math.round(state.boardConfidence)}%），你坐稳了位置。`
-    notes.push(ok)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: ok })
-  }
-}
-
-/**
- * Reputation gets harder to earn the more of it you have.
- *
- * Without this a manager who wins one season is already the biggest name in the
- * sport, and every remaining season has nothing left to climb toward.
- *
- * Exported (with TITLE_REP_WORTH) so check_reachable.ts can extrapolate a
- * winning career's reputation through the engine's own curve instead of
- * restating these numbers — restated constants are exactly how the
- * 'Champions' spelling bug survived every test it had.
- */
-export function damped(current: number, gain: number): number {
-  return gain * clamp((96 - current) / 42, 0.12, 1)
-}
-
-/** What lifting a trophy is worth to the manager's own name. */
-export const TITLE_REP_WORTH = { regional: 2.5, international: 6 } as const
-
-/**
- * Clubs coming after the manager.
- *
- * This is the reward for a career going well, and the only route to the jobs
- * that were locked at creation: reputation earned by winning opens doors that
- * choosing never could.
- */
-function offerJobs(state: GameState, notes: string[]): void {
-  const m = state.manager
-  if (!m || state.gameOver) return
-  state.jobOffers = (state.jobOffers ?? []).filter((o) => o.expiresOn > state.day)
-
-  // a club will not poach a manager their own board just warned
-  if (state.onNotice) return
-  const rng = new Rng(hashStr(`jobs:${state.seed}:${state.year}:${state.day}`))
-  const here = state.teams[state.myTeam]
-  if (!here) return
-
-  const candidates = Object.values(state.teams).sort((a, b) => b.reputation - a.reputation)
-  for (const t of candidates) {
-    if (state.jobOffers.length >= 3) break     // an inbox, not a spreadsheet
-    if (t.id === state.myTeam) continue
-    if (t.reputation <= here.reputation) continue          // no sideways moves
-    if (state.jobOffers.some((o) => o.teamId === t.id)) continue
-    // they want someone they can justify hiring
-    const reach = m.reputation - t.reputation
-    if (reach < -6) continue
-    const chance = clamp(0.04 + reach * 0.01 + state.honours.length * 0.015, 0, 0.3)
-    if (!rng.chance(chance)) continue
-
-    state.jobOffers.push({
-      id: `J${t.id}_${state.day}`,
-      teamId: t.id,
-      day: state.day,
-      expiresOn: state.day + 30,
-      pitch: t.tier === 1
-        ? `${t.name} 希望你接手一队，预算 ${Math.round(t.budget / 10000) / 100} 千万级别。`
-        : `${t.name} 想请你来重建队伍。`,
-    })
-    notes.push(`📩 ${t.name} 向你发出了执教邀请。`)
-    state.news.push({
-      day: state.day, kind: 'club', important: true,
-      text: `📩 ${t.name} 向你发出执教邀请（声望 ${t.reputation}）。`,
-    })
-  }
-}
-
-/** Take a job elsewhere. The career continues; the club does not. */
-export function acceptJob(state: GameState, offerId: string): string {
-  const offer = state.jobOffers?.find((o) => o.id === offerId)
-  const to = offer ? state.teams[offer.teamId] : null
-  if (!offer || !to) return '这份邀请已经失效。'
-  return moveToClub(state, to.id)
 }
 
 /**
@@ -1166,68 +824,6 @@ function played(
 ): string[] {
   const lineup = teamId === f.teamA ? result.lineups?.a : result.lineups?.b
   return lineup ?? state.teams[teamId]?.starters ?? []
-}
-
-/** Take over at another club, however the job came about. */
-export function moveToClub(state: GameState, teamId: string): string {
-  const to = state.teams[teamId]
-  if (!to) return '找不到这支战队。'
-
-  const from = state.teams[state.myTeam]
-  state.tenures ??= []
-  const current = state.tenures.find((t) => t.teamId === state.myTeam && !t.toYear)
-  if (current) current.toYear = state.year
-  else state.tenures.push({ teamId: state.myTeam, fromYear: 2026, toYear: state.year })
-  state.tenures.push({ teamId: to.id, fromYear: state.year })
-
-  state.myTeam = to.id
-  state.startFacilities = to.facilities
-  state.startTier = to.tier
-  // The squad you inherited is the squad you inherited HERE. Left pointing at
-  // the old club's roster, every badge and ending built on it went wrong the
-  // moment you changed jobs: 「大换血」 and 「推倒重来」 fired for free because
-  // nobody on the new team was on that list, and 「一起走到最后」 became
-  // impossible for the same reason.
-  state.startingSquad = [...to.roster]
-  // a new squad, and their development starts being yours from today — the
-  // stars you walked in on are not something you built
-  for (const id of to.roster) {
-    const p = state.players[id]
-    if (p) p.arrivedOverall = p.overall
-  }
-  state.jobOffers = []
-  state.jobApplications = []
-  state.managerContract = undefined
-  state.boardConfidence = 62
-  state.onNotice = false
-  state.missedStreak = 0
-  state.objective = undefined
-  state.finances = { balance: to.budget, log: [] }
-  state.training = {}
-  state.drill = { kind: 'none' }
-  // ...and everything else that belonged to the old job. A drill lock left
-  // running greyed out the new club's training panel for up to a week; a pair
-  // drill kept coaching two players who now work somewhere else; and a bid
-  // left pending settled later at the OLD club, spending the new club's money
-  // to sign a player for the one you just left.
-  state.drillLock = undefined
-  state.duo = undefined
-  state.physioOn = {}
-  state.commercialDays = {}
-  for (const o of state.offers) {
-    if (o.status === 'pending' && (o.toTeam === from?.id || o.fromTeam === from?.id)) {
-      o.status = 'rejected'
-    }
-  }
-  state.enquiries = []
-  for (const pid of to.roster) state.training[pid] = 'rest'
-
-  state.managerContract = defaultContract(state)
-  state.news.push({
-    day: state.day, kind: 'club', important: true,
-    text: `你离开 ${from?.name} 出任 ${to.name} 的经理。`,
-  })
-  return `你已就任 ${to.name} 的经理。`
 }
 
 export interface DayReport {
@@ -1305,12 +901,14 @@ export function commitFixture(
     // had no dressing-room incidents at all; it had them, and never said so.
     const room: string[] = []
     const isA = f.teamA === state.myTeam
-    const won = (result.mapsWonA > result.mapsWonB) === isA
     // a level Bo2 is neither a win to trust nor a defeat to fall out over
     if (result.mapsWonA !== result.mapsWonB) {
-      trustAfterMatch(state, won, (isA ? result.lineups?.a : result.lineups?.b) ?? [])
-      applyMatchBonds(state, result, state.myTeam, isA, rng, room)
+      // the room's own dice: the fixture's stream goes on to both sides' fatigue
+      // and injury rolls, which must not depend on which club is "ours"
+      applyMatchBonds(state, result, state.myTeam, isA, new Rng(hashStr(`match:${state.seed}:${state.year}:${f.id}:bonds`)), room)
     }
+    // a manager's club: his players' trust in him, and the board's view of the result (engine/desk.ts)
+    deskOf(state)?.matchPlayed(state, f, result)
     for (const t of room) {
       state.news.push({ day: state.day, kind: 'club', important: true, text: t })
       notes.push(t)
@@ -1409,12 +1007,7 @@ export function commitFixture(
     }
   }
 
-  if (isMine) {
-    state.lastResults.push(f.id)
-    const mine = f.teamA === state.myTeam
-    const myWin = mine ? aWon : !aWon
-    state.boardConfidence = clamp(state.boardConfidence + (drawn ? 0 : myWin ? 1.2 : -1.4), 0, 100)
-  }
+  if (isMine) state.lastResults.push(f.id)
 
   state.news.push({
     day: state.day,
@@ -1439,11 +1032,11 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
       playedMine: [], notes: [], seasonEnded: false,
     }
   }
-  // The five-year settlement is a question, and the clock waits for the
-  // answer. Without this, one more 推进 while the modal is up re-enters
-  // endSeason with the ask already marked done, and the off-season runs out
-  // from under the verdict being read.
-  if (state.midReview) {
+  // A manager's save can hold the clock on a question only he can answer —
+  // the five-year settlement (engine/board.ts). Without this, one more 推进
+  // while the modal is up re-enters endSeason with the ask already marked
+  // done, and the off-season runs out from under the verdict being read.
+  if (deskOf(state)?.holdsClock(state)) {
     return {
       day: state.day, stage: state.stage, stageChanged: false,
       playedMine: [], notes: [], seasonEnded: false,
@@ -1490,7 +1083,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
     }
   }
 
-  dailyLife(state, notes)
+  deskOf(state)?.dayOpened(state, notes)
 
   // a club history let go goes quiet a few weeks after its last event, one at a time (engine/timeline.ts)
   const gone = historyFolds(state)
@@ -1523,17 +1116,10 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
       notes.push(line)
       state.news.push({ day: state.day, kind: 'league', text: line })
     }
-    settleObjective(state, prevStage, notes)
-    setObjective(state, notes)
-    offerJobs(state, notes)
-    // some years the league floats a themed capsule as Stage 1 opens —
-    // deterministic per save+year, so a reload does not conjure a new one
-    if (state.stage === 'stage1'
-      && ((hashStr(`bundle:${state.seed}:${state.year}`) >>> 4) % 100) < 60) {
-      offerBundle(state, notes)
-    }
+    // a manager's save: the board's brief, job offers, the league's capsule (engine/desk.ts)
+    deskOf(state)?.stageChanged(state, prevStage, notes)
   }
-  tickLeagueOffer(state, notes)
+  deskOf(state)?.dayStarted(state, notes)
 
   // A club that lost a man yesterday must not walk out four-handed today.
   //
@@ -1594,30 +1180,21 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   if (!pendingMine) progressCompetitions(state, notes, !!opts.autoResolveDrawDecisions)
 
-  // ---- commercial work booked for today, then any new approach
-  runGigsToday(state, notes)
-  offerGigs(state, rng, notes)
-  notes.push(...resolveSponsorTalks(state, rng))
-  drillTick(state, rng, notes)
   pruneMatchDetail(state)
-
-  // ---- coaches and clubs answering today
-  notes.push(...resolveApproaches(state, rng))
-  notes.push(...resolveStaffOffers(state, rng))
-  notes.push(...resolveApplications(state, rng))
-
-  // ---- offers whose waiting period is up
-  notes.push(...resolveEnquiries(state, rng))
-  notes.push(...resolveDueOffers(state, rng))
+  // a manager's save: commercial work, sponsors, the drill, staff and job answers, enquiries, bids (engine/desk.ts)
+  const desk = deskOf(state)
+  desk?.afterMatches(state, notes)
 
   // ---- weekly upkeep
   if (state.day % 7 === 0) {
-    streamWeek(state, rng, notes)
-    notes.push(...weeklyTick(state, rng))
-    weeklyLife(state, rng, notes)
-    weeklyFinance(state)
-    aiTransferTick(state, rng, notes)
-    refreshListings(state, rng, notes)   // runs all year so stale listings expire
+    desk?.weekOpened(state, notes)
+    // the managed club's players whose promise of minutes is not being kept, for its desk to hear from
+    const grumbling: Player[] = []
+    notes.push(...weeklyTick(state, rng, grumbling))
+    weeklyBudgets(state)
+    desk?.weekTrained(state, grumbling, notes)
+    // the manager game's market: the AI clubs' bids and listings, and bids for his own players (engine/desk.ts)
+    desk?.weekMarket(state, notes)
   }
 
   if (state.news.length > 400) state.news.splice(0, state.news.length - 400)
@@ -1685,171 +1262,38 @@ function retirePlayer(state: GameState, p: Player, notes: string[]): string {
   return mine || star ? '' : `${p.ign}（${p.age} 岁${t ? `，${t.tag}` : ''}）`
 }
 
-/** What the manager puts on the table when a player announces retirement. */
-export type StayApproach = 'heart' | 'raise' | 'bench' | 'transfer' | 'accept'
+// ---------------------------------------------------------------- the manager game's screens, by name
+//
+// These are the manager's desk now: the board and the five-year settlement
+// (engine/board.ts), job offers (engine/career.ts) and the retirement talk
+// (engine/managerDesk.ts). The manager game's screens still import them from
+// here by name. A player's career mounts no desk, and there each does nothing.
 
-/**
- * One conversation, eye to eye, about how his story ends.
- *
- * Five ways to have it: appeal to the heart (free, long odds), put money on
- * the table (a 30% raise, the best odds), offer him the bench and the rookies
- * (middle ground), agree to find him a last dance somewhere else (certain —
- * he plays on, just not here), or accept it and give him the send-off he has
- * earned. Whatever is chosen, it is chosen once: asking twice is not
- * persuasion, it is pressure.
- */
-export function persuadeStay(
-  state: GameState, playerId: string, approach: StayApproach = 'heart',
-): string {
-  const p = state.players[playerId]
-  if (!p) return '找不到这名选手。'
-  if (p.teamId !== state.myTeam) return '他不是你队里的人，这话轮不到你说。'
-  if (!p.retiring) return `${p.ign} 没打算退役。`
-  if (p.persuaded) return '你已经和他谈过了——他的决定应该被尊重。'
-  p.persuaded = true
+export type { StayApproach } from './desk'
 
-  const locker = state.manager?.skills.locker ?? 50
-  const nego = state.manager?.skills.negotiation ?? 50
-  const roll = ((hashStr(`stay:${state.seed}:${state.year}:${p.id}:${approach}`) >>> 6) % 1000) / 1000
-  const stays = (line: string) => {
-    p.retiring = false
-    state.news.push({ day: state.day, kind: 'player', important: true, text: `🤝 ${line}` })
-    return line
-  }
+/** Take a job elsewhere (engine/career.ts). */
+export const acceptJob = (state: GameState, offerId: string): string =>
+  deskOf(state)?.acceptJob(state, offerId) ?? '这份邀请已经失效。'
 
-  switch (approach) {
-    case 'raise': {
-      const odds = clamp(0.5 + (nego - 50) * 0.006 + (p.morale - 60) * 0.003, 0.2, 0.9)
-      if (roll < odds) {
-        p.salary = Math.round(p.salary * 1.3)
-        if (p.contract) p.contract.salary = p.salary
-        p.contractYears = Math.max(1, p.contractYears)
-        p.morale = clamp(p.morale + 8, 0, 100)
-        return stays(`${p.ign} 收下了那份加薪合同——再战一年，年薪 $${p.salary.toLocaleString()}。`)
-      }
-      return `${p.ign} 把合同推了回来："不是钱的事。" 他心意已决，赛季打完就走。`
-    }
-    case 'bench': {
-      const odds = clamp(0.42 + (locker - 50) * 0.007, 0.15, 0.8)
-      if (roll < odds) {
-        const t = state.teams[state.myTeam]
-        if (t) {
-          t.starters = t.starters.filter((id) => id !== p.id)
-          if (t.starters.length < 5) t.starters = autoStarters(state, state.myTeam)
-        }
-        p.morale = clamp(p.morale + 3, 0, 100)
-        return stays(`${p.ign} 同意退居替补，把经验留给年轻人——他还在基地里，这就够了。`)
-      }
-      return `${p.ign} 苦笑了一下："让我坐着看别人打？那还不如回家。" 他决定退役。`
-    }
-    case 'transfer': {
-      p.listed = true
-      p.listedOn = state.day
-      p.morale = clamp(p.morale + 4, 0, 100)
-      return stays(`${p.ign} 没想到你会成全他——他想换个环境打最后一舞，已挂牌，转会费能收回一点是一点。`)
-    }
-    case 'accept': {
-      p.morale = clamp(p.morale + 6, 0, 100)
-      state.news.push({
-        day: state.day, kind: 'player', important: true,
-        text: `🫡 俱乐部官宣：将在赛季末为 ${p.ign} 举办退役仪式。`,
-      })
-      return `你握了握他的手。俱乐部会在赛季末为 ${p.ign} 办一场配得上他生涯的退役仪式。`
-    }
-    default: {
-      const odds = clamp(0.3 + (locker - 50) * 0.008 + (p.morale - 60) * 0.004, 0.1, 0.8)
-      if (roll < odds) {
-        p.morale = clamp(p.morale + 6, 0, 100)
-        return stays(`${p.ign} 被你说动了——退役计划搁置，再战一年。`)
-      }
-      return `${p.ign} 听完摇了摇头——他心意已决，这个赛季打完就走。让他体面地离开吧。`
-    }
-  }
-}
+/** One conversation, eye to eye, about how a player's story ends (engine/managerDesk.ts). */
+export const persuadeStay = (state: GameState, playerId: string, approach: StayApproach = 'heart'): string =>
+  deskOf(state)?.persuadeStay(state, playerId, approach) ?? ''
 
-/**
- * Take the five-year verdict and go: the career ends here, graded, with the
- * squad that earned it still intact.
- *
- * The season was worked, so the year's salary is banked exactly as the finale
- * path banks it — endSeason returned before its own tally line to get here.
- */
-export function settleAtFive(state: GameState): void {
-  if (!state.midReview) return
-  state.midReview = false
-  state.midReviewDone = true
-  state.tally ??= { signed: 0, hired: 0, earned: 0, commercial: 0 }
-  state.tally.earned += state.managerContract?.salary ?? 0
-  const earned = endingsFor(state)
-  state.finished = true
-  state.gameOver = earned[0]
-    ? `${tenureCn(state.year)}年之约到期，你选择功成身退——${earned[0].title}`
-    : `${tenureCn(state.year)}年之约到期，你选择功成身退。`
-  state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
-}
+/** The five-year settlement, taken (engine/board.ts). */
+export const settleAtFive = (state: GameState): void => { deskOf(state)?.settleAtFive(state) }
 
-/** Decline the settlement and play on: 2036 stays the hard end of the story. */
-export function continuePastFive(state: GameState): void {
-  if (!state.midReview) return
-  state.midReview = false
-  state.midReviewDone = true
-  state.news.push({
-    day: state.day, kind: 'club', important: true,
-    text: '你谢绝了功成身退的机会——这份工作干到 2036 年为止。',
-  })
-}
+/** The five-year settlement, declined (engine/board.ts). */
+export const continuePastFive = (state: GameState): void => { deskOf(state)?.continuePastFive(state) }
+
+/** What takes the board's warning off (engine/board.ts). */
+export const noticeHint = (state: GameState): string => deskOf(state)?.noticeHint(state) ?? ''
 
 function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
-  // The five-year settlement. BEFORE anything else touches the state, for the
-  // same reason the finale check below runs first: the verdict must judge the
-  // squad that played the season, not the one the off-season is about to
-  // dissolve. Nothing is decided here — the state freezes (advanceDay holds
-  // while midReview is up) until settleAtFive or continuePastFive answers,
-  // and on 继续 this function runs again with the ask marked done.
-  //
-  // `>=`, not `===`. The settlement shipped into a game people had already
-  // been playing for weeks, and a save that was in 2031 the day it landed
-  // would have matched 2030 exactly never — the one question the career is
-  // built around, silently unreachable for precisely the players who had
-  // played longest. Asked late is right; not asked at all is not.
-  // a player career decides its own endings — see engine/me/endings.ts
-  if (state.year >= MID_YEAR && state.year < FINAL_YEAR && !state.midReviewDone && !state.me) {
-    state.midReview = true
-    notes.push(`⏳ ${tenureCn(state.year)}年之期已到——是就此收官拿一个结局，还是继续带到 2036？`)
-    return
-  }
-
-  // The manager's own pay, banked. It had no destination at all before this —
-  // a number on the contract screen that nothing ever read — and it is the
-  // one figure in the game that belongs to the person rather than the club.
-  // Counted before the finale check, because the last season was worked.
-  state.tally ??= { signed: 0, hired: 0, earned: 0, commercial: 0 }
-  state.tally.earned += state.managerContract?.salary ?? 0
-
-  // Ten seasons is the whole story: 2036 is the last campaign played, and when
-  // it is settled the career ends on its own terms rather than running on until
-  // somebody is sacked.
-  //
-  // This has to come FIRST, before a single line of the off-season runs. The
-  // check used to sit at the bottom, and by the time it was reached every
-  // expiring contract had already been let go, the retirements had already
-  // happened and ensureMinimumRosters had reshuffled the league — so the
-  // endings were judging a squad that had just been dissolved. 「一起走到最后」
-  // was decided after the men in question had walked out the door on the same
-  // afternoon, and 「本土主义」 came free to anyone left with three players.
-  // There is no 2037 to prepare for, so none of that should happen at all: the
-  // record ends with the last season, and the last season's squad is the one
-  // that gets judged.
-  if (state.year >= FINAL_YEAR && !state.me) {
-    const earned = endingsFor(state)
-    state.finished = true
-    state.gameOver = earned[0]
-      ? `十年任期结束——${earned[0].title}`
-      : '十年任期结束。'
-    notes.push(`🏁 ${state.gameOver}`)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
-    return
-  }
+  // A manager's season can stop here, before a line of the off-season runs:
+  // the five-year settlement asked, or the tenure over (engine/board.ts). The
+  // verdict must judge the squad that played the season, not the one the
+  // winter is about to dissolve.
+  if (deskOf(state)?.seasonEnding(state, notes)) return
 
   // ---- Ascension: each region's Challengers champion swaps with the weakest tier-1 side
   for (const region of REGIONS) {
@@ -1886,60 +1330,46 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
       Math.max(1, sponsorWorth({ ...promoted, tier: 2 } as Team))
     reprice(promoted, step)
     reprice(relegated, 1 / step)
-    if (promoted.id === state.myTeam) {
-      notes.push('💰 升入一级联赛后，赞助合同全部重新议价，收入大幅提高。')
-    }
-    if (relegated.id === state.myTeam) {
-      notes.push('📉 降级后赞助合同被重新议价，赛季收入大幅缩水——先把薪资压下来。')
-    }
+    deskOf(state)?.ascension(state, promoted, relegated, notes)
     state.news.push({
       day: state.day, kind: 'league', important: true,
       text: `🎫 ${promoted.name} 通过 Ascension 升入 VCT ${region}，${relegated.name} 降入次级联赛。`,
     })
-    if (promoted.id === state.myTeam) state.honours.push({ year: state.year, title: `晋级 VCT ${region}` })
     if (promoted.id === state.myTeam) notes.push(`🎫 我们通过 Ascension 升入 VCT ${region}。`)
     if (relegated.id === state.myTeam) notes.push(`🎫 我们降入 Challengers ${region}。`)
   }
 
   // ---- contracts tick down; expiring players leave
-  const finalYear: string[] = []
+  const run: ContractsRun = { finalYear: [], expiring: [], walked: [] }
+  // a club a person manages gives its men a winter's grace to be renewed; every other club decides on the spot
+  const managed = managedClub(state)
   const released: string[] = []
   for (const p of Object.values(state.players)) {
     if (!p.teamId) continue
-    const mine = p.teamId === state.myTeam
     p.contractYears -= 1
-    // a deal running down is the thing a manager most needs warning about, and
-    // it happened silently: one year quietly became zero over the winter
-    if (mine && p.contractYears === 1) finalYear.push(p.ign)
+    if (p.teamId === managed && p.contractYears === 1) run.finalYear.push(p.ign)
     if (p.contractYears <= 0) {
       const team = state.teams[p.teamId]
       // clubs usually renew players they still rate
       const keep = p.overall >= (team?.rating ?? 60) - 6 && rng.chance(0.72)
-      if (keep && team && team.id !== state.myTeam) {
+      // the career player's contract is his own to renew or leave (me/transfer.ts seasonContractCheck)
+      if (p.id === state.me?.id) { p.contractYears = 0; continue }
+      if (keep && team && team.id !== managed) {
         p.contractYears = contractLength(p, rng, team.roster.map((id) => state.players[id]))
-      } else if (team && team.id === state.myTeam) {
+      } else if (team && team.id === managed) {
         // One winter of grace, then he actually goes. It used to be an
-        // unlimited stay: the agenda warned every single day that he would
-        // leave if not renewed, and he never did — he simply drew wages
-        // forever on a contract that had run out.
+        // unlimited stay: he simply drew wages forever on a contract that had
+        // run out.
         if (p.expiredYear != null && p.expiredYear < state.year) {
           team.roster = team.roster.filter((id) => id !== p.id)
           team.starters = team.starters.filter((id) => id !== p.id)
           p.teamId = null
           p.expiredYear = undefined
-          state.news.push({
-            day: state.day, kind: 'club', important: true,
-            text: `👋 ${p.ign} 的合同到期满一年未续约，已经离队。`,
-          })
-          notes.push(`👋 ${p.ign} 合同到期一年未续，已自由转会离队。`)
+          run.walked.push(p)
         } else {
           p.expiredYear ??= state.year
-          state.news.push({
-            day: state.day, kind: 'club', important: true,
-            text: `⏳ ${p.ign} 的合同已到期，本赛季内必须续约，否则下个休赛期他会走。`,
-          })
-          notes.push(`⏳ ${p.ign} 的合同已到期——这是最后一个赛季，不续约他就走了。`)
           p.contractYears = 0
+          run.expiring.push(p)
         }
       } else if (team) {
         team.roster = team.roster.filter((id) => id !== p.id)
@@ -1959,24 +1389,13 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
     })
   }
 
-  if (finalYear.length) {
-    notes.push(`📋 合同进入最后一年：${finalYear.slice(0, 6).join('、')}`
-      + (finalYear.length > 6 ? ` 等 ${finalYear.length} 人` : ''))
-  }
-
-  track('season_done', {
-    year: state.year, seasons: state.year - 2026 + 1,
-    honours: state.honours.length,
-    confidence: Math.round(state.boardConfidence),
-  })
-  // clauses are judged on the season that just ended, before the counters reset
-  notes.push(...settleSponsorDemands(state))
-  // and so is the league's bundle money — champ points reset with the rollover
-  settleLeagueSeason(state, notes)
-  // and a new intake arrives, so a career that runs long still has somebody
-  // to sign and somebody to develop
-  state.seasonGigs = 0
-  state.bestPlacing = undefined
+  const desk = deskOf(state)
+  // a manager's club: the deals running down and the men out of contract (engine/desk.ts)
+  desk?.contractsRun(state, run, notes)
+  // and, judged on the season that just ended, the sponsors' clauses and the league's bundle money
+  desk?.seasonClosing(state, notes)
+  // a new intake arrives, so a career that runs long still has somebody to
+  // sign and somebody to develop
   notes.push(...seasonRollover(state, rng))
 
   // ---- the in-save CV: the season just played goes on every man's record
@@ -2047,9 +1466,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
         const tag = state.teams[p.teamId]?.tag ?? ''
         noticed.push(`${p.ign}（${tag}）`)
       }
-      if (mine) {
-        notes.push(`📢 ${p.ign} 告诉你，这将是他的最后一个赛季——想留他，去他的资料页当面谈。`)
-      }
+      if (mine) deskOf(state)?.retiring(state, p, notes)
     }
   }
   if (noticed.length) {
@@ -2070,8 +1487,6 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
     }
     t.champPoints = 0
     t.seasonPrize = 0
-    // a new season, a new chance to hit the placement each contract asks for
-    for (const sp of t.sponsors) delete sp.bonusPaidYear
     if (t.starters.length < 5) t.starters = autoStarters(state, t.id)
   }
 
@@ -2182,49 +1597,13 @@ export function resumeTimeline(state: GameState): boolean {
  */
 function rebaseSeasonClock(state: GameState, shift: number): void {
   if (shift <= 0) return
-  const move = (v: number | undefined): number | undefined =>
-    v == null ? v : v - shift
-
-  if (state.pitchCooldown != null) state.pitchCooldown = Math.max(0, state.pitchCooldown - shift)
   // a club told us it closes on a day of the old calendar
   if (state.foldNotice) state.foldNotice.day -= shift
-  if (state.drillLock != null) state.drillLock = Math.max(0, state.drillLock - shift)
-  // physio bookings live in the past; left unshifted, "day - last" went
-  // negative after the new year and locked the whole squad out of the physio
-  // room for a season ("理疗室不能点了")
-  if (state.physioOn) {
-    for (const k of Object.keys(state.physioOn)) state.physioOn[k] -= shift
-  }
-  // the turn budget re-mints itself whenever its day is in the future or past
-  state.actions = undefined
-
   for (const p of Object.values(state.players)) {
     if (p.injuredUntil > 0) p.injuredUntil = Math.max(0, p.injuredUntil - shift)
-    if (p.listedOn != null) p.listedOn = move(p.listedOn)
-    if (p.payAskedOn != null) p.payAskedOn = move(p.payAskedOn)
-    if (p.rumourOn != null) p.rumourOn = move(p.rumourOn)
-    if (p.stream) {
-      p.stream.since -= shift
-      p.stream.until -= shift
-    }
   }
-
-  for (const o of state.offers) {
-    o.day -= shift
-    if (o.respondOn != null) o.respondOn -= shift
-  }
-  for (const e of state.enquiries ?? []) { e.day -= shift; e.replyOn -= shift }
-  for (const j of state.jobOffers ?? []) { j.day -= shift; j.expiresOn -= shift }
-  for (const a of state.jobApplications ?? []) { a.day -= shift; a.replyOn -= shift }
-  for (const o of state.staffOffers ?? []) { o.day -= shift; o.replyOn -= shift }
-  for (const a of state.staffApproaches ?? []) { a.day -= shift; a.replyOn -= shift }
-  for (const t of state.sponsorTalks ?? []) { t.day -= shift; t.replyOn -= shift }
-  for (const g of state.gigs ?? []) {
-    g.day -= shift
-    g.expiresOn -= shift
-    if (g.windowEnd != null) g.windowEnd -= shift
-  }
-  for (const v of state.ventures ?? []) v.day -= shift
+  // a manager's save: sponsors, staff, job offers, bids, the drill and the physio room (engine/desk.ts)
+  deskOf(state)?.clockRebased(state, shift)
 }
 
 /**
@@ -2234,15 +1613,11 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
  * the market is empty a club simply runs short and the shortage is reported,
  * rather than conjuring a fictional prospect to paper over it.
  */
-/** Give the market a starting state, so the first window is not empty. */
-export function seedMarket(state: GameState, notes?: string[]): void {
-  refreshListings(state, new Rng(hashStr(`market:${state.seed}:${state.year}`)), notes)
-}
 
 export function ensureMinimumRosters(state: GameState, rng: Rng): void {
   const short: string[] = []
   for (const team of Object.values(state.teams)) {
-    if (team.id === state.myTeam || team.dormant) continue
+    if (team.id === managedClub(state) || team.dormant) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
       const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)

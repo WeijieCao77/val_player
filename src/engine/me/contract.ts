@@ -2,7 +2,6 @@ import { Rng, clamp } from '../rng'
 import { defaultContract } from '../types'
 import type { GameState, SquadRole } from '../types'
 import { expectedSalary } from '../player'
-import { recommendedTrainingFocus } from './focus'
 import type { Deal } from './types'
 import { pushLog } from './log'
 import { pop } from './pending'
@@ -185,14 +184,8 @@ export function joinClub(state: GameState, d: Deal): void {
   p.grievance = 0
   ;(p.clubHist ??= []).push({ team: to.id, from: state.year, to: state.year })
   state.myTeam = to.id
-  state.finances = { balance: to.budget, log: [] }
-  state.offers = state.offers.filter((o) => o.status !== 'pending')
-  state.startingSquad = [...to.roster]
-  state.training = {}
-  for (const id of to.roster) {
-    const q = state.players[id]
-    if (q) state.training[id] = id === me.id ? 'rest' : recommendedTrainingFocus(q)
-  }
+  // my own programme is my week's (me/growth.ts); the club's is the world's, as at every club
+  state.training[me.id] = 'rest'
   me.phase = 'pro'
   me.coachTrust = 50 + (d.role === 'star' ? 12 : d.role === 'starter' ? 6 : 0)
   me.gmTrust = 55
@@ -227,6 +220,8 @@ export function leaveClub(state: GameState, why: string): void {
     from.starters = from.starters.filter((id) => id !== me.id)
   }
   p.teamId = null
+  // nobody's club again: the world keeps no club for a free agent
+  state.myTeam = ''
   p.contractYears = 0
   p.expiredYear = undefined
   me.phase = 'free'

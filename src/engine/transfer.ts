@@ -492,7 +492,7 @@ function weakestRole(state: GameState, team: Team): { role: Player['role']; stre
  * AI clubs work the market: fill holes from free agency, occasionally bid for
  * a player who is unhappy or transfer-listed.
  */
-export function aiTransferTick(state: GameState, rng: Rng, notes?: string[]): void {
+export function aiTransferTick(state: GameState, rng: Rng, _notes?: string[]): void {
   if (!windowOpen(state.day)) return
 
   const teams = Object.values(state.teams).filter((t) => t.id !== state.myTeam && !t.dormant)
@@ -568,7 +568,7 @@ export function aiTransferTick(state: GameState, rng: Rng, notes?: string[]): vo
     }
   }
 
-  bidForOurPlayers(state, rng, notes)
+  // bids for the manager's own players are his desk's (engine/managerDesk.ts weekMarket)
 }
 
 /**

@@ -254,13 +254,46 @@ export function deleteSave(slot: string): void {
   writeIndex(readIndex().filter((m) => m.slot !== slot))
 }
 
-/** Bring an older save forward. */
-function migrate(state: GameState): GameState {
+/**
+ * Bring an older save's world forward — every save's, a player's career
+ * included (engine/me/save.ts): club names from the world file, fields added
+ * since, agent names, an injury a pre-fix rollover left a season long, and old
+ * match paperwork.
+ */
+export function migrateWorld(state: GameState): GameState {
   state.version ??= SAVE_VERSION
-  state.offers ??= []
-  state.honours ??= []
   state.lastResults ??= []
   state.training ??= {}
+  for (const t of Object.values(state.teams)) {
+    // A club's tag and name are the world file's to decide, not the save's.
+    // They are display-only — nothing in a save is keyed on them — so a
+    // correction (VNLG → VLG, which is what the org and its own crest say)
+    // reaches careers already in progress instead of only new ones.
+    const canon = WORLD_TEAMS.find((w) => w.id === t.id)
+    if (canon) { t.tag = canon.tag; t.name = canon.name }
+    t.champPoints ??= 0
+    t.seasonPrize ??= 0
+    t.sponsors ??= []
+    t.mapPrefs ??= {}
+  }
+  for (const p of Object.values(state.players)) {
+    p.xp ??= {}
+    p.potentialRevisions ??= 0
+    // pools saved as vlr's slugs come back as proper names — see canonAgent
+    p.agentPool = canonAgents(p.agentPool ?? [])
+    p.injuredUntil ??= 0
+    // a pre-fix rollover left injuries a season in the future (see repairClocks)
+    if (p.injuredUntil > state.day + 45) p.injuredUntil = state.day + 10
+  }
+  pruneMatchDetail(state)
+  return state
+}
+
+/** Bring an older manager's save forward: its world, then the desk on it. */
+function migrate(state: GameState): GameState {
+  migrateWorld(state)
+  state.offers ??= []
+  state.honours ??= []
   state.boardConfidence ??= 60
 
   // The three "as you found it" marks, for careers that began before they
@@ -282,25 +315,6 @@ function migrate(state: GameState): GameState {
     }
   }
 
-  for (const t of Object.values(state.teams)) {
-    // A club's tag and name are the world file's to decide, not the save's.
-    // They are display-only — nothing in a save is keyed on them — so a
-    // correction (VNLG → VLG, which is what the org and its own crest say)
-    // reaches careers already in progress instead of only new ones.
-    const canon = WORLD_TEAMS.find((w) => w.id === t.id)
-    if (canon) { t.tag = canon.tag; t.name = canon.name }
-    t.champPoints ??= 0
-    t.seasonPrize ??= 0
-    t.sponsors ??= []
-    t.mapPrefs ??= {}
-  }
-  for (const p of Object.values(state.players)) {
-    p.xp ??= {}
-    p.potentialRevisions ??= 0
-    // pools saved as vlr's slugs come back as proper names — see canonAgent
-    p.agentPool = canonAgents(p.agentPool ?? [])
-    p.injuredUntil ??= 0
-  }
   repairClocks(state)
   // Old saves serialized drillVoid: true from a mechanic that no longer sets
   // it — left in place it swallowed the first seven-day drill's entire payout
@@ -315,7 +329,6 @@ function migrate(state: GameState): GameState {
       if (state.physioOn[k] > state.day) delete state.physioOn[k]
     }
   }
-  pruneMatchDetail(state)
   return state
 }
 
@@ -355,7 +368,6 @@ function repairClocks(state: GameState): void {
   if (state.pitchCooldown != null && state.pitchCooldown > d + 14) state.pitchCooldown = d
   if (state.drillLock != null && state.drillLock > d + 7) state.drillLock = undefined
   for (const p of Object.values(state.players)) {
-    if (p.injuredUntil > d + 45) p.injuredUntil = d + 10
     if (p.stream && p.stream.until > d + 200) p.stream.until = d + 84
   }
 }
