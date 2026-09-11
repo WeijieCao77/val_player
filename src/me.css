@@ -224,6 +224,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .club-list button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding: 8px 10px; }
 .club-list button.on { border-color: var(--accent); background: var(--accent-wash); }
 .club-list button .r { margin-left: auto; color: var(--muted); font-size: var(--t-tiny); }
+/* nobody at that tier this year: the sentence takes the whole row, not one narrow cell */
+.club-list .empty { grid-column: 1 / -1; }
 
 /* ---- new career: start points and origins ---- */
 .start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
