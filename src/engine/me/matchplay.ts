@@ -18,6 +18,7 @@ import { starBeat, starBeatLine } from './stars'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 import { compCn } from './compname'
+import { psychMul } from './shop'
 
 export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
 
@@ -401,7 +402,9 @@ export class MeMatch {
       this.me.fatigue = clamp(this.me.fatigue + (started ? 5 : 1.5) * result.maps.length, 0, 100)
       if (started && won) questProgress(state, 'win', 1)
       if (started) {
-        me.tilt = clamp(me.tilt + (won ? -6 : drawn ? 2 : rank >= 5 ? 14 : 8), 0, 100)
+        // 运动心理 takes a fifth off what a loss leaves behind (me/shop.ts)
+        const lossTilt = won ? -6 : drawn ? 2 : rank >= 5 ? 14 : 8
+        me.tilt = clamp(me.tilt + (lossTilt > 0 ? lossTilt * psychMul(me.courses ?? []) : lossTilt), 0, 100)
         if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)
       }
       const line = started

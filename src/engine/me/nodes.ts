@@ -128,11 +128,11 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): num
     const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[opt.dim as keyof typeof m.attrs], 0) / mates.length : mine
     v = mine * NODE_MINE + avg * (1 - NODE_MINE)
   }
-  // gear on the desk and a cool head each add a little; a trait may add more
-  const gear = Object.values(me.gear ?? {}).reduce((s, t) => s + t * 0.004, 0)
+  // a cool head adds a little; a trait may add more. Gear used to add 0.4% a tier here — money
+  // reaching into the match — until the economy was measured (me/shop.ts, 2026-09-11)
   const edge = me.traits?.includes('edge') && (p.form < 70 || me.tilt > 40) ? 0.03 : 0
   return clamp(
-    0.30 + (v / 100) * 0.55 - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60 + gear + edge,
+    0.30 + (v / 100) * 0.55 - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60 + edge,
     0.12, 0.92,
   )
 }

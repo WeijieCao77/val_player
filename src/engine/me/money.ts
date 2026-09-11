@@ -46,6 +46,7 @@ export const LEDGER_OUT: [MoneyKind, string][] = [
   ['gear', '外设'],
   ['course', '课程'],
   ['relax', '放松'],
+  ['life', '家人与生活'],
   ['fee', '报名费'],
   ['fine', '违约金'],
   ['outother', '其他开销'],

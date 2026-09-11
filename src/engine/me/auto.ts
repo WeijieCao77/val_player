@@ -250,7 +250,7 @@ export function autoBuy(state: GameState): string[] {
     if (!buyGear(state, s.key)) out.push(`${s.name}换成了${gearModel(s.key, 1)}`)
   }
   if (me.phase === 'pro') {
-    if (me.mental < 50 && me.money - 8000 >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
+    if (me.tilt >= 40 && me.money - 8000 >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
     if (me.abroad && !me.courses.includes('lang') && me.money - 5000 >= reserve && !buyCourse(state, 'lang')) out.push('报了语言课')
   }
   return out
