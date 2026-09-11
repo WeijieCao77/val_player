@@ -33,8 +33,9 @@
 .tile { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
 .tile:last-child { border-right: 0; }
 .tile small { display: block; color: var(--muted); font-size: var(--t-small); margin-bottom: 4px; }
-.tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-.tile b em { font-style: normal; font-size: var(--t-small); color: var(--muted); margin-left: 4px; }
+/* a figure wraps rather than trails off: 「这个项目的门面 1318 万」 is one tile at 1280 and at 320 */
+.tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; display: block; line-height: 1.3; overflow-wrap: anywhere; }
+.tile b em { font-style: normal; font-size: var(--t-small); color: var(--muted); margin-left: 4px; white-space: nowrap; display: inline-block; }
 .tile.up b { color: var(--win); }
 .tile.dn b { color: var(--loss); }
 @media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tile { border-bottom: 1px solid var(--line); } }
@@ -133,8 +134,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .attr-row.capped .xp, .attr-row.capped .v em { color: var(--gold); }
 /* the bar, its ceiling, and the hairline toward the next point */
 .attr-track { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-/* .bar is flex: 1 for rows; stacked in a column that would take its height away */
-.attr-track .bar { flex: none; position: relative; overflow: visible; }
+/* .bar is flex: 1 for rows; stacked in a column that would take its height away — and its 54px floor is wider than the column on a small phone */
+.attr-track .bar { flex: none; position: relative; overflow: visible; min-width: 0; }
+.attr-row > .bar { min-width: 0; }
 .attr-track .bar > i { border-radius: 2px; }
 .attr-track .capline { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--gold); border-radius: 1px; }
 .attr-next { height: 2px; background: var(--well); border-radius: 1px; overflow: hidden; }
@@ -154,6 +156,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .diary { list-style: none; margin: 0; padding: 0; }
 .diary li { padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); display: flex; gap: 10px; }
+/* a club written as one word (TeamOrangeGaming) breaks rather than leaving the panel */
+.diary li > span { min-width: 0; overflow-wrap: anywhere; }
 .diary li .when { color: var(--faint); font-variant-numeric: tabular-nums; min-width: 88px; }
 .diary li.good { color: var(--win); }
 .diary li.bad { color: var(--loss); }
@@ -161,20 +165,24 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
 .advance-me .hint { color: var(--muted); font-size: var(--t-small); }
+/* the button and the longer runs: two more controls in this row, and on a phone the bar over the tabs (below) */
+.advance-go { display: contents; }
 /* the longer runs, one control beside the button */
 .advance-me select.advance-far { min-height: 34px; max-width: 100%; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--t-small); cursor: pointer; }
 .pinbar .sm.ghost { margin-left: auto; }
-/* a match week, a day to a press: the week's seven days and what is on each */
-.week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 14px 0 0; }
-@media (max-width: 560px) { .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* a match week, a day to a press: the week's seven days and what is on each.
+   As many days to a row as are at least 72px wide — seven on a monitor, four
+   on a phone, three on the smallest — so 「4/10 周五」 and 「vs FMG」 never
+   have to be cut to fit a column. */
+.week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 4px; margin: 14px 0 0; }
 .week-day {
-  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; min-width: 0;
   background: var(--panel-2); display: flex; flex-direction: column; gap: 1px; font-size: var(--t-small);
 }
-.week-day .d { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.week-day .w { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-day .d { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.week-day .w { font-weight: 650; overflow-wrap: anywhere; }
 .week-day:not(.match) .w { color: var(--muted); font-weight: 400; }
-.week-day .s { font-size: var(--t-tiny); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-day .s { font-size: var(--t-tiny); color: var(--muted); overflow-wrap: anywhere; }
 .week-day .s.up { color: var(--win); }
 .week-day .s.dn { color: var(--loss); }
 .week-day.match { border-color: var(--accent-line); background: var(--accent-wash); }
@@ -218,9 +226,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .round-feed-score { display: inline-block; min-width: 52px; color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .talent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
 @media (max-width: 560px) { .talent-grid { grid-template-columns: 1fr; } }
-.talent-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 8px; align-items: center; }
-.talent-row .pips { display: flex; gap: 3px; }
-.talent-row .pips i { width: 12px; height: 12px; border-radius: 3px; background: var(--well); display: block; }
+/* the eight pips give way before the − / + do: at 320px the row was 10px wider than the panel */
+.talent-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.talent-row .pips { display: flex; gap: 3px; min-width: 0; }
+.talent-row .pips i { flex: 0 1 12px; min-width: 0; height: 12px; border-radius: 3px; background: var(--well); display: block; }
 .talent-row .pips i.on { background: var(--accent); }
 .club-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 720px) { .club-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -243,7 +252,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 /* ---- the career on one card ---- */
 .poster-me { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(160deg, var(--panel), var(--panel-2)); }
-.poster-me .eyebrow { font-size: var(--t-tiny); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.poster-me .eyebrow { font-size: var(--t-tiny); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; overflow-wrap: anywhere; }
 .poster-me h1 { margin: 2px 0 6px; font-size: 34px; }
 .poster-me .txt { color: var(--muted); margin: 0 0 12px; }
 .poster-me .wall { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -251,7 +260,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .poster-me .trophy.c { border-color: var(--gold); color: var(--gold); }
 .poster-me .trophy.m { border-color: var(--accent); color: var(--accent); }
 .poster-me .trophy.ring { opacity: .6; }
-.poster-me .years td { padding: 2px 8px 2px 0; font-size: var(--t-small); }
+/* a club's name wraps inside its year: twelve seasons of long names were wider than a phone */
+.poster-me .years td { padding: 2px 8px 2px 0; font-size: var(--t-small); white-space: normal; }
 .poster-me .nums { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0; }
 .poster-me .nums div { display: flex; flex-direction: column; }
 .poster-me .nums b { font-size: 22px; }
@@ -377,17 +387,11 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 /* 试训选项：上面一行是「你在赌什么」，下面一行才是数字 */
 .node-opt button .m.mech { color: var(--faint); }
 
-/* ---- 手机：生涯的页面都是行内写死的两栏（.app.career 只在生涯里有，经理模式不受影响） ----
-   375 宽的时候两栏各剩一百二十几像素，一句话三个字一折行；经济页的按钮直接出了屏幕。 */
-@media (max-width: 720px) {
-  .career { --t-label: 11px; }
-  .career .main .grid[style] { grid-template-columns: minmax(0, 1fr) !important; }
-  .tile b { white-space: normal; font-size: 16px; line-height: 1.25; }
-  .tile b em { display: block; margin: 2px 0 0; }
-  .hero-row, .hero-stage { gap: 4px 10px; }
-  .hero-who, .hero-club, .hero-stage { flex-wrap: wrap; min-width: 0; }
-  .hero-club { margin-left: 0; }
-  .hero-stage b { font-size: 18px; }
+/* ---- 窄屏：生涯的页面都是行内写死的两栏（.app.career 只在生涯里有，经理模式不受影响） ----
+   375 宽的时候两栏各剩一百二十几像素，一句话三个字一折行；经济页的按钮直接出了屏幕。
+   平板竖屏（768、820）左边还有栏目，两栏各剩三百和两百多：也排成一栏。 */
+@media (max-width: 900px) {
+  .app.career .main .grid[style] { grid-template-columns: minmax(0, 1fr) !important; }
 }
 /* 商店一行：名字、档位、型号，按钮放不下就折到下一行，不出屏幕 */
 .shop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 0; }
@@ -418,12 +422,195 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 @media (min-width: 561px) and (max-width: 1100px) {
   .career .attr-row { grid-template-columns: 48px minmax(60px, 1fr) auto minmax(0, 104px); gap: 6px; }
 }
-/* 平板上本周是两栏，左栏三百来像素，七天挤成一天四十像素，「vs TYL」「负 0-2」都被截断：同样排四列 */
-@media (max-width: 1100px) {
-  .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ================================================================ 手机
+   2026-09-11，作者：「文字和数字超过框的问题仍然存在」「手机端的体验非常不好」。
+
+   量出来的（scripts/mobile_audit.mjs，375 宽）：总览加属性条压在屏幕上方四百多
+   像素，内容在剩下的框里自己滚；正文 12.5px、小字 11px、左边栏目 11px；按钮、
+   下拉、能点的行大多 34–37px；右下角两颗浮窗压着卡片右边的字。
+
+   现在（≤720px），参考破晓（底栏四个入口加「更多」、属性条贴顶、触控往 40px
+   靠、避开安全区）和经理模式（手机上推进钉在屏幕底部），样子还是这个游戏的：
+   - 整页自己滚：总览跟着滚走，「综合」那一行贴顶；
+   - 栏目在底栏：四个加「更多」，其余的从底栏上面弹出来，当前页不在四个里就顶替第四个；
+   - 本周页：底栏上面一条推进，一个主按钮加「快进到…」；
+   - 停下来等你的卡片、比赛、选手卡占满全屏：标题贴顶，回答它的那排按钮贴底；
+   - 表格横着滚，名字那一列钉住；
+   - 字：正文 15px，小字 13.5px，最小 12px；按钮、下拉、能点的行不低于 40px。
+   只挂在 .app.career（生涯）和 .newcareer（开局页）下，经理模式不受影响。
+
+   叠放次序：推进条 38 < 「更多」的遮罩 39 < 底栏 40 < 成就卡 45 < 卡片 50 < 提示 100。 */
+@media (max-width: 720px) {
+  .app.career, .newcareer {
+    --t-body: 15px; --t-small: 13.5px; --t-tiny: 12px; --t-label: 12px;
+    --t-h2: 17px; --t-h1: 20px;
+    /* the bottom of the screen: the tab bar, the advance bar over it on the week page, the phone's own strip under both */
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --dock-h: 54px;
+    --go-h: 61px;
+    font-size: var(--t-body);
+  }
+
+  /* -- the page scrolls, not a box inside it */
+  .app.career { height: auto; min-height: 100%; }
+  .app.career > .body { display: block; }
+  .app.career > .body > .main { overflow: visible; padding: 10px 10px calc(var(--dock-h) + var(--safe-b) + 20px); }
+  .app.career:has(.advance-go) > .body > .main { padding-bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 20px); }
+
+  /* -- the top: the wordmark, and the corner buttons at its right end (below), because the bottom of the screen is the tabs' */
+  .app.career > .topbar { min-height: 48px; padding: 4px 10px; flex-wrap: nowrap; }
+  .app.career .brand { font-size: 14px; min-height: 40px; }
+  .app.career .support-card { max-height: calc(100dvh - 16px); }
+
+  /* -- the overview: the same six numbers, three to a row */
+  .app.career > .hero { margin: 6px 10px 0; }
+  .app.career .hero-row { padding: 8px 12px; gap: 2px 10px; }
+  .app.career .hero-who { flex-wrap: wrap; min-width: 0; gap: 2px 8px; }
+  .app.career .hero-name { font-size: 19px; overflow-wrap: anywhere; }
+  .app.career .hero-club { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; row-gap: 2px; }
+  .app.career .hero-club b { overflow-wrap: anywhere; }
+  .app.career .hero-stage { padding: 6px 12px; gap: 2px 10px; flex-wrap: wrap; }
+  .app.career .hero-stage b { font-size: 17px; }
+  .app.career .tile { padding: 7px 10px; }
+  .app.career .tile:nth-child(3n) { border-right: 0; }
+  .app.career .tile:nth-last-child(-n + 3) { border-bottom: 0; }
+  .app.career .tile small { font-size: var(--t-tiny); margin-bottom: 2px; }
+  .app.career .tile b { font-size: 16px; }
+  .app.career .tile b em { display: block; margin: 1px 0 0; white-space: normal; }
+  /* the changelog card: its kind badges were 10.5px, and a line of code in it one unbreakable word */
+  .app.career .log-kind { font-size: var(--t-tiny); }
+  .app.career .log-list li { min-width: 0; overflow-wrap: anywhere; }
+
+  /* -- the one line under it stays on top while the page scrolls; 我的 is on the tab bar, so the shortcut to it goes */
+  .app.career > .pinbar { min-height: 40px; padding: 6px 12px; flex-wrap: nowrap; gap: 4px 14px; }
+  .app.career > .pinbar .pin { white-space: normal; min-width: 0; }
+  .app.career > .pinbar .pin > span { white-space: nowrap; }
+  .app.career > .pinbar > button { display: none; }
+
+  /* -- the screens: a tab bar along the bottom, four and 更多 */
+  .app.career .nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    width: auto; padding: 0 env(safe-area-inset-right, 0px) var(--safe-b) env(safe-area-inset-left, 0px);
+    display: flex; flex-flow: row wrap; align-items: stretch; overflow: visible;
+    border-right: 0; border-top: 1px solid var(--line); box-shadow: var(--shadow-up);
+  }
+  .app.career .nav > div { flex: 1 1 0; min-width: 0; order: 3; }
+  .app.career .nav > .nav-rest, .app.career .nav > .nav-foot { display: none; }
+  .app.career .nav button {
+    min-height: var(--dock-h); padding: 4px 2px; text-align: center;
+    font-size: 14px; border-left: 0;
+  }
+  .app.career .nav button.active { background: none; box-shadow: inset 0 2px 0 var(--accent); }
+  /* 更多: the rest over the bar, four to a row, and the ground switch */
+  .app.career .nav.more-open { padding-top: 8px; }
+  .app.career .nav.more-open > .nav-rest { display: block; order: 1; flex: 0 0 25%; padding: 4px; }
+  .app.career .nav.more-open > .nav-rest button {
+    min-height: 48px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  .app.career .nav.more-open > .nav-rest button.active { border-color: var(--accent); box-shadow: none; }
+  .app.career .nav.more-open > .nav-foot {
+    display: flex; order: 2; flex: 0 0 100%; align-items: center; gap: 10px;
+    position: static; margin: 4px 0 0; padding: 6px 8px 8px; border-top: 0; border-bottom: 1px solid var(--line);
+  }
+  .app.career .nav.more-open > .nav-foot::before { content: '界面配色'; color: var(--muted); font-size: var(--t-small); margin-right: auto; }
+  .app.career .nav .nav-foot .theme-cycle { width: auto; min-height: 40px; padding: 0 14px; font-size: var(--t-small); }
+  .app.career > .nav-scrim { position: fixed; inset: 0; z-index: 39; background: var(--scrim-soft); }
+
+  /* -- the week page: the way forward rides over the tab bar */
+  .app.career .advance-go {
+    position: fixed; left: 0; right: 0; z-index: 38;
+    bottom: calc(var(--dock-h) + var(--safe-b) + 1px);
+    display: flex; gap: 8px; align-items: stretch;
+    padding: 8px calc(10px + env(safe-area-inset-right, 0px)) 8px calc(10px + env(safe-area-inset-left, 0px));
+    background: var(--bg-rail); border-top: 1px solid var(--line);
+  }
+  .app.career .advance-go > button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 10px; font-size: 16px; }
+  /* 16px: a smaller select zooms the whole page on iOS when it opens */
+  .app.career .advance-me select.advance-far { flex: 0 1 40%; width: auto; min-width: 0; min-height: 44px; font-size: 16px; }
+  .app.career > .toast { bottom: calc(var(--dock-h) + var(--safe-b) + 12px); max-width: calc(100vw - 24px); }
+  .app.career:has(.advance-go) > .toast { bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 12px); }
+  .app.career > .ach-pop { bottom: calc(var(--dock-h) + var(--safe-b) + 10px) !important; }
+  .app.career:has(.advance-go) > .ach-pop { bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 10px) !important; }
+
+  /* -- a card the clock stopped on takes the whole screen: its title on top, its answer at the bottom */
+  /* not stretched: a stretched card is exactly the screen's height and a long match spills out of it; min-height fills a short one */
+  .app.career .modal-bg { padding: 0; }
+  .app.career .modal {
+    max-width: none !important; min-height: 100%;
+    border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column;
+  }
+  .app.career .modal-head {
+    position: sticky; top: 0; z-index: 3; background: var(--panel);
+    min-height: 52px; padding: calc(4px + env(safe-area-inset-top, 0px)) 6px 4px 12px; gap: 8px;
+  }
+  .app.career .modal-head h3 { flex: 1 1 auto; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+  .app.career .modal-head > .spacer { display: none; }
+  .app.career .modal-head > button { flex: none; }
+  /* a column, so a short card still has its answer down where the thumb is */
+  .app.career .modal-body { flex: 1 0 auto; display: flex; flex-direction: column; padding: 12px 12px calc(16px + var(--safe-b)); }
+  .app.career .modal-body > .row:has(> button.primary) {
+    position: sticky; bottom: 0; z-index: 2; flex-wrap: wrap; margin-top: auto !important;
+    margin-left: -12px !important; margin-right: -12px !important;
+    padding: 10px 12px calc(10px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line);
+  }
+  .app.career .modal-body > .row:has(> button.primary) > button { flex: 1 1 0; min-height: 44px; }
+  .app.career .share-card { max-height: calc(100dvh - 32px); }
+
+  /* -- the match, stacked: score, map, the call, the rounds */
+  .app.career .score-line { gap: 10px; }
+  .app.career .score-line .t { font-size: 17px; gap: 6px; min-width: 0; }
+  .app.career .score-line .s { font-size: 28px; }
+  .app.career .map-real { max-width: 300px; justify-self: center; }
+  .app.career .round-feed-body { height: min(240px, 42vh); }
+  .app.career .node-opt button { min-height: 48px; }
+
+  /* -- tables scroll sideways with the row's name pinned: the first column, or the one after a rank */
+  .app.career :is(.table-wrap, .me-recent-wrap) > table > * > tr > :first-child:not(.num),
+  .app.career :is(.table-wrap, .me-recent-wrap) > table > * > tr > :first-child.num:not(.sticky-name) + * {
+    position: sticky; left: 0; z-index: 1; background: var(--panel);
+  }
+  .app.career :is(.table-wrap, .me-recent-wrap) > table > tbody > tr:is(.me, .mine) > :first-child:not(.num),
+  .app.career :is(.table-wrap, .me-recent-wrap) > table > tbody > tr:is(.me, .mine) > :first-child.num:not(.sticky-name) + * {
+    background: var(--panel-me);
+  }
+
+  /* -- anything to tap is 40px, the way 破晓 measured it */
+  .app.career button, .newcareer button, .app.career select, .newcareer select { min-height: 40px; }
+  .app.career button.sm, .newcareer button.sm { min-width: 40px; }
+  .app.career tr.clickable > td { height: 44px; }
+  .app.career summary { padding: 11px 0; }
+  .app.career a.share-dl { display: inline-flex; align-items: center; min-height: 40px; }
+  /* the opponent's five as a small stack (media.css) still take a thumb each */
+  @container (max-width: 300px) {
+    .app.career .face-btn { width: 40px; }
+    .app.career .face-btn + .face-btn { margin-left: 0; }
+  }
+
+  /* -- the new career: the start button stays in reach */
+  .newcareer { padding: 12px 10px 0; }
+  .newcareer > .row:last-child {
+    position: sticky; bottom: 0; z-index: 5; margin: 12px -10px 0; padding: 10px 10px calc(10px + var(--safe-b));
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .newcareer > .row:last-child > button.primary { flex: 1 1 auto; min-height: 48px; font-size: 16px; }
 }
-/* 一周七天在手机上排成四列：少一点内边距，「vs NOVA」就不用省略 */
-@media (max-width: 560px) {
-  .week-days { gap: 4px; }
-  .week-day { padding: 5px; }
+@media (min-width: 721px) {
+  .app.career .nav > .nav-more, .app.career > .nav-scrim { display: none; }
+}
+/* the player card's radar puts its axis names just past the picture's edge, and an SVG cuts off what is past its edge:
+   「意识」「沟通」 lost a few pixels at every width. The card around it has the room. And a match sheet's 300px
+   comparison radar is wider than a 320px phone's card: it scales down to the card (common.tsx gives it a viewBox). */
+.app.career .radar-wrap svg { overflow: visible; max-width: 100%; height: auto; }
+
+/* The corner buttons — the numbers switch and what changed in this build — at the right end of the top bar, at
+   every width. Floating over the bottom-right of the screen they covered the right edge of whatever panel was under
+   them, at 375, 768 and 1280 alike; on a phone that corner is the tab bar's now. No z-index on the row, so the
+   changelog card it opens still stacks over the tab bar. */
+.app.career > .corner { position: absolute; top: 10px; right: 16px; display: flex; align-items: center; gap: 8px; }
+.app.career > .corner > .support-fab { position: static; white-space: nowrap; }
+@media (max-width: 720px) {
+  .app.career > .corner { top: 4px; right: 10px; gap: 6px; }
+  .app.career > .corner > .support-fab { min-width: 40px; min-height: 40px; padding: 0 12px; justify-content: center; font-size: var(--t-small); }
+  .app.career > .corner > .pins-fab .lbl { display: inline; }
 }

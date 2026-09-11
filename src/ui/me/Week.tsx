@@ -179,6 +179,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
             {/* one way forward on the button; the longer runs share one control (asked 2026-09-11: four advance buttons read as clutter) */}
+            {/* the pair rides the bottom of a phone's screen over the tab bar (me.css .advance-go); elsewhere it is two more controls in this row */}
+            <div className="advance-go">
             {days
               ? <button className="primary" onClick={onAdvance} title="过一天；比赛日当天开打，打完回到这里">{weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →'}</button>
               : quiet
@@ -201,6 +203,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               <option value="stage">赛段末</option>
               <option value="season">赛季末</option>
             </select>
+            </div>
             <span className="hint">
               {me.ap > 0 ? `还有 ${me.ap} 点没用，${days ? '这一周过完' : '推进后'}作废。` : ''}
               {quiet ? '接下来四周没有你的比赛。' : ''}

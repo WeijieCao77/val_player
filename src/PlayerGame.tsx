@@ -70,9 +70,18 @@ export default function PlayerGame() {
   // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
   const [nums, setNums] = useNumbers()
   const mainRef = useRef<HTMLElement>(null)
+  // a phone's 更多: the screens that are not on its tab bar, opened over it (me.css)
+  const [more, setMore] = useState(false)
 
   useEffect(() => { setBooted(true) }, [])
-  useEffect(() => { mainRef.current?.scrollTo(0, 0) }, [screen])
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0)
+    // a phone scrolls the page itself (me.css): the new screen opens at its own top, the overview left scrolled away if it was
+    const body = mainRef.current?.parentElement
+    if (!body || window.scrollY <= body.offsetTop) return
+    const bar = document.querySelector('.app.career > .pinbar')?.getBoundingClientRect().height ?? 0
+    window.scrollTo(0, body.offsetTop - bar)
+  }, [screen])
 
   const commit = useCallback(() => {
     bump()
@@ -216,12 +225,14 @@ export default function PlayerGame() {
           <div className="spacer" />
         </header>
 
-        {/* the corner: what changed in this build, and the numbers switch */}
-        <Changelog entries={CHANGELOG_ME} latest={LATEST_ME} seenKey="valplayer.changelog.seen" foot="选手生涯 demo · 每一版改了什么都在这里，回看用" />
-        <button className={`support-fab pins-fab${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
-          <span className="ico" aria-hidden="true">🔢</span>
-          <span className="lbl">数值 {nums ? '开' : '关'}</span>
-        </button>
+        {/* the corner: the numbers switch, and what changed in this build — at the top bar's right end (me.css .corner) */}
+        <div className="corner">
+          <button className={`support-fab pins-fab${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
+            <span className="ico" aria-hidden="true">🔢</span>
+            <span className="lbl">数值 {nums ? '开' : '关'}</span>
+          </button>
+          <Changelog entries={CHANGELOG_ME} latest={LATEST_ME} seenKey="valplayer.changelog.seen" foot="选手生涯 demo · 每一版改了什么都在这里，回看用" />
+        </div>
 
         {/* who I am, where I am, and the six numbers that matter — the rest
             live one row down, as numbers or as words */}
@@ -279,13 +290,22 @@ export default function PlayerGame() {
         )}
 
         <div className="body">
-          <nav className="nav">
-            {SCREENS.filter((s) => !s.pro || pro).map((s) => (
-              <div key={s.key}>
-                {s.sep && <div className="nav-group">—</div>}
-                <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => setScreen(s.key)}>{s.label}</button>
-              </div>
-            ))}
+          <nav className={`nav${more ? ' more-open' : ''}`}>
+            {(() => {
+              const shown = SCREENS.filter((s) => !s.pro || pro)
+              // a phone's tab bar holds the first four and 更多; the screen I am on takes the fourth place when it is one of the rest (破晓's rule)
+              const at = shown.findIndex((s) => s.key === screen)
+              const bar = new Set((at >= 4 ? [...shown.slice(0, 3), shown[at]] : shown.slice(0, 4)).map((s) => s.key))
+              return shown.map((s) => (
+                <div key={s.key} className={bar.has(s.key) ? 'nav-bar' : 'nav-rest'}>
+                  {s.sep && <div className="nav-group">—</div>}
+                  <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => { setScreen(s.key); setMore(false) }}>{s.label}</button>
+                </div>
+              ))
+            })()}
+            <div className="nav-more">
+              <button className={`nav-item${more ? ' active' : ''}`} aria-expanded={more} onClick={() => setMore(!more)}>更多</button>
+            </div>
             <div className="nav-foot"><ThemeToggle compact /></div>
           </nav>
           <main className="main" id="main" ref={mainRef}>
@@ -300,6 +320,7 @@ export default function PlayerGame() {
             ) : Screen ? <Screen /> : <Week onAdvance={advance} onAdvanceUntil={advanceMany} />}
           </main>
         </div>
+        {more && <div className="nav-scrim" aria-hidden="true" onClick={() => setMore(false)} />}
 
         {playerId && <PlayerModal playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}

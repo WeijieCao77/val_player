@@ -17,6 +17,7 @@ export default function AchPop() {
   const close = () => { book.seen = me.achievements.length; commit() }
   return (
     <div
+      className="ach-pop"
       role="status"
       aria-live="polite"
       style={{

@@ -286,7 +286,7 @@ export function MultiRadar({
     return [cx + Math.cos(a) * r * mag, cy + Math.sin(a) * r * mag]
   }
   return (
-    <svg width={size} height={size} role="img" aria-label="表现对比雷达图">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="表现对比雷达图">
       {[0.25, 0.5, 0.75, 1].map((g) => (
         <polygon
           key={g} points={axes.map((_, i) => pt(i, g).join(',')).join(' ')}
@@ -345,7 +345,7 @@ export function Radar({ values, labels, size = 210 }: {
   const poly = values.map((v, i) => pt(i, Math.max(0.05, v / 100)).join(',')).join(' ')
 
   return (
-    <svg width={size} height={size} role="img" aria-label="能力雷达图">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="能力雷达图">
       {[0.25, 0.5, 0.75, 1].map((g) => (
         <polygon
           key={g}
