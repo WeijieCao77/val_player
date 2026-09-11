@@ -178,15 +178,29 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           )}
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
+            {/* one way forward on the button; the longer runs share one control (asked 2026-09-11: four advance buttons read as clutter) */}
             {days
               ? <button className="primary" onClick={onAdvance} title="过一天；比赛日当天开打，打完回到这里">{weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →'}</button>
-              : <button className={quiet ? undefined : 'primary'} onClick={onAdvance}>推进一周 →</button>}
-            {quiet && (
-              <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title="四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停">推进一个月 →</button>
-            )}
-            <button onClick={() => onAdvanceUntil('match')}>到下一场比赛</button>
-            <button onClick={() => onAdvanceUntil('stage')}>到赛段末</button>
-            <button onClick={() => onAdvanceUntil('season')}>到赛季末</button>
+              : quiet
+                ? <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title="四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停">推进一个月 →</button>
+                : <button className="primary" onClick={onAdvance}>推进一周 →</button>}
+            <select
+              className="advance-far"
+              value=""
+              aria-label="快进"
+              title="按推荐安排一路推进，替你处理路上的事；有要你拿主意的事就停"
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'week') onAdvance()
+                else if (v === 'match' || v === 'stage' || v === 'season') onAdvanceUntil(v)
+              }}
+            >
+              <option value="">快进到…</option>
+              {quiet && !days && <option value="week">只推进一周</option>}
+              <option value="match">下一场比赛</option>
+              <option value="stage">赛段末</option>
+              <option value="season">赛季末</option>
+            </select>
             <span className="hint">
               {me.ap > 0 ? `还有 ${me.ap} 点没用，${days ? '这一周过完' : '推进后'}作废。` : ''}
               {quiet ? '接下来四周没有你的比赛。' : ''}

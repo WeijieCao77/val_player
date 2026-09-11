@@ -161,6 +161,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
 .advance-me .hint { color: var(--muted); font-size: var(--t-small); }
+/* the longer runs, one control beside the button */
+.advance-me select.advance-far { min-height: 34px; max-width: 100%; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--t-small); cursor: pointer; }
+.pinbar .sm.ghost { margin-left: auto; }
 /* a match week, a day to a press: the week's seven days and what is on each */
 .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 14px 0 0; }
 @media (max-width: 560px) { .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

@@ -113,7 +113,7 @@ export interface TourStep {
 
 const WEEK = 'week'
 const panel = (title: string): TourTarget => ({ sel: '.panel', text: title })
-const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛'] }
+const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛', '推进一个月'] }
 
 export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
   if (kind === 'season') return seasonSteps()
@@ -123,7 +123,7 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
   const week: TourStep[] = [
     {
       screen: WEEK, at: [{ sel: '.hero' }, { sel: '.pinbar' }], title: '这一块是你',
-      body: `${pro ? '效力的队、首发还是替补' : '段位、粉丝、资金'}、体力、状态都在这里。下面一行是八项属性，卡在瓶颈的那项是金色。`,
+      body: `${pro ? '效力的队、首发还是替补' : '段位、粉丝、资金'}、体力、状态都在这里。下面一行是综合能力，有卡在瓶颈的会点出来；八项属性的细节在「我的」页。`,
     },
     {
       screen: WEEK, at: [{ sel: '.pins-fab' }], title: '文字还是数字',

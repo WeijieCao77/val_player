@@ -266,20 +266,15 @@ export default function PlayerGame() {
           </div>
         )}
 
-        {/* not on 我的, which is the same eight rows at full size; 心态/体质/疲劳/气压 live there and in the 状态 tile */}
+        {/* One line under the tiles, not a row of every dimension (asked 2026-09-11: 「段位下方有足足13个维度」).
+            The eight, 心态, 体质, 疲劳 and 气压 all still drive every sum; they are read in full on 我的. */}
         {screen !== 'me' && (
-        <div className="pinbar" role="status" aria-label="属性">
-          {ATTR_KEYS.map((k) => {
-            // an attribute sitting at its ceiling is marked here too; the 我的 page says how to break it
-            const capped = p.attrs[k] >= caps[k]
-            return (
-              <span key={k} className={`pin${capped ? ' cap' : ''}`} title={capped ? `${ATTR_CN[k]}卡在瓶颈，怎么破看「我的」` : undefined}>
-                <span>{ATTR_CN[k]}</span><b>{nums ? p.attrs[k] : attrWord(p.attrs[k])}</b>
-              </span>
-            )
-          })}
-          <span className="sep" />
+        <div className="pinbar" role="status" aria-label="能力">
           <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
+          {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
+            <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
+          )}
+          <button className="sm ghost" onClick={() => setScreen('me')}>看八项属性 →</button>
         </div>
         )}
 
