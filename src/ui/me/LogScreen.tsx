@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel, fmtDay } from '../common'
+import { useGame } from './ctx'
+import { Panel, fmtDay } from './common'
 
 export default function LogScreen() {
   const { game } = useGame()

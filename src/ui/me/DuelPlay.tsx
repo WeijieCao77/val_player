@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Modal, OvrBadge, Roles } from '../common'
+import { useGame } from './ctx'
+import { Modal, OvrBadge, Roles } from './common'
 import { closeDuel, duelCompare, duelOptP, duelPick, duelScene, DIM_CN } from '../../engine/me/duel'
 import { EDGE_NEED } from '../../engine/me/coach'
 import type { DuelSceneLog } from '../../engine/me/types'

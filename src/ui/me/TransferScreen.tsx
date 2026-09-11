@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Crest, Panel, money } from '../common'
+import { useGame } from './ctx'
+import { Crest, Panel, money } from './common'
 import { inWindow, listSelf, nextWindow, perfWord, proPerf } from '../../engine/me/transfer'
 import { clubBars, expectOf, ladderTier, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { ROLE_CN } from '../../engine/me/contract'

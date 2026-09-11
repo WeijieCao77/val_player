@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useGame } from '../ctx'
+import { useGame } from './ctx'
 import { closeTour, dueTour, markTourSeen, openTour, setToursOff, tourSteps, useOpenTour } from './guide'
 import type { TourKind, TourTarget } from './guide'
 import './tour.css'

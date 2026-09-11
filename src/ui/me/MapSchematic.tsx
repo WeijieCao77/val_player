@@ -1,6 +1,6 @@
 import { MINIMAPS } from '../../data/minimaps'
 import type { MiniPt } from '../../data/minimaps'
-import { minimapImg } from '../common'
+import { minimapImg } from './common'
 import type { RoundLog } from '../../engine/types'
 
 /**

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useGame } from '../ctx'
-import { Crest, Modal, money } from '../common'
+import { useGame } from './ctx'
+import { Crest, Modal, money } from './common'
 import type { PendingItem } from '../../engine/me/types'
 import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
 import { MeMatch } from '../../engine/me/matchplay'

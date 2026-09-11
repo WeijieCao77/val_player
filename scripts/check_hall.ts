@@ -143,9 +143,9 @@ before = snap()
 saveGame('probe', C.state)
 deleteSave('probe')
 check(snap() === before && Object.keys(mem).every((k) => !k.includes('save:probe')), '存档存下又删掉：殿堂不动')
-const E = createCareer({ name: 'HallE', region: 'China', role: '哨卫', talents: emptyTalents(), originKey: 'vodkid', start: 'pre', seed: 14, year: 2026 })
+const E = createCareer({ name: 'HallE', region: 'China', role: '哨卫', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 14, year: 2026 })
 noteHall(E)
-check(snap() === before && E.me!.originKey === 'vodkid', '开新生涯（殿堂出身卡）：殿堂不动')
+check(snap() === before && E.me!.originKey === 'netcafe', '开新生涯：殿堂不动')
 
 const keep = snap()
 mem[HALL_KEY] = '{"v":1,"cards":[{"id":'

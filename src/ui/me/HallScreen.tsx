@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { REGION_CN } from '../../engine/types'
 import type { GameState, Region } from '../../engine/types'
-import { useGame } from '../ctx'
-import { Panel } from '../common'
+import { useGame } from './ctx'
+import { Panel } from './common'
 import { ACHIEVEMENTS, ACH_ROUTES } from '../../engine/me/achievements'
 import { compCn } from '../../engine/me/compname'
-import { HALL_ORIGINS, originOf } from '../../engine/me/origins'
+import { originOf } from '../../engine/me/origins'
 import {
-  HALL_ORIGIN_NEEDS, MILESTONES, MILESTONE_BY_KEY, START_SHORT, exportHall, hallAchCount, hallRecords, hallTitle,
-  importHall, isIntlClass, milestoneDone, originUnlocked, peekCareerId, readHall,
+  MILESTONES, MILESTONE_BY_KEY, START_SHORT, exportHall, hallAchCount, hallRecords, hallTitle,
+  importHall, isIntlClass, milestoneDone, peekCareerId, readHall,
 } from '../../engine/me/hall'
 import type { HallCard, HallRecord } from '../../engine/me/hall'
 import { attrWord, useNumbers } from './words'
@@ -82,7 +82,7 @@ export function HallView({ game, onBack }: { game?: GameState | null; onBack: ()
         <div><b>{achN}<em>/{ACHIEVEMENTS.length}</em></b><small>成就</small></div>
         <div><b>{hxN}<em>/{MILESTONES.length}</em></b><small>殿堂成就</small></div>
       </div>
-      <p className="tiny faint hall-note">记在这台设备上，开新生涯不会清。殿堂只给称号和出身卡，不加任何数值。</p>
+      <p className="tiny faint hall-note">记在这台设备上，开新生涯不会清。殿堂只给称号，不加任何数值，也不给下一局解锁东西。</p>
 
       <Panel title="殿堂成就">
         {MILESTONES.map((m) => {
@@ -130,18 +130,6 @@ export function HallView({ game, onBack }: { game?: GameState | null; onBack: ()
           )}
         </Panel>
       )}
-
-      <Panel title="出身卡">
-        {HALL_ORIGINS.map((o) => {
-          const ok = originUnlocked(h, o.key)
-          return (
-            <div key={o.key} className={`hall-row${ok ? ' got' : ' locked'}`}>
-              <span className="mark">{ok ? '◆' : '◇'}</span>
-              <div><b>{o.name}</b><span className="tiny muted desc">{ok ? '开新生涯时可选' : HALL_ORIGIN_NEEDS[o.key]?.need}</span></div>
-            </div>
-          )
-        })}
-      </Panel>
 
       <Panel title={`成就 · ${achN}/${ACHIEVEMENTS.length}`}>
         {ACH_ROUTES.map((r) => {
@@ -214,27 +202,6 @@ function CareerCard({ c, mine }: { c: HallCard; mine: boolean }) {
         <div className="tiny faint">最好的一季 {c.best.year} · {c.best.team}{c.best.titles ? ` · ${c.best.titles} 冠` : ''}{c.best.acs ? ` · ACS ${c.best.acs}` : ''}</div>
       )}
       {hx.length > 0 && <div className="tiny hc-hx">殿堂 · 凑齐「{hx.join('」「')}」</div>}
-    </div>
-  )
-}
-
-/** Under the twelve on the new-career page: the hall's two, greyed with what opens them until the hall has it. */
-export function HallOrigins({ pick, onPick }: { pick: string; onPick: (key: string) => void }) {
-  const h = useMemo(() => readHall(), [])
-  return (
-    <div className="hall-origins">
-      <div className="tiny faint" style={{ marginBottom: 6 }}>成就殿堂解锁</div>
-      <div className="origin-grid">
-        {HALL_ORIGINS.map((o) => {
-          const ok = originUnlocked(h, o.key)
-          return (
-            <button key={o.key} className={`origin-pick${pick === o.key ? ' on' : ''}${ok ? '' : ' locked'}`} disabled={!ok} onClick={() => onPick(o.key)}>
-              <b>{o.name}</b>
-              <span>{ok ? o.blurb : HALL_ORIGIN_NEEDS[o.key]?.need}</span>
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel, money, moneyFull } from '../common'
+import { useGame } from './ctx'
+import { Panel, money, moneyFull } from './common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizeRows } from '../../engine/me/money'
 import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'

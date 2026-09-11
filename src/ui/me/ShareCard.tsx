@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useGame } from '../ctx'
+import { useGame } from './ctx'
 import { CARD_FILE, canShareFile, careerCardUrl, dataUrlToFile } from './share'
 
 /**

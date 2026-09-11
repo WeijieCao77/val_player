@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel } from '../common'
+import { useGame } from './ctx'
+import { Panel } from './common'
 import { activeRivals, rivalOnTeam } from '../../engine/me/rivals'
 import { starTitleOf } from '../../engine/me/startitles'
 import type { MeMatchRecord } from '../../engine/me/types'

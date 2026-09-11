@@ -1,4 +1,4 @@
-import { useGame } from '../ctx'
+import { useGame } from './ctx'
 import { fansCn, fanTier } from '../../engine/me/fans'
 import { traitOf } from '../../engine/me/traits'
 import { bondCardLines } from '../../engine/me/bond'
