@@ -72,6 +72,7 @@ const OVERRIDE: Record<string, string | null> = {
   1747: 'China Evolution Series/2023/Act 1', 1825: 'China Evolution Series/2023/Act 2', 1880: 'China Evolution Series/2023/Act 3',
   // 2024
   1954: null, 2076: null, 2131: null,
+  1952: 'VCL/2024/Indonesia/Split 1', // the match prefers its Group Stage page, whose dates are nearer and which has no table
   1971: 'VCL/2024/North America/Split 1/Mid Season Cup', 2071: 'VCL/2024/North America/Challenger Playoffs',
   2126: 'VCL/2024/Latin America', 2234: 'FGC Valorant Invitational/2024',
   // 2025

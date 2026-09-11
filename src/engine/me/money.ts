@@ -103,10 +103,14 @@ export const ledgerSum = (o: Record<string, number> | undefined): number =>
  * leagues, whose two winners are joint first — each conference was paid off its
  * own copy of the table, so joint first of two is each conference's 1st.
  */
-function placeAt(comp: Competition, index: number): { place: number; row: number; span: number } {
+function placeAt(comp: Competition, index: number, table?: PrizeTable): { place: number; row: number; span: number } {
   const place = comp.places?.[index] ?? index + 1
   const level = comp.places ? comp.places.filter((x) => x === place).length : 1
-  const sides = comp.places ? Math.max(1, comp.places.filter((x) => x === 1).length) : 1
+  // joint winners are conferences only where the table has one winner: a table that pays 1st and 2nd
+  // alike (Korea's 2021 Challengers sent both finalists on) is one bracket whose top two were level
+  const first = table?.pay[0]
+  const winners = comp.places ? comp.places.filter((x) => x === 1).length : 1
+  const sides = first && first[0] === 1 && first[1] === 1 ? Math.max(1, winners) : 1
   return { place, row: Math.floor((place - 1) / sides) + 1, span: Math.max(1, Math.round(level / sides)) }
 }
 
@@ -127,7 +131,7 @@ function myCut(state: GameState, amount: number): number {
  * roster. `index` is the club's position in `comp.finished`.
  */
 export function prizeShare(state: GameState, comp: Competition, index: number): number {
-  const { row, span } = placeAt(comp, index)
+  const { row, span } = placeAt(comp, index, prizeTableOf(comp, state.year))
   return myCut(state, prizeFor(comp, row, state.year, span))
 }
 
