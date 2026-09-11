@@ -195,9 +195,13 @@ export function createCareer(o: CareerOpts): GameState {
     ? careerRegions(year).find((r) => regionIn(r, year) === o.region) ?? o.region
     : o.region
   const teamId = o.start === 'pre'
-    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // a club to watch until I have one
+    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // the world is built around a club; I am not at it
     : (o.teamId ?? pickClub(region, clubTier, rng, year))
   const state = year >= 2026 ? createWorldAt(teamId, o.name, seed, year) : createNewGame(teamId, o.name, seed, undefined, year)
+  // Nobody's club until I sign for one. The world used to keep a club "watched" for a player on the
+  // ladder, and treated it as his: its title raised the world's rivalry, it kept its name when history
+  // renamed it, its matches were his in the engine's eyes.
+  if (o.start === 'pre') state.myTeam = ''
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
 

@@ -4,7 +4,7 @@ import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnC
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
 import { growLoyalty } from './attachment'
-import { deskOf } from './desk'
+import { deskOf, managedClub } from './desk'
 import type { ClubMods } from './desk'
 import { ATTR_KEYS } from './types'
 import type { Attrs, GameState, Player, Team } from './types'
@@ -154,7 +154,8 @@ export function weeklyTick(state: GameState, rng: Rng, grumbling: Player[] = [])
   // a manager's skills and staff, at the club he runs (engine/desk.ts)
   const mods = deskOf(state)?.clubMods(state)
   for (const team of Object.values(state.teams)) {
-    const isMine = team.id === state.myTeam
+    // the club a person manages trains to his plan; every other club — a player's included — to the role-aware one
+    const isMine = team.id === managedClub(state)
     for (const pid of team.roster) {
       const p = state.players[pid]
       if (!p) continue
@@ -181,7 +182,8 @@ export function weeklyTick(state: GameState, rng: Rng, grumbling: Player[] = [])
         // the manager's, so a player arrives at a new club with his programme
         // visible; it is a pure function of the player, so it stays put
         // until the attribute has nowhere left to go.
-        state.training[p.id] = recommendedTrainingFocus(p)
+        // the career player's own week sets his (me/week.ts)
+        if (p.id !== state.me?.id) state.training[p.id] = recommendedTrainingFocus(p)
         trainPlayer(state, p, team, rng)
       }
 
@@ -275,7 +277,7 @@ export function applyMatchFatigue(
   state: GameState, teamId: string, mapsPlayed: number, rng: Rng,
   notes?: string[], played?: string[],
 ) {
-  const isMine = teamId === state.myTeam
+  const isMine = teamId === managedClub(state)
   for (const pid of played?.length ? played : state.teams[teamId]?.starters ?? []) {
     const p = state.players[pid]
     if (!p) continue

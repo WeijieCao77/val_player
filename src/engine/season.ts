@@ -15,7 +15,7 @@ import { hostCity } from './hosts'
 import { applyMatchBonds } from './bonds'
 import { titleLoyalty } from './attachment'
 import { applyMatchFatigue, seasonRollover, weeklyTick } from './training'
-import { deskOf } from './desk'
+import { deskOf, managedClub } from './desk'
 import type { ContractsRun, StayApproach } from './desk'
 import { autoStarters, ensureCaller } from './world'
 import { CHAMPIONS_2025, drawRules } from './ruleset'
@@ -1341,19 +1341,22 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
 
   // ---- contracts tick down; expiring players leave
   const run: ContractsRun = { finalYear: [], expiring: [], walked: [] }
+  // a club a person manages gives its men a winter's grace to be renewed; every other club decides on the spot
+  const managed = managedClub(state)
   const released: string[] = []
   for (const p of Object.values(state.players)) {
     if (!p.teamId) continue
-    const mine = p.teamId === state.myTeam
     p.contractYears -= 1
-    if (mine && p.contractYears === 1) run.finalYear.push(p.ign)
+    if (p.teamId === managed && p.contractYears === 1) run.finalYear.push(p.ign)
     if (p.contractYears <= 0) {
       const team = state.teams[p.teamId]
       // clubs usually renew players they still rate
       const keep = p.overall >= (team?.rating ?? 60) - 6 && rng.chance(0.72)
-      if (keep && team && team.id !== state.myTeam) {
+      // the career player's contract is his own to renew or leave (me/transfer.ts seasonContractCheck)
+      if (p.id === state.me?.id) { p.contractYears = 0; continue }
+      if (keep && team && team.id !== managed) {
         p.contractYears = contractLength(p, rng, team.roster.map((id) => state.players[id]))
-      } else if (team && team.id === state.myTeam) {
+      } else if (team && team.id === managed) {
         // One winter of grace, then he actually goes. It used to be an
         // unlimited stay: he simply drew wages forever on a contract that had
         // run out.
@@ -1614,7 +1617,7 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
 export function ensureMinimumRosters(state: GameState, rng: Rng): void {
   const short: string[] = []
   for (const team of Object.values(state.teams)) {
-    if (team.id === state.myTeam || team.dormant) continue
+    if (team.id === managedClub(state) || team.dormant) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
       const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)

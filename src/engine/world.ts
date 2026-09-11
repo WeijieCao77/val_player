@@ -13,6 +13,7 @@ import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
 import { currentRuleset } from './ruleset'
 import { historyNames } from './names'
+import { managedClub } from './desk'
 
 export interface RawPlayer {
   id: string; ign: string; teamId: string | null; region: string; role: string
@@ -355,15 +356,20 @@ export function ensureCaller(state: GameState, teamId: string): void {
   if (!team) return
   const squad = squadOf(state, teamId)
   if (!squad.length) { team.igl = null; return }
-  if (teamId !== state.myTeam && !squad.some((p) => p.isIgl)) {
-    const next = squad.slice().sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
-    next.isIgl = true
-    next.iglSource = 'inferred'
+  // a club a person manages names its own caller; every other club promotes a stand-in
+  const managed = managedClub(state)
+  if (teamId !== managed && !squad.some((p) => p.isIgl)) {
+    // never the career player: whether he calls is his own story, not a stand-in's
+    const next = squad.filter((p) => p.id !== state.me?.id).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
+    if (next) {
+      next.isIgl = true
+      next.iglSource = 'inferred'
+    }
   }
   const flagged = squad.filter((p) => p.isIgl)
   // an AI club with one caller needs no pointer — callerOf falls back to
   // him — and seventy-odd pointers were a kilobyte on every save
-  if (teamId !== state.myTeam && flagged.length <= 1) { delete team.igl; return }
+  if (teamId !== managed && flagged.length <= 1) { delete team.igl; return }
   if (squad.some((p) => p.id === team.igl && p.isIgl)) return
   const had = team.igl
   const best = flagged.sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
@@ -413,7 +419,7 @@ export function syncCallersWithWorld(state: GameState): string[] {
       if (p.teamId) touched.add(p.teamId)
       notes.push(`${p.ign} 标为指挥${p.teamId ? `（${state.teams[p.teamId]?.tag ?? ''}）` : ''}`)
     } else if (!w.isIgl && p.isIgl && p.iglSource !== 'inferred' && p.iglSource !== 'appointed'
-      && p.teamId === w.teamId && p.teamId !== state.myTeam) {
+      && p.teamId === w.teamId && p.teamId !== managedClub(state)) {
       p.isIgl = false
       p.iglSource = undefined
       if (p.teamId) touched.add(p.teamId)
@@ -426,7 +432,7 @@ export function syncCallersWithWorld(state: GameState): string[] {
     const squad = squadOf(state, teamId)
     // a real caller has arrived: the stand-in the AI club appointed for want
     // of one steps back, as a fresh build would have it
-    if (teamId !== state.myTeam && squad.some((p) => p.isIgl && p.iglSource === 'verified')) {
+    if (teamId !== managedClub(state) && squad.some((p) => p.isIgl && p.iglSource === 'verified')) {
       for (const p of squad) if (p.isIgl && p.iglSource === 'inferred') { p.isIgl = false; p.iglSource = undefined }
       const main = squad.find((p) => p.id === team.igl)
       if (!main?.isIgl) team.igl = null

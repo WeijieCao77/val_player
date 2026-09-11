@@ -1,12 +1,11 @@
 import type { Rng } from '../rng'
-import { contractLength, expectedSalary, marketValue, refreshValue } from '../player'
+import { expectedSalary, marketValue, refreshValue } from '../player'
 import { defaultContract, ROLES } from '../types'
 import type { GameState, Player, Role, Team } from '../types'
 import { squadOf } from '../roster'
 import { importBlock } from '../imports'
 import { releaseForHistory, signForHistory } from '../timeline'
 import { autoStarters, ensureCaller } from '../world'
-import { recommendedTrainingFocus } from './focus'
 import { coachStarters } from './coach'
 import { pushLog } from './log'
 
@@ -104,34 +103,16 @@ function fillSquad(state: GameState, team: Team, rng: Rng): void {
 }
 
 /**
- * The club's week around me: a team-mate whose deal has run out is renewed if
- * the club still rates him, whoever has gone is replaced, and the team-mates'
- * programme is the coach's — the one every club in the world follows.
+ * The club's week around me: whoever has gone — a contract the club did not
+ * renew, a retirement, history — is replaced, so there are five besides me.
+ * Renewals and the team-mates' programme are the world's, as at every club
+ * nobody manages (engine/season.ts endSeason, engine/training.ts weeklyTick).
  */
 export function clubWeek(state: GameState, rng: Rng): void {
   const me = state.me!
   const team = state.teams[state.myTeam]
   if (!team || me.phase !== 'pro') return
-  // The world renews a club's expiring players itself and leaves a managed
-  // club's to its manager — a winter of grace, then they walk. Nobody manages
-  // this one, so the same rule as any club applies.
-  for (const id of team.roster) {
-    if (id === me.id) continue
-    const q = state.players[id]
-    if (!q || q.expiredYear == null) continue
-    const keep = q.overall >= team.rating - 6 && q.age < 31 && rng.chance(0.72)
-    if (!keep) continue
-    q.contractYears = contractLength(q, rng, team.roster.map((x) => state.players[x]).filter((x): x is Player => !!x))
-    q.salary = expectedSalary(q, team.tier)
-    q.expiredYear = undefined
-    pushLog(state, 'team', `俱乐部和 ${q.ign} 续约 ${q.contractYears} 年。`)
-  }
   fillSquad(state, team, rng)
-  for (const id of team.roster) {
-    if (id === me.id) continue
-    const q = state.players[id]
-    if (q && q.injuredUntil <= state.day) state.training[id] = recommendedTrainingFocus(q)
-  }
   if (team.starters.length < 5 || !team.starters.every((id) => team.roster.includes(id))) {
     team.starters = coachStarters(state)
   }
