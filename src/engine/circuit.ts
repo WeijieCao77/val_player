@@ -2,7 +2,7 @@ import raw from '../data/circuit.json'
 import routesRaw from '../data/routes.json'
 import partneredRaw from '../data/routes_partnered.json'
 import { regionIn, stageAtIn } from './era'
-import { bookLeague, sceneFor, syncEvent } from './timeline'
+import { bookLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import type { Competition, Fixture, GameState, Region, StageKey, Team } from './types'
 
@@ -957,7 +957,9 @@ function takeSeat(state: GameState, ev: CEvent, seeds: (string | null)[]): (stri
   const s = state.seat
   if (!s || state.year < s.from) return seeds
   const seatEvent = (isLeagueEvent(state.year, ev) && ev.region === s.league) || /LOCK\/\/IN/i.test(ev.name)
-  const i = seeds.indexOf(s.displaced)
+  // the seat's real holder at this event: the club it was taken from, or what history carried that club on as
+  const holders = [s.displaced, ...successorsOf(s.displaced, state.year)]
+  const i = seeds.findIndex((t) => !!t && holders.includes(t))
   if (!seatEvent || i < 0 || seeds.includes(s.club)) return seeds
   const out = seeds.slice()
   out[i] = s.club

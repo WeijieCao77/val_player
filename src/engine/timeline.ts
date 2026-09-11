@@ -290,9 +290,28 @@ function applySeat(state: GameState, year: number): void {
   const s = state.seat
   if (!s || year < s.from) return
   const mine = state.teams[s.club]
-  const out = state.teams[s.displaced]
   if (mine) { mine.tier = 1; mine.league = `VCT ${s.league}` }
-  if (out) { out.tier = 2; out.league = `Challengers ${out.scene ?? out.region}` }
+  // the seat's real holder, and whatever history carried it on as: Giants Gaming's was GIANTX's from 2024
+  for (const id of [s.displaced, ...successorsOf(s.displaced, year)]) {
+    const out = state.teams[id]
+    if (!out || id === s.club) continue
+    out.tier = 2
+    out.scene = sceneFor(state, out)
+    out.league = `Challengers ${out.scene ?? out.region}`
+  }
+}
+
+/** The clubs history carried a club on as, by `year` (src/data/lineage.json): Giants Gaming → GIANTX in 2024. */
+export function successorsOf(teamId: string, year: number): string[] {
+  const out: string[] = []
+  let at = teamId
+  for (let guard = 0; guard < 6; guard++) {
+    const e = LINEAGE.find((x) => clubId(x.from) === at && x.year <= year)
+    if (!e) break
+    at = clubId(e.to)
+    out.push(at)
+  }
+  return out
 }
 
 interface Lineage {

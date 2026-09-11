@@ -763,6 +763,15 @@ def main() -> int:
     bad: list[tuple[str, list[str]]] = []
     for eid in sorted(all_matches, key=int):
         ev = history[eid]
+        # a Challengers League split whose qualifiers open in November or December is the
+        # next season's league, played early — Brazil, Turkey, Portugal, Italy and Oceania's
+        # 2023 Split 1s all are. vlr files it under the year it started; it belongs to the
+        # year it is for, its first rounds on the days before New Year's
+        last_day = max((m['date'] for m in all_matches[eid] if m.get('date')), default='')
+        if last_day[:4].isdigit() and int(last_day[:4]) > ev['year'] and CHALLENGERS.search(ev['name']) \
+                and not THIRD_PARTY.search(ev['name']):
+            ev = {**ev, 'year': int(last_day[:4])}
+            report['跨年开打的 Challengers 联赛，算进它所属的那一年'] += 1
         if ev['year'] not in years_wanted:
             continue
         if THIRD_PARTY.search(ev['name']):
