@@ -1,6 +1,6 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { defaultTactics, emptyStats, ROLES } from '../types'
-import type { GameState, Player, Role, Team } from '../types'
+import type { GameState, Player, Region, Role, Team } from '../types'
 import { MAPS } from '../content'
 import { recomputeOverall } from '../player'
 import type { CupRun, PickupMate } from './types'
@@ -30,9 +30,9 @@ export interface CupDef {
 }
 
 export const CUPS: CupDef[] = [
-  { key: 'city', name: '城市争霸赛', week: 6, fee: 800, minFans: 0, heat: 6,
+  { key: 'city', name: '本地线下赛', week: 6, fee: 800, minFans: 0, heat: 6,
     rounds: [{ bo: 1, label: '首轮' }, { bo: 1, label: '八强' }, { bo: 3, label: '四强' }, { bo: 3, label: '决赛' }],
-    band: [60, 72], prize: [0, 200, 800, 2000, 5000], blurb: '线下网吧赛，路人车队打路人车队。赢两轮就有人看你。' },
+    band: [60, 72], prize: [0, 200, 800, 2000, 5000], blurb: '本地的线下赛，路人车队打路人车队。赢两轮就有人看你。' },
   { key: 'premier', name: '官方业余联赛挑战者组', week: 14, fee: 0, minFans: 0, heat: 10,
     rounds: [{ bo: 3, label: '小组赛' }, { bo: 3, label: '小组赛' }, { bo: 3, label: '半决赛' }, { bo: 3, label: '决赛' }],
     band: [66, 78], prize: [0, 0, 500, 2500, 8000], blurb: '官方业余联赛的最高组，挑战者联赛的俱乐部都在看。' },
@@ -50,11 +50,22 @@ export const CUPS: CupDef[] = [
 export const cupOf = (key: string): CupDef | undefined => CUPS.find((c) => c.key === key)
 
 /**
- * A cup as it was in a given year. There was no Premier before 2023: in the
- * open era the amateur door to the pro scene was the Challengers open
- * qualifier itself — five people and an entry form.
+ * A cup as it was in a given year, where I play. There was no Premier before
+ * 2023: in the open era the amateur door to the pro scene was the Challengers
+ * open qualifier itself — five people and an entry form.
+ *
+ * The year's first cup used to be 「城市争霸赛」, a name VALORANT never had
+ * (asked 2026-09-11). In China from 2023 the amateur ladder is Tencent's
+ * 无畏契约全国大赛, whose café track starts in local 网吧; before the Chinese
+ * server there was no national event, only café cups. Elsewhere it is a local
+ * offline tournament, and no brand is claimed for it.
  */
-export function cupView(c: CupDef, year: number): CupDef {
+export function cupView(c: CupDef, year: number, region?: Region): CupDef {
+  if (c.key === 'city' && region === 'China') {
+    return year >= 2023
+      ? { ...c, name: '全国大赛 · 网吧赛道', blurb: '无畏契约全国大赛的网吧赛道，从本地网吧的线下赛打起。路人车队打路人车队，赢两轮就有人看你。' }
+      : { ...c, name: '网吧赛', blurb: '本地网吧办的线下赛，路人车队打路人车队。赢两轮就有人看你。' }
+  }
   if (year <= 2022 && c.key === 'premier') {
     return { ...c, name: '挑战者赛 · 开放海选', blurb: '这一年没有联盟也没有席位，Challengers 的海选凑齐五个人就能报名。打不进正赛也没关系——俱乐部的人会看海选。' }
   }
@@ -63,6 +74,11 @@ export function cupView(c: CupDef, year: number): CupDef {
 export const cupOfYear = (key: string, year: number): CupDef | undefined => {
   const c = cupOf(key)
   return c && cupView(c, year)
+}
+/** A cup as it is for me: this year, in my region. */
+export const cupFor = (state: GameState, key: string): CupDef | undefined => {
+  const c = cupOf(key)
+  return c && cupView(c, state.year, state.me ? state.players[state.me.id]?.region : undefined)
 }
 
 const MATE_NAMES = ['Kite', 'Nozomi', 'Vex', 'Aki', 'Bolt', 'Rin', 'Sable', 'Juno', 'Tao', 'Miro', 'Zed', 'Lumi', 'Pako', 'Yui', 'Kuro', 'Neo', 'Sora', 'Ivo', 'Nix', 'Ollie']
@@ -145,19 +161,24 @@ export function dropTempTeams(state: GameState): void {
   }
 }
 
-/** Sign up, pay, meet the four. */
+/**
+ * Sign up, pay, meet the four. The cup's card stays up: it is where the rounds
+ * are played, and afterCupMatch takes it down when the run is over. Taking it
+ * down here left a run with nowhere to be played and nothing to end it, and
+ * every cup after it refused with 「你已经在打一项赛事了。」 — a dead save
+ * (reported 2026-09-11).
+ */
 export function enterCup(state: GameState, key: string, rng: Rng): string | null {
   void rng
   const me = state.me!
-  const cup = cupOfYear(key, state.year)
+  const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事。'
-  if (me.pre.cup) return '你已经在打一项赛事了。'
+  if (me.pre.cup) return `你还在打${cupFor(state, me.pre.cup.key)?.name ?? '另一项赛事'}，打完才能报名。`
   if (me.money < cup.fee) return `报名费 $${cup.fee}，你的钱不够。`
   if (me.fans < cup.minFans) return `这是邀请赛，要有 ${cup.minFans} 以上的粉丝。`
   addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
   me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [] }
-  pop(state, 'cup', key)
   pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role} ${m.overall}）`).join('、')}。`)
   return null
 }
@@ -174,7 +195,7 @@ export function afterCupMatch(state: GameState, won: boolean, score: string, rng
   const me = state.me!
   const run = me.pre.cup
   if (!run) return null
-  const cup = cupOfYear(run.key, state.year)!
+  const cup = cupFor(state, run.key)!
   run.results.push(`${cup.rounds[run.round].label} ${won ? '胜' : '负'} ${score}`)
   if (won) run.round++
   const over = !won || run.round >= cup.rounds.length
@@ -185,6 +206,7 @@ export function afterCupMatch(state: GameState, won: boolean, score: string, rng
   const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize }
   me.pre.cups.push(rec)
   me.pre.cup = undefined
+  pop(state, 'cup', run.key)
   addMoney(state, 'prize', prize)
   me.heat += cup.heat * (0.4 + reached / cup.rounds.length)
   me.pre.tac = clamp(me.pre.tac + 1.5 + reached, 0, 60)
@@ -201,4 +223,26 @@ export const cupRng = (state: GameState, tag: string) =>
 /** Offer this week's cup, once. */
 export function offerCup(state: GameState, key: string): void {
   push(state, { kind: 'cup', id: key })
+}
+
+/**
+ * A run with no card to play it on — a save from before enterCup kept the card
+ * up. For a player still without a club the card goes back in front of
+ * everything else, so the rounds can be played and the run can end. Signed to a
+ * club by now, the run is withdrawn from: a pro does not go back to a café cup.
+ */
+export function resumeCup(state: GameState): void {
+  const me = state.me
+  const run = me?.pre.cup
+  if (!me || !run) return
+  if (me.phase === 'pro' || me.phase === 'retired') {
+    dropTempTeams(state)
+    me.pre.cup = undefined
+    pop(state, 'cup', run.key)
+    pushLog(state, 'cup', `退出了${cupFor(state, run.key)?.name ?? '杯赛'}。`)
+    return
+  }
+  if (me.pending[0]?.kind === 'cup' && me.pending[0].id === run.key) return
+  me.pending = me.pending.filter((x) => !(x.kind === 'cup' && x.id === run.key))
+  me.pending.unshift({ kind: 'cup', id: run.key, day: state.day })
 }

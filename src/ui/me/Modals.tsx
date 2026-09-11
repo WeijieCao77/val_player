@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Modal, money } from '../common'
 import type { PendingItem } from '../../engine/me/types'
-import { cupOf, cupView, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
+import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
 import { MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
@@ -47,7 +47,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
 function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
   const { game, commit, toast } = useGame()
   const me = game.me!
-  const cup = cupView(cupOf(cupKey)!, game.year)
+  const cup = cupFor(game, cupKey)!
   const [live, setLive] = useState<MeMatch | null>(null)
   const run = me.pre.cup
   if (live) {

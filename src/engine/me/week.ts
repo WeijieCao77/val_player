@@ -23,7 +23,7 @@ import { MeMatch } from './matchplay'
 import { pushLog } from './log'
 import { push } from './pending'
 import { AP_PRE, cupThisWeek, expireInvites, ladderWeekly, rollInvites } from './prepro'
-import { offerCup } from './cups'
+import { offerCup, resumeCup } from './cups'
 import { fanWeek } from './fans'
 import { streamClauseCheck, streamTick } from './stream'
 import { AGENTS } from './shop'
@@ -286,6 +286,8 @@ export function advanceTurn(state: GameState): WeekStop {
 function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   const me = state.me!
   const p = state.players[me.id]
+  // a cup entered on a save from before its card stayed up: back in front, to be played out
+  resumeCup(state)
   if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
   if (me.phase === 'retired' || state.gameOver) return { kind: 'game-over' }
   // a match the week stopped on that nobody played: play it the steady way

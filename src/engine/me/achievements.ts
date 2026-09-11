@@ -39,7 +39,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'ovr90', name: '世界级', desc: '综合达到 90', group: '成长', cond: (s) => s.players[s.me!.id].overall >= 90 },
   { key: 'ladder_top', name: '国服第一', desc: '天梯登顶', group: '职业前', cond: (s) => s.me!.pre.ladderPeak >= 96 },
   { key: 'ladder_100', name: '前一百', desc: '天梯进前 100', group: '职业前', cond: (s) => s.me!.pre.ladderPeak >= 72 },
-  { key: 'cup_city', name: '网吧之王', desc: '城市争霸赛冠军', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'city' && c.won) },
+  { key: 'cup_city', name: '网吧之王', desc: '拿下一次网吧赛或本地线下赛的冠军', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'city' && c.won) },
   { key: 'cup_premier', name: '业余联赛冠军', desc: '拿下官方业余联赛挑战者组', group: '职业前', cond: (s) => s.me!.pre.cups.some((c) => c.key === 'premier' && c.won) },
   { key: 'signed_t1', name: '一步登天', desc: '从业余直接签进 VCT 俱乐部', group: '职业前', cond: (s) => !!s.me!.flags.signedT1FromPre },
   { key: 'fans350', name: '平台头部', desc: '粉丝到「平台头部」', group: '人气', cond: (s) => s.me!.fans >= 350 },

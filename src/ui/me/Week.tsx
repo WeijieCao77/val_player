@@ -280,7 +280,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </Panel>
             <Panel title="今年的赛事">
               {CUPS.map((raw) => {
-                const c = cupView(raw, game.year)
+                const c = cupView(raw, game.year, p.region)
                 const done = me.pre.cups.find((x) => x.key === c.key && x.year === game.year)
                 // entering a cup marks it seen, exactly as skipping one does: a cup still being played is neither
                 const running = me.pre.cup?.key === c.key

@@ -1,8 +1,9 @@
-import { Rng, hashStr } from '../rng'
+import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { GameState } from '../types'
 import { ceilingOf, weightsFor } from '../player'
 import { chasing } from './bottleneck'
+import { traitMul } from './traits'
 import { ACTION_BY_KEY } from './actions'
 import { advanceWeek, doDuel, setPlan } from './week'
 import type { WeekStop } from './week'
@@ -10,7 +11,7 @@ import { MeMatch } from './matchplay'
 import { EDGE_NEED } from './coach'
 import type { PendingItem } from './types'
 import { pop } from './pending'
-import { cupOf, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng } from './cups'
+import { cupFor, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng } from './cups'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
@@ -23,10 +24,54 @@ import { CEREMONIES, cerSkip } from './ceremony'
 import { compCn } from './compname'
 import { eventOf as circuitEventOf } from '../circuit'
 
+/** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
+export const WEEK_END_FATIGUE = 40
+
+/** The fatigue my club's matches still to come this week will book (matchplay.ts: a map on the floor 5, on the bench 1.5). */
+export function matchLoad(state: GameState): number {
+  const me = state.me!
+  if (me.phase !== 'pro') return 0
+  const club = state.myTeam
+  const starter = !!state.teams[club]?.starters.includes(me.id)
+  const last = state.day - me.weekDay + 7
+  let load = 0
+  for (const f of state.fixtures) {
+    if (f.played || f.comp === 'scrim' || f.day > last || (f.teamA !== club && f.teamB !== club)) continue
+    const maps = f.bo === 1 ? 1 : f.bo === 2 ? 2 : f.bo === 5 ? 4 : 2.5
+    load += maps * (starter ? 5 : 1.5)
+  }
+  return load
+}
+
 /**
- * The steady plan — never the best plan. Rest when worn, chase a trial when
- * benched, practise what the role is judged on, keep the ladder warm without
- * a club. The headless bot's week goes through exactly the buttons' functions.
+ * Where fatigue lands at the end of this week if the plan stands: what is
+ * already on it, the matches still to come, and what a week gives back by
+ * itself — the same sums as growth.ts settleTraining.
+ */
+export function weekEndFatigue(state: GameState, load = matchLoad(state)): number {
+  const me = state.me!
+  let f = state.players[me.id].fatigue + load
+  for (const [k, n] of Object.entries(me.plan)) {
+    const d = ACTION_BY_KEY[k as keyof typeof ACTION_BY_KEY]
+    if (!d || !n) continue
+    f += d.fatigue * n
+    if (k === 'rest') f -= 14 * n * ((me.body - 50) / 200 + traitMul(me, 'rest') - 1)
+  }
+  if (me.flags.relax_flat) f -= 3
+  return f - clamp(6 + (me.body - 50) / 10, 3, 12)
+}
+
+/**
+ * The steady plan — never the best plan. Chase a trial when benched, practise
+ * what the role is judged on, keep the ladder warm without a club — and not at
+ * the body's expense: an hour goes on only while the week still ends with
+ * 体力 60 or so, and rest makes the room when it would not.
+ *
+ * It used to rest by thresholds (once above 45 fatigue, twice above 65) and put
+ * every other point into training whatever it cost, matches not counted. On the
+ * recommended plan 体力 sat under 40 for most of a year (reported 2026-09-11;
+ * a probe's ladder start had 24 weeks under 40). The headless bot's week goes
+ * through exactly the buttons' functions.
  */
 export function autoPlan(state: GameState): void {
   const me = state.me!
@@ -34,14 +79,22 @@ export function autoPlan(state: GameState): void {
   const pro = me.phase === 'pro'
   const team = state.teams[state.myTeam]
   const starter = pro && team.starters.includes(me.id)
+  const load = matchLoad(state)
+  const end = () => weekEndFatigue(state, load)
   const spend = (k: keyof typeof ACTION_BY_KEY) => setPlan(state, k, 1) === null
-
-  if (p.fatigue > 65) { spend('rest'); spend('rest') }
-  else if (p.fatigue > 45) spend('rest')
+  const rest = ACTION_BY_KEY.rest
+  // an hour of k if the week can take it; rest first while that makes the room and still leaves the hour's points
+  const want = (k: keyof typeof ACTION_BY_KEY): boolean => {
+    const d = ACTION_BY_KEY[k]
+    let guard = 0
+    while (end() + d.fatigue > WEEK_END_FATIGUE && me.ap >= d.cost + rest.cost && guard++ < 12 && spend('rest')) { /* making room */ }
+    return end() + d.fatigue <= WEEK_END_FATIGUE && spend(k)
+  }
 
   if (pro && !starter && !me.trial && me.edge < EDGE_NEED) {
     let guard = 0
-    while (me.ap >= ACTION_BY_KEY.duel.cost && guard++ < 3) {
+    // the way off the bench, but not on legs that are gone: a duel wears twice (runDuel, and the week's books)
+    while (me.ap >= ACTION_BY_KEY.duel.cost && guard++ < 3 && end() + ACTION_BY_KEY.duel.fatigue * 2 <= WEEK_END_FATIGUE + 20) {
       const r = doDuel(state)
       if (typeof r === 'string') break
       if (r.trial) break
@@ -56,17 +109,20 @@ export function autoPlan(state: GameState): void {
     .sort((a, b) => p.attrs[a] / w[a] - p.attrs[b] / w[b])[0]
   const first = weakest === 'aim' || weakest === 'reaction' ? 'aim'
     : weakest === 'awareness' || weakest === 'clutch' ? 'vod' : 'util'
-  spend(first)
-  if (chasing(state, 'aim')) spend('aim')
-  if (pro && me.ap >= 3 && !starter) spend('scrim')
-  if (!pro) { spend('ranked'); spend('ranked') }
-  spend('vod')
-  spend('aim')
-  if (me.quests.some((q) => q.kind === 'stream' && q.done < q.need)) spend('stream')
-  if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage) spend('stream')
+  want(first)
+  if (chasing(state, 'aim')) want('aim')
+  if (pro && me.ap >= 3 && !starter) want('scrim')
+  if (!pro) { want('ranked'); want('ranked') }
+  want('vod')
+  want('aim')
+  if (me.quests.some((q) => q.kind === 'stream' && q.done < q.need)) want('stream')
+  // a signed stream deal is a contract: its minimum is kept even on a tired week
+  if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage && !want('stream')) spend('stream')
   while (me.ap > 0) {
-    if (me.ap >= 2 && me.fans < 200 && spend('stream')) continue
-    if (spend('ranked')) continue
+    if (me.ap >= 2 && me.fans < 200 && want('stream')) continue
+    if (want('ranked')) continue
+    // nothing else fits this week: the hour goes to rest, while there is anything to rest off
+    if (end() > 0 && spend('rest')) continue
     break
   }
 }
@@ -85,10 +141,14 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       return `${name}：没参加那个环节`
     }
     case 'cup': {
-      const cup = cupOf(item.id!)
-      if (!cup || me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup?.name ?? '杯赛'}` }
-      const why = enterCup(state, item.id!, rng)
-      if (why) { skipCup(state, item.id!); return why }
+      const cup = cupFor(state, item.id!)
+      if (!cup) { skipCup(state, item.id!); return '' }
+      // a run already entered is played out — entering it again failed, and skipping it left it hanging
+      if (me.pre.cup?.key !== item.id) {
+        if (me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup.name}` }
+        const why = enterCup(state, item.id!, rng)
+        if (why) { skipCup(state, item.id!); return why }
+      }
       let guard = 0
       while (me.pre.cup && guard++ < 8) {
         const run = me.pre.cup

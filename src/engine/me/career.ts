@@ -19,6 +19,7 @@ import { onTimeline, regionIn, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
 import { ensureCeilings } from './bottleneck'
+import { cupFor } from './cups'
 
 export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
@@ -221,7 +222,7 @@ export function createCareer(o: CareerOpts): GameState {
   pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.blurb}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。城市争霸赛在第 7 周开打，${state.year <= 2022 ? '挑战者赛开放海选' : 'Premier'}在第 15 周，主播杯要 60 个粉丝才请你。`)
+    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要 60 个粉丝才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON
