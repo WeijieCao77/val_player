@@ -419,6 +419,8 @@ export interface MeState {
   weekNotes: string[]
   /** a fixture the week stopped on, still to be played */
   pendingFixture?: string
+  /** my match today that the clock stopped in front of — for a decision, or as the week turned into days — opened on the next press (me/week.ts dueToday) */
+  dueFixture?: string
   /** things waiting on me before the clock moves */
   pending: PendingItem[]
   seasons: MeSeason[]

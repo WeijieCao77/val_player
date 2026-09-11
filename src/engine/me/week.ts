@@ -38,6 +38,8 @@ import { quietClub, releaseForHistory } from '../timeline'
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
   | { kind: 'pending'; item: PendingItem }
+  /** a day of a week of days went by with nothing to stop for (see weekInDays) */
+  | { kind: 'day' }
   | { kind: 'week-end' }
   | { kind: 'game-over' }
 
@@ -69,10 +71,14 @@ export function setPlan(state: GameState, action: MeAction, delta: 1 | -1): stri
   const me = state.me!
   const def = ACTION_BY_KEY[action]
   const cur = me.plan[action] ?? 0
+  // the club's programme follows the hours as they are put in or taken out: in
+  // a week of days that can happen after the first morning (see weekInDays)
+  const follow = () => { if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, state.players[me.id]) }
   if (delta < 0) {
     if (cur <= 0) return null
     me.plan[action] = cur - 1
     me.ap += def.cost
+    follow()
     return null
   }
   if (action === 'duel') return '对位挑战是当场打的，用下面的按钮。'
@@ -80,6 +86,7 @@ export function setPlan(state: GameState, action: MeAction, delta: 1 | -1): stri
   if (me.ap < def.cost) return '行动点不够了。'
   me.plan[action] = cur + 1
   me.ap -= def.cost
+  follow()
   return null
 }
 
@@ -145,11 +152,137 @@ function keep(n: string): boolean {
 }
 
 /**
+ * How this week is played: seven days to a press, or one.
+ *
+ * The one rule, read by the week screen, its button and whatever drives them.
+ * A week that holds two or more of my club's official matches goes a day at a
+ * time — the manager game's in-season turn — so a match ends on its own day
+ * and the next one is a press away, instead of the match screen opening again
+ * the moment the last one closed. A week with one match or none stays a week:
+ * nothing in it comes back to back.
+ *
+ * Counted over the week's own seven days, played and still to come. So it is
+ * settled the morning the week opens and only turns one way: a bracket or a
+ * draw that writes my next match into the week turns the rest of it into
+ * days, and short of leaving the club a week of days stays one. Nothing is
+ * kept in the save for it, so a save from before it reads the same way.
+ *
+ * The week's economy does not change with it: the action points are the
+ * week's, spent on whichever days I like, and the plan settles on the seventh
+ * with the pay, as in any other week.
+ */
+export function weekInDays(state: GameState): boolean {
+  return weekMatches(state).length >= 2
+}
+
+export interface WeekMatch {
+  fixture: Fixture
+  /** the day of the week it lands on */
+  day: number
+}
+
+/**
+ * My club's official matches in this week's seven days, each on the day it
+ * lands. A played one sits on the day it was played, from my own record of it:
+ * a bracket often writes its next round for a day already gone, and the engine
+ * plays it the morning after — counted on the day it was written for, it fell
+ * out of the week it was played in, and the week ran on into the round after.
+ * The rest sit on their own day, or tomorrow if that day has gone.
+ */
+export function weekMatches(state: GameState): WeekMatch[] {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return []
+  const club = state.myTeam
+  const from = state.day - me.weekDay + 1
+  const to = from + 6
+  const mine = (f: Fixture) => f.comp !== 'scrim' && (f.teamA === club || f.teamB === club)
+  const out: WeekMatch[] = []
+  for (const m of me.matches) {
+    if (m.friendly || m.year !== state.year || m.day < from || m.day > to) continue
+    const f = state.fixtures.find((x) => x.id === m.fixtureId)
+    if (f && mine(f)) out.push({ fixture: f, day: m.day })
+  }
+  const due = dueToday(state)
+  for (const f of state.fixtures) {
+    if (f.played || !mine(f) || f.day > to) continue
+    const day = f === due ? state.day : Math.max(f.day, state.day + 1)
+    if (day <= to) out.push({ fixture: f, day })
+  }
+  return out.sort((a, b) => a.day - b.day)
+}
+
+export interface WeekDay {
+  day: number
+  /** my club's official matches that day */
+  matches: Fixture[]
+  /** gone by */
+  past: boolean
+  /** the day the next press plays: tomorrow, or today while my match is still due */
+  next: boolean
+}
+
+/** The week's seven days for the week screen: what is on each, what is done, which is next. */
+export function weekCalendar(state: GameState): WeekDay[] {
+  const me = state.me!
+  const from = state.day - me.weekDay + 1
+  const mine = weekMatches(state)
+  const due = !!dueToday(state)
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = from + i
+    return {
+      day,
+      matches: mine.filter((w) => w.day === day).map((w) => w.fixture),
+      past: day < state.day || (day === state.day && !due),
+      next: day === (due ? state.day : state.day + 1),
+    }
+  })
+}
+
+/**
+ * My match today that the clock stopped in front of, still to be played: a
+ * ceremony, an event or an offer came first, or the week turned into days on
+ * the morning of it. Only a match the engine handed me today and I have not
+ * had yet. A round a bracket writes for today after my last result is not
+ * this — it is played the next morning, as the engine always has, or two
+ * matches would open back to back after all.
+ */
+export function dueToday(state: GameState): Fixture | undefined {
+  const me = state.me
+  if (!me?.dueFixture || me.phase !== 'pro') return undefined
+  const f = state.fixtures.find((x) => x.id === me.dueFixture)
+  return f && !f.played && (f.teamA === state.myTeam || f.teamB === state.myTeam) ? f : undefined
+}
+
+/**
+ * Once what stopped the clock is dealt with — my match, a decision — does it
+ * go on by itself? A week run as a week does, as it always has. A week of days
+ * does not: that day is over and the next is my press — unless it was the
+ * week's last, which closes the week, or my match is still due today.
+ */
+export function carriesOn(state: GameState): boolean {
+  const me = state.me
+  if (!me || me.pending.length || me.weekDay <= 0) return false
+  if (me.weekDay >= 7 || dueToday(state)) return true
+  return !weekInDays(state)
+}
+
+/**
  * Seven days, or until something needs me: my club's match, a cup, an
  * invitation, a contract, an event. A player has no board, so the manager
- * game's dismissal is undone on the spot.
+ * game's dismissal is undone on the spot. The headless runs go a week at a
+ * time whatever the week is; the week screen's button is advanceTurn.
  */
 export function advanceWeek(state: GameState): WeekStop {
+  return runDays(state, 7, false)
+}
+
+/** One press of the week screen's button: a day of a match week, the rest of any other (see weekInDays). */
+export function advanceTurn(state: GameState): WeekStop {
+  return weekInDays(state) ? runDays(state, 1, false) : runDays(state, 7, true)
+}
+
+/** Up to `days` more of the week; `turn` stops the run on the day it becomes a week of days. */
+function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   const me = state.me!
   const p = state.players[me.id]
   if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
@@ -160,11 +293,22 @@ export function advanceWeek(state: GameState): WeekStop {
     if (f && !f.played) new MeMatch(state, f).runOut()
     me.pendingFixture = undefined
   }
+  // My match today that the clock stopped in front of is played today. Left to
+  // the next morning's engine run it was played a day late: a day behind the
+  // calendar, and in a week of days a match the strip shows on one day and
+  // the button opens on the next.
+  const due = dueToday(state)
+  me.dueFixture = undefined
+  if (due) {
+    me.pendingFixture = due.id
+    return { kind: 'match', fixture: due }
+  }
   if (me.weekDay === 0) {
     if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, p)
     me.weekNotes = []
   }
-  while (me.weekDay < 7) {
+  let ran = 0
+  while (me.weekDay < 7 && ran++ < days) {
     if (state.midReview) continuePastFive(state)
     const yearBefore = state.year
     const pro = me.phase === 'pro'
@@ -188,17 +332,30 @@ export function advanceWeek(state: GameState): WeekStop {
     // queued *before* the generic pending check, not after: anything else
     // raised the same day would return first and the fixture would slip past
     // — which is exactly why it fired zero times the first time round. The
-    // engine re-offers a deferred fixture the next day, so the match is not
-    // lost by stopping for the ceremony.
-    if (r.pendingMine && pro) {
-      ceremonyBeforeMatch(state, r.pendingMine.label, state.comps[r.pendingMine.comp]?.name ?? r.pendingMine.comp)
+    // match is not lost by stopping for the ceremony: it is kept for today,
+    // and the next run plays it (dueToday).
+    const today = r.pendingMine && pro ? r.pendingMine : undefined
+    if (today) {
+      ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
     }
-    if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
-    if (r.pendingMine && pro) {
-      me.pendingFixture = r.pendingMine.id
-      return { kind: 'match', fixture: r.pendingMine }
+    if (me.pending.length) {
+      if (today) me.dueFixture = today.id
+      return { kind: 'pending', item: me.pending[0] }
+    }
+    // A draw or a bracket has put a second match of mine into a week being run
+    // as a week — often during this very day's games, for today. Stop here, in
+    // front of today's match if there is one, and the rest of the week goes a
+    // day at a time; run on, and it would open the moment the last one closed.
+    if (turn && weekInDays(state) && (me.weekDay < 7 || today)) {
+      if (today) me.dueFixture = today.id
+      return { kind: 'day' }
+    }
+    if (today) {
+      me.pendingFixture = today.id
+      return { kind: 'match', fixture: today }
     }
   }
+  if (me.weekDay < 7) return { kind: 'day' }
   settleWeek(state)
   return { kind: 'week-end' }
 }

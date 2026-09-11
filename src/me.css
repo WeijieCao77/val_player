@@ -138,6 +138,22 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
 .advance-me .hint { color: var(--muted); font-size: var(--t-small); }
+/* a match week, a day to a press: the week's seven days and what is on each */
+.week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 14px 0 0; }
+@media (max-width: 560px) { .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.week-day {
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0;
+  background: var(--panel-2); display: flex; flex-direction: column; gap: 1px; font-size: var(--t-small);
+}
+.week-day .d { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.week-day .w { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-day:not(.match) .w { color: var(--muted); font-weight: 400; }
+.week-day .s { font-size: var(--t-tiny); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-day .s.up { color: var(--win); }
+.week-day .s.dn { color: var(--loss); }
+.week-day.match { border-color: var(--accent-line); background: var(--accent-wash); }
+.week-day.past { opacity: .55; }
+.week-day.next { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .newcareer { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
 .newcareer h1 { margin: 0 0 4px; }

@@ -5,7 +5,7 @@ import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
-import { advanceWeek } from './engine/me/week'
+import { advanceTurn, carriesOn, weekCalendar, weekInDays, weekMatches } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
 import { advanceUntil, runAutoPilot } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
@@ -87,24 +87,47 @@ export default function PlayerGame() {
     commit()
   }, [commit])
 
-  /** Run the week until it stops on my match, something waiting, the week's end, or the end of the road. */
+  /** Whatever the dials cover is answered, and said so, before the clock moves. */
+  const answerDials = useCallback((g: GameState) => {
+    const did = runAutoPilot(g)
+    if (did.length) toast(`托管：${did.slice(0, 2).join('；')}${did.length > 2 ? '…' : ''}`)
+  }, [toast])
+
+  /**
+   * One press: the rest of the week, or one day of a match week (engine/me/week.ts
+   * weekInDays) — until it stops on my match, something waiting, the end of the
+   * day or the week, or the end of the road.
+   */
   const advance = useCallback(() => {
     const g = gameRef.current
     if (!g?.me) return
-    // whatever the dials cover is answered before the clock moves
-    const did = runAutoPilot(g)
-    if (did.length) toast(`托管：${did.slice(0, 2).join('；')}${did.length > 2 ? '…' : ''}`)
+    answerDials(g)
     if (g.me.pending.length) { commit(); return }
-    const stop = advanceWeek(g)
+    const inDays = weekInDays(g)
+    const stop = advanceTurn(g)
     runAutoPilot(g)
     commit()
     if (stop.kind === 'match') {
       setLive(new MeMatch(g, stop.fixture))
     } else if (stop.kind === 'week-end') {
-      setScreen((s) => (s === 'week' ? s : s))
-      toast(`新的一周 · ${dateLabel(g)}`)
+      toast(`新的一周 · ${dateLabel(g)}${weekInDays(g) ? ` · 这周 ${weekMatches(g).length} 场比赛，一天一推` : ''}`)
+    } else if (stop.kind === 'day') {
+      // the week turned under the run: say why it stopped on a day with nothing in it
+      if (!inDays) { toast(`这周排进了第 ${weekMatches(g).length} 场比赛，接下来一天一推${weekCalendar(g).some((d) => d.next && d.day === g.day) ? '，今天就有一场' : ''}。`); return }
+      const tomorrow = weekCalendar(g).find((d) => d.day === g.day + 1)?.matches[0]
+      const opp = tomorrow && g.teams[tomorrow.teamA === g.myTeam ? tomorrow.teamB : tomorrow.teamA]
+      toast(`${dateLabel(g)}${opp ? ` · 明天打 ${opp.tag}` : ''}`)
     }
-  }, [commit, toast])
+  }, [answerDials, commit, toast])
+
+  /** A match or a decision the clock stopped on is done: the week goes on by itself, or waits for the next press. */
+  const afterStop = useCallback(() => {
+    const g = gameRef.current
+    if (!g?.me) return
+    answerDials(g)
+    commit()
+    if (carriesOn(g)) window.setTimeout(advance, 0)
+  }, [advance, answerDials, commit])
 
   /**
    * Run several weeks. Everything waiting is answered the steady way and
@@ -295,9 +318,8 @@ export default function PlayerGame() {
             mm={live}
             onDone={() => {
               setLive(null)
-              commit()
-              // the week goes on from the day after the match
-              window.setTimeout(advance, 0)
+              // a week run as a week goes on from the day after the match; a week of days waits on this one
+              afterStop()
             }}
           />
         )}
@@ -306,11 +328,8 @@ export default function PlayerGame() {
             key={`${pending.kind}:${pending.id ?? ''}:${pending.day}`}
             item={pending}
             onDone={() => {
-              commit()
-              // a week that stopped on this goes on once it is answered
-              const g = gameRef.current
-              if (g?.me && !g.me.pending.length && g.me.weekDay > 0 && g.me.weekDay < 7) window.setTimeout(advance, 0)
-              else bump()
+              // a week that stopped on this goes on once it is answered — a week of days only to close the week or play today's match
+              afterStop()
             }}
           />
         )}
