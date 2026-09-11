@@ -1,7 +1,8 @@
+import { Fragment } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
-import { planBlock, setPlan, staminaLeft } from '../../engine/me/week'
+import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays, weekMatches } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
@@ -30,6 +31,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const week = Math.floor(game.day / 7)
   // 策划稿 §3.5 A: nothing of mine for four weeks — the clock can run a month at a time
   const quiet = quietAhead(game, 28)
+  // two or more of my club's matches this week: it goes a day to a press, its seven days laid out over the button (engine/me/week.ts weekInDays)
+  const days = weekInDays(game)
 
   const plan = (k: typeof ACTIONS[number]['key'], d: 1 | -1) => {
     const why = setPlan(game, k, d)
@@ -134,9 +137,40 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             )
           })}
           {me.duelLive && <DuelPlay onDone={() => commit()} />}
+          {days && (
+            <>
+              {/* the week's rhythm, right over the button: what each of its seven days holds */}
+              <div className="week-days" role="list" aria-label="这一周的七天">
+                {weekCalendar(game).map((d, i) => {
+                  const date = new Date(Date.UTC(game.year, 0, 1 + d.day))
+                  return (
+                    <div key={d.day} role="listitem" className={`week-day${d.matches.length ? ' match' : ''}${d.past ? ' past' : ''}${d.next ? ' next' : ''}`}>
+                      <span className="d">{fmtDay(d.day, game.year)} 周{'日一二三四五六'[date.getUTCDay()]}</span>
+                      {d.matches.length ? d.matches.map((f) => {
+                        const mine = f.teamA === game.myTeam
+                        const r = f.result
+                        const my = r ? (mine ? r.mapsWonA : r.mapsWonB) : 0
+                        const their = r ? (mine ? r.mapsWonB : r.mapsWonA) : 0
+                        return (
+                          <Fragment key={f.id}>
+                            <span className="w" title={`${game.comps[f.comp]?.name ?? f.comp} · ${f.label.replace(/^(KO|SW):\d+:/, '')} · BO${f.bo}`}>vs {game.teams[mine ? f.teamB : f.teamA]?.tag}</span>
+                            <span className={`s${r && my !== their ? (my > their ? ' up' : ' dn') : ''}`}>{r ? `${my > their ? '胜' : my < their ? '负' : '平'} ${my}-${their}` : `BO${f.bo}`}</span>
+                          </Fragment>
+                        )
+                      }) : <span className="w">训练</span>}
+                      {i === 6 && <span className="s">周结算</span>}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>行动点还是按周给：没有比赛的日子拿来练，第七天和工资一起结算。</p>
+            </>
+          )}
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
-            <button className={quiet ? undefined : 'primary'} onClick={onAdvance}>推进一周 →</button>
+            {days
+              ? <button className="primary" onClick={onAdvance} title="过一天；比赛日当天开打，打完回到这里">{weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →'}</button>
+              : <button className={quiet ? undefined : 'primary'} onClick={onAdvance}>推进一周 →</button>}
             {quiet && (
               <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title="四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停">推进一个月 →</button>
             )}
@@ -145,8 +179,9 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             <button onClick={() => onAdvanceUntil('season')}>到赛季末</button>
             <span className="hint">
               {quiet && '接下来四周你这里没有比赛：可以一次推一个月，训练、排位、直播照常，有事会停下来。'}
-              {me.ap > 0 ? `还有 ${me.ap} 点没用，推进后作废。` : '行动点已用完。'}
-              {pro ? '一周里遇到你队的比赛会停下来打。' : '杯赛、邀请、事件都会停下来等你。'}
+              {me.ap > 0 ? `还有 ${me.ap} 点没用，${days ? '这一周过完' : '推进后'}作废。` : '行动点已用完。'}
+              {days ? `这周你队有 ${weekMatches(game).length} 场比赛，改成一天一推：比赛日当天开打，打完回到这里。`
+                : pro ? '一周里遇到你队的比赛会停下来打；一周有两场以上就改成一天一推。' : '杯赛、邀请、事件都会停下来等你。'}
               自动推进的周按推荐安排，遇到你的比赛或要你拿主意的事就停。
             </span>
           </div>
@@ -181,7 +216,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                     <div className="t"><Crest id={opp.id} size={28} /><span>{opp.tag}</span></div>
                   </div>
                   <p className="small" style={{ margin: '0 0 6px' }}>
-                    {game.comps[next.comp]?.name ?? next.comp} · {next.label.replace(/^(KO|SW):\d+:/, '')} · BO{next.bo} · {fmtDay(next.day, game.year)}（{next.day - game.day} 天后）
+                    {game.comps[next.comp]?.name ?? next.comp} · {next.label.replace(/^(KO|SW):\d+:/, '')} · BO{next.bo} · {fmtDay(next.day, game.year)}（{next.day - game.day <= 0 ? '今天' : `${next.day - game.day} 天后`}）
                   </p>
                   <p className="small" style={{ margin: '0 0 6px' }}>实力 {team.rating} vs {opp.rating}，纸面赢面约 <b>{Math.round(est * 100)}%</b></p>
                   <p className="small" style={{ margin: 0 }}>
