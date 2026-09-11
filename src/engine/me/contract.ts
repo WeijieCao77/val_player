@@ -9,6 +9,24 @@ import { pop } from './pending'
 import { expectOf, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
 import { addMoney } from './money'
+import { PLAYER_PRIZE_SHARE } from './prizes'
+import { inVctLeague } from '../timeline'
+import { regionIn } from '../era'
+
+/**
+ * A VCT partner club's lowest wage, from the 2023 season: US$50,000 in the
+ * Americas, €50,000 in EMEA, ₩67,000,000 in Pacific (Dexerto, 2022-10-31) —
+ * all about fifty thousand dollars, which is the one currency this game keeps.
+ * China's league has a floor too, but its figure was never published, so no
+ * number is made up for it. Rookie deals used to come in at $20–40k, under it.
+ */
+export const VCT_MIN_SALARY = 50000
+
+export function salaryFloor(state: GameState, teamId: string, salary: number): number {
+  const team = state.teams[teamId]
+  if (!inVctLeague(state, team) || regionIn(team.region, state.year) === 'China') return salary
+  return Math.max(salary, VCT_MIN_SALARY)
+}
 
 /** what each standing pays, against a starter's expected wage */
 export const ROLE_PAY: Record<SquadRole, number> = { star: 1.0, starter: 0.8, rotation: 0.55, bench: 0.4 }
@@ -29,7 +47,7 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
     ? (d >= 8 || (kind !== 'sign' && me.proven) ? 'starter' : 'rotation')
     : (d >= 8 ? 'star' : 'starter')
   const base = expectedSalary(p, team.tier)
-  const salary = Math.round(base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1) / 1000) * 1000
+  const salary = salaryFloor(state, teamId, Math.round(base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1) / 1000) * 1000)
   const years = team.tier === 1 ? (rng.chance(0.5) ? 2 : 3) : (rng.chance(0.6) ? 1 : 2)
   const signBonus = Math.round(salary * rng.range(0, 0.3) / 500) * 500
   const buyout = Math.round(salary * (team.tier === 1 ? rng.range(4, 8) : rng.range(2, 4)) / 1000) * 1000
@@ -82,7 +100,7 @@ export function askDeal(state: GameState, dealId: string, askKey: string, rng: R
       pushLog(state, 'bad', `${state.teams[d.teamId]?.name} 撤回了报价：要得太多了。`)
       return { ok: false, blown: true, text: '他们收回了报价。谈崩了。' }
     }
-    d.salary = Math.round(d.salary * 0.9 / 1000) * 1000
+    d.salary = salaryFloor(state, d.teamId, Math.round(d.salary * 0.9 / 1000) * 1000)
     return { ok: false, blown: true, text: `他们不高兴了：年薪反而降到 $${d.salary.toLocaleString()}。再来一次就撤回。（成功率 ${Math.round(p * 100)}%）` }
   }
   return { ok: false, blown: false, text: `他们没答应。（成功率 ${Math.round(p * 100)}%）` }
@@ -132,7 +150,7 @@ function applyTerms(state: GameState, d: Deal): void {
   p.expiredYear = undefined
   // releaseClause stays 0: the engine sells a man whose clause is met without asking him,
   // and in this game the man is me. The buyout is kept here and read by engine/me/transfer.
-  p.contract = { ...defaultContract(d.salary, d.years), signingBonus: d.signBonus, promisedRole: d.role, releaseClause: 0, noPoach: true, bonusShare: d.tier === 1 ? 10 : 6 }
+  p.contract = { ...defaultContract(d.salary, d.years), signingBonus: d.signBonus, promisedRole: d.role, releaseClause: 0, noPoach: true, bonusShare: PLAYER_PRIZE_SHARE }
   me.flags.buyout = d.buyout
   addMoney(state, 'sign', d.signBonus)
 }

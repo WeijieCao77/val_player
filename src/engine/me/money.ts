@@ -1,4 +1,4 @@
-import { PRIZE } from '../finance'
+import { prizeFor } from './prizes'
 import { onTimeline, stageNameIn } from '../era'
 import type { GameState, StageKey } from '../types'
 import { pushLog } from './log'
@@ -99,11 +99,9 @@ export const ledgerSum = (o: Record<string, number> | undefined): number =>
 /* ------------------------------------------------------------------ */
 
 /**
- * One man's slice of a competition's prize, by the club's own arithmetic.
- *
- * engine/finance.ts charges the club `amount * bonusShare / 100 / squadSize`
- * per player. This returns exactly that for one player, so what the club is
- * billed and what the player receives are the same number.
+ * One man's slice of a competition's prize: his contracted share of the
+ * club's prize, split between the roster. The table is the career's own copy
+ * (me/prizes.ts), not the manager game's.
  */
 export function prizeShare(state: GameState, stage: StageKey, place: number): number {
   const me = state.me
@@ -112,7 +110,7 @@ export function prizeShare(state: GameState, stage: StageKey, place: number): nu
   const team = state.teams[p?.teamId ?? '']
   const pct = p?.contract?.bonusShare ?? 0
   if (!team || !pct) return 0
-  const amount = PRIZE[stage]?.[place] ?? 0
+  const amount = prizeFor(stage, place)
   if (!amount) return 0
   return Math.round((amount * pct) / 100 / Math.max(1, team.roster.length))
 }
