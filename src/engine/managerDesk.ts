@@ -1,7 +1,7 @@
 import { Rng, clamp, dayStream, hashStr } from './rng'
 import { mountDesk } from './desk'
 import type { ClubMods, ContractsRun, ManagerDesk, StayApproach } from './desk'
-import { skillMod } from './manager'
+import { ORIGINS, skillMod } from './manager'
 import { analystEdge, resolveApproaches, resolveStaffOffers, staffBonus } from './staff'
 import { acceptJob, defaultContract, offerJobs, resolveApplications } from './career'
 import { offerGigs, resolveSponsorTalks, runGigsToday, settleSponsorDemands, streamWeek } from './commercial'
@@ -112,6 +112,29 @@ function persuadeStay(state: GameState, playerId: string, approach: StayApproach
 }
 
 export const managerDesk: ManagerDesk = {
+  initManager(state: GameState, managerName: string, manager?: GameState['manager']): void {
+    const club = state.teams[state.myTeam]
+    // extra cash some backgrounds bring with them
+    const funds = manager ? ORIGINS.find((x) => x.key === manager.originKey)?.startingFunds ?? 0 : 0
+    state.managerName = manager?.name ?? managerName
+    state.manager = manager
+    state.offers = []
+    state.finances = { balance: (club?.budget ?? 0) + funds, log: [] }
+    state.honours = []
+    state.boardConfidence = 62
+    for (const pid of club?.roster ?? []) state.training[pid] = 'rest'
+    // the squad you inherited, kept so an ending can ask who is still here in
+    // ten years' time — the record, not a flag set when somebody leaves
+    state.startingSquad = [...(club?.roster ?? [])]
+    state.startFacilities = club?.facilities
+    state.startTier = club?.tier
+    // they are yours from today, so today is where their development is measured from
+    for (const id of state.startingSquad) {
+      const p = state.players[id]
+      if (p) p.arrivedOverall = p.overall
+    }
+  },
+
   seasonSetup(state: GameState, notes?: string[]): void {
     state.managerContract ??= defaultContract(state)
     // give the market a starting state, so the first window is not empty

@@ -10,7 +10,7 @@ import {
 import { awardPrize, sponsorWorth, weeklyBudgets } from './budget'
 import { mapCn } from './content'
 import { FAM_MATCH, FAM_SCRIM, learnComp } from './comp'
-import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './endings'
+import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './era'
 import { hostCity } from './hosts'
 import { applyMatchBonds } from './bonds'
 import { titleLoyalty } from './attachment'

@@ -1,5 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { advanceDay, continuePastFive } from '../season'
+import { advanceDay } from '../season'
 import { clubWeek, clubWinter } from './club'
 import { marketWindow } from './market'
 import type { Fixture, GameState } from '../types'
@@ -315,7 +315,6 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   }
   let ran = 0
   while (me.weekDay < 7 && ran++ < days) {
-    if (state.midReview) continuePastFive(state)
     const yearBefore = state.year
     const pro = me.phase === 'pro'
     // one match of mine a day: a second due the same day is mine tomorrow, not the engine's today

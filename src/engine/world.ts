@@ -5,15 +5,13 @@ import { dossierOf } from './dossier'
 import { Rng, clamp, hashStr } from './rng'
 import { AGENTS, MAPS, SPONSOR_NAMES } from './content'
 import { defaultTactics, emptyStats, ROLES } from './types'
-import type { Attrs, GameState, Player, Role, Sponsor, Team } from './types'
-import { ORIGINS } from './manager'
-import type { Manager } from './manager'
+import type { Attrs, GameState, Player, Role, Sponsor, Team, WorldState } from './types'
 import { freeAgentPool } from './prospects'
 import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
 import { currentRuleset } from './ruleset'
 import { historyNames } from './names'
-import { managedClub } from './desk'
+import { deskOf, managedClub } from './desk'
 
 export interface RawPlayer {
   id: string; ign: string; teamId: string | null; region: string; role: string
@@ -135,12 +133,6 @@ export function autoStarters(state: GameState, teamId: string): string[] {
   return five.map((p) => p.id)
 }
 
-/** Extra cash some backgrounds bring with them. */
-function startingFunds(m?: Manager): number {
-  if (!m) return 0
-  const o = ORIGINS.find((x) => x.key === m.originKey)
-  return o?.startingFunds ?? 0
-}
 
 /**
  * A roster-book person as the game holds him — a new world's, and the
@@ -213,21 +205,27 @@ export function teamFromRaw(rt: RawTeam, seed: number): Team {
   }
 }
 
-export function createNewGame(
-  myTeamId: string, managerName: string, seed?: number, manager?: Manager,
+/**
+ * A world as it stands the day a save enters the one timeline, built around a
+ * club: its people and clubs, every club's five and its caller, the names the
+ * clubs had then. Only the world — a player's career keeps no club until he
+ * signs (engine/me/career.ts), and the manager game puts its desk on top
+ * (createNewGame).
+ */
+export function createWorld(
+  myTeamId: string, seed?: number,
   /** the year the save enters the one timeline at — see engine/era.ts ENTRY_YEARS */
   year = 2026,
 ): GameState {
-  const s = seed ?? (hashStr(myTeamId + managerName + String(Date.now())) >>> 0)
-  const rng = new Rng(s)
+  const s = seed ?? (hashStr(myTeamId + String(Date.now())) >>> 0)
 
   const players: Record<string, Player> = {}
   for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) players[rp.id] = playerFromRaw(rp, year, s)
 
   // The rest of the professional scene: real players from below the simulated
-  // leagues, without a club. They are ordinary free agents from day one — the
-  // market lists them, AI sides short of five sign them — which is the whole
-  // point, because a world of 518 that only ages runs out of people.
+  // leagues, without a club. They are ordinary free agents from day one — AI
+  // sides short of five sign them — which is the whole point, because a world
+  // of 518 that only ages runs out of people.
   // 2026's prospects are 2026's: a 2021 world has its own free agents in its file
   if (year >= 2026) {
     for (const p of freeAgentPool(2026)) {
@@ -238,53 +236,49 @@ export function createNewGame(
   const teams: Record<string, Team> = {}
   for (const rt of (year <= 2021 ? RAW_2021.teams : WORLD_TEAMS)) teams[rt.id] = teamFromRaw(rt, s)
 
-  const state: GameState = {
+  // the world's own fields; a manager game's desk adds its own (engine/managerDesk.ts initManager)
+  const world: WorldState = {
     version: 1,
     seed: s,
     day: 0,
     year,
     stage: 'preseason',
     myTeam: myTeamId,
-    managerName: manager?.name ?? managerName,
-    manager,
     players,
     teams,
     comps: {},
     fixtures: [],
     news: [],
-    offers: [],
     training: {},
-    finances: { balance: teams[myTeamId].budget + startingFunds(manager), log: [] },
-    honours: [],
     lastResults: [],
-    boardConfidence: 62,
     rulesetId: currentRuleset(),
   }
+  const state = world as GameState
 
   for (const id of Object.keys(teams)) {
-    // Static data may honestly leave a club's real caller unknown. AI clubs
-    // still appoint an in-save stand-in; the human's club leaves that choice
-    // to the manager and the squad screen warns about it.
+    // Static data may honestly leave a club's real caller unknown. A club
+    // appoints an in-save stand-in; a club a person manages leaves that choice
+    // to him and the squad screen warns about it.
     ensureCaller(state, id)
     teams[id].starters = autoStarters(state, id)
   }
-  for (const pid of teams[myTeamId].roster) {
-    state.training[pid] = 'rest'
-  }
-  // the squad you inherited, kept so an ending can ask who is still here in
-  // ten years' time — the record, not a flag set when somebody leaves
-  state.startingSquad = [...teams[myTeamId].roster]
-  state.startFacilities = teams[myTeamId].facilities
-  state.startTier = teams[myTeamId].tier
-  // they are yours from today, so today is where their development is measured from
-  for (const id of state.startingSquad) {
-    const p = state.players[id]
-    if (p) p.arrivedOverall = p.overall
-  }
   // world_2021.json has vlr's names of today: a club opens the year under the one it had then (engine/names.ts)
   historyNames(state, [])
+  return state
+}
 
-  void rng
+/**
+ * A manager game's new save: the world, and the manager's desk on it — his name
+ * and books, the board, the squad as he found it (engine/managerDesk.ts
+ * initManager). The manager game's new-game screen imports this by name.
+ */
+export function createNewGame(
+  myTeamId: string, managerName: string, seed?: number, manager?: GameState['manager'],
+  /** the year the save enters the one timeline at — see engine/era.ts ENTRY_YEARS */
+  year = 2026,
+): GameState {
+  const state = createWorld(myTeamId, seed ?? (hashStr(myTeamId + managerName + String(Date.now())) >>> 0), year)
+  deskOf(state)?.initManager(state, managerName, manager)
   return state
 }
 

@@ -8,7 +8,7 @@ import { INTERNATIONAL_START, eventRounds, nextInEvent, upcomingInternational } 
 import { hostCity } from '../../engine/hosts'
 // TODO(engine split): the three event names move out of the manager's endings.ts into the world core
 // (separation notes, rule 7); point this import at their new home.
-import { CHAMPIONS, MASTERS_1, MASTERS_2 } from '../../engine/endings'
+import { CHAMPIONS, MASTERS_1, MASTERS_2 } from '../../engine/era'
 import type { Fixture } from '../../engine/types'
 
 /**

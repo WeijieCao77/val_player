@@ -1,4 +1,8 @@
 import { Rng, clamp, hashStr } from './rng'
+import type { Manager, ManagerSkill } from './types'
+
+// a save's type holds the manager, so the save needs nothing from this file (engine/types.ts)
+export type { Manager, ManagerSkill } from './types'
 
 /**
  * The manager themselves.
@@ -16,9 +20,6 @@ import { Rng, clamp, hashStr } from './rng'
  * do not exist. 眼光 is how precisely you can read a player's ceiling, and
  * 带新人 is how fast the young ones improve under you.
  */
-export type ManagerSkill =
-  | 'training' | 'negotiation' | 'tactics' | 'scouting'
-  | 'medical' | 'business' | 'locker' | 'youth'
 
 export const SKILL_CN: Record<ManagerSkill, string> = {
   training: '训练', negotiation: '谈判', tactics: '战术', scouting: '眼光',
@@ -99,20 +100,6 @@ export const ORIGINS: ManagerOrigin[] = [
   },
 ]
 
-export interface Manager {
-  name: string
-  age: number
-  originKey: string
-  /** gates which clubs will hire you */
-  reputation: number
-  /** talent points not yet spent */
-  points?: number
-  /** where each skill started, so refunds cannot dip below the origin */
-  baseSkills?: Record<ManagerSkill, number>
-  /** how fast your skills improve; the price of starting with reputation */
-  growth: number
-  skills: Record<ManagerSkill, number>
-}
 
 export const AGE_MIN = 18
 export const AGE_MAX = 60

@@ -1,4 +1,3 @@
-import type { Manager } from './manager'
 
 /**
  * Every region the circuit has ever had, not just today's four.
@@ -892,7 +891,37 @@ export interface VctSeason {
   reselected?: boolean
 }
 
-export interface GameState {
+/** The manager's eight talents — the manager game's (engine/manager.ts), kept here so a save's type needs nothing from it. */
+export type ManagerSkill =
+  | 'training' | 'negotiation' | 'tactics' | 'scouting'
+  | 'medical' | 'business' | 'locker' | 'youth'
+
+/** The manager themselves, in a manager game's save (engine/manager.ts). */
+export interface Manager {
+  name: string
+  age: number
+  originKey: string
+  /** gates which clubs will hire you */
+  reputation: number
+  /** talent points not yet spent */
+  points?: number
+  /** where each skill started, so refunds cannot dip below the origin */
+  baseSkills?: Record<ManagerSkill, number>
+  /** how fast your skills improve; the price of starting with reputation */
+  growth: number
+  skills: Record<ManagerSkill, number>
+}
+
+/**
+ * The world every save plays in: the calendar, the clubs and their people, the
+ * competitions and the news.
+ *
+ * A player's career is this and `me` (engine/me); a manager game's save is this
+ * and the manager's desk on it (ManagerDeskState, engine/desk.ts). The field
+ * names are the saves' own, so a save written before the three were told apart
+ * reads the same.
+ */
+export interface WorldState {
   version: number
   seed: number
   /** the world's caller data this save has been brought up to — see syncCallersWithWorld */
@@ -940,77 +969,26 @@ export interface GameState {
   day: number
   year: number
   stage: StageKey
-  /** the team the human manages */
+  /**
+   * The club this save plays for: a manager's own club, or the career player's
+   * while he has one — '' when he has none (engine/me/career.ts).
+   */
   myTeam: string
-  managerName: string
-  /** the manager's own background and skills */
-  manager?: Manager
   players: Record<string, Player>
   teams: Record<string, Team>
   comps: Record<string, Competition>
   fixtures: Fixture[]
   news: NewsItem[]
-  offers: TransferOffer[]
   /** per-player weekly training focus */
   training: Record<string, keyof Attrs | 'rest'>
-  /** the squad-wide drill running alongside it */
-  drill?: TeamDrill
-  /** pair work, which runs alongside whichever main drill is set */
-  duo?: { a: string; b: string }
-  /**
-   * Day the training plan can next be changed.
-   *
-   * A confirmed plan is committed until it has actually been run, so the week
-   * is a decision rather than something you can keep nudging.
-   */
-  drillLock?: number
-  /**
-   * Set when a committed week was torn up.
-   *
-   * Cancelling is allowed, but it costs the week: the squad has already been
-   * working to the old plan, so the new one does not start paying until the
-   * next cycle.
-   */
   /**
    * Pairwise relationships, keyed by the two player ids sorted and joined.
    *
    * Symmetric by construction — see engine/bonds.ts.
    */
   bonds?: Record<string, number>
-  /**
-   * Set while the guided trial day is running.
-   *
-   * The tutorial genuinely rewinds the clock to 31 December rather than
-   * labelling 1 January as if it were — so the turn it teaches is one day long
-   * and ends by arriving at the real first day.
-   */
-  tutorialDay?: boolean
-  /** the day's action budget — see engine/actions.ts */
-  actions?: { day: number; used: number }
-  /** commercial offers on the table and already booked */
-  gigs?: Gig[]
-  /** club-run events currently being organised */
-  ventures?: Venture[]
-  /** day a sponsor pitch can next be made, so it is not spammable */
-  pitchCooldown?: number
   /** optional rule: each club may hold at most two players from other regions */
   importLimit?: boolean
-  /** sponsorship offers on the table, awaiting our answer or theirs */
-  sponsorTalks?: SponsorTalk[]
-  /**
-   * Days each player spent on commercial work this week.
-   *
-   * Read at the weekly settlement: a day being famous is a day not practising.
-   */
-  commercialDays?: Record<string, number>
-  /** a log of what the manager did, so today can be recounted */
-  activity?: Activity[]
-  finances: {
-    balance: number
-    log: { day: number; label: string; amount: number }[]
-  }
-  /** career-long honours for the managed club */
-  honours: { year: number; title: string }[]
   /** qualification posters already shown, as `${year}:${event}` */
   postersSeen?: string[]
   /**
@@ -1020,35 +998,10 @@ export interface GameState {
    * rating. Undefined on old saves means nobody has been provoked yet.
    */
   rivalry?: number
-  /** day each player last had physio, so a session is once a week per player */
-  physioOn?: Record<string, number>
   /** prospects already let into the world, so nobody arrives twice */
   prospectsTaken?: string[]
-  /** the squad you inherited, so an ending can ask who is still here */
-  startingSquad?: string[]
-  /**
-   * The tier your current club was in the day you took it.
-   *
-   * Promotion rewrites `team.tier` to 1, so reading a club's CURRENT tier to
-   * ask "did you start in the second division" erases the evidence the moment
-   * you succeed — the 草根 ending describes taking a tier-2 side up and winning
-   * the region, and that exact story could not trigger it.
-   */
-  startTier?: number
-  /**
-   * The training facility as you found it.
-   *
-   * Four of the 78 clubs already sit at 90, so a badge for "reach 90" is
-   * handed to whoever took the right job. What the manager actually does is
-   * pay to raise it, and that is only visible against where it started.
-   */
-  startFacilities?: number
   /** the career is over because its seasons are up, not because you were sacked */
   finished?: boolean
-  /** the five-year settlement is on screen; the clock holds until a choice is made */
-  midReview?: boolean
-  /** the five-year settlement has been answered — never ask twice */
-  midReviewDone?: boolean
   /** agents the manager has chosen for the next match, keyed by map */
   agentPicks?: Record<string, Record<string, string>>
   /**
@@ -1079,18 +1032,105 @@ export interface GameState {
   compPro?: Record<string, { key: string; value: number }>
   /** maps the manager banned/picked himself for the next match */
   vetoPlan?: { fixtureId: string; maps: string[]; log: string[] }
+  /** farewell records for retired players, newest last — the send-off cards read these */
+  retireFeed?: RetireNote[]
+  /** last processed match ids so the UI can surface results */
+  lastResults: string[]
+  /** set when the career is over; the text is why */
+  gameOver?: string
+}
+
+/**
+ * The manager game's desk on the world (engine/desk.ts): the manager, his books
+ * and his board, sponsors and commercial days, staff, job offers, bids and
+ * enquiries, the drill and the physio room.
+ *
+ * A player's career carries none of it: a new career is made without it
+ * (engine/world.ts createWorld) and a career's save is read without it
+ * (engine/me/save.ts). The manager game's screens still read these as they
+ * always did, which is the only reason the type keeps them on GameState.
+ */
+export interface ManagerDeskState {
+  managerName: string
+  /** the manager's own background and skills */
+  manager?: Manager
+  offers: TransferOffer[]
+  /** the squad-wide drill running alongside the training focus */
+  drill?: TeamDrill
+  /** pair work, which runs alongside whichever main drill is set */
+  duo?: { a: string; b: string }
+  /**
+   * Day the training plan can next be changed.
+   *
+   * A confirmed plan is committed until it has actually been run, so the week
+   * is a decision rather than something you can keep nudging.
+   */
+  drillLock?: number
+  /**
+   * Set while the guided trial day is running.
+   *
+   * The tutorial genuinely rewinds the clock to 31 December rather than
+   * labelling 1 January as if it were — so the turn it teaches is one day long
+   * and ends by arriving at the real first day.
+   */
+  tutorialDay?: boolean
+  /** the day's action budget — see engine/actions.ts */
+  actions?: { day: number; used: number }
+  /** commercial offers on the table and already booked */
+  gigs?: Gig[]
+  /** club-run events currently being organised */
+  ventures?: Venture[]
+  /** day a sponsor pitch can next be made, so it is not spammable */
+  pitchCooldown?: number
+  /** sponsorship offers on the table, awaiting our answer or theirs */
+  sponsorTalks?: SponsorTalk[]
+  /**
+   * Days each player spent on commercial work this week.
+   *
+   * Read at the weekly settlement: a day being famous is a day not practising.
+   */
+  commercialDays?: Record<string, number>
+  /** a log of what the manager did, so today can be recounted */
+  activity?: Activity[]
+  finances: {
+    balance: number
+    log: { day: number; label: string; amount: number }[]
+  }
+  /** career-long honours for the managed club */
+  honours: { year: number; title: string }[]
+  /** day each player last had physio, so a session is once a week per player */
+  physioOn?: Record<string, number>
+  /** the squad you inherited, so an ending can ask who is still here */
+  startingSquad?: string[]
+  /**
+   * The tier your current club was in the day you took it.
+   *
+   * Promotion rewrites `team.tier` to 1, so reading a club's CURRENT tier to
+   * ask "did you start in the second division" erases the evidence the moment
+   * you succeed — the 草根 ending describes taking a tier-2 side up and winning
+   * the region, and that exact story could not trigger it.
+   */
+  startTier?: number
+  /**
+   * The training facility as you found it.
+   *
+   * Four of the 78 clubs already sit at 90, so a badge for "reach 90" is
+   * handed to whoever took the right job. What the manager actually does is
+   * pay to raise it, and that is only visible against where it started.
+   */
+  startFacilities?: number
+  /** the five-year settlement is on screen; the clock holds until a choice is made */
+  midReview?: boolean
+  /** the five-year settlement has been answered — never ask twice */
+  midReviewDone?: boolean
   /** the club's revenue-share arrangement with the league — engine/leagueShare.ts */
   leagueDeal?: LeagueDeal
   /** a live league proposal (themed bundle), waiting on the manager's answer */
   leagueOffer?: { year: number; expires: number }
-  /** farewell records for retired players, newest last — the send-off cards read these */
-  retireFeed?: RetireNote[]
   /** commercial appearances completed this season, for sponsorship clauses */
   seasonGigs?: number
   /** best regional stage finish this season, for sponsorship clauses */
   bestPlacing?: number
-  /** last processed match ids so the UI can surface results */
-  lastResults: string[]
   boardConfidence: number
   /** what the board asked for this stage, and how it was judged */
   objective?: StageObjective
@@ -1133,8 +1173,10 @@ export interface GameState {
     /** commercial and sponsorship income, added up */
     commercial: number
   }
-  /** set when the career is over; the text is why */
-  gameOver?: string
+}
+
+/** A save: the world, the manager's desk on it, and — in a player's career — the player. */
+export interface GameState extends WorldState, ManagerDeskState {
   /** the human as one player in this world — the player-career layer, see engine/me */
   me?: import('./me/types').MeState
 }

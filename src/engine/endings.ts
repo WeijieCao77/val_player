@@ -81,10 +81,8 @@ export interface Ending {
  * season.ts imports them, which is the only arrangement where the two cannot
  * drift apart again.
  */
-export const MASTERS_1 = 'Masters I'
-export const MASTERS_2 = 'Masters II'
-export const CHAMPIONS = 'VALORANT Champions'
-export const INTL_TITLES = [MASTERS_1, MASTERS_2, CHAMPIONS] as const
+import { CHAMPIONS, INTL_TITLES, MASTERS_1, MASTERS_2 } from './era'
+export { CHAMPIONS, INTL_TITLES, MASTERS_1, MASTERS_2 }
 
 const isIntl = (t: string) => (INTL_TITLES as readonly string[]).includes(t)
 const isChampions = (t: string) => t === CHAMPIONS

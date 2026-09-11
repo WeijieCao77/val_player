@@ -102,6 +102,8 @@ export interface ManagerDesk {
   clubMods(state: GameState): ClubMods
 
   // ---- the manager game's screens, which still import these by name from world modules
+  /** a manager game's new save: his name and books, the board, the squad as he found it (engine/world.ts createNewGame) */
+  initManager(state: GameState, managerName: string, manager?: GameState['manager']): void
   acceptJob(state: GameState, offerId: string): string
   persuadeStay(state: GameState, playerId: string, approach: StayApproach): string
   settleAtFive(state: GameState): void

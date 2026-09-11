@@ -51,15 +51,10 @@ const isSharedUi = (f: string) => f.startsWith('src/ui/') && !f.startsWith('src/
  * Manager modules the career may still reach, and why. Only ever delete lines here.
  */
 const ALLOWED_FOR_NOW: Record<string, string> = {
-  // The engine split takes these out of the career's week. Already out: the
-  // club's books, sponsors, the league's bundle, job offers, the squad's life,
-  // the telemetry call (engine/desk.ts, mounted by the manager game only), and
-  // the manager game's market with its trust and loyalty (the career's own
-  // market is engine/me/market.ts). Still reached: match.ts reads staff and the
-  // manager's skills; the endings' event names move into the world core.
-  'src/engine/staff.ts': 'engine split: match.ts',
-  'src/engine/manager.ts': 'engine split: match.ts',
-  'src/engine/endings.ts': 'engine split: season.ts; the event names ui/me/Schedule.tsx reads move to the world core',
+  // Empty: the engine split is done. The manager's desk is mounted by the
+  // manager game only (engine/desk.ts), a match reads a manager's skills and
+  // analysts through it, the event names live in the world core (engine/era.ts)
+  // and a career's save is its own (engine/me/save.ts). Nothing goes back on.
 }
 
 type Kind = 'static' | 'dynamic' | 'reexport' | 'side-effect' | 'type'
