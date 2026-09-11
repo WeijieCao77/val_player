@@ -12,6 +12,7 @@ import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nod
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
 import { sayDim, useNumbers } from './words'
+import Face, { Mug } from './Face'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -187,7 +188,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               <div className="col tiny" style={{ gap: 4 }}>
                 {five(mm.myTeamId).map(({ p, agent, role }) => (
                   <span key={p.id} className="row" style={{ gap: 4, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
+                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<Mug id={p.id} name={p.ign} agent={agent} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -199,7 +200,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               <div className="col tiny" style={{ gap: 4 }}>
                 {five(oppId).map(({ p, agent, role }) => (
                   <span key={p.id} className="row" style={{ gap: 4 }}>
-                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
+                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<Mug id={p.id} name={p.ign} agent={agent} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -212,6 +213,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-body">
               {lights.map((s) => (
                 <div key={s.id} className={`light${s.opposite ? ' opposite' : ''}`}>
+                  <Face id={s.id} name={s.ign} size={30} />
                   <div className="n"><b>{s.ign}</b> <span className="muted">{s.role}</span>{s.opposite && <span className="tag t1">你的对位</span>}</div>
                   <div className="cv muted">{s.cv}</div>
                 </div>
@@ -452,7 +454,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               const ag = map ? (mm.mineIsA ? map.A : map.B).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
+                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<Mug id={p.id} name={p.ign} agent={ag} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )
@@ -465,7 +467,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               const ag = map ? (mm.mineIsA ? map.B : map.A).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6 }}>
-                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
+                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<Mug id={p.id} name={p.ign} agent={ag} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )

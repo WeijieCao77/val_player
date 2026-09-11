@@ -20,6 +20,7 @@ import { askingPrice } from '../engine/transfer'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../engine/types'
 import { agentCn } from '../engine/content'
 import type { Stats } from '../engine/types'
+import Face from './me/Face'
 
 export default function PlayerModal(
   { playerId, onClose, startRenewing = false }:
@@ -102,13 +103,16 @@ export default function PlayerModal(
     >
       <div className="grid c2" style={{ marginBottom: 14 }}>
         <div>
-          {(p.realName || p.nat) && (
-            <div className="small muted" style={{ marginBottom: 8 }}>
-              {p.realName}
-              {p.realName && p.nat ? ' · ' : ''}
-              {p.nat ? natName(p.nat) : ''}
-            </div>
-          )}
+          <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+            <Face id={p.id} name={p.ign} size={56} />
+            {(p.realName || p.nat) && (
+              <div className="small muted">
+                {p.realName}
+                {p.realName && p.nat ? ' · ' : ''}
+                {p.nat ? natName(p.nat) : ''}
+              </div>
+            )}
+          </div>
           <div className="row wrap" style={{ gap: 7, marginBottom: 12 }}>
             <span className="tag">{team?.name ?? '自由人'}</span>
             <span className="tag">{REGION_CN[p.region]}</span>
