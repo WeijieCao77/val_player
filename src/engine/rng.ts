@@ -77,3 +77,14 @@ export function hashStr(s: string): number {
   }
   return h >>> 0
 }
+
+/**
+ * A named side stream for one day of one world.
+ *
+ * engine/season.ts advanceDay rolls the world — rosters, training, the AI
+ * market, the winter — on one stream for the day. A step that only concerns one
+ * club's desk or dressing room takes a stream of its own under a tag, so how
+ * often it rolls, or whether it runs at all, never moves a roll in the world.
+ */
+export const dayStream = (seed: number, year: number, day: number, tag: string): Rng =>
+  new Rng(hashStr(`day:${seed}:${year}:${day}:${tag}`))

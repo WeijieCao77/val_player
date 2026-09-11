@@ -1,4 +1,4 @@
-import { Rng, clamp, hashStr } from './rng'
+import { Rng, clamp, dayStream, hashStr } from './rng'
 import { contractLength, expectedSalary, marketValue, refreshValue } from './player'
 import { autoStarters, ensureCaller } from './world'
 import { squadOf, wageBill } from './roster'
@@ -568,7 +568,8 @@ export function aiTransferTick(state: GameState, rng: Rng, notes?: string[]): vo
     }
   }
 
-  bidForOurPlayers(state, rng, notes)
+  // the manager's desk rolls its own dice, so listings below roll the same whether it runs or not
+  bidForOurPlayers(state, dayStream(state.seed, state.year, state.day, 'bids'), notes)
 }
 
 /**

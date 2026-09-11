@@ -1,4 +1,4 @@
-import { Rng, clamp } from './rng'
+import { Rng, clamp, dayStream } from './rng'
 import { INJURIES } from './content'
 import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
 import { coachOr, squadOf } from './roster'
@@ -359,8 +359,12 @@ function runDrill(state: GameState, rng: Rng, notes: string[]): void {
 /** Weekly tick: training, condition, morale drift, injury rolls. */
 export function weeklyTick(state: GameState, rng: Rng): string[] {
   const notes: string[] = []
-  weeklyBonds(state, rng, notes)
-  weeklyTrust(state, rng, notes)
+  // One club's dressing room rolls its own dice (engine/rng.ts dayStream): the
+  // squad it reads changes with whoever is at that club, and every training and
+  // injury roll in the world below must not move with it.
+  weeklyBonds(state, dayStream(state.seed, state.year, state.day, 'bonds'), notes)
+  weeklyTrust(state, dayStream(state.seed, state.year, state.day, 'trust'), notes)
+  const grumble = dayStream(state.seed, state.year, state.day, 'grievance')
   const missed = Object.entries(state.commercialDays ?? {})
     .filter(([, d]) => d >= 2)
     .map(([id]) => state.players[id]?.ign)
@@ -411,7 +415,7 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
           const soothe = isMine ? 2 - skillMod(state.manager, 'locker', 0.006) : 1
           p.grievance = clamp((p.grievance ?? 0) + (promised === 'star' ? 7 : 4.5) * soothe, 0, 100)
           p.morale = clamp(p.morale - (promised === 'star' ? 3 : 2), 10, 100)
-          if (isMine && (p.grievance ?? 0) > 55 && rng.chance(0.25) && !p.listed) {
+          if (isMine && (p.grievance ?? 0) > 55 && grumble.chance(0.25) && !p.listed) {
             notes.push(`😠 ${p.ign} 对出场时间不满，已经在考虑离队（承诺是${promised === 'star' ? '核心' : '首发'}）。`)
           }
         } else {

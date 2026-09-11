@@ -1,4 +1,4 @@
-import { Rng, clamp, hashStr } from './rng'
+import { Rng, clamp, dayStream, hashStr } from './rng'
 import {
   activePool, applyMatchStats, poolFor, poolPhaseOf, pruneMatchDetail, simulateMatch, stripRoundLogs,
 } from './match'
@@ -1309,7 +1309,9 @@ export function commitFixture(
     // a level Bo2 is neither a win to trust nor a defeat to fall out over
     if (result.mapsWonA !== result.mapsWonB) {
       trustAfterMatch(state, won, (isA ? result.lineups?.a : result.lineups?.b) ?? [])
-      applyMatchBonds(state, result, state.myTeam, isA, rng, room)
+      // the room's own dice: the fixture's stream goes on to both sides' fatigue
+      // and injury rolls, which must not depend on which club is "ours"
+      applyMatchBonds(state, result, state.myTeam, isA, new Rng(hashStr(`match:${state.seed}:${state.year}:${f.id}:bonds`)), room)
     }
     for (const t of room) {
       state.news.push({ day: state.day, kind: 'club', important: true, text: t })
@@ -1594,30 +1596,38 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   if (!pendingMine) progressCompetitions(state, notes, !!opts.autoResolveDrawDecisions)
 
+  // The manager's desk below draws from streams of its own (engine/rng.ts
+  // dayStream). The day's `rng` belongs to the world — rosters, training, the
+  // AI market, the winter — and a desk that rolls more or less often, or does
+  // not run at all, must not move a single roll of it.
+  const side = (tag: string) => dayStream(state.seed, state.year, state.day, tag)
+
   // ---- commercial work booked for today, then any new approach
   runGigsToday(state, notes)
-  offerGigs(state, rng, notes)
-  notes.push(...resolveSponsorTalks(state, rng))
-  drillTick(state, rng, notes)
+  offerGigs(state, side('gigs'), notes)
+  notes.push(...resolveSponsorTalks(state, side('sponsors')))
+  drillTick(state, side('drill'), notes)
   pruneMatchDetail(state)
 
   // ---- coaches and clubs answering today
-  notes.push(...resolveApproaches(state, rng))
-  notes.push(...resolveStaffOffers(state, rng))
-  notes.push(...resolveApplications(state, rng))
+  notes.push(...resolveApproaches(state, side('approaches')))
+  notes.push(...resolveStaffOffers(state, side('staff')))
+  notes.push(...resolveApplications(state, side('jobs')))
 
   // ---- offers whose waiting period is up
-  notes.push(...resolveEnquiries(state, rng))
-  notes.push(...resolveDueOffers(state, rng))
+  notes.push(...resolveEnquiries(state, side('enquiries')))
+  notes.push(...resolveDueOffers(state, side('offers')))
 
   // ---- weekly upkeep
   if (state.day % 7 === 0) {
-    streamWeek(state, rng, notes)
+    streamWeek(state, side('stream'), notes)
     notes.push(...weeklyTick(state, rng))
-    weeklyLife(state, rng, notes)
+    weeklyLife(state, side('life'), notes)
     weeklyFinance(state)
-    aiTransferTick(state, rng, notes)
-    refreshListings(state, rng, notes)   // runs all year so stale listings expire
+    // the manager game's market, on streams of its own: a player's world
+    // does not run it, and the winter that follows rolls the same either way
+    aiTransferTick(state, side('market'), notes)
+    refreshListings(state, side('listings'), notes)   // runs all year so stale listings expire
   }
 
   if (state.news.length > 400) state.news.splice(0, state.news.length - 400)
