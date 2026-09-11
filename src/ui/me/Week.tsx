@@ -16,6 +16,7 @@ import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, ladderLabel, ladderTier, 
 import { CUPS, cupView } from '../../engine/me/cups'
 import { fansCn } from '../../engine/me/fans'
 import { useNumbers } from './words'
+import { chainLine } from '../../engine/me/story'
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
@@ -60,6 +61,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}>
+      {/* a chain under way: one line across both columns — how long is left, what it wants (me/story.ts) */}
+      {(() => {
+        const line = chainLine(game)
+        return line ? <div className="node-line" style={{ gridColumn: '1 / -1', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div> : null
+      })()}
       <div>
         <Panel
           title={`本周行动 · 剩 ${me.ap} 点`}

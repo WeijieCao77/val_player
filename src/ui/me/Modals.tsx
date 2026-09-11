@@ -13,6 +13,7 @@ import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me
 import { Rng, hashStr } from '../../engine/rng'
 import { answerStreamOffer } from '../../engine/me/stream'
 import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
+import { storyHint, storyTag } from '../../engine/me/story'
 import { AXIS_CN, traitOf } from '../../engine/me/traits'
 import { pop } from '../../engine/me/pending'
 import { retire } from '../../engine/me/endings'
@@ -273,12 +274,15 @@ function StreamModal({ onDone }: { onDone: () => void }) {
 function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }) {
   const { game, commit } = useGame()
   const [result, setResult] = useState<{ pick: string; lines: string[] } | null>(null)
+  // what the card echoes and which chain step it is, read once: the answer moves the chain on
+  const [tags] = useState(() => { const e = eventOf(eventId); return e ? storyTag(game, e) : [] })
   const ev = eventOf(eventId)
   if (!ev) { pop(game, 'event', eventId); onDone(); return null }
   // the question stays on screen after the choice, with what it did right
   // under the option you took — a popup that closes on click teaches nothing
   return (
     <Modal title="事件" onClose={result ? onDone : () => {}} onBgClose={result ? onDone : () => {}}>
+      {tags.map((line) => <p key={line} className="tiny muted" style={{ margin: '0 0 4px' }}>{line}</p>)}
       <p className="q" style={{ fontSize: 'var(--t-h2)', fontWeight: 650, margin: '0 0 4px' }}>{ev.q}</p>
       <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctx}</p>
       {result ? (
@@ -295,7 +299,7 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
             {ev.a.map((o, i) => (
               <button key={i} onClick={() => { const lines = resolveEvent(game, ev.id, i); setResult({ pick: o.t, lines }); commit() }}>
                 <span>{o.t}</span>
-                <span className="m">{describeEffect(o.e) || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
+                <span className="m">{[describeEffect(o.e), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
               </button>
             ))}
           </div>

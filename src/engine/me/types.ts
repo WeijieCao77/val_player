@@ -537,6 +537,12 @@ export interface MeState {
   traits: string[]
   eventCounts: Record<string, number>
   pendingEvent?: string
+  /** 伏笔: choices that come back later, by key — see me/story.ts; absent in older saves */
+  seeds?: Record<string, import('./story').SeedRec>
+  /** the countdown chain under way, if any — see me/story.ts */
+  chain?: import('./story').ChainLive
+  /** chains that ran their course, newest last, capped */
+  chainsDone?: { id: string; wk: number; end: import('./story').ChainEnd; steps: number }[]
   quests: Quest[]
   eventsSeen: number
 

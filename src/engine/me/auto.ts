@@ -25,6 +25,7 @@ import { compCn } from './compname'
 import { injuryHelpedBy, injuryStatus } from './injury'
 import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
+import { storyPlan } from './storyweek'
 
 /** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
 export const WEEK_END_FATIGUE = 40
@@ -133,6 +134,8 @@ export function autoPlan(state: GameState): void {
     if (end() > 0 && spend('rest')) continue
     break
   }
+  // a chain under way keeps its task in the week (me/storyweek.ts)
+  storyPlan(state, (k, d) => setPlan(state, k, d) === null)
 }
 
 /** Answer whatever is in front of me the steady way. Returns a line for the record. */
