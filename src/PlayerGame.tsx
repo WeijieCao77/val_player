@@ -9,6 +9,7 @@ import { advanceTurn, carriesOn, weekCalendar, weekInDays, weekMatches } from '.
 import { MeMatch } from './engine/me/matchplay'
 import { advanceUntil, runAutoPilot } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
+import { noteHall } from './engine/me/hall'
 import Changelog from './ui/Changelog'
 import { CHANGELOG_ME, LATEST_ME } from './data/changelog_me'
 import { ladderLabel } from './engine/me/prepro'
@@ -24,6 +25,7 @@ import TransferScreen from './ui/me/TransferScreen'
 import EconomyScreen from './ui/me/EconomyScreen'
 import AchievementsScreen from './ui/me/AchievementsScreen'
 import AchPop from './ui/me/AchPop'
+import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
 import Poster from './ui/me/Poster'
@@ -78,6 +80,8 @@ export default function PlayerGame() {
     bump()
     const g = gameRef.current
     if (!g) return
+    // the 成就殿堂, outside the save: this career's unlocks, and its card once it has ended (me/hall.ts)
+    noteHall(g)
     try { autosave(g) } catch { /* storage full or blocked; the game goes on in memory */ }
   }, [])
 
@@ -201,6 +205,7 @@ export default function PlayerGame() {
           : screen === 'schedule' && pro ? Schedule
             : screen === 'standings' ? Standings
               : screen === 'awards' ? AchievementsScreen
+                : screen === 'hall' ? HallPage
                 : screen === 'log' ? LogScreen
                   : screen === 'auto' ? AutoScreen
                     : screen === 'help' ? HelpScreen

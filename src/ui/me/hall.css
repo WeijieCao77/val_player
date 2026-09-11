@@ -1,0 +1,85 @@
+/* 成就殿堂 (ui/me/HallScreen.tsx). Every rule sits under .hall-page, .hall-origins
+   or .poster-me .hall-sig, so none of it reaches the screens around it. One
+   column that fits 375px; wider screens only get more records per row. */
+
+.hall-page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hall-page .panel { margin: 0; }
+.hall-page .hall-head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.hall-page .hall-head h2 { margin: 0; font-size: 18px; }
+.hall-page .hall-note { margin: 0; }
+
+.hall-page .hall-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hall-page .hall-sum > div {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+}
+.hall-page .hall-sum b { font-size: 20px; line-height: 1.15; }
+.hall-page .hall-sum em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--faint); }
+.hall-page .hall-sum small { font-size: var(--t-tiny, 11px); color: var(--muted); }
+
+.hall-page .hall-row {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px;
+  padding: 7px 0; border-bottom: 1px solid var(--line-soft);
+}
+.hall-page .hall-row:last-child { border-bottom: 0; }
+.hall-page .hall-row .mark { color: var(--faint); line-height: 1.5; }
+.hall-page .hall-row.got .mark { color: var(--gold); }
+.hall-page .hall-row.locked b { color: var(--muted); }
+.hall-page .hall-row .desc { margin-left: 6px; }
+.hall-page .won { color: var(--win); }
+
+.hall-page .parts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
+.hall-page .part {
+  font-size: var(--t-tiny, 11px); line-height: 1.6; padding: 0 6px;
+  border: 1px dashed var(--line); border-radius: var(--radius); color: var(--faint);
+}
+.hall-page .part.ok { border-style: solid; border-color: var(--win); color: var(--win); }
+
+.hall-page .hall-recs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .hall-page .hall-recs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hall-page .hall-recs > div {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 6px 8px; border-left: 2px solid var(--gold); background: var(--panel-2);
+}
+.hall-page .hall-recs small { font-size: var(--t-tiny, 11px); color: var(--muted); }
+.hall-page .hall-recs b { font-size: 16px; }
+.hall-page .hall-recs .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hall-page .hall-cards { display: flex; flex-direction: column; gap: 8px; }
+.hall-page .hall-card {
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+}
+.hall-page .hall-card.mine { border-color: var(--accent-line); }
+.hall-page .hc-top { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
+.hall-page .hc-end { color: var(--gold); font-weight: 600; }
+.hall-page .hc-clubs { overflow-wrap: anywhere; }
+.hall-page .hc-wall { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.hall-page .hc-t {
+  font-size: var(--t-tiny, 11px); line-height: 1.6; padding: 0 6px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.hall-page .hc-t.intl { border-color: var(--gold); color: var(--gold); }
+.hall-page .hc-t.ring { border-style: dashed; opacity: .75; }
+.hall-page .hc-hx { color: var(--gold); }
+
+.hall-page .hall-route { border-bottom: 1px solid var(--line-soft); }
+.hall-page .hall-route:last-child { border-bottom: 0; }
+.hall-page .hall-route summary { cursor: pointer; padding: 7px 0; font-weight: 600; }
+.hall-page .hall-route summary em { font-style: normal; font-weight: 400; color: var(--faint); margin-left: 6px; }
+.hall-page .hall-ach {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px;
+  padding: 3px 0 3px 4px; color: var(--faint);
+}
+.hall-page .hall-ach b::before { content: '☆ '; }
+.hall-page .hall-ach.got { color: inherit; }
+.hall-page .hall-ach.got b::before { content: '★ '; color: var(--gold); }
+
+.hall-page .hall-move summary { cursor: pointer; font-size: var(--t-small, 13px); color: var(--muted); }
+.hall-page .hall-move textarea { display: block; width: 100%; box-sizing: border-box; margin: 6px 0; font-size: 12px; resize: vertical; }
+
+.hall-origins { margin-top: 10px; }
+.hall-origins .origin-pick.locked { opacity: .55; cursor: not-allowed; }
+.hall-origins .origin-pick.locked b { color: var(--muted); }
+
+.poster-me .hall-sig { font-size: var(--t-tiny, 11px); color: var(--gold); padding-top: 4px; }

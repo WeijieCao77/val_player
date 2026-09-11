@@ -3,6 +3,7 @@ import { fansCn, fanTier } from '../../engine/me/fans'
 import { traitOf } from '../../engine/me/traits'
 import { bondCardLines } from '../../engine/me/bond'
 import { compCn } from '../../engine/me/compname'
+import { hallLine } from '../../engine/me/hall'
 
 /** The career on one card, made to be screenshotted. */
 export default function Poster() {
@@ -52,6 +53,8 @@ export default function Poster() {
         return lines.length ? <div className="mates">{lines.map((l, i) => <p key={i}>{l}</p>)}</div> : null
       })()}
       <div className="sig">{me.traits.map((k) => traitOf(k)?.name).filter(Boolean).join(' · ') || '没有形成特质'} · 成就 {me.achievements.length} · 事件 {me.eventsSeen}</div>
+      {/* the 成就殿堂's line: what this career completed there, or the hall's 称号 (me/hall.ts) */}
+      {(() => { const l = hallLine(game); return l ? <div className="hall-sig">{l}</div> : null })()}
     </div>
   )
 }
