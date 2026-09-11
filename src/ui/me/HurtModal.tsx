@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Modal } from '../common'
+import { useGame } from './ctx'
+import { Modal } from './common'
 import { answerHurt, hurtAsk } from '../../engine/me/hurtplay'
 
 /**

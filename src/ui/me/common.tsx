@@ -1,0 +1,337 @@
+/**
+ * The career's building blocks: money, rating badges, role tags, bars, crests,
+ * agent icons, panels, modals, dates and the two radars.
+ *
+ * Copied from the manager game's ui/common.tsx when the career became a game
+ * of its own (作者 2026-09-11) — only what the career draws, and none of the
+ * manager's scouting. The radars keep the viewBox the phone pass gave them, so
+ * they scale down inside a narrow card instead of being cut off.
+ */
+import { useContext } from 'react'
+import type { ReactNode } from 'react'
+import { GameCtx } from './ctx'
+import { roleColor } from '../../engine/player'
+import { crestUrl } from '../../engine/dossier'
+import { AGENT_ROLE, agentCn, canonAgent } from '../../engine/content'
+import type { Player, Role, Trait } from '../../engine/types'
+
+export const money = (n: number): string => {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 1 : 2)}M`
+  if (abs >= 1_000) return `${sign}$${(abs / 1000).toFixed(0)}K`
+  return `${sign}$${abs.toFixed(0)}`
+}
+
+export const moneyFull = (n: number): string =>
+  `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`
+
+export function OvrBadge({ value }: { value: number }) {
+  const cls = value >= 88 ? 'elite' : value >= 78 ? 'good' : value >= 68 ? 'ok' : ''
+  return <span className={`ovr ${cls}`}>{value}</span>
+}
+
+export function RoleTag({ role }: { role: Role }) {
+  return <span className="role" style={{ background: roleColor(role) }}>{role}</span>
+}
+
+/** Primary role plus any second role the player actually covers. */
+export function Roles({ p }: { p: Player }) {
+  const list = p.roles?.length ? p.roles : [p.role]
+  return (
+    <span className="row" style={{ gap: 3 }}>
+      <RoleTag role={list[0]} />
+      {list.slice(1).map((r) => (
+        <span
+          key={r}
+          className="role"
+          style={{ background: 'transparent', color: roleColor(r), boxShadow: `inset 0 0 0 1px ${roleColor(r)}` }}
+          title={`兼任 ${r}`}
+        >
+          {r}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+export function Bar({ value, max = 100, color }: { value: number; max?: number; color?: string }) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100))
+  const c = color ?? (pct >= 75 ? 'var(--win)' : pct >= 45 ? 'var(--warn)' : 'var(--loss)')
+  return (
+    <div className="bar">
+      <i style={{ width: `${pct}%`, background: c }} />
+    </div>
+  )
+}
+
+/**
+ * A club's crest.
+ *
+ * 76 of the world's 78 clubs have one, so this renders nothing at all rather
+ * than a placeholder for the other two — a missing crest should leave the
+ * layout as it was, not put a grey box in it.
+ *
+ * A club my club carried on as under another name wears that name's crest:
+ * read off the running game, or `heirs` where there is none (the front page).
+ */
+export function Crest({
+  id, size = 18, className, heirs,
+}: { id: string | null | undefined; size?: number; className?: string; heirs?: Record<string, string> }) {
+  const ctx = useContext(GameCtx)
+  const src = crestUrl(id, heirs ?? ctx?.game.heirs)
+  if (!src) return null
+  return (
+    <img
+      className={`crest${className ? ' ' + className : ''}`}
+      src={src}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      width={size}
+      height={size}
+      style={{ width: size, height: size }}
+    />
+  )
+}
+
+const assetBase = (): string =>
+  typeof import.meta.env !== 'undefined' ? import.meta.env.BASE_URL : './'
+
+/** The official top-down minimap, clean, only the site letters — see scripts/fetch_minimaps.ts. */
+export const minimapImg = (map: string): string => `${assetBase()}minimaps/${map}.png`
+
+/**
+ * An agent's portrait icon, the way vlr.gg prints one in a scoreboard.
+ *
+ * The filename strips everything non-alphabetic (KAY/O → KAYO.png). The title
+ * carries the Chinese name and the job, so hovering answers what the icon
+ * alone cannot.
+ */
+export function AgentIcon({
+  name: raw, size = 24, title,
+}: { name: string; size?: number; title?: string }) {
+  // whatever spelling arrived, the file and the tables want the proper name
+  const name = canonAgent(raw) ?? raw
+  return (
+    <img
+      className="agent-icon"
+      src={`${assetBase()}agents/${name.replace(/[^A-Za-z]/g, '')}.webp`}
+      alt={agentCn(name)}
+      title={title ?? `${agentCn(name)}${AGENT_ROLE[name] ? `（${AGENT_ROLE[name]}）` : ''}`}
+      loading="lazy"
+      width={size}
+      height={size}
+      style={{ width: size, height: size, borderRadius: 4, background: 'var(--panel-3)', display: 'block' }}
+    />
+  )
+}
+
+export function Panel({
+  title, children, actions, flush, className, tut,
+}: {
+  title?: string; children: ReactNode; actions?: ReactNode
+  flush?: boolean; className?: string
+  /** stable hook for the tour to spotlight this panel */
+  tut?: string
+}) {
+  return (
+    <div className={`panel${className ? ` ${className}` : ''}`} data-tut={tut}>
+      {(title || actions) && (
+        <div className="panel-head">
+          {title && <h2>{title}</h2>}
+          <div className="spacer" />
+          {actions}
+        </div>
+      )}
+      <div className={`panel-body${flush ? ' flush' : ''}`}>{children}</div>
+    </div>
+  )
+}
+
+export function Stat({ k, v, small }: { k: string; v: ReactNode; small?: boolean }) {
+  return (
+    <div className="stat">
+      <span className="k">{k}</span>
+      <span className={`v${small ? ' sm' : ''}`}>{v}</span>
+    </div>
+  )
+}
+
+export function Modal({
+  title, onClose, onBgClose, children, wide,
+}: { title: ReactNode; onClose: () => void; onBgClose?: () => void; children: ReactNode; wide?: boolean }) {
+  return (
+    <div className="modal-bg" onClick={onBgClose ?? onClose}>
+      <div
+        className="modal"
+        style={wide ? { maxWidth: 1020 } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h3>{title}</h3>
+          <div className="spacer" style={{ flex: 1 }} />
+          <button className="sm ghost" onClick={onClose}>关闭 ✕</button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+/** Condition read-out used in roster lists: the bar's colour, the figure on hover when `hideNumber`. */
+export function Condition({ p, day, hideNumber }: { p: Player; day: number; hideNumber?: boolean }) {
+  if (p.injuredUntil > day) {
+    return <span className="neg tiny">⚕ 伤停 {p.injuredUntil - day}天</span>
+  }
+  // fatigue accumulates as a float during weekly ticks, so round for display
+  const fit = Math.round(100 - p.fatigue)
+  const c = fit >= 75 ? 'var(--win)' : fit >= 50 ? 'var(--warn)' : 'var(--loss)'
+  return (
+    <span className="row" style={{ gap: 6 }} title={hideNumber ? `体能 ${fit}` : undefined}>
+      <Bar value={fit} color={c} />
+      {!hideNumber && <span className="tiny mono muted">{fit}</span>}
+    </span>
+  )
+}
+
+/**
+ * A season day as a date label.
+ *
+ * The base year matters: 2000 is a leap year, so from day 59 every date here
+ * would sit one day behind the one in the header (which counts from the save's
+ * own year). Pass the save's year.
+ */
+export const fmtDay = (day: number, year = 2026): string => {
+  const d = new Date(Date.UTC(year, 0, 1))
+  d.setUTCDate(d.getUTCDate() + day)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+}
+
+/** Characteristics derived from the player's real statistics. */
+export function Traits({ traits, max }: { traits?: Trait[]; max?: number }) {
+  if (!traits?.length) return null
+  const list = max ? traits.slice(0, max) : traits
+  return (
+    <span className="row wrap" style={{ gap: 4 }}>
+      {list.map((t) => (
+        <span
+          key={t.key}
+          className="trait"
+          data-good={t.good ? 'y' : 'n'}
+          title={t.good ? '该项处于职业选手前列' : '该项明显低于职业平均'}
+        >
+          {t.label}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/** Radar that can overlay several series on the same axes, for comparison. */
+export function MultiRadar({
+  axes, series, size = 300,
+}: {
+  axes: string[]
+  series: { label: string; color: string; values: number[] }[]
+  size?: number
+}) {
+  const cx = size / 2
+  const cy = size / 2
+  const r = size / 2 - 44
+  const n = axes.length
+  const pt = (i: number, mag: number) => {
+    const a = (Math.PI * 2 * i) / n - Math.PI / 2
+    return [cx + Math.cos(a) * r * mag, cy + Math.sin(a) * r * mag]
+  }
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="表现对比雷达图">
+      {[0.25, 0.5, 0.75, 1].map((g) => (
+        <polygon
+          key={g} points={axes.map((_, i) => pt(i, g).join(',')).join(' ')}
+          fill="none" stroke="var(--line)" strokeWidth={1}
+        />
+      ))}
+      {axes.map((_, i) => {
+        const [x, y] = pt(i, 1)
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--line)" />
+      })}
+      {series.map((s) => (
+        <polygon
+          key={s.label}
+          points={s.values.map((v, i) => pt(i, Math.max(0.04, Math.min(1, v / 100))).join(',')).join(' ')}
+          fill={s.color} fillOpacity={0.22} stroke={s.color} strokeWidth={2}
+        />
+      ))}
+      {series.map((s) =>
+        s.values.map((v, i) => {
+          const [x, y] = pt(i, Math.max(0.04, Math.min(1, v / 100)))
+          return <circle key={`${s.label}-${i}`} cx={x} cy={y} r={2.6} fill={s.color} />
+        }),
+      )}
+      {axes.map((l, i) => {
+        const [x, y] = pt(i, 1.2)
+        return (
+          <g key={l}>
+            <text x={x} y={y - 6} fill="var(--muted)" fontSize={11} fontWeight={600}
+              textAnchor="middle" dominantBaseline="middle">{l}</text>
+            <text x={x} y={y + 7} fontSize={10} textAnchor="middle" dominantBaseline="middle"
+              fontFamily="var(--mono)" fill={series[0]?.color ?? 'var(--faint)'}>
+              {Math.round(series[0]?.values[i] ?? 0)}
+              {series[1] ? (
+                <tspan fill={series[1].color}> / {Math.round(series[1].values[i])}</tspan>
+              ) : null}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/** Simple 8-axis radar for a player's attributes. */
+export function Radar({ values, labels, size = 210 }: {
+  values: number[]; labels: string[]; size?: number
+}) {
+  const cx = size / 2
+  const cy = size / 2
+  const r = size / 2 - 26
+  const n = values.length
+  const pt = (i: number, mag: number) => {
+    const a = (Math.PI * 2 * i) / n - Math.PI / 2
+    return [cx + Math.cos(a) * r * mag, cy + Math.sin(a) * r * mag]
+  }
+  const poly = values.map((v, i) => pt(i, Math.max(0.05, v / 100)).join(',')).join(' ')
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="能力雷达图">
+      {[0.25, 0.5, 0.75, 1].map((g) => (
+        <polygon
+          key={g}
+          points={values.map((_, i) => pt(i, g).join(',')).join(' ')}
+          fill="none" stroke="var(--line)" strokeWidth={1}
+        />
+      ))}
+      {values.map((_, i) => {
+        const [x, y] = pt(i, 1)
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--line)" strokeWidth={1} />
+      })}
+      <polygon points={poly} fill="rgba(255,70,85,.28)" stroke="var(--accent)" strokeWidth={2} />
+      {values.map((v, i) => {
+        const [x, y] = pt(i, Math.max(0.05, v / 100))
+        return <circle key={i} cx={x} cy={y} r={2.5} fill="var(--accent)" />
+      })}
+      {labels.map((l, i) => {
+        const [x, y] = pt(i, 1.2)
+        return (
+          <text
+            key={l} x={x} y={y} fill="var(--muted)" fontSize={10}
+            textAnchor="middle" dominantBaseline="middle"
+          >
+            {l}
+          </text>
+        )
+      })}
+    </svg>
+  )
+}

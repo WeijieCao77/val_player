@@ -9,7 +9,7 @@ import { hallTitle, readHall } from '../../engine/me/hall'
 import { HallOrigins, HallView } from './HallScreen'
 import { ENTRY_CN, ENTRY_YEARS, regionIn, regionsOf } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
-import { Crest, Panel } from '../common'
+import { Crest, Panel } from './common'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 

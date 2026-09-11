@@ -5,7 +5,14 @@
  * can see happen on screen, a fix says what was going wrong. Nothing about
  * files or functions.
  */
-import type { ChangeEntry } from './changelog'
+export type ChangeKind = '新增' | '调整' | '修复'
+
+export interface ChangeEntry {
+  /** YYYY-MM-DD, as it will be shown */
+  date: string
+  title: string
+  changes: { kind: ChangeKind; text: string }[]
+}
 
 export const CHANGELOG_ME: ChangeEntry[] = [
   {

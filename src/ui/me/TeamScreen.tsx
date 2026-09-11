@@ -1,7 +1,7 @@
-import { useGame } from '../ctx'
-import { Condition, OvrBadge, Panel, Roles } from '../common'
+import { useGame } from './ctx'
+import { Condition, OvrBadge, Panel, Roles } from './common'
 import { bondBetween } from '../../engine/bonds'
-import { trustLabel } from '../../engine/trust'
+import { trustLabel } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, EDGE_NEED } from '../../engine/me/coach'
 import { mateMark } from '../../engine/me/hurtplay'
@@ -9,7 +9,7 @@ import {
   canList, canSign, cloutBreakdown, cloutTier,
   doList, doSign, listOdds, signTargets,
 } from '../../engine/me/clout'
-import { moneyFull } from '../common'
+import { moneyFull } from './common'
 import { useState } from 'react'
 import Face from './Face'
 

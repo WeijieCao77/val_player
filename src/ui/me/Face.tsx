@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react'
-import { GameCtx } from '../ctx'
-import { AgentIcon } from '../common'
+import { GameCtx } from './ctx'
+import { AgentIcon } from './common'
 import { dossierOf } from '../../engine/dossier'
 import { AGENT_CN, canonAgent } from '../../engine/content'
 import './media.css'
@@ -8,8 +8,8 @@ import './media.css'
 const BASE = typeof import.meta.env !== 'undefined' ? import.meta.env.BASE_URL : './'
 /**
  * The protagonist's id (engine/me/career.ts ME_ID). Spelled out rather than
- * imported: career.ts reads the 2021 roster book, and this file is drawn on
- * the shared player card, which the manager game loads too.
+ * imported: career.ts reads the 2021 roster book, and a face is drawn on
+ * screens that have no reason to load it.
  */
 const ME = 'ME'
 const EN_OF_CN = new Map(Object.entries(AGENT_CN).map(([en, cn]) => [cn, en]))

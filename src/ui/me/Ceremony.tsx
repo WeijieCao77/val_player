@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useGame } from '../ctx'
-import { Modal } from '../common'
+import { useGame } from './ctx'
+import { Modal } from './common'
 import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip, mediaMoment } from '../../engine/me/ceremony'
 import { speechOf } from '../../engine/me/nights'
 import type { CerTier } from '../../engine/me/types'

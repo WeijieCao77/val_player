@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel, money, moneyFull } from '../common'
+import { useGame } from './ctx'
+import { Panel, money, moneyFull } from './common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizePreview, prizeRows } from '../../engine/me/money'
 import type { MeState } from '../../engine/me/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
