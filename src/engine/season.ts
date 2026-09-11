@@ -1246,6 +1246,14 @@ export interface AdvanceOpts {
   /** hand the manager's own fixture back unplayed so they can watch it */
   deferMine?: boolean
   /**
+   * With deferMine, a second fixture of our own due the same day waits for the
+   * next morning instead of being played here without us. The career's day
+   * (engine/me/week.ts) hands over one match of mine a day; a side twice on
+   * one day — 2021 Japan's round-robin groups — had its second match played
+   * by the engine, with the player never in it.
+   */
+  holdMine?: boolean
+  /**
    * Play scrims automatically instead of handing them over.
    *
    * A scrim booked for tomorrow used to halt a week-long turn on its first day,
@@ -1566,10 +1574,14 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
         continue
       }
       const isMine = f.teamA === state.myTeam || f.teamB === state.myTeam
-      if (isMine && opts.deferMine && !pendingMine && !(opts.autoScrims && isScrim(f))) {
-        // leave it for the manager to watch or skip
-        pendingMine = f
-        continue
+      if (isMine && opts.deferMine && !(opts.autoScrims && isScrim(f))) {
+        if (!pendingMine) {
+          // leave it for the manager to watch or skip
+          pendingMine = f
+          continue
+        }
+        // a second of our own due today: played here without us, unless held for tomorrow
+        if (opts.holdMine) continue
       }
       const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim)
       commitFixture(state, f, result, notes)

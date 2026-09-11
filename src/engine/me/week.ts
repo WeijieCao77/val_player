@@ -316,7 +316,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     if (state.midReview) continuePastFive(state)
     const yearBefore = state.year
     const pro = me.phase === 'pro'
-    const r = advanceDay(state, { deferMine: pro, autoScrims: true, autoResolveDrawDecisions: true })
+    // one match of mine a day: a second due the same day is mine tomorrow, not the engine's today
+    const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true })
     me.weekDay++
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
     if (state.gameOver && sacked(state.gameOver)) {

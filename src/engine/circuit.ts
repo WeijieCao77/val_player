@@ -1360,6 +1360,29 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
   }
   const playIn = c.playin ? state.fixtures.find((f) => f.id === c.playin!.fixture) : undefined
 
+  // scripts/build_circuit.py seeds a phase off the last earlier phase each side played in, and a
+  // phase can begin before that one has ended: DACH Evolution 2026 Stage 1's Weekly #1 (11 January)
+  // is read off a group stage that ran to its tiebreaker on 1 February. Waiting for that table put
+  // all four Weekly cups, the play-in and the playoffs' first days into 1–13 February, one after
+  // another. A phase that reseeds every side of such a table is seeded off it as it stood the day
+  // before the phase began, once it holds them all. One that takes only some of its places still
+  // waits for the final table: 2021 SEA's D组 takes A组's fourth, and read early that fourth could
+  // go on to finish second and be seeded into the playoffs twice.
+  const cuts = new Map<string, { day: number; need: number } | null>()
+  const earlyCut = (ui: number, uj: number): { day: number; need: number } | null => {
+    const key = `${ui}:${uj}`
+    if (!cuts.has(key)) {
+      const fed = (ev.units[ui].nodes ?? []).flatMap((n) => [n.a, n.b]
+        .filter((s) => s[0] === 'g' && s[1] === uj).map((s) => ({ day: n.day, rank: s[2] ?? 0 })))
+      const day = Math.min(...fed.map((x) => x.day))
+      const ends = Math.max(...(ev.units[uj].nodes ?? []).map((n) => n.day))
+      const need = ev.units[uj].size
+      const whole = new Set(fed.map((x) => x.rank).filter((r) => r >= 1 && r <= need)).size === need
+      cuts.set(key, fed.length && whole && ends > day ? { day, need } : null)
+    }
+    return cuts.get(key)!
+  }
+
   const slot = (ui: number, s: Slot): string | null | undefined => {
     if (s[0] === 's') {
       // a seat the player's club is contesting: whoever wins the decider sits in it
@@ -1384,6 +1407,18 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
         return g ? g.w : undefined
       }
       return teamOf(state, ev, u.ranked?.[rank! - 1]) ?? c.fill?.[key] ?? null
+    }
+    const early = earlyCut(ui, uj)
+    if (early) {
+      const known: Game[] = []
+      for (let i = 0; i < (u.nodes?.length ?? 0); i++) {
+        if (u.nodes![i].day >= early.day) continue
+        const g = games.get(base[uj] + i)
+        if (!g) return undefined
+        known.push(g)
+      }
+      const ranked = rankPhase(u.type, known, u.upperFirst).ranked
+      if (ranked.length >= early.need) return ranked[rank! - 1] ?? null
     }
     const gs = unitGames(uj)
     if (!gs) return undefined
