@@ -148,7 +148,6 @@ export function doDuel(state: GameState): DuelResult | string {
   return r
 }
 
-const sacked = (s: string) => s.includes('解除你的职务')
 /** tax and the cost of a life, off the top of every pay packet */
 export const LIVING = 0.3
 
@@ -278,8 +277,7 @@ export function carriesOn(state: GameState): boolean {
 
 /**
  * Seven days, or until something needs me: my club's match, a cup, an
- * invitation, a contract, an event. A player has no board, so the manager
- * game's dismissal is undone on the spot. The headless runs go a week at a
+ * invitation, a contract, an event. The headless runs go a week at a
  * time whatever the week is; the week screen's button is advanceTurn.
  */
 export function advanceWeek(state: GameState): WeekStop {
@@ -328,19 +326,13 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true })
     me.weekDay++
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
-    if (state.gameOver && sacked(state.gameOver)) {
-      state.gameOver = undefined
-      state.onNotice = false
-      state.missedStreak = 0
-      state.boardConfidence = 55
-    }
     const rng = new Rng(hashStr(`me:day:${state.seed}:${state.year}:${state.day}`))
     if (r.stageChanged) onStageChange(state, rng)
     if (pro && windowOpensToday(state)) rollOffers(state, rng)
     syncTitles(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng)
-    if (state.gameOver && !sacked(state.gameOver)) return { kind: 'game-over' }
+    if (state.gameOver) return { kind: 'game-over' }
     // A final is worth stopping for before the doors open. This has to be
     // queued *before* the generic pending check, not after: anything else
     // raised the same day would return first and the fixture would slip past
@@ -496,11 +488,6 @@ export function settleWeek(state: GameState): void {
   checkAchievements(state)
   // who took my place, which losses ended a run, and the cooling (me/rivals.ts)
   rivalWeek(state)
-
-  // a player has no board behind him
-  state.boardConfidence = Math.max(state.boardConfidence, 45)
-  state.onNotice = false
-  state.jobOffers = []
 
   for (const n of notes) me.weekNotes.push(n)
   // the week's paper: my results, who moved where, who got stronger, what is next

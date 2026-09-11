@@ -2,7 +2,7 @@ import { natCountry } from './nat'
 import { Rng, clamp, hashStr } from './rng'
 import { ratingOf } from './player'
 import { squadOf } from './roster'
-import { skillMod } from './manager'
+import { deskOf } from './desk'
 import type { GameState, MatchResult, Player } from './types'
 
 /**
@@ -243,7 +243,7 @@ export function weeklyBonds(state: GameState, rng: Rng, notes: string[]): void {
       // a coach who is good with people pulls the room back together faster
       // 更衣室 is the manager's own lever on the room, alongside the coach's
       const heal = (NEUTRAL - now) * (0.012 + coachPull * 0.03) *
-        skillMod(state.manager, 'locker', 0.012)
+        (deskOf(state)?.clubMods(state).bondsHeal ?? 1)
       shift(state, a.id, b.id, heal + rng.range(-1, 1))
     }
   }

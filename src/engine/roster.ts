@@ -7,6 +7,7 @@
  * did the front page that imports endings.ts for a single integer.
  */
 import type { GameState, Player, Team } from './types'
+import { managedClub } from './desk'
 
 export const squadOf = (state: GameState, teamId: string): Player[] =>
   (state.teams[teamId]?.roster ?? [])
@@ -24,8 +25,8 @@ export const wageBill = (state: GameState, teamId: string): number =>
   squadOf(state, teamId).reduce((s, p) => s + p.salary, 0) +
   // a coach the manager hired is paid like everyone else
   (state.teams[teamId]?.coach?.salary ?? 0) +
-  // assistants and analysts are on the payroll too, for our club only
-  (teamId === state.myTeam
+  // assistants and analysts are on the payroll too, at the club a person manages
+  (teamId === managedClub(state)
     ? (state.staff ?? []).reduce((s, m) => s + m.salary, 0)
     : 0)
 

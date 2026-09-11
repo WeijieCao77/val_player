@@ -117,11 +117,6 @@ function createWorldAt(teamId: string, name: string, seed: number, year: number)
   state.news = []
   state.training = {}
   state.myTeam = teamId
-  const club = state.teams[teamId]
-  state.finances = { balance: club?.budget ?? 0, log: [] }
-  state.startingSquad = [...(club?.roster ?? [])]
-  state.startTier = club?.tier
-  state.startFacilities = club?.facilities
   return state
 }
 

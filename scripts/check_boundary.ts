@@ -51,22 +51,17 @@ const isSharedUi = (f: string) => f.startsWith('src/ui/') && !f.startsWith('src/
  * Manager modules the career may still reach, and why. Only ever delete lines here.
  */
 const ALLOWED_FOR_NOW: Record<string, string> = {
-  // The engine split (a separate branch) takes these out of the career's week:
-  // season.ts runs the club's books, the board, sponsors, staff and the
-  // manager's wages; match.ts reads staff and the manager's skills; training
-  // and transfer read trust, loyalty and staff; the endings' event names move
-  // into the world core (rules 1, 7, 8 and 13 in the separation notes).
-  'src/engine/finance.ts': 'engine split: season.ts',
-  'src/engine/commercial.ts': 'engine split: season.ts',
-  'src/engine/leagueShare.ts': 'engine split: season.ts',
-  'src/engine/staff.ts': 'engine split: match.ts, training.ts, season.ts',
-  'src/engine/manager.ts': 'engine split: match.ts, training.ts, season.ts',
-  'src/engine/career.ts': 'engine split: season.ts',
+  // The engine split takes these out of the career's week. Already out: the
+  // club's books, sponsors, the league's bundle, job offers, the squad's life
+  // and the telemetry call (engine/desk.ts, mounted by the manager game only).
+  // Still reached: match.ts reads staff and the manager's skills; the manager
+  // game's market in transfer.ts reads trust and loyalty; the endings' event
+  // names move into the world core (rules 3, 7 and 13 in the separation notes).
+  'src/engine/staff.ts': 'engine split: match.ts',
+  'src/engine/manager.ts': 'engine split: match.ts, transfer.ts',
   'src/engine/loyalty.ts': 'engine split: season.ts, training.ts, transfer.ts',
-  'src/engine/life.ts': 'engine split: season.ts',
   'src/engine/endings.ts': 'engine split: season.ts; the event names ui/me/Schedule.tsx reads move to the world core',
-  'src/engine/trust.ts': 'engine split: season.ts, training.ts',
-  'src/engine/telemetry.ts': 'engine split: season.ts:42',
+  'src/engine/trust.ts': 'engine split: transfer.ts',
 }
 
 type Kind = 'static' | 'dynamic' | 'reexport' | 'side-effect' | 'type'

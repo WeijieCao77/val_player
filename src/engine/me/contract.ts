@@ -185,9 +185,6 @@ export function joinClub(state: GameState, d: Deal): void {
   p.grievance = 0
   ;(p.clubHist ??= []).push({ team: to.id, from: state.year, to: state.year })
   state.myTeam = to.id
-  state.finances = { balance: to.budget, log: [] }
-  state.offers = state.offers.filter((o) => o.status !== 'pending')
-  state.startingSquad = [...to.roster]
   state.training = {}
   for (const id of to.roster) {
     const q = state.players[id]

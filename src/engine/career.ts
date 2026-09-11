@@ -1,7 +1,6 @@
 import { Rng, clamp, hashStr } from './rng'
 import { OPEN_TO_ALL, skillMod } from './manager'
 import { squadOf } from './roster'
-import { moveToClub } from './season'
 import type { GameState, ManagerContract, Team } from './types'
 
 /**
@@ -168,4 +167,121 @@ export function takeAcceptedJob(state: GameState, applicationId: string): string
   // the terms you asked for are the terms you get
   state.managerContract = { salary, years, since: state.year }
   return msg
+}
+
+/**
+ * Clubs coming after the manager.
+ *
+ * This is the reward for a career going well, and the only route to the jobs
+ * that were locked at creation: reputation earned by winning opens doors that
+ * choosing never could. Asked as each stage opens (engine/managerDesk.ts).
+ */
+export function offerJobs(state: GameState, notes: string[]): void {
+  const m = state.manager
+  if (!m || state.gameOver) return
+  state.jobOffers = (state.jobOffers ?? []).filter((o) => o.expiresOn > state.day)
+
+  // a club will not poach a manager their own board just warned
+  if (state.onNotice) return
+  const rng = new Rng(hashStr(`jobs:${state.seed}:${state.year}:${state.day}`))
+  const here = state.teams[state.myTeam]
+  if (!here) return
+
+  const candidates = Object.values(state.teams).sort((a, b) => b.reputation - a.reputation)
+  for (const t of candidates) {
+    if (state.jobOffers.length >= 3) break     // an inbox, not a spreadsheet
+    if (t.id === state.myTeam) continue
+    if (t.reputation <= here.reputation) continue          // no sideways moves
+    if (state.jobOffers.some((o) => o.teamId === t.id)) continue
+    // they want someone they can justify hiring
+    const reach = m.reputation - t.reputation
+    if (reach < -6) continue
+    const chance = clamp(0.04 + reach * 0.01 + state.honours.length * 0.015, 0, 0.3)
+    if (!rng.chance(chance)) continue
+
+    state.jobOffers.push({
+      id: `J${t.id}_${state.day}`,
+      teamId: t.id,
+      day: state.day,
+      expiresOn: state.day + 30,
+      pitch: t.tier === 1
+        ? `${t.name} 希望你接手一队，预算 ${Math.round(t.budget / 10000) / 100} 千万级别。`
+        : `${t.name} 想请你来重建队伍。`,
+    })
+    notes.push(`📩 ${t.name} 向你发出了执教邀请。`)
+    state.news.push({
+      day: state.day, kind: 'club', important: true,
+      text: `📩 ${t.name} 向你发出执教邀请（声望 ${t.reputation}）。`,
+    })
+  }
+}
+
+/** Take a job elsewhere. The career continues; the club does not. */
+export function acceptJob(state: GameState, offerId: string): string {
+  const offer = state.jobOffers?.find((o) => o.id === offerId)
+  const to = offer ? state.teams[offer.teamId] : null
+  if (!offer || !to) return '这份邀请已经失效。'
+  return moveToClub(state, to.id)
+}
+
+/** Take over at another club, however the job came about. */
+export function moveToClub(state: GameState, teamId: string): string {
+  const to = state.teams[teamId]
+  if (!to) return '找不到这支战队。'
+
+  const from = state.teams[state.myTeam]
+  state.tenures ??= []
+  const current = state.tenures.find((t) => t.teamId === state.myTeam && !t.toYear)
+  if (current) current.toYear = state.year
+  else state.tenures.push({ teamId: state.myTeam, fromYear: 2026, toYear: state.year })
+  state.tenures.push({ teamId: to.id, fromYear: state.year })
+
+  state.myTeam = to.id
+  state.startFacilities = to.facilities
+  state.startTier = to.tier
+  // The squad you inherited is the squad you inherited HERE. Left pointing at
+  // the old club's roster, every badge and ending built on it went wrong the
+  // moment you changed jobs: 「大换血」 and 「推倒重来」 fired for free because
+  // nobody on the new team was on that list, and 「一起走到最后」 became
+  // impossible for the same reason.
+  state.startingSquad = [...to.roster]
+  // a new squad, and their development starts being yours from today — the
+  // stars you walked in on are not something you built
+  for (const id of to.roster) {
+    const p = state.players[id]
+    if (p) p.arrivedOverall = p.overall
+  }
+  state.jobOffers = []
+  state.jobApplications = []
+  state.managerContract = undefined
+  state.boardConfidence = 62
+  state.onNotice = false
+  state.missedStreak = 0
+  state.objective = undefined
+  state.finances = { balance: to.budget, log: [] }
+  state.training = {}
+  state.drill = { kind: 'none' }
+  // ...and everything else that belonged to the old job. A drill lock left
+  // running greyed out the new club's training panel for up to a week; a pair
+  // drill kept coaching two players who now work somewhere else; and a bid
+  // left pending settled later at the OLD club, spending the new club's money
+  // to sign a player for the one you just left.
+  state.drillLock = undefined
+  state.duo = undefined
+  state.physioOn = {}
+  state.commercialDays = {}
+  for (const o of state.offers) {
+    if (o.status === 'pending' && (o.toTeam === from?.id || o.fromTeam === from?.id)) {
+      o.status = 'rejected'
+    }
+  }
+  state.enquiries = []
+  for (const pid of to.roster) state.training[pid] = 'rest'
+
+  state.managerContract = defaultContract(state)
+  state.news.push({
+    day: state.day, kind: 'club', important: true,
+    text: `你离开 ${from?.name} 出任 ${to.name} 的经理。`,
+  })
+  return `你已就任 ${to.name} 的经理。`
 }
