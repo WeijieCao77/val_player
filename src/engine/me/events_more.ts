@@ -248,7 +248,7 @@ export const MORE_EVENTS: EventDef[] = [
       { t: '不解释', g: 'hard', e: { gmTrust: -6, tilt: -2 }, ch: { end: 'miss' } }] },
 
   // ---- 直播风波 (chain: storm) — say it, or stay off the air, and then keep to it
-  { id: 'ch_storm_open', w: 0, max: 2, rec: 1, chain: 'storm', when: (s) => s.me!.chain?.id === 'storm',
+  { id: 'ch_storm_open', w: 0, max: 2, rec: 0, chain: 'storm', when: (s) => s.me!.chain?.id === 'storm',
     q: '直播时随口一句吐槽被切了片，挂上了论坛首页。', ctx: '评论两边在吵，热度还在涨。',
     a: [{ t: '这周开播，正面说清楚', g: 'show', e: { heat: 15 }, ch: { track: 'stream', need: 1, weeks: 1 } },
       { t: '冷处理：两周不开播', g: 'grind', e: { heat: -5 }, ch: { track: 'quiet', weeks: 2 } },
@@ -257,7 +257,7 @@ export const MORE_EVENTS: EventDef[] = [
     q: '风头下去了一半，还有人在评论区等你回来。', ctx: '接下来怎么做，决定这事怎么收尾。',
     a: [{ t: '回到直播间，只打游戏不提这事', g: 'grind', e: { mental: 1 }, ch: { track: 'stream', need: 1, weeks: 2 } },
       { t: '再停两周，专心训练', g: 'warm', e: { xp: { aim: 8 } }, ch: { track: 'quiet', weeks: 2 } }] },
-  { id: 'ch_storm_flare', w: 0, max: 2, rec: 1, chain: 'storm', when: (s) => s.me!.chain?.id === 'storm',
+  { id: 'ch_storm_flare', w: 0, max: 2, rec: 0, chain: 'storm', when: (s) => s.me!.chain?.id === 'storm',
     q: '切片越传越远，有人翻出了你更早的直播录像。', ctx: '私信和评论一起涌进来。',
     a: [{ t: '开播正面回应', g: 'show', e: { heat: 25, tilt: 8 }, ch: { track: 'stream', need: 1, weeks: 2 } },
       { t: '关掉直播间，先停一段', g: 'grind', e: { heat: -15, fans: -20, tilt: -4 }, ch: { track: 'quiet', weeks: 3 } },

@@ -223,11 +223,17 @@ export function describeEffect(e: EffectSpec): string {
   return out.join(' · ')
 }
 
+/**
+ * A professional's weeks already carry the matches, the cards that follow
+ * them and the chains (me/storyweek.ts): the dice roll a little less often.
+ */
+export const EVENT_CHANCE_PRO = 0.1
+
 /** The weekly draw. One event at a time; the clock stops on it. */
 export function tryRandomEvent(state: GameState, rng: Rng): boolean {
   const me = state.me!
   if (me.pendingEvent) return false
-  if (!rng.chance(EVENT_CHANCE)) return false
+  if (!rng.chance(me.phase === 'pro' ? EVENT_CHANCE_PRO : EVENT_CHANCE)) return false
   const pool = EVENTS.filter((e) => e.w > 0 && canFire(state, e))
   if (!pool.length) return false
   const ev = rng.weighted(pool, pool.map((e) => e.w))

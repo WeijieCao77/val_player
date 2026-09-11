@@ -113,7 +113,7 @@ interface ChainDef {
 }
 
 /** weeks between the end of one chain and the start of the next */
-export const CHAIN_GAP = 10
+export const CHAIN_GAP = 14
 
 const aged = (s: GameState, key: string, v: string[], weeks: number): boolean => {
   const r = seedLive(s, key, v)
@@ -129,7 +129,9 @@ function pickForeign(state: GameState, rng: Rng): Team | null {
   const home = regionIn(mine.region, 2099)
   const pool = Object.values(state.teams).filter((t) => t.id !== mine.id && (t.tier === 1 || mine.tier === 2) && !t.dormant && hasPlace(state, t)
     && regionIn(t.region, 2099) !== home && t.roster.length <= 7 && !me.declined.includes(t.id)
-    && t.rating >= mine.rating - 4 && expectOf(t) <= p.overall + 8)
+    // a bar around my own level, read the way a tryout reads it — not my club's: a weak
+    // player on a strong second-tier club is scouted as the player he is
+    && expectOf(t) <= tryoutSkill(state) + 6 && expectOf(t) >= tryoutSkill(state) - 10)
   if (!pool.length) return null
   return rng.weighted(pool, pool.map((t) => Math.max(1, t.rating - 60)))
 }

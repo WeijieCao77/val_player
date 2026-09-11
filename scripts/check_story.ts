@@ -171,8 +171,10 @@ for (const id of ['showcase', 'overseas', 'storm', 'rift']) {
     console.log(`  ${CHAIN_CN[id]} · ${strategy === 'rec' ? '按推荐' : '放着不管'} → ${END_CN[r.end]}（答了 ${r.steps} 张）${r.dealt ? ' · 转会窗开时来了报价' : ''}`)
     console.log(`    ${r.cards.join(' → ')}`)
     if (r.lines.length) console.log(`    周页：${r.lines.slice(0, 3).join('  /  ')}`)
-    const longest = Math.max(0, ...r.lines.map((l) => l.length))
-    if (longest > 30) fail(`${CHAIN_CN[id]}：周页那一行有 ${longest} 个字，手机上放不下`)
+    // a CJK character is about one em and Latin about half: some 24 em fit on a 375px screen at that size
+    const width = (l: string) => [...l].reduce((w, ch) => w + (ch.charCodeAt(0) < 256 ? 0.55 : 1), 0)
+    const longest = Math.max(0, ...r.lines.map(width))
+    if (longest > 24) fail(`${CHAIN_CN[id]}：周页那一行约 ${longest.toFixed(0)} 个字宽，手机上放不下`)
     const want = strategy === 'ignore' ? ['miss'] : id === 'overseas' ? ['ok', 'miss'] : ['ok']
     if (!want.includes(r.end)) fail(`${CHAIN_CN[id]}·${strategy}：收在「${END_CN[r.end]}」，应该是 ${want.map((w) => END_CN[w]).join('或')}`)
     if (r.steps < 2) fail(`${CHAIN_CN[id]}·${strategy}：只答了 ${r.steps} 张就结束了`)

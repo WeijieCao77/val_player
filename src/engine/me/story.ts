@@ -118,8 +118,8 @@ export function plantSeed(state: GameState, key: string, v: string, t: string): 
   const me = state.me!
   const seeds = (me.seeds ??= {})
   const old = seeds[key]
-  // the same choice made again, not yet come back: its clock keeps running
-  if (old && old.v === v && old.echo == null) return
+  // the same choice made again keeps its first date — and once it has come back, it does not come back twice
+  if (old && old.v === v) return
   seeds[key] = { v, t, day: state.day, year: state.year, wk: me.week }
 }
 
@@ -263,22 +263,32 @@ export function storyTag(state: GameState, ev: EventDef): string[] {
 }
 
 /** The one line the week screen shows while a chain runs. Short enough for a phone. */
+const TRACK_SHORT: Record<string, string> = { win: '首发赢', scrim: '训练赛', stream: '直播', vod: '复盘' }
+
+/**
+ * The one line the week screen shows while a chain runs. The time left comes
+ * first, so on a narrow phone it is the name of the task that gets cut, not
+ * the deadline; a long IGN is shortened for the same reason.
+ */
 export function chainLine(state: GameState): string | null {
   const me = state.me
   const c = me?.chain
   if (!me || !c) return null
-  const who = c.mate && state.players[c.mate] ? `（${state.players[c.mate].ign}）` : ''
-  const head = `⏳ ${CHAIN_CN[c.id] ?? '悬而未决'}${who}`
-  if (c.asked || !c.track) return `${head} · 等你拿主意`
+  const name = CHAIN_CN[c.id] ?? '悬而未决'
+  if (c.asked || !c.track) return `⏳ ${name} · 等你拿主意`
   if (c.track === 'window') {
     const left = c.due - me.week
-    return `${head} · 等转会窗${left > 0 ? ` · 剩 ${left} 周` : ''}`
+    return `⏳ ${left > 0 ? `剩 ${left} 周` : '这周'} · ${name} · 等转会窗`
   }
   const left = c.due - me.week + 1
   const got = chainProgress(state, c)
   const need = c.need ?? 1
+  const ign = (c.mate && state.players[c.mate]?.ign) || '他'
+  const who = ign.length > 6 ? `${ign.slice(0, 5)}…` : ign
   const task = c.track === 'quiet'
-    ? (got ? `说好不开播，播了 ${got} 次` : '这几周别开播')
-    : `${{ win: '首发赢', scrim: '训练赛', stream: '直播', vod: '复盘', duo: '和他双排' }[c.track]} ${Math.min(got, need)}/${need}`
-  return `${head} · ${task} · ${left > 1 ? `剩 ${left} 周` : '本周见分晓'}`
+    ? (got ? `说好不播，播了 ${got} 次` : '别开播')
+    : c.track === 'duo'
+      ? `和 ${who} 双排 ${Math.min(got, need)}/${need}`
+      : `${TRACK_SHORT[c.track] ?? ''} ${Math.min(got, need)}/${need}`
+  return `⏳ ${left > 1 ? `剩 ${left} 周` : '本周见分晓'} · ${name} · ${task}`
 }
