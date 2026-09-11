@@ -244,11 +244,13 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               {CUPS.map((raw) => {
                 const c = cupView(raw, game.year)
                 const done = me.pre.cups.find((x) => x.key === c.key && x.year === game.year)
+                // entering a cup marks it seen, exactly as skipping one does: a cup still being played is neither
+                const running = me.pre.cup?.key === c.key
                 const seen = me.pre.seen.includes(`${game.year}:${c.key}`)
                 return (
                   <p key={c.key} className="small" style={{ margin: '0 0 4px' }}>
                     <b>{c.name}</b> · 第 {c.week + 1} 周{c.minFans ? ` · 邀请制（粉丝 ≥ ${c.minFans}）` : ''}
-                    {done ? ` · ${done.won ? '冠军' : `打到 ${done.reached}/${done.rounds}`}` : seen ? ' · 没参加' : week > c.week ? ' · 错过了' : week === c.week ? ' · 本周' : ''}
+                    {done ? ` · ${done.won ? '冠军' : `打到 ${done.reached}/${done.rounds}`}` : running ? ' · 已报名，正在打' : seen ? ' · 没参加' : week > c.week ? ' · 错过了' : week === c.week ? ' · 本周' : ''}
                   </p>
                 )
               })}

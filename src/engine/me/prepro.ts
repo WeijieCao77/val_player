@@ -204,11 +204,14 @@ export function rollInvites(state: GameState, rng: Rng): void {
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
   const l = me.pre.ladder
-  if (l >= 74 && rng.chance(0.04 + (l - 74) * 0.01)) {
+  // Both channels open where the screen already tells the player he is somebody: 辐能战魂前 500 on the
+  // ladder, 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
+  // with 120 fans got no call in a year, in every region — the channels began at ladder 74 and 180 fans.
+  if (l >= 62 && rng.chance(0.02 + (l - 62) * 0.005)) {
     const team = pickClub(state, rng, l >= 88 ? 1 : 2)
     if (team) { offerInvite(state, team, 'rank', rng); return }
   }
-  if (me.fans >= 180 && rng.chance(me.fans >= 400 ? 0.05 : 0.03)) {
+  if (me.fans >= 120 && rng.chance(0.03 + (Math.min(me.fans, 900) - 120) / 780 * 0.07)) {
     const team = pickClub(state, rng, me.fans >= 400 ? 1 : 2)
     if (team) { offerInvite(state, team, 'fans', rng); return }
   }

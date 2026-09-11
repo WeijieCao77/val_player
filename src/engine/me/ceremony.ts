@@ -78,11 +78,11 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
     // one a stage is a lot of the same screen, so the question is read off
     // where the career actually is — the fork is the same three tones, but
     // what you are answering is not
-    story: (state, about) => `${about}前的媒体日。背景板、三台机位、一个问题：「${mediaQuestion(state)}」`,
+    story: (state, about) => `${about}前的媒体日。背景板、三台机位、一个问题：「${mediaMoment(state).q}」`,
     blurb: {
       gold: '话说得很满。热度大涨，但话说出去了就得打回来。',
       silver: '标准答案。热度小涨，挑不出毛病。',
-      bronze: '你把问题引到了别人身上。热度涨了，队友们看得懂你在说谁。',
+      bronze: '你把问题引到了别人身上。热度涨了，被你点到的人听得懂。',
     },
   },
   rehab: {
@@ -102,23 +102,57 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
 }
 
 
-/** What the room asks, given where the career actually is. */
-function mediaQuestion(state: GameState): string {
+export interface MediaMoment {
+  q: string
+  /** the same three tones, as answers to this question */
+  lines: Record<'bold' | 'steady' | 'blame', string>
+  /** who 「指向别人」 points at */
+  pointsAt: string
+}
+
+/**
+ * What the room asks, given where the career actually is — and what each tone
+ * sounds like as an answer to that question. The answers used to be one fixed
+ * set: a man on the bench, asked about his minutes, was offered
+ * 「冠军。别的没什么好说的。」 (reported 2026-09-11, verified in this file).
+ */
+export function mediaMoment(state: GameState): MediaMoment {
+  const talk = (q: string, bold: string, steady: string, blame: string, pointsAt = '队友们'): MediaMoment =>
+    ({ q, lines: { bold, steady, blame }, pointsAt })
+  const general = talk('你们这个赛段的目标是什么？', '「冠军。别的没什么好说的。」', '「一场一场打，先进季后赛。」', '「我个人状态没问题。」')
   const me = state.me
-  if (!me) return '你们这个赛段的目标是什么？'
+  if (!me) return general
   const p = state.players[me.id]
   const team = state.teams[p?.teamId ?? '']
   const starter = !!team?.starters.includes(me.id)
   const last3 = me.matches.slice(-3)
   const lost3 = last3.length === 3 && last3.every((m) => !m.won)
   const won3 = last3.length === 3 && last3.every((m) => m.won)
-  if (!starter) return '你这个赛段上场时间不多，怎么看？'
-  if (me.titles.length && me.tenure <= 1) return '换了一个环境，能把上一座奖杯带过来吗？'
-  if (lost3) return '三连败了。问题出在哪里？'
-  if (won3) return '连胜中。你们现在是夺冠热门吗？'
-  if (me.titles.length >= 3) return '已经拿过这么多，还有什么在推着你？'
-  if (me.seasons.length <= 1) return '新人赛季，你对自己的期待是什么？'
-  return '你们这个赛段的目标是什么？'
+  if (!starter) {
+    return talk('你这个赛段上场时间不多，怎么看？',
+      '「给我机会，我会让所有人闭嘴。」', '「每天都在练，教练需要我的时候，我准备好了。」', '「谁上场是教练组定的，我能做的都做了。」', '教练组')
+  }
+  if (me.titles.length && me.tenure <= 1) {
+    return talk('换了一个环境，能把上一座奖杯带过来吗？',
+      '「我来这里，就是为了再拿一座。」', '「新队伍要先磨合，一场一场来。」', '「我没问题，就看队伍跟不跟得上。」')
+  }
+  if (lost3) {
+    return talk('三连败了。问题出在哪里？',
+      '「下一场我们会赢，而且会赢得很好看。」', '「回去复盘，问题我们自己清楚。」', '「我个人状态没问题。」')
+  }
+  if (won3) {
+    return talk('连胜中。你们现在是夺冠热门吗？',
+      '「冠军。别的没什么好说的。」', '「一场一场打，还没到说这个的时候。」', '「我打得不错，队伍还要更稳一点。」')
+  }
+  if (me.titles.length >= 3) {
+    return talk('已经拿过这么多，还有什么在推着你？',
+      '「再拿一座，然后再拿一座。」', '「每个赛段都是新的，先把眼前这场打好。」', '「我还想赢，就看身边的人是不是也一样想。」')
+  }
+  if (me.seasons.length <= 1) {
+    return talk('新人赛季，你对自己的期待是什么？',
+      '「今年就要打出名字。」', '「先站稳位置，多学多打。」', '「我准备好了，就看队伍用不用我。」')
+  }
+  return general
 }
 
 /* ------------------------------------------------------------------ */

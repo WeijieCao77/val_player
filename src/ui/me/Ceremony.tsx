@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
 import { Modal } from '../common'
-import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip } from '../../engine/me/ceremony'
+import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip, mediaMoment } from '../../engine/me/ceremony'
 import type { CerTier } from '../../engine/me/types'
 
 /**
@@ -277,21 +277,24 @@ function ReactGame({ onEnd }: { onEnd: Ended }) {
 /*  媒体日：不是小游戏，是一句话                                        */
 /* ------------------------------------------------------------------ */
 
-const TONES: { key: string; name: string; label: string; blurb: string; tier: CerTier }[] = [
-  { key: 'bold', name: '狂', label: '「冠军。别的没什么好说的。」', blurb: '热度大涨。话说出去了，就得打回来。', tier: 'gold' },
-  { key: 'steady', name: '稳', label: '「一场一场打，先进季后赛。」', blurb: '热度小涨。挑不出毛病，也没人写你。', tier: 'silver' },
-  { key: 'blame', name: '指向别人', label: '「我个人状态没问题。」', blurb: '热度涨了，但队友们看得懂你在说谁。', tier: 'bronze' },
+const TONES: { key: 'bold' | 'steady' | 'blame'; name: string; blurb: string; tier: CerTier }[] = [
+  { key: 'bold', name: '狂', blurb: '热度大涨。话说出去了，就得打回来。', tier: 'gold' },
+  { key: 'steady', name: '稳', blurb: '热度小涨。挑不出毛病，也没人写你。', tier: 'silver' },
+  { key: 'blame', name: '指向别人', blurb: '热度涨了，但{who}听得懂你在说谁。', tier: 'bronze' },
 ]
 
 function MediaChoice({ onEnd }: { onEnd: Ended }) {
+  const { game } = useGame()
+  // the three answers are to the question actually asked: the bench is not offered a line about the trophy
+  const moment = mediaMoment(game)
   return (
     <div className="cer-game">
       <p className="cer-hint">三台机位在等你开口。</p>
       <div className="cer-tones">
         {TONES.map((t) => (
           <button key={t.key} className="cer-tone" onClick={() => onEnd(t.tier, { tone: t.key })}>
-            <b>{t.label}</b>
-            <span className="tiny muted">{t.blurb}</span>
+            <b>{moment.lines[t.key]}</b>
+            <span className="tiny muted">{t.blurb.replace('{who}', moment.pointsAt)}</span>
           </button>
         ))}
       </div>
