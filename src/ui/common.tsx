@@ -1,4 +1,6 @@
+import { useContext } from 'react'
 import type { ReactNode } from 'react'
+import { GameCtx } from './ctx'
 import { roleColor } from '../engine/player'
 import { scoutedPotential } from '../engine/manager'
 import { analystEdge } from '../engine/staff'
@@ -84,11 +86,15 @@ export function Potential({ p, game }: { p: Player; game: GameState }) {
  * should be the plainer of the two. 76 of the world's 78 clubs have one, so
  * this renders nothing at all rather than a placeholder for the other two —
  * a missing crest should leave the layout as it was, not put a grey box in it.
+ *
+ * A club the player's club carried on as under another name wears that name's
+ * crest: read off the running game, or `heirs` where there is none (the front page).
  */
 export function Crest({
-  id, size = 18, className,
-}: { id: string | null | undefined; size?: number; className?: string }) {
-  const src = crestUrl(id)
+  id, size = 18, className, heirs,
+}: { id: string | null | undefined; size?: number; className?: string; heirs?: Record<string, string> }) {
+  const ctx = useContext(GameCtx)
+  const src = crestUrl(id, heirs ?? ctx?.game.heirs)
   if (!src) return null
   return (
     <img

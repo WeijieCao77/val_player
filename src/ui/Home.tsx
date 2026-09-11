@@ -61,6 +61,8 @@ const REGION_FACES: { region: Region; face: string }[] = [
 interface Resume {
   club: string | null
   clubId: string | null
+  /** the clubs it carried on as, so the crest is the name's (engine/dossier.ts crestUrl) */
+  heirs?: Record<string, string>
   year: number
   over: boolean
 }
@@ -85,6 +87,7 @@ export default function Home({ onOpen }: { onOpen: (m: Mode) => void }) {
           setResume({
             club: g.teams[g.myTeam]?.name ?? null,
             clubId: g.myTeam,
+            heirs: g.heirs,
             year: g.year,
             over: !!g.gameOver,
           })
@@ -167,7 +170,7 @@ export default function Home({ onOpen }: { onOpen: (m: Mode) => void }) {
               </button>
               {resume && (
                 <span className="home-resume">
-                  {resume.clubId && <Crest id={resume.clubId} size={16} />}
+                  {resume.clubId && <Crest id={resume.clubId} heirs={resume.heirs} size={16} />}
                   {resume.club} · {resume.year} 年
                 </span>
               )}

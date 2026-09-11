@@ -119,9 +119,26 @@ export const faceUrl = (file: string, v?: string): string => {
   return `${base}faces/${file}${v ? `?v=${v}` : ''}`
 }
 
-/** The club crest, where we have one, stamped the same way. */
-export const crestUrl = (clubId: string | null | undefined): string | null => {
-  const key = clubId ? CLUB.get(clubId) ?? clubId : undefined
+/**
+ * The same org under an earlier vlr team id. G2 Esports' European side and
+ * FunPlus Phoenix's played 2021–22 under ids of their own — G2's Americas side
+ * and FPX's Chinese one came in 2023 under new ones — and they wear the crest
+ * the later side ships with. Never two of them playing at once.
+ */
+const SAME_ORG: Record<string, string> = { V21T257: 'T2', V21T628: 'T40' }
+
+/**
+ * The club crest, where we have one, stamped the same way.
+ *
+ * `heirs` is the world's record of clubs the player's club carried on as
+ * (engine/timeline.ts inherit): once ENVY has become OpTic Gaming it wears
+ * OpTic's crest — none shipped, so none — not ENVY's; once Vision Strikers has
+ * become DRX, DRX's.
+ */
+export const crestUrl = (clubId: string | null | undefined, heirs?: Record<string, string>): string | null => {
+  const carried = clubId && heirs ? Object.keys(heirs).filter((to) => heirs[to] === clubId) : []
+  const id = carried.length ? carried[carried.length - 1] : clubId
+  const key = id ? SAME_ORG[id] ?? CLUB.get(id) ?? id : undefined
   const v = key ? DOSSIER.logos?.[key] : undefined
   if (!key || !v) return null
   const base = typeof import.meta.env !== 'undefined' ? import.meta.env.BASE_URL : './'
