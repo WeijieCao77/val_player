@@ -1,6 +1,7 @@
 import raw from '../data/circuit.json'
 import type { CEvent, CNode, CUnit, Slot } from './circuit'
 import { WORLD_END } from './era'
+import { aheadHosts } from './hosts'
 import type { Region, StageKey } from './types'
 
 /**
@@ -27,7 +28,8 @@ import type { Region, StageKey } from './types'
  *     partners and visitors are in both Cups; its other two places are played for
  *  4. Masters in 2026's format: each league's top three of Kickoff, then of Cup 1
  *  5. Champions in 2026's format: each league's top four of Cup 2, and no points
- *  6. 2026's dates, and no host city nobody has announced
+ *  6. 2026's dates; host cities drawn from cities with the scene for it, and
+ *     Champions 2027 in the Americas as announced (engine/hosts.ts aheadHosts)
  *  7. 2028 as 2027; from 2029 the partners are chosen again every two years,
  *     at most two new clubs a league each time (engine/leagues.ts)
  *
@@ -339,7 +341,7 @@ function season(year: number): CEvent[] {
     const shape = shapeOf(SHAPE_YEAR, n === 1 ? 'masters1' : 'masters2', null)
     const feeder = n === 1 ? 'kickoff' : 'cup1'
     out.push(make(year, `masters${n}`, {
-      name: `Valorant Masters ${year} Stage ${n}`, cn: `${year} 第${n === 1 ? '一' : '二'}站大师赛`, region: null, layer: null,
+      name: `Valorant Masters ${year} Stage ${n}`, cn: `${aheadHosts(year)[n === 1 ? 'masters1' : 'masters2']}大师赛`, region: null, layer: null,
       stage: n === 1 ? 'masters1' : 'masters2',
       units: retime(shape.units, [shape.start!, shape.end!]),
       plan: { kind: 'masters', seats: MASTERS_SEATS.map(([L, k]) => ({ from: 'place', event: id(`${feeder}:${L}`), k, league: L })) },
@@ -347,7 +349,7 @@ function season(year: number): CEvent[] {
   }
   const champions = shapeOf(SHAPE_YEAR - 1, 'champions', null)
   out.push(make(year, 'champions', {
-    name: `Valorant Champions ${year}`, cn: `${year} 全球冠军赛`, region: null, layer: null, stage: 'champions',
+    name: `Valorant Champions ${year}`, cn: `${year} 全球冠军赛（${aheadHosts(year).champions}）`, region: null, layer: null, stage: 'champions',
     units: retime(champions.units, CHAMPIONS_DAYS),
     plan: { kind: 'champions', seats: CHAMPIONS_SEATS.map(([L, k]) => ({ from: 'place', event: id(`cup2:${L}`), k, league: L })) },
   }))

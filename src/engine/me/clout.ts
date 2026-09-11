@@ -182,7 +182,7 @@ export function doList(state: GameState, targetId: string): string {
     me.coachTrust = clamp(me.coachTrust - 14, 0, 100)
     duoBonded(state, me.id, targetId, -26)
     for (const id of team.roster) if (id !== me.id && id !== targetId) duoBonded(state, me.id, id, -9)
-    pushLog(state, 'bad', `你向教练组提出换掉 ${target.ign}，没被同意——<b>而且消息走漏了</b>。${target.ign} 知道了，整个更衣室都知道了。`)
+    pushLog(state, 'bad', `你向教练组提出换掉 ${target.ign}，没被同意——<b>而且消息走漏了</b>。${target.ign} 知道了，整个基地都知道了。`)
     return `没同意。${target.ign} 知道是你提的。`
   }
 
@@ -193,7 +193,7 @@ export function doList(state: GameState, targetId: string): string {
   }
   me.coachTrust = clamp(me.coachTrust - 4, 0, 100)
   for (const id of team.roster) if (id !== me.id) duoBonded(state, me.id, id, -6)
-  pushLog(state, 'team', `你向教练组提出换掉 ${target.ign}，成功了。他被放走，位置空了出来。<b>更衣室安静了很久——他们知道这是你提的。</b>`)
+  pushLog(state, 'team', `你向教练组提出换掉 ${target.ign}，成功了。他被放走，位置空了出来。<b>基地安静了很久——他们知道这是你提的。</b>`)
   return `${target.ign} 被放走了。位置空着，俱乐部会去补。`
 }
 

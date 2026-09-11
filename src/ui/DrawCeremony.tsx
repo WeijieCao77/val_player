@@ -85,7 +85,7 @@ export default function DrawCeremony({ drawId, onClose }: { drawId: string; onCl
           ))}
         </div>
         <div className="draw-steps">
-          {shown.length === 0 && <div className="empty">签球还在碗里。</div>}
+          {shown.length === 0 && <div className="empty">还没有抽出队伍。</div>}
           {shown.map((s, i) => (
             <div key={i} className={`draw-step${i === shown.length - 1 ? ' latest' : ''}${s.team === game.myTeam ? ' me' : ''}`}>
               <span className="mono muted tiny">{i + 1}</span>

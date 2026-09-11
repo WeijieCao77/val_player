@@ -256,7 +256,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-body">
               <p className="small" style={{ margin: 0 }}>
                 <b>{rec.kills}/{rec.deaths}/{rec.assists}</b> · ACS <b>{rec.acs}</b> · 首杀 {rec.firstKills} · 残局 {rec.clutches} · 评分 <b>{rec.rating.toFixed(2)}</b>
-                · 队内第 {rec.rank}{rec.mvp ? ' · 全场 MVP' : ''}{rec.carried ? ' · 输球但你全队最高' : ''}
+                · 队内第 {rec.rank}{rec.mvp ? ' · 全场 MVP' : ''}{rec.carried ? ' · 输了比赛但你全队最高' : ''}
               </p>
             </div>
           </div>

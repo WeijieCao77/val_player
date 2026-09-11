@@ -207,7 +207,7 @@ export default function Dashboard() {
           </div>
           <p className="tiny faint" style={{ padding: '0 14px 12px', margin: 0 }}>
             成绩越好、名气越大，来找你的俱乐部就越强。不接受的话邀请会自行过期。
-            也可以去<b>经理</b>页面主动向别的球队投申请。
+            也可以去<b>经理</b>页面主动向别的战队投申请。
           </p>
         </Panel>
       )}
@@ -578,7 +578,7 @@ export default function Dashboard() {
         <Panel title={next ? `空档期 · 距下一场还有 ${gapDays} 天` : '空档期 · 本赛段没有比赛'}>
           <p className="small muted" style={{ marginTop: 0 }}>
             约一场训练赛：<b>不计积分、不进个人数据</b>，没有 BP，地图提前商定。
-            <b>按「战术」页给这张图定的英雄阵容打</b>，练的也是那套阵容。
+            <b>按「战术」页给这张图定的特工阵容打</b>，练的也是那套阵容。
           </p>
           <div className="tiny faint" style={{ margin: '0 0 12px', lineHeight: 1.85 }}>
             每人每张图：<b style={{ color: 'var(--win)' }}>赢 状态 +0.4~2.2</b>／
@@ -650,7 +650,7 @@ export default function Dashboard() {
             </span>
           </div>
           <p className="tiny faint" style={{ marginTop: 10, marginBottom: 0 }}>
-            对方可能拒绝：即将与我们打正赛的球队不愿暴露战术，实力远高于我们的球队也未必愿意。
+            对方可能拒绝：即将与我们打正赛的战队不愿暴露战术，实力远高于我们的战队也未必愿意。
           </p>
         </Panel>
         )}

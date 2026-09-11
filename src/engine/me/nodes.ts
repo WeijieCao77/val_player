@@ -54,7 +54,7 @@ export const NODES: NodeDef[] = [
     a: [{ t: '先手，不等了', dim: 'reaction', risk: 0.95 }, { t: '等道具到位再进', dim: 'utility', risk: 0.45 }] },
   { id: 'eco_gun', q: '经济局，队友把唯一一把大枪递给了你。', ctx: '拿枪就是全队指望你一个人打开局面。',
     when: (c) => !c.pistol && c.round >= 3, rec: 0,
-    a: [{ t: '拿枪，我来打', dim: 'aim', risk: 0.8 }, { t: '别买了，五人半甲一起冲', dim: 'teamwork', risk: 0.5 }] },
+    a: [{ t: '拿枪，我来打', dim: 'aim', risk: 0.8 }, { t: '别买了，五人轻甲一起冲', dim: 'teamwork', risk: 0.5 }] },
   { id: 'clutch', q: '1v2，包已经下了，对面在包点两侧。', ctx: '拆包前你必须先解决一个。',
     when: (c) => !c.pistol && c.round >= 4, rec: 0,
     a: [{ t: '打，先找一个', dim: 'clutch', risk: 1.0 }, { t: '藏起来，等他们来拆', dim: 'awareness', risk: 0.6 }] },
@@ -72,7 +72,7 @@ export const NODES: NodeDef[] = [
     a: [{ t: '给我，我来', dim: 'mental', risk: 1.0 }, { t: '按体系打，别改', dim: 'teamwork', risk: 0.45 }] },
   { id: 'map_point_theirs', q: '对面赛点，暂停时语音里没人说话。', ctx: '这时候要有人站出来。',
     when: (c) => c.mapPoint === 'theirs', rec: 1,
-    a: [{ t: '把球给我', dim: 'mental', risk: 1.0 }, { t: '别慌，按流程打一回合', dim: 'teamwork', risk: 0.5 }] },
+    a: [{ t: '这波交给我', dim: 'mental', risk: 1.0 }, { t: '别慌，按流程打一回合', dim: 'teamwork', risk: 0.5 }] },
   { id: 'ot', q: '加时。你发现自己的手在抖。', ctx: '这个舞台比训练赛大得多。',
     when: (c) => c.ot, rec: 0,
     a: [{ t: '深呼吸，按流程走', dim: 'mental', risk: 0.5 }, { t: '用一波激进的开局逼自己进状态', dim: 'aim', risk: 0.95 }] },
@@ -176,7 +176,7 @@ const NODE_HL: Record<string, { ok: string; bad: string }[]> = {
   ],
   eco_gun: [
     { ok: '全队唯一一把大枪在你手里，你打开了局面。', bad: '那把大枪在你手里被打掉了，这回合的经济白攒。' },
-    { ok: '五把手枪半甲一起冲，靠人数把点撕开了。', bad: '五个人半甲冲上去，被两把大枪扫了回来。' },
+    { ok: '五把手枪轻甲一起冲，靠人数把点撕开了。', bad: '五个人轻甲冲上去，被两把大枪扫了回来。' },
   ],
   clutch: [
     { ok: '1v2，你先解决了一个，再把最后一个等了出来。', bad: '1v2 想先找一个，被两边同时夹住。' },

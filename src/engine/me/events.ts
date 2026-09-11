@@ -60,7 +60,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '买', g: 'show', e: { money: -35000, heat: 20, mental: 2 } }, { t: '再存存', g: 'grind', e: { mental: 1 } }] },
   // ---- the room
   { id: 'locker_blame', w: 0, max: 6, when: pro, rec: 1,
-    q: '输球之后，一个队友在语音里把责任推给了你。', ctx: '所有人都听见了。',
+    q: '输掉比赛之后，一个队友在语音里把责任推给了你。', ctx: '所有人都听见了。',
     a: [{ t: '当场怼回去', g: 'hard', e: { bond: -12, mental: 1, tilt: 5 } }, { t: '先认，回头私下说', g: 'warm', e: { bond: 4, tilt: 3 } }, { t: '不说话，用下一场回答', g: 'grind', e: { quest: 'rumor', tilt: 6 } }] },
   { id: 'locker_dinner', w: 7, max: 9, when: pro, rec: 0,
     q: '队友约了聚餐，你今晚本来想加练。', ctx: '关系是聚出来的。',
@@ -72,7 +72,7 @@ export const EVENTS: EventDef[] = [
     q: '队里新来的替补问你能不能带他复盘。', ctx: '他现在的处境和你当初一样。',
     a: [{ t: '带', g: 'warm', e: { bond: 10, fatigue: 3, coachTrust: 2 } }, { t: '没空', g: 'hard', e: { bond: -5, xp: { aim: 8 } } }] },
   { id: 'mate_leaves', w: 0, max: 5, when: pro, rec: 0,
-    q: '和你最熟的队友官宣离队。', ctx: '更衣室空了一块。',
+    q: '和你最熟的队友官宣离队。', ctx: '基地里空了一块。',
     a: [{ t: '发一条长文送别', g: 'show', e: { heat: 20, mental: -1 } }, { t: '私下吃顿饭', g: 'warm', e: { mental: 1, money: -400 } }, { t: '照常训练', g: 'grind', e: { xp: { teamwork: 10 } } }] },
   // ---- the trade
   { id: 'ad', w: 5, max: 5, when: (s) => famous(s, 120), rec: 0,
@@ -143,7 +143,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '休一周', g: 'warm', e: { fatigue: -20, coachTrust: -2, body: 1 } }, { t: '打封闭上', g: 'hard', e: { body: -3, coachTrust: 3, mental: 1 } }] },
   // ---- more of the ordinary
   { id: 'patch', w: 6, max: 6, when: () => true, rec: 1,
-    q: '新版本把你最熟的英雄削了。', ctx: '教练问要不要换。',
+    q: '新版本把你最熟的特工削了。', ctx: '教练问要不要换。',
     a: [{ t: '硬用，我熟', g: 'hard', e: { form: -2, xp: { aim: 10 } } }, { t: '换，跟版本走', g: 'grind', e: { xp: { utility: 14, awareness: 6 }, form: -1 } }, { t: '两个都练', g: 'grind', e: { fatigue: 8, xp: { utility: 8, aim: 8 } } }] },
   { id: 'fan_letter', w: 5, max: 5, when: (s) => famous(s, 80), rec: 0,
     q: '一个粉丝寄来手写信，说因为你才开始打这个游戏。', ctx: '信很长。',

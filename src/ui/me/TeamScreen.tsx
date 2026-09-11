@@ -111,7 +111,7 @@ export default function TeamScreen() {
           })()}
           <p className="small" style={{ margin: '0 0 6px' }}>
             {team.starters.includes(me.id)
-              ? (me.trial ? `试用期，还剩 ${me.trial.left} 场。赢球或打出队内前二就算过。` : me.proven ? '你是教练认定的首发。' : '本周你在名单里——是因为数值压过了别人，教练还没把你当自己人。')
+              ? (me.trial ? `试用期，还剩 ${me.trial.left} 场。赢下比赛或打出队内前二就算过。` : me.proven ? '你是教练认定的首发。' : '本周你在名单里——是因为数值压过了别人，教练还没把你当自己人。')
               : `资本 ${me.edge.toFixed(1)}/${EDGE_NEED}。对位挑战赢一次 +1（三局全胜 +1.5），输一次 −0.5，攒够了教练给试用期。`}
           </p>
           <p className="tiny faint" style={{ margin: 0 }}>

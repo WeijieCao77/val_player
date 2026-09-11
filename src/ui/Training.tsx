@@ -229,10 +229,10 @@ export default function Training() {
           </div>
 
           <div className="drill-card">
-            <b>练新英雄</b>
+            <b>练新特工</b>
             <p className="tiny muted">
               位置熟练度约 <b>+3/周</b>（看意识与道具，满 100 约需半个赛季）。
-              满了就能<b>兼任该位置</b>，中途每 34% 解锁一个该位置英雄。
+              满了就能<b>兼任该位置</b>，中途每 34% 解锁一个该位置特工。
             </p>
             <div className="row wrap" style={{ gap: 5 }}>
               {fit.map((p) => (
@@ -241,7 +241,7 @@ export default function Training() {
                   onChange={(e) => {
                     const role = e.target.value as Role
                     if (!role) return
-                    setDrill({ kind: 'agent', playerId: p.id, role }, `${p.ign} 学习${role}英雄`)
+                    setDrill({ kind: 'agent', playerId: p.id, role }, `${p.ign} 学习${role}特工`)
                   }}>
                   <option value="">{p.ign}…</option>
                   {ROLES.filter((r) => r !== '自由人' && !(p.roles ?? [p.role]).includes(r))
@@ -260,7 +260,7 @@ export default function Training() {
                     <span className="tiny mono">{Math.round(pro)}%</span>
                   </div>
                   <div className="tiny faint" style={{ marginTop: 4 }}>
-                    满 100% 才算真正兼任，中途会陆续解锁该位置的英雄。改练别的位置不会清空已有进度。
+                    满 100% 才算真正兼任，中途会陆续解锁该位置的特工。改练别的位置不会清空已有进度。
                   </div>
                 </div>
               )
@@ -651,7 +651,7 @@ export default function Training() {
                                     </span>
                                   )
                                 }
-                                if (!cand) return <span className="tiny faint">他已经不在这支球队了</span>
+                                if (!cand) return <span className="tiny faint">他已经不在这支战队了</span>
                                 const wants = askingSalary(cand, 'head')
                                 return bidOn === coach.name ? (
                                   <div className="row" style={{ gap: 5 }}>

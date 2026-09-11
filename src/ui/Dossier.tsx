@@ -278,7 +278,7 @@ function Detail({ card, onBack }: { card: PlayerCard; onBack: () => void }) {
           )}
           {!!player?.agentPool?.length && (
             <div style={{ marginTop: 12 }}>
-              <div className="tiny faint" style={{ marginBottom: 5 }}>真实英雄池</div>
+              <div className="tiny faint" style={{ marginBottom: 5 }}>真实特工池</div>
               <div className="row wrap" style={{ gap: 4 }}>
                 {player.agentPool.map((a) => (
                   <span key={a} className="chiplet row" style={{ gap: 4, alignItems: 'center' }}>

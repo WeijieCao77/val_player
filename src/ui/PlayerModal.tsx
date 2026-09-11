@@ -192,7 +192,7 @@ export default function PlayerModal(
           />
           {p.agentPool.length > 0 && (
             <div className="row wrap tiny muted" style={{ gap: 6, justifyContent: 'center', alignItems: 'center' }}>
-              <span>常用英雄：</span>
+              <span>常用特工：</span>
               {p.agentPool.map((a) => (
                 <span key={a} className="row" style={{ gap: 3, alignItems: 'center' }}>
                   <AgentIcon name={a} size={18} />{agentCn(a)}

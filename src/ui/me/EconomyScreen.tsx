@@ -2,7 +2,7 @@ import { useGame } from '../ctx'
 import { Panel, money, moneyFull } from '../common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizePreview, prizeRows } from '../../engine/me/money'
 import type { MeState } from '../../engine/me/types'
-import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, RELAX, buyCourse, buyGear, buyRelax, hireAgent } from '../../engine/me/shop'
+import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, RELAX, buyCourse, buyGear, buyRelax, gearModel, hireAgent } from '../../engine/me/shop'
 import { STREAM_CUTS, streamCut, streamIncome } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
 
@@ -79,9 +79,9 @@ export default function EconomyScreen() {
             return (
               <div key={s.key} className="row" style={{ gap: 10, padding: '4px 0' }}>
                 <span style={{ minWidth: 56 }}>{s.name}</span>
-                <span className="tag">{GEAR_TIER_CN[t]}</span>
+                <span className="tag">{GEAR_TIER_CN[t]}</span><span className="small">{gearModel(s.key, t)}</span>
                 <span className="spacer" style={{ flex: 1 }} />
-                {t < 2 && <button className="sm" onClick={() => act(buyGear(game, s.key))}>升到{GEAR_TIER_CN[t + 1]} {money(GEAR_PRICE[t + 1])}</button>}
+                {t < 2 && <button className="sm" onClick={() => act(buyGear(game, s.key))}>换成 {gearModel(s.key, t + 1)} {money(GEAR_PRICE[t + 1])}</button>}
               </div>
             )
           })}

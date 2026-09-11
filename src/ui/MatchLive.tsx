@@ -175,7 +175,7 @@ export default function MatchLive({
             here is tonight's sheet and the map's new default. */}
         <div className="panel own" style={{ marginTop: 12 }}>
           <div className="panel-head">
-            <h2>各图预案 · 英雄与战术</h2>
+            <h2>各图预案 · 特工与战术</h2>
             <div className="spacer" style={{ flex: 1 }} />
             <span className="tiny faint">改了就记住，下次这张图直接用</span>
           </div>

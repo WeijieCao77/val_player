@@ -280,7 +280,7 @@ export interface OwnedCard {
   got: string
 }
 
-export const DIVISIONS = ['青铜', '白银', '黄金', '铂金', '钻石', '大师'] as const
+export const DIVISIONS = ['青铜', '白银', '黄金', '铂金', '钻石', '超凡入圣'] as const
 
 /**
  * The rungs inside a division, and what each is worth.
@@ -333,13 +333,13 @@ export const tierStars = (div: number): number =>
  */
 export const MASTER_DIV = DIVISIONS.length - 1
 export const MASTER_TITLES = [
-  { at: 2500, name: '辐能' },
-  { at: 1000, name: '不朽' },
-  { at: 0, name: '大师' },
+  { at: 2500, name: '辐能战魂' },
+  { at: 1000, name: '神话' },
+  { at: 0, name: '超凡入圣' },
 ] as const
 
 export const masterTitle = (points: number): string =>
-  MASTER_TITLES.find((t) => points >= t.at)?.name ?? '大师'
+  MASTER_TITLES.find((t) => points >= t.at)?.name ?? '超凡入圣'
 
 /** What the badge says, at any point on the ladder. */
 export function rankName(div: number, stars: number, points = 0): string {

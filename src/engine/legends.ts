@@ -188,7 +188,7 @@ export const LEGENDS: Legend[] = [
   },
   {
     id: 'L:chichoo-bangkok-2025',
-    ign: 'CHICHOO', title: '2025 曼谷球', short: '25 曼谷球',
+    ign: 'CHICHOO', title: '2025 曼谷之星', short: '25 曼谷之星',
     year: 2025, kind: 'icon', clubId: 'T36', clubTag: 'EDG',
     rating: 97,
     // No trophy — EDG went out third — but the tournament's best player by

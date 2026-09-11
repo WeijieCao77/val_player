@@ -17,17 +17,17 @@ export const skillToLadder = (overall: number): number => clamp(45 + (overall - 
 
 /**
  * The real ladder, in the names the CN client uses: 铂金 / 钻石 / 超凡 / 神话
- * each split into 1–3, then 赋能 with a leaderboard rank once inside the top
- * 500. Bands below 赋能 carry `sub: 3`; the tier function turns 44.5 into 神话1.
+ * each split into 1–3, then 辐能战魂 with a leaderboard rank once inside the top
+ * 500. Bands below 辐能战魂 carry `sub: 3`; the tier function turns 44.5 into 神话1.
  */
 export const LADDER_TIERS: { at: number; name: string; k: string; sub?: number }[] = [
-  { at: 92, name: '赋能第一梯队', k: 'top' },
-  { at: 82, name: '赋能前 10', k: 'top10' },
-  { at: 72, name: '赋能前 100', k: 'top100' },
-  { at: 62, name: '赋能前 500', k: 'top500' },
-  { at: 52, name: '赋能', k: 'radiant' },
+  { at: 92, name: '辐能战魂第一梯队', k: 'top' },
+  { at: 82, name: '辐能战魂前 10', k: 'top10' },
+  { at: 72, name: '辐能战魂前 100', k: 'top100' },
+  { at: 62, name: '辐能战魂前 500', k: 'top500' },
+  { at: 52, name: '辐能战魂', k: 'radiant' },
   { at: 42, name: '神话', k: 'immortal', sub: 3 },
-  { at: 30, name: '超凡', k: 'ascendant', sub: 3 },
+  { at: 30, name: '超凡入圣', k: 'ascendant', sub: 3 },
   { at: 16, name: '钻石', k: 'diamond', sub: 3 },
   { at: 0, name: '铂金', k: 'platinum', sub: 3 },
 ]
@@ -46,7 +46,7 @@ export function ladderLabel(l: number): string {
   if (l >= 96) return '国服第一'
   if (l >= 62) {
     const rank = Math.max(2, Math.round(500 * Math.pow((100 - l) / 38, 2.2)))
-    return `赋能 第 ${rank}`
+    return `辐能战魂 第 ${rank}`
   }
   return ladderTier(l).name
 }

@@ -35,7 +35,7 @@ export function OfferVerdict({
 const ROLES: SquadRole[] = ['star', 'starter', 'rotation', 'bench']
 
 const ROLE_HINT: Record<SquadRole, string> = {
-  star: '球队围绕他建队，几乎每场首发。做不到会严重不满。',
+  star: '战队围绕他建队，几乎每场首发。做不到会严重不满。',
   starter: '常规首发。长期坐板凳会不满。',
   rotation: '轮换出场，对上场时间要求不高。',
   bench: '替补，没有出场承诺，薪资要求也最低。',
@@ -137,7 +137,7 @@ export default function ContractTerms({
           onChange={(e) => set('noPoach', e.target.checked)}
         />
         <span className="small">转会限制条款 <span className="tiny faint">
-          未经选手本人同意不得出售。球队更安全，但选手要价更高。
+          未经选手本人同意不得出售。俱乐部更安全，但选手要价更高。
         </span></span>
       </label>
     </>

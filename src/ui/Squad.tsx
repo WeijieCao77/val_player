@@ -58,7 +58,7 @@ export default function Squad() {
     const payoff = Math.round(p.salary * Math.max(0, p.contractYears) * 0.4)
     const hurt = departureImpact(game, p)
     const warn = hurt.length
-      ? `\n\n更衣室反应：${hurt.map((h) => `${h.p.ign} 信任 −${h.hit.toFixed(0)}`).join('，')}`
+      ? `\n\n队内反应：${hurt.map((h) => `${h.p.ign} 信任 −${h.hit.toFixed(0)}`).join('，')}`
       : ''
     if (!(await ask(`确定与 ${p.ign} 解约？需支付违约金约 ${money(payoff)}。${warn}`, '解约'))) return
     if (!spendAction(game, 'release')) { toast(NO_ACTIONS_LEFT); return }
@@ -333,13 +333,13 @@ export default function Squad() {
         </div>
       </Panel>
 
-      <Panel title={`更衣室 · 全队默契 ${harmony >= 0 ? '+' : ''}${harmony.toFixed(0)}`} flush>
+      <Panel title={`队内关系 · 全队默契 ${harmony >= 0 ? '+' : ''}${harmony.toFixed(0)}`} flush>
         <p className="small muted" style={{ padding: '10px 14px 0', margin: 0 }}>
           每两名选手之间有独立的关系值。他们首先是<b>每天一起训练的队友</b>，所以开局都在
           40~70 这一档——<b>差距有，但不会有人一上来就跟队友结怨</b>。拉开差距的因素依次是：
           <b>一起打了多久</b>（取自 Liquipedia 的真实转会履历，四年约 +10）、同国籍、
           位置上要天天配合（决斗↔先锋、控场↔哨卫）、年纪相仿、本身协同沟通就好。
-          多年老班底通常比刚拼起来的阵容高十几分。之后：<b>赢球让所有人更亲近</b>；输球时，如果一个人打得
+          多年老班底通常比刚拼起来的阵容高十几分。之后：<b>赢下比赛让所有人更亲近</b>；输掉比赛时，如果一个人打得
           明显好而另一个明显差，差的一方会被记账，而且<b>矛盾会滚雪球</b>。关系会缓慢回落到
           两人各自的基准线，而不是回到某个统一值。<b>双排练</b>是最直接的修复手段。
         </p>

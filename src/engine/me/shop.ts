@@ -14,7 +14,21 @@ export const GEAR_SLOTS: { key: string; name: string }[] = [
 ]
 /** price by tier (1, 2) */
 export const GEAR_PRICE = [0, 900, 4200]
-export const GEAR_TIER_CN = ['普通', '职业级', '定制级']
+export const GEAR_TIER_CN = ['入门', '职业级', '旗舰']
+
+/**
+ * What each tier is on the desk: kit VCT players really buy, not a tier word —
+ * 「这些外设没有代入感，要用一些真实的品牌和型号」 (2026-09-11). The effect is the
+ * tier's; the name is what the player sees.
+ */
+export const GEAR_MODELS: Record<string, [string, string, string]> = {
+  mouse: ['罗技 G102', '罗技 G PRO X SUPERLIGHT 2', '雷蛇 毒蝰 V3 Pro'],
+  keyboard: ['雷柏 V500 PRO', '罗技 G PRO X TKL', 'Wooting 60HE+'],
+  headset: ['HyperX Cloud Stinger 2', 'HyperX Cloud III', '罗技 G PRO X 2'],
+  monitor: ['AOC 24G2 144Hz', 'ZOWIE XL2546K 240Hz', 'ZOWIE XL2586X 540Hz'],
+  chair: ['西昊 M57', 'Secretlab TITAN Evo', 'Herman Miller × 罗技 G Embody'],
+}
+export const gearModel = (slot: string, tier: number): string => GEAR_MODELS[slot]?.[tier] ?? GEAR_TIER_CN[tier] ?? ''
 
 export interface Course { key: string; name: string; price: number; blurb: string }
 export const COURSES: Course[] = [
@@ -40,13 +54,13 @@ export const AGENTS: { tier: number; name: string; fee: number; cut: number; blu
 export function buyGear(state: GameState, slot: string): string | null {
   const me = state.me!
   const cur = me.gear[slot] ?? 0
-  if (cur >= 2) return '已经是定制级了。'
+  if (cur >= 2) return `已经是${gearModel(slot, 2)}了。`
   const price = GEAR_PRICE[cur + 1]
   if (me.money < price) return `要 $${price.toLocaleString()}，钱不够。`
   addMoney(state, 'gear', -price)
   me.gear[slot] = cur + 1
   const name = GEAR_SLOTS.find((s) => s.key === slot)?.name ?? slot
-  pushLog(state, 'money', `买了${GEAR_TIER_CN[cur + 1]}${name}（$${price.toLocaleString()}）。`)
+  pushLog(state, 'money', `换了${name}：${gearModel(slot, cur + 1)}（${GEAR_TIER_CN[cur + 1]}，$${price.toLocaleString()}）。`)
   return null
 }
 

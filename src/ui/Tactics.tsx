@@ -27,12 +27,12 @@ export default function Tactics() {
   return (
     <>
       <Panel
-        title="各图预案 · 每张图的英雄阵容和战术"
+        title="各图预案 · 每张图的特工阵容和战术"
         className="own"
         actions={<span className="tiny faint">训练赛按这里打，跑图练的也是它</span>}
       >
         <p className="small muted" style={{ marginTop: 0 }}>
-          在这里把每张图的<b>五个英雄</b>和<b>四条滑杆</b>定好，赛前就不用再调。
+          在这里把每张图的<b>五个特工</b>和<b>四条滑杆</b>定好，赛前就不用再调。
           <b>同一套阵容打得越多越熟</b>——熟练度进比赛是加分，临时换五个人从零开始。
         </p>
         <MapPlan maps={pool} mode="plan" />
@@ -129,7 +129,7 @@ export default function Tactics() {
           </table>
         </div>
         <p className="tiny muted" style={{ padding: '10px 14px', margin: 0 }}>
-          BP 会 ban 掉对手熟练度高的图、留自己擅长的。阵容熟练度看的是这张图预案里那五个英雄，50 是中立。
+          BP 会 ban 掉对手熟练度高的图、留自己擅长的。阵容熟练度看的是这张图预案里那五个特工，50 是中立。
         </p>
       </Panel>
     </>

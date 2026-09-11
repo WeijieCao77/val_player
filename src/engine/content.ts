@@ -136,7 +136,7 @@ export const HIGHLIGHT_TEMPLATES = {
     n >= 3 ? `${p} 上演 1v${n} 残局，硬生生把这回合抢了回来。`
       : `${p} 最后一人守住 1v${n}，稳稳收下这回合。`,
   firstBlood: (p: string, n: number) => `${p} 连续 ${n} 个回合拿下首杀，突破端完全被他打开。`,
-  eco: (t: string) => `${t} 手枪局打崩对面经济，读秒阶段连下两分。`,
+  eco: (t: string) => `${t} 赢下手枪局打崩对面经济，紧接着两回合也顺势拿下。`,
   antiEco: (t: string, o: string) => `${t} 一把强起打穿了 ${o} 的满配，经济瞬间反转。`,
   flawless: (t: string) => `${t} 零封拿下这回合，五人零阵亡。`,
   streak: (t: string, n: number) => `${t} 连下 ${n} 回合，把比分彻底拉开。`,

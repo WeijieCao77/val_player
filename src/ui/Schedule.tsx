@@ -215,9 +215,9 @@ export default function Schedule() {
                   <thead>
                     <tr>
                       <th className="num sticky-name at-left">日期</th><th className="hide-m">赛事</th><th>轮次</th>
-                      <th style={{ textAlign: 'right' }}>主队</th>
+                      <th style={{ textAlign: 'right' }}>队伍 A</th>
                       <th className="center">比分</th>
-                      <th>客队</th><th />
+                      <th>队伍 B</th><th />
                     </tr>
                   </thead>
                   <tbody>

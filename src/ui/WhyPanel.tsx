@@ -25,7 +25,7 @@ const FACTORS: {
 }[] = [
   { key: 'base', label: '选手个人能力', fix: '这是阵容硬实力，只能靠转会和训练慢慢补' },
   { key: 'map', label: '地图熟练度', fix: '在训练里安排「跑图」练这张图，或在 BP 时避开它' },
-  { key: 'chem', label: '团队默契', fix: '更衣室关系与协同/沟通属性，双排练和集训能改善' },
+  { key: 'chem', label: '团队默契', fix: '队内关系与协同/沟通属性，双排练和集训能改善' },
   // comp's advice is filled in from the lineup that actually played — see
   // compFix below. Reading it off the number was how the panel came to tell
   // XLG to find a missing role when all four were covered.
@@ -46,9 +46,9 @@ const FACTORS: {
   { key: 'utility', label: '道具运用', fix: '战术里的「道具」滑杆，以及选手的道具属性；双控场阵容从这一项拿得最多' },
   { key: 'tacticsAtk', label: '战术设置（进攻端）', fix: '这张图的节奏与侵略性滑杆——双决斗阵容往右拉才吃得到' },
   { key: 'tacticsDef', label: '战术设置（防守端）', fix: '节奏与侵略性调高会削弱防守；双哨卫阵容往左拉才厚' },
-  { key: 'style', label: '阵容风格', fix: '双决斗偏攻、双哨卫偏守、双控场两头都吃——在预案里换一套五个英雄' },
+  { key: 'style', label: '阵容风格', fix: '双决斗偏攻、双哨卫偏守、双控场两头都吃——在预案里换一套五个特工' },
   { key: 'matchup', label: '针对对手', fix: '对双哨卫放慢节奏、对双决斗别把侵略性拉满、对双控场道具拉高——赛前预案里能看到对手的阵容' },
-  { key: 'familiarity', label: '阵容熟练度', fix: '同一套五个英雄多打几场、跑图时练它；临时换阵容会从零开始' },
+  { key: 'familiarity', label: '阵容熟练度', fix: '同一套五个特工多打几场、跑图时练它；临时换阵容会从零开始' },
 ]
 
 const CORE_ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫']

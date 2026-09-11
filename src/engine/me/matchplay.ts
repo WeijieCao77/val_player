@@ -405,7 +405,7 @@ export class MeMatch {
         if (won && rank === 1) me.mental = clamp(me.mental + 0.5, 0, 100)
       }
       const line = started
-        ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输球但你全队最高' : ''}`
+        ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输了比赛但你全队最高' : ''}`
         : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— 你在替补席看完了这场。`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)

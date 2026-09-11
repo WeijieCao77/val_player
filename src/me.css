@@ -158,6 +158,12 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .home-group.flat { grid-template-columns: minmax(0, 1fr); }
 .home-league { color: var(--muted); font-size: var(--t-small); font-weight: 700; }
 @media (max-width: 560px) { .home-group { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+/* 我的 · 最近的比赛: a long event name wraps, a narrow screen scrolls, nothing spills out of the panel */
+.me-recent-wrap { overflow-x: auto; }
+.me-recent { width: 100%; }
+.me-recent th, .me-recent td { white-space: nowrap; }
+.me-recent td.comp { white-space: normal; min-width: 9em; }
+.me-recent td.badge { padding-left: 0; }
 /* the live match's round log: a box that keeps its height and scrolls */
 .round-feed { margin: 8px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
 .round-feed-head { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: var(--t-tiny); }

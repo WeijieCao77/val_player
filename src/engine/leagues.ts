@@ -211,7 +211,7 @@ function carryQualified(state: GameState, year: number, s: VctSeason, lost: stri
         if (taken.has(id) || !t || t.dormant) continue
         taken.add(id)
         if (!keptFive(state, c, id)) {
-          lost.push(`🎟️ ${t.name} 冬窗换人太多，赢下${c.name}的五个人留下不到三个，揭幕赛名额顺延给下一名。`)
+          lost.push(`🎟️ ${t.name} 休赛期换人太多，赢下${c.name}的五个人留下不到三个，揭幕赛名额顺延给下一名。`)
           continue
         }
         out[L].push(id)

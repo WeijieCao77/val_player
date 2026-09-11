@@ -305,11 +305,11 @@ function runDrill(state: GameState, rng: Rng, notes: string[]): void {
       // other drills all filter their squad — this one never did.
       if (!p || p.teamId !== state.myTeam) {
         state.drill = { kind: 'none' }
-        notes.push('⚠️ 原定的「练新英雄」对象已经不在队中，本轮团队训练没有产生效果。')
+        notes.push('⚠️ 原定的「练新特工」对象已经不在队中，本轮团队训练没有产生效果。')
         break
       }
       if (p.injuredUntil > state.day) {
-        notes.push(`⚠️ ${p.ign} 伤停中，本轮「练新英雄」没有进行。`)
+        notes.push(`⚠️ ${p.ign} 伤停中，本轮「练新特工」没有进行。`)
         break
       }
       // Learning a position is a grind, not a switch. A quick learner still

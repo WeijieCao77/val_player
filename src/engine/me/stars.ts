@@ -133,8 +133,8 @@ export function starBeat(state: GameState, rec: MeMatchRecord, myRole: Role): St
 
 /** The sentence for the log; one per opponent per stage is plenty. */
 export function starBeatLine(beat: StarBeat, seriesWon: boolean): string {
-  if (beat.won && seriesWon) return `对位 ${beat.ign}，你 ${beat.myRating.toFixed(2)} 对他 ${beat.theirRating.toFixed(2)}，还赢了球。`
-  if (beat.won) return `对位 ${beat.ign} 你打赢了（${beat.myRating.toFixed(2)} 对 ${beat.theirRating.toFixed(2)}），可惜球输了。`
-  if (seriesWon) return `${beat.ign} 个人数据压了你一头（${beat.theirRating.toFixed(2)} 对 ${beat.myRating.toFixed(2)}），好在球赢了。`
+  if (beat.won && seriesWon) return `对位 ${beat.ign}，你 ${beat.myRating.toFixed(2)} 对他 ${beat.theirRating.toFixed(2)}，还赢了比赛。`
+  if (beat.won) return `对位 ${beat.ign} 你打赢了（${beat.myRating.toFixed(2)} 对 ${beat.theirRating.toFixed(2)}），可惜比赛输了。`
+  if (seriesWon) return `${beat.ign} 个人数据压了你一头（${beat.theirRating.toFixed(2)} 对 ${beat.myRating.toFixed(2)}），好在比赛赢了。`
   return `${beat.ign} 给你上了一课：${beat.theirRating.toFixed(2)} 对 ${beat.myRating.toFixed(2)}。`
 }

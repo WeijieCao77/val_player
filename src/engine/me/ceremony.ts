@@ -82,7 +82,7 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
     blurb: {
       gold: '话说得很满。热度大涨，但话说出去了就得打回来。',
       silver: '标准答案。热度小涨，挑不出毛病。',
-      bronze: '你把问题引到了别人身上。热度涨了，更衣室看得懂你在说谁。',
+      bronze: '你把问题引到了别人身上。热度涨了，队友们看得懂你在说谁。',
     },
   },
   rehab: {
@@ -96,7 +96,7 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
   },
   farewell: {
     kind: 'farewell', name: '最后一个赛季', game: 'none',
-    story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段开始，每一个客场都会有人举着你的名字。`,
+    story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段开始，每一个赛场都会有人举着你的名字。`,
     blurb: { gold: '', silver: '', bronze: '' },
   },
 }

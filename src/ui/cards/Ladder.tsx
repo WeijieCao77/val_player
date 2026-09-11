@@ -131,16 +131,16 @@ export default function Ladder() {
             <br />
             {master ? (
               <span className="tiny faint">
-                到了大师就不再掉段，改成计分：赢一场 +20 起，对手评分每高出 84 一分多给 3 分
+                到了超凡入圣就不再掉段，改成计分：赢一场 +20 起，对手评分每高出 84 一分多给 3 分
                 （下一个对手评分 {(opp?.rating ?? 80) + bump}，赢了 +{20 + Math.max(0, (opp?.rating ?? 80) + bump - 84) * 3}），
-                三连胜起再 +8；对上别人的阵容时，对手评分按他的大师分折算。输一场 −15，分数最低到 0 为止。
+                三连胜起再 +8；对上别人的阵容时，对手评分按他的积分折算。输一场 −15，分数最低到 0 为止。
                 {MASTER_TITLES.slice().reverse().filter((t) => t.at > 0)
                   .map((t) => `${t.at} 分升「${t.name}」`).join('，')}——上不封顶。
               </span>
             ) : (
               <span className="tiny faint">
                 赢一场 +1★（三连胜起 +2★，钻石以下），输一场 −1★。铂金开始会掉段。
-                每个大段分成几个小段，升一个小段就是一次进步；打到大师之后改成计分，不再封顶。
+                每个大段分成几个小段，升一个小段就是一次进步；打到超凡入圣之后改成计分，不再封顶。
               </span>
             )}
           </div>
@@ -167,7 +167,7 @@ export default function Ladder() {
                         {opp.rating + bump}
                         {bump > 0 && (
                           <span className="tag warn" style={{ marginLeft: 5 }}>
-                            大师加强 +{bump}
+                            高段加强 +{bump}
                           </span>
                         )}
                       </>
@@ -208,7 +208,7 @@ export default function Ladder() {
         title="排行榜"
         actions={
           <span className="tiny muted">
-            按段位和大师分排
+            按段位和积分排
             {topAt > 0 && <FreshAt at={topAt} />}
           </span>
         }

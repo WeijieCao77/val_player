@@ -1133,7 +1133,7 @@ function offerJobs(state: GameState, notes: string[]): void {
       day: state.day,
       expiresOn: state.day + 30,
       pitch: t.tier === 1
-        ? `${t.name} 希望你接手一线队，预算 ${Math.round(t.budget / 10000) / 100} 千万级别。`
+        ? `${t.name} 希望你接手一队，预算 ${Math.round(t.budget / 10000) / 100} 千万级别。`
         : `${t.name} 想请你来重建队伍。`,
     })
     notes.push(`📩 ${t.name} 向你发出了执教邀请。`)
@@ -1170,7 +1170,7 @@ function played(
 /** Take over at another club, however the job came about. */
 export function moveToClub(state: GameState, teamId: string): string {
   const to = state.teams[teamId]
-  if (!to) return '找不到这支球队。'
+  if (!to) return '找不到这支战队。'
 
   const from = state.teams[state.myTeam]
   state.tenures ??= []
@@ -1723,7 +1723,7 @@ export function persuadeStay(
           if (t.starters.length < 5) t.starters = autoStarters(state, state.myTeam)
         }
         p.morale = clamp(p.morale + 3, 0, 100)
-        return stays(`${p.ign} 同意退居替补，把经验留给年轻人——他还在更衣室里，这就够了。`)
+        return stays(`${p.ign} 同意退居替补，把经验留给年轻人——他还在基地里，这就够了。`)
       }
       return `${p.ign} 苦笑了一下："让我坐着看别人打？那还不如回家。" 他决定退役。`
     }

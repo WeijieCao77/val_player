@@ -80,7 +80,7 @@ export default function Commercial() {
         <p className="small muted" style={{ marginTop: 0 }}>
           不必干等着别人来找。你可以自己去谈赞助，也可以自己办活动——办活动要<b>先垫钱</b>，
           回本与否取决于<b>俱乐部声望</b>（上座率）：豪门大概六七成场次赚钱，
-          小球队多半亏。<b>线下训练营是唯一注定亏钱的</b>，它买的是体能和士气，不是收入。
+          小俱乐部多半亏。<b>线下训练营是唯一注定亏钱的</b>，它买的是体能和士气，不是收入。
         </p>
 
         <div className="row wrap" style={{ gap: 10, alignItems: 'center', marginBottom: 14 }}>

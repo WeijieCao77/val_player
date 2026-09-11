@@ -14,7 +14,7 @@ export interface TraitDef { key: string; name: string; axis: Axis; blurb: string
  */
 export const TRAITS: TraitDef[] = [
   { key: 'edge', name: '刺头', axis: 'hard', blurb: '不服就顶，输了也顶。', gain: '涨粉 ×1.18，逆风时临场决策 +3%', cost: '队友信任涨幅 ×0.80' },
-  { key: 'glue', name: '更衣室粘合剂', axis: 'warm', blurb: '谁都愿意和你双排。', gain: '羁绊与信任涨幅 ×1.35', cost: '涨粉 ×0.90' },
+  { key: 'glue', name: '队内粘合剂', axis: 'warm', blurb: '谁都愿意和你双排。', gain: '羁绊与信任涨幅 ×1.35', cost: '涨粉 ×0.90' },
   { key: 'grinder', name: '劳模', axis: 'grind', blurb: '别人下播你还在练。', gain: '训练收益 ×1.14', cost: '休息回体力 ×0.88' },
   { key: 'star', name: '话题人物', axis: 'show', blurb: '有你就有热度。', gain: '涨粉 ×1.28', cost: '每个赛段教练信任 −2' },
 ]

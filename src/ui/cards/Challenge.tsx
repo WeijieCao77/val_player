@@ -171,7 +171,7 @@ export default function Challenge() {
         }
       >
         <p className="small muted" style={{ marginTop: 0, lineHeight: 1.7 }}>
-          今天要猜的可能是<b>一名选手、一支战队、一张地图或者一个英雄</b>——
+          今天要猜的可能是<b>一名选手、一支战队、一张地图或者一个特工</b>——
           题目不会告诉你是哪一类，<b>先猜出它是什么，再猜出它是哪个</b>。
           图会糊到看不出是人是队；每猜错一次清楚一点。
           <br />
@@ -374,7 +374,7 @@ export default function Challenge() {
           </table>
         </div>
         <p className="tiny faint" style={{ marginTop: 10, marginBottom: 0 }}>
-          猜中还按连胜天数加金币。题型每天轮换：猜选手、猜战队、猜地图、猜英雄——
+          猜中还按连胜天数加金币。题型每天轮换：猜选手、猜战队、猜地图、猜特工——
           选手题最多，因为这游戏说到底是关于人的。
         </p>
       </Panel>

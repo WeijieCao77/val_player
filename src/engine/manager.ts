@@ -22,7 +22,7 @@ export type ManagerSkill =
 
 export const SKILL_CN: Record<ManagerSkill, string> = {
   training: '训练', negotiation: '谈判', tactics: '战术', scouting: '眼光',
-  medical: '体能', business: '商务', locker: '更衣室', youth: '带新人',
+  medical: '体能', business: '商务', locker: '带队', youth: '带新人',
 }
 
 export const SKILL_HINT: Record<ManagerSkill, string> = {
@@ -63,12 +63,12 @@ export const ORIGINS: ManagerOrigin[] = [
   },
   {
     key: 'coach', label: '前教练 / 助教', repMod: 9,
-    blurb: '你在教练席上熬了很多年，懂训练也懂临场，只是不擅长跟人谈钱。',
+    blurb: '你在教练岗位上熬了很多年，懂训练也懂临场，只是不擅长跟人谈钱。',
     strong: ['tactics', 'training'], weak: 'negotiation',
   },
   {
     key: 'analyst', label: '数据分析师', repMod: -2,
-    blurb: '你靠一份份报告看人，比谁都准，但很少走进更衣室。',
+    blurb: '你靠一份份报告看人，比谁都准，但很少走进基地。',
     strong: ['scouting', 'training'], weak: 'locker',
   },
   {
@@ -123,7 +123,7 @@ export function ageBand(age: number): { key: string; label: string; note: string
     return { key: 'young', label: '青年', note: '没人认识你，只能从底层带起，但成长最快。' }
   }
   if (age <= 35) {
-    return { key: 'mid', label: '中生代', note: '有一定履历，能接手中游球队，成长中等。' }
+    return { key: 'mid', label: '中生代', note: '有一定履历，能接手中游战队，成长中等。' }
   }
   return { key: 'senior', label: '资深', note: '名字有分量，能接手强队，但你基本定型了。' }
 }

@@ -79,7 +79,7 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   const t = pickBuyer(state, rng)
   if (!t) return
   me.intents.push({ teamId: t.id, day: state.day })
-  pushLog(state, 'info', `看台上出现了 ${t.name} 的教练。转会窗开了再说。`)
+  pushLog(state, 'info', `${t.name} 的教练来看了你的比赛。转会窗开了再说。`)
 }
 
 /** Where a buyer plays, in the words an offer uses. */

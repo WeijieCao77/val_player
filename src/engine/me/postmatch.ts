@@ -38,8 +38,8 @@ const LABELS: Record<string, { label: string; advice: string }> = {
   tacticsAtk: { label: '进攻战术', advice: '教练的战术盘' },
   tacticsDef: { label: '防守战术', advice: '教练的战术盘' },
   style: { label: '阵容风格', advice: '五个人的位置搭配' },
-  matchup: { label: '战术克制', advice: '针对对面的阵型' },
-  familiarity: { label: '英雄池熟悉度', advice: '这套特工这张图打得少' },
+  matchup: { label: '战术克制', advice: '针对对面的阵容' },
+  familiarity: { label: '特工池熟悉度', advice: '这套特工这张图打得少' },
   atk: { label: '进攻端', advice: '' },
   def: { label: '防守端', advice: '' },
 }

@@ -22,7 +22,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'mvp10', name: '常客', desc: '10 次 MVP', group: '战绩', cond: (s) => starts(s).filter((m) => m.mvp).length >= 10 },
   { key: 'acs300', name: '爆种', desc: '一场比赛 ACS 300+', group: '战绩', cond: (s) => starts(s).some((m) => m.acs >= 300) },
   { key: 'clutch3', name: '残局大师', desc: '一场比赛打出 3 次残局', group: '战绩', cond: (s) => starts(s).some((m) => m.clutches >= 3) },
-  { key: 'carry5', name: '院长', desc: '5 场输球局里你是全队最高', group: '逆境', cond: (s) => starts(s).filter((m) => m.carried).length >= 5 },
+  { key: 'carry5', name: '院长', desc: '5 场败局里你是全队最高', group: '逆境', cond: (s) => starts(s).filter((m) => m.carried).length >= 5 },
   { key: 'matches100', name: '一百场', desc: '打满 100 场正赛', group: '里程碑', cond: (s) => starts(s).length >= 100 },
   { key: 'title_regional', name: '赛区冠军', desc: '随队夺得一个赛区赛事冠军', group: '荣誉', cond: (s) => titlesOf(s).some((t) => !/Masters|Champions/.test(t.title)) },
   { key: 'title_masters', name: '大师', desc: '随队夺得大师赛冠军', group: '荣誉', cond: (s) => intl(s, /Masters/).length >= 1 },

@@ -171,7 +171,7 @@ export function roleOfAgent(agent: string): string | null {
 }
 
 export const KIND_CN: Record<ChallengeKind, string> = {
-  player: '选手', team: '战队', map: '地图', agent: '英雄',
+  player: '选手', team: '战队', map: '地图', agent: '特工',
 }
 
 /**

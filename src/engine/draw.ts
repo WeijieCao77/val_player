@@ -370,7 +370,7 @@ export function drawChampionsGroups(state: GameState, comp: Competition, pots: s
   const rng = rngFor(state, comp.key, 'groups')
   const names = ['A', 'B', 'C', 'D']
   const ev = newEvent(state, comp, 'champions-groups', 'groups',
-    '四档各四队，每组从每档各得一队，且每组必须来自四个不同赛区。签球依次落入 A 到 D 组中第一个合法的小组。',
+    '四档各四队，每组从每档各得一队，且每组必须来自四个不同赛区。抽出的队伍依次落入 A 到 D 组中第一个合法的小组。',
     pots.map((p, i) => ({ name: `第${'一二三四'[i]}档`, teams: p.slice() })), playDay)
   const groups: string[][] = [[], [], [], []]
   pots.forEach((pot, pi) => {

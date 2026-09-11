@@ -363,7 +363,7 @@ function Scoreboard({
           <table>
             <thead>
               <tr>
-                <th>选手</th><th>英雄</th><th>位置</th><th className="num">评分</th><th className="num">ACS</th>
+                <th>选手</th><th>特工</th><th>位置</th><th className="num">评分</th><th className="num">ACS</th>
                 <th className="num">K</th><th className="num">D</th><th className="num">A</th>
                 <th className="num">ADR</th><th className="num">首杀</th><th className="num">残局</th>
               </tr>

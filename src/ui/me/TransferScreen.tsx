@@ -31,7 +31,7 @@ export default function TransferScreen() {
         {pro && (
           <Panel title="市场怎么看你" actions={<span className="tag">{perf.toFixed(1)}</span>}>
             <p className="small" style={{ marginTop: 0 }}><b>{perfWord(perf)}</b>。</p>
-            <p className="tiny faint">这个数字由：综合与联赛水平的差 ×1.2、队伍胜率、你的场均评分、院长局、冠军、状态、粉丝、坐过的板凳、训练赛，减去违约金的拖累。赛段结束时够高，看台上就会出现别队的教练；转会窗开了他们来报价。</p>
+            <p className="tiny faint">这个数字由：综合与联赛水平的差 ×1.2、队伍胜率、你的场均评分、院长局、冠军、状态、粉丝、坐过的板凳、训练赛，减去违约金的拖累。赛段结束时够高，就会有别队的教练来看你的比赛；转会窗开了他们来报价。</p>
             {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
             <p className="small">
               转会窗一年两次：{PLAYER_WINDOWS.map(windowLabel).join('、')}。

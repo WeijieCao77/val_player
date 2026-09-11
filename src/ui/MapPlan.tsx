@@ -152,7 +152,7 @@ export default function MapPlan({
         <table>
           <thead>
             <tr>
-              <th>选手</th><th>位置</th><th>英雄</th><th className="num">影响</th>
+              <th>选手</th><th>位置</th><th>特工</th><th className="num">影响</th>
             </tr>
           </thead>
           <tbody>
@@ -180,7 +180,7 @@ export default function MapPlan({
                             <option key={x} value={x}>{agentCn(x)}（{AGENT_ROLE[x]}）</option>
                           ))}
                         </optgroup>
-                        <optgroup label="全部英雄">
+                        <optgroup label="全部特工">
                           {ALL_AGENTS.filter((x) => !(MAP_META[cur] ?? []).includes(x)).map((x) => (
                             <option key={x} value={x}>{agentCn(x)}（{AGENT_ROLE[x] ?? '—'}）</option>
                           ))}

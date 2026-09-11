@@ -1,3 +1,4 @@
+import { aheadHosts } from './hosts'
 import { REGION_CN } from './types'
 import type { GameState, Region, StageKey } from './types'
 
@@ -292,14 +293,24 @@ const STAGES_2026: StageDef[] = [
 ]
 
 /**
- * After the last real year: 2026's shape, no city named that nobody has
- * announced, and 2027's two Cups where 2026 had its stages (engine/ahead.ts).
+ * After the last real year: 2026's shape, 2027's two Cups where 2026 had its
+ * stages (engine/ahead.ts), and each Masters named for the city drawn to host
+ * it (engine/hosts.ts aheadHosts).
  */
-const AHEAD_NAMES: Partial<Record<StageKey, string>> = { masters1: '第一站大师赛', stage1: '杯赛 1', masters2: '第二站大师赛', stage2: '杯赛 2' }
-const STAGES_AHEAD: StageDef[] = STAGES_2026.map((s) => {
-  const name = AHEAD_NAMES[s.key]
-  return name ? { ...s, name } : s
-})
+const STAGES_AHEAD = new Map<number, StageDef[]>()
+function stagesAhead(year: number): StageDef[] {
+  let hit = STAGES_AHEAD.get(year)
+  if (!hit) {
+    const host = aheadHosts(year)
+    const names: Partial<Record<StageKey, string>> = { masters1: `${host.masters1}大师赛`, stage1: '杯赛 1', masters2: `${host.masters2}大师赛`, stage2: '杯赛 2' }
+    hit = STAGES_2026.map((s) => {
+      const name = names[s.key]
+      return name ? { ...s, name } : s
+    })
+    STAGES_AHEAD.set(year, hit)
+  }
+  return hit
+}
 
 /**
  * The 2026 entrance's calendar: the shape the game already ships. Kept here
@@ -335,7 +346,7 @@ export function stagesOf(year: number, timeline = year <= 2025): StageDef[] {
   if (year === 2024) return STAGES_2024
   if (year === 2025) return STAGES_2025
   if (!timeline) return STAGES_MODERN
-  return year === 2026 ? STAGES_2026 : STAGES_AHEAD
+  return year === 2026 ? STAGES_2026 : stagesAhead(year)
 }
 
 export const stageAtIn = (year: number, day: number, timeline?: boolean): StageKey =>

@@ -309,7 +309,7 @@ export const ENDINGS: Ending[] = [
     brief: '拿到过奖杯，但一座国际冠军也没有',
     test: (_s, f) => f.titles > 0 && f.intlTitles === 0,
     text: (s, f) => `${f.titles} 座奖杯。不是一个会被写进历史的十年，`
-      + `但${club(s)}的球迷记得每一座是怎么来的。`,
+      + `但${club(s)}的粉丝记得每一座是怎么来的。`,
   },
   {
     // A real condition, not a `() => true` fallback. Written that way once, it
@@ -344,11 +344,11 @@ export const ENDINGS: Ending[] = [
     brief: '带着当初那批人中的三人以上走完十年',
     test: (_s, f) => f.originalsAt > 0 && f.originalsLeft >= 3 && f.seasons >= 5,
     text: (s, f) => `十年前接手时的那批人，还有 ${f.originalsLeft} 个在队里。`
-      + `${club(s)}的更衣室里，有些故事只有他们和你知道。`,
+      + `${club(s)}的基地里，有些故事只有他们和你知道。`,
   },
   {
     key: 'grassroots', track: '故事', title: '草根',
-    brief: '从次级联赛的球队起步，最后拿下 VCT 赛区冠军',
+    brief: '从次级联赛的战队起步，最后拿下 VCT 赛区冠军',
     test: (_s, f) => f.startedLow && f.regionalTitles > 0,
     text: (s) => `你是从没人看的次级联赛开始的。现在${club(s)}是赛区冠军，`
       + `而当年那间小小的训练室，墙上还挂着第一张合影。`,

@@ -94,7 +94,7 @@ export default function Career() {
           </div>
           <p className="small muted" style={{ marginTop: 0 }}>
             以你的声望，这个位置的合理年薪约 <b>{money(fairHere)}</b>。
-            涨薪要看董事会信任、你的冠军数，以及<b>有没有别的球队在挖你</b>——
+            涨薪要看董事会信任、你的冠军数，以及<b>有没有别的战队在挖你</b>——
             手上有邀请时最好谈。刚被警告过就别开口了。
           </p>
           <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
@@ -154,8 +154,8 @@ export default function Career() {
 
       <Panel title="主动求职">
         <p className="small muted" style={{ marginTop: 0 }}>
-          不必干等着别人来找。任何一支愿意接你电话的球队都可以投申请——
-          <b>成绩不好的球队最容易点头</b>，一切顺利的球队反而最难进，因为没人要走。
+          不必干等着别人来找。任何一支愿意接你电话的战队都可以投申请——
+          <b>成绩不好的战队最容易点头</b>，一切顺利的战队反而最难进，因为没人要走。
           要价太高也会被拒。答复需要 3~10 天。
         </p>
         {applyTo && (() => {
@@ -192,7 +192,7 @@ export default function Career() {
           <table>
             <thead>
               <tr>
-                <th>球队</th><th>赛区</th><th className="num">声望</th>
+                <th>战队</th><th>赛区</th><th className="num">声望</th>
                 <th className="num">合理年薪</th><th>机会</th><th />
               </tr>
             </thead>
@@ -229,10 +229,10 @@ export default function Career() {
           </table>
         </div>
         {candidates.length === 0 && (
-          <div className="empty">目前没有球队会考虑你的申请，先做出成绩。</div>
+          <div className="empty">目前没有战队会考虑你的申请，先做出成绩。</div>
         )}
         <p className="tiny faint" style={{ marginBottom: 0 }}>
-          共 {WORLD_TEAMS.length} 支球队，其中 {candidates.length} 支愿意考虑你。
+          共 {WORLD_TEAMS.length} 支战队，其中 {candidates.length} 支愿意考虑你。
         </p>
       </Panel>
     </>

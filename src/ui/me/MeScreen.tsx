@@ -52,7 +52,7 @@ export default function MeScreen() {
             <Stat k="存款" v={money(me.money)} small />
           </div>
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>
-            咖位：{fanTier(me.fans).name}。心态气压超过 55 开始拖累发挥；休息、赢球都能泄压。疲劳超过 45 训练收益打折，超过 70 伤病风险明显上升。
+            咖位：{fanTier(me.fans).name}。心态气压超过 55 开始拖累发挥；休息、赢下比赛都能泄压。疲劳超过 45 训练收益打折，超过 70 伤病风险明显上升。
           </p>
         </Panel>
         <Panel title="性格">
@@ -89,22 +89,29 @@ export default function MeScreen() {
         </Panel>
         <Panel title="最近的比赛" flush>
           {recent.length === 0 ? <p className="muted" style={{ padding: 12, margin: 0 }}>还没打过比赛。</p> : (
-            <table>
-              <thead><tr><th>日期</th><th>赛事</th><th>对手</th><th>比分</th><th>K/D/A</th><th>ACS</th><th>评分</th></tr></thead>
-              <tbody>
-                {recent.map((m) => (
-                  <tr key={m.fixtureId}>
-                    <td className="muted">{fmtDay(m.day, m.year)}</td>
-                    <td className="tiny">{m.comp.replace(/VCT |VALORANT /, '')}</td>
-                    <td>{m.oppTag}</td>
-                    <td className="num" style={{ color: m.won ? 'var(--win)' : 'var(--loss)' }}>{m.score}</td>
-                    <td className="num">{m.started ? `${m.kills}/${m.deaths}/${m.assists}` : '替补'}</td>
-                    <td className="num">{m.started ? m.acs : '—'}</td>
-                    <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}{m.mvp ? ' MVP' : m.carried ? ' 院长' : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            // a long event name wraps and a narrow screen scrolls: the table never spills out of its panel
+            <div className="me-recent-wrap">
+              <table className="me-recent">
+                <thead><tr><th>日期</th><th>赛事</th><th>对手</th><th>比分</th><th>K/D/A</th><th>ACS</th><th>评分</th><th></th></tr></thead>
+                <tbody>
+                  {recent.map((m) => (
+                    <tr key={m.fixtureId}>
+                      <td className="muted">{fmtDay(m.day, m.year)}</td>
+                      <td className="tiny comp">{m.comp.replace(/VCT |VALORANT /, '')}</td>
+                      <td>{m.oppTag}</td>
+                      <td className="num" style={{ color: m.won ? 'var(--win)' : 'var(--loss)' }}>{m.score}</td>
+                      <td className="num">{m.started ? `${m.kills}/${m.deaths}/${m.assists}` : '替补'}</td>
+                      <td className="num">{m.started ? m.acs : '—'}</td>
+                      <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}</td>
+                      <td className="badge">
+                        {m.mvp ? <span className="tag win">MVP</span>
+                          : m.carried ? <span className="tag" title="输了这场，但你是全队评分最高的">全队最高</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Panel>
         {me.pre.cups.length > 0 && (

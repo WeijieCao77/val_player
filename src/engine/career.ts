@@ -38,10 +38,10 @@ export function defaultContract(state: GameState): ManagerContract {
  */
 export function openness(state: GameState, team: Team): { odds: number; note: string } {
   const rep = state.manager?.reputation ?? 50
-  if (team.id === state.myTeam) return { odds: 0, note: '这是你现在的球队' }
+  if (team.id === state.myTeam) return { odds: 0, note: '这是你现在的战队' }
 
   const squad = squadOf(state, team.id)
-  if (!squad.length) return { odds: 0, note: '这支球队没有可用阵容' }
+  if (!squad.length) return { odds: 0, note: '这支战队没有可用阵容' }
 
   const reach = rep - team.reputation
   if (reach < -14) return { odds: 0, note: '远高于你目前的声望，不会考虑你' }
@@ -70,7 +70,7 @@ export function applyForJob(
   state: GameState, teamId: string, salary: number, years: number,
 ): string {
   const team = state.teams[teamId]
-  if (!team) return '找不到这支球队。'
+  if (!team) return '找不到这支战队。'
   if (state.jobApplications?.some((a) => a.teamId === teamId && !a.answer)) {
     return `已经在等 ${team.name} 的答复了。`
   }

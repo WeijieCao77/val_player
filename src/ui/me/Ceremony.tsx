@@ -280,7 +280,7 @@ function ReactGame({ onEnd }: { onEnd: Ended }) {
 const TONES: { key: string; name: string; label: string; blurb: string; tier: CerTier }[] = [
   { key: 'bold', name: '狂', label: '「冠军。别的没什么好说的。」', blurb: '热度大涨。话说出去了，就得打回来。', tier: 'gold' },
   { key: 'steady', name: '稳', label: '「一场一场打，先进季后赛。」', blurb: '热度小涨。挑不出毛病，也没人写你。', tier: 'silver' },
-  { key: 'blame', name: '指向别人', label: '「我个人状态没问题。」', blurb: '热度涨了，但更衣室看得懂你在说谁。', tier: 'bronze' },
+  { key: 'blame', name: '指向别人', label: '「我个人状态没问题。」', blurb: '热度涨了，但队友们看得懂你在说谁。', tier: 'bronze' },
 ]
 
 function MediaChoice({ onEnd }: { onEnd: Ended }) {

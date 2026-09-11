@@ -280,7 +280,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
         me.rotateHeat = 0
         me.benchLock = state.day + 7
         team.starters = coachStarters(state)
-        pushLog(state, 'bad', '连着输球，教练要试新阵容：这一周先换人打，看看到底是谁在拖累。')
+        pushLog(state, 'bad', '连着输了几场，教练要试新阵容：这一周先换人打，看看到底是谁在拖累。')
       }
     }
   }

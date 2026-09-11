@@ -152,10 +152,10 @@ export function scoreOffer(
       v: fit >= 0 ? fit * 11 : fit * 16,
       // a starting place is never refused; falling short of 核心 is only a wish
       why: promisedRole === 'starter'
-        ? '他希望被当作球队核心'
+        ? '他希望被当作队伍核心'
         : `不接受「${SQUAD_ROLE_CN[promisedRole]}」这种替补定位`,
     },
-    { key: 'rep', v: (toTeam.reputation - (from?.reputation ?? 30)) * 0.9, why: '认为这支球队不如他现在的平台' },
+    { key: 'rep', v: (toTeam.reputation - (from?.reputation ?? 30)) * 0.9, why: '认为这支战队不如他现在的平台' },
     { key: 'tier', v: from ? (toTeam.tier < from.tier ? 18 : toTeam.tier > from.tier ? -22 : 0) : 0, why: '不愿意降级去次级联赛' },
     {
       key: 'loyal',
@@ -169,7 +169,7 @@ export function scoreOffer(
       // group looking for a way to farm something that did not exist — 「忠诚度
       // 怎么刷呀」. It grows a season at a time now, so the line says so.
       why: renewal
-        ? '对这支球队没有太深的归属感（归属感靠年头和荣誉慢慢长，挂牌会掉一大截）'
+        ? '对这支战队没有太深的归属感（归属感靠年头和荣誉慢慢长，挂牌会掉一大截）'
         : '对现在的俱乐部感情很深',
     },
     { key: 'lock', v: noPoach ? -13 : 0, why: '不愿接受转会限制条款' },
@@ -277,7 +277,7 @@ export function squadFloorBlock(state: GameState, teamId: string): string | null
   if (squadOf(state, teamId).length > 5) return null
   return teamId === state.myTeam
     ? '阵容只剩五人了——再放走一个就凑不出首发，比赛只能少人上场。先补人再说。'
-    : '对方只剩五名球员，放人就凑不齐首发了。'
+    : '对方只剩五名选手，放人就凑不齐首发了。'
 }
 
 /**
@@ -879,7 +879,7 @@ export function resolveEnquiries(state: GameState, rng: Rng): string[] {
     e.interest = score > 28 ? 'keen' : score > 6 ? 'open' : score > -18 ? 'reluctant' : 'no'
     e.answer = e.interest === 'no' ? 'closed' : 'open'
     if (e.interest === 'no') {
-      e.reason = better < 0 ? '不愿意去平台更差的球队' : '现在不想离开'
+      e.reason = better < 0 ? '不愿意去平台更差的战队' : '现在不想离开'
     }
 
     // An enquiry answers twice over — the club names a price, the player says

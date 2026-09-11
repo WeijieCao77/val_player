@@ -236,7 +236,7 @@ export default function NewGame({ onHome,
         </div>
       </div>
 
-      {/* ---------------------------------------------------------- 3 球队 */}
+      {/* ---------------------------------------------------------- 3 战队 */}
       <div className="panel">
         <div className="panel-head">
           <h2>3 · 选择战队</h2>
@@ -278,7 +278,7 @@ export default function NewGame({ onHome,
                     <button key={t.id}
                       className={`team-card${teamId === t.id ? ' sel' : ''}${ok ? '' : ' locked'}`}
                       disabled={!ok}
-                      title={top ? '联赛顶尖球队，需要靠成绩解锁' : ok ? '' : '你的声望还不足以接手这支球队'}
+                      title={top ? '联赛顶尖战队，需要靠成绩解锁' : ok ? '' : '你的声望还不足以接手这支战队'}
                       onClick={() => { setTeamId(t.id); setErr(null) }}>
                       <div className="row" style={{ justifyContent: 'space-between', gap: 6 }}>
                         <div className="n" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -307,9 +307,9 @@ export default function NewGame({ onHome,
                 </p>
               ) : (
                 <p className="tiny faint" style={{ marginTop: 12, marginBottom: 0 }}>
-                  声望决定哪些俱乐部愿意请你，每个赛区最强的三支球队开局锁定。
+                  声望决定哪些俱乐部愿意请你，每个赛区最强的三支战队开局锁定。
                   在任意存档里做到<b>三连霸</b>、<b>走完十年</b>或<b>声望 90</b>，
-                  之后的新生涯就能不受限制、任选球队开局。
+                  之后的新生涯就能不受限制、任选战队开局。
                 </p>
               )}
             </>
@@ -399,7 +399,7 @@ export default function NewGame({ onHome,
       <p className="tiny muted" style={{ marginTop: 12, lineHeight: 1.8 }}>
         游戏内所有战队与选手均为真实人物。阵容、国籍、位置、照片、赛事名次与全部比赛数据取自
         <b> vlr.gg</b>；真名、生日、教练、指挥、生涯队伍履历与部分选手照片取自 <b>Liquipedia</b>
-        （图片依 CC BY-SA 3.0 使用）；少量选手照片取自<b>号角 HOJO</b>（haojiao.cc）；英雄池取自真实出场记录。
+        （图片依 CC BY-SA 3.0 使用）；少量选手照片取自<b>号角 HOJO</b>（haojiao.cc）；特工池取自真实出场记录。
         八项能力值由这些真实数据按分位映射得出。合同、薪资与预算为游戏平衡所需的估算值。
       </p>
     </div>

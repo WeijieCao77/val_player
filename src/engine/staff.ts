@@ -145,7 +145,7 @@ export function employedCoaches(state: GameState): { team: Team; coach: Coach; a
 /** Ask a club for permission to speak to their coach. */
 export function approachForCoach(state: GameState, teamId: string, fee: number): string {
   const team = state.teams[teamId]
-  if (!team?.coach) return '这支球队没有主教练。'
+  if (!team?.coach) return '这支战队没有主教练。'
   if (state.staffApproaches?.some((a) => a.teamId === teamId && !a.answer)) {
     return `已经在等 ${team.name} 的答复了。`
   }
@@ -169,7 +169,7 @@ export function resolveApproaches(state: GameState, rng: Rng): string[] {
     const team = state.teams[a.teamId]
     if (!team?.coach || team.coach.name !== a.name) {
       a.answer = 'refused'
-      a.reason = '这名教练已经不在那支球队了'
+      a.reason = '这名教练已经不在那支战队了'
       continue
     }
     const asked = employedCoaches(state).find((x) => x.team.id === a.teamId)?.ask ?? a.fee

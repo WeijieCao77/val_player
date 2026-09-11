@@ -14,7 +14,7 @@ import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
-import { buyCourse, buyGear, buyRelax, GEAR_SLOTS } from './shop'
+import { buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
 import { fanCap } from './fans'
 import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
@@ -183,7 +183,7 @@ export function autoBuy(state: GameState): string[] {
   for (const s of GEAR_SLOTS) {
     if ((me.gear[s.key] ?? 0) >= 1) continue
     if (me.money - 900 < reserve) break
-    if (!buyGear(state, s.key)) out.push(`买了职业级${s.name}`)
+    if (!buyGear(state, s.key)) out.push(`${s.name}换成了${gearModel(s.key, 1)}`)
   }
   if (me.phase === 'pro') {
     if (me.mental < 50 && me.money - 8000 >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
