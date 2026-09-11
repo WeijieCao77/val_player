@@ -6,6 +6,7 @@ import type { Plan, Seat } from './ahead'
 import { regionIn, stageAtIn } from './era'
 import { bookLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
+import { realName } from './names'
 import type { Competition, Fixture, GameState, Region, StageKey, Team, VctSeason } from './types'
 
 /**
@@ -102,7 +103,11 @@ const CIRCUIT = raw as unknown as Record<string, CEvent[]>
 
 const BY_ID = new Map<string, CEvent>()
 const YEAR_OF = new Map<string, number>()
-for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) { BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y)) }
+for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) {
+  BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y))
+  // vlr names every side by its name of today; an event names each by the one it had when the event began (engine/names.ts)
+  for (const v of Object.keys(e.names ?? {})) e.names[v] = realName(v, Number(y), e.start ?? 0)?.name ?? e.names[v]
+}
 
 /* ------------------------------------------------------------------ */
 /*  the years nobody has played yet                                    */

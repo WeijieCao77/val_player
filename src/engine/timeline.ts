@@ -2,6 +2,7 @@ import raw from '../data/timeline.json'
 import lineageRaw from '../data/lineage.json'
 import { canonAgents } from './content'
 import { onTimeline, regionIn } from './era'
+import { realName } from './names'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
 import type { RawTeam } from './teams'
@@ -53,6 +54,13 @@ interface Book {
 }
 
 const BOOK = raw as unknown as Book
+// vlr writes a club's whole past under its name of today: each year of the book opens under the name the club had then (engine/names.ts)
+for (const [y, Y] of Object.entries(BOOK.years)) {
+  for (const [vlr, c] of Object.entries(Y.clubs)) {
+    const real = realName(vlr, Number(y), 0)
+    if (real) { c.n = real.name; c.t = real.tag ?? c.t }
+  }
+}
 const ATTRS = BOOK.meta.attrs as (keyof Attrs)[]
 const FIRST = BOOK.meta.years[0]
 const LAST_BOOK = BOOK.meta.years[BOOK.meta.years.length - 1]

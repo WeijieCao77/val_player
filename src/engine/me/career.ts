@@ -2,6 +2,7 @@ import RAW from '../../data/world.json'
 import RAW_2021 from '../../data/world_2021.json'
 import { createNewGame } from '../world'
 import { bookClubsAt, openWorldAt } from '../timeline'
+import { realName } from '../names'
 import { arrive2026 } from '../today'
 import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
@@ -86,7 +87,11 @@ export function candidateClubs(region: Region, tier: 1 | 2, year = 2026): ClubCh
   }
   return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[])
     .filter((t) => t.region === region && t.tier === tier)
-    .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier }))
+    .map((t) => {
+      // world_2021.json has vlr's names of today; January 2021 had its own (engine/names.ts)
+      const real = year <= 2021 ? realName(t.id.replace(/^V21T/, ''), 2021, 0) : null
+      return { id: t.id, name: real?.name ?? t.name, tag: real?.tag ?? t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier }
+    })
     .sort((a, b) => a.rating - b.rating)
 }
 
