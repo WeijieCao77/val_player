@@ -100,6 +100,34 @@ for (const r of RUNS) {
 console.log(`  合计：职业前每季 ${(tot.preE / Math.max(1, tot.preW) * 52).toFixed(1)} 个 · 职业每季 ${(tot.proE / Math.max(1, tot.proW) * 52).toFixed(1)} 个 · 三条生涯出现过 ${union.size} 种事件`)
 console.log(`  连锁收尾：${Object.entries(tot.chains).map(([k, v]) => `${END_CN[k]} ${v}`).join(' · ') || '无'} · 回响 ${tot.echoes} 次`)
 
+/* ---- 二b、the ladder years on their own: a career that signs in week 18 says little about them ---- */
+{
+  const PRE: any[] = [
+    { name: 'PreA', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'grinder', start: 'pre', seed: 5 },
+    { name: 'PreB', region: 'Americas', role: '哨卫', talents: emptyTalents(), originKey: 'town', start: 'pre', seed: 9 },
+    { name: 'PreC', region: 'Pacific', role: '控场', talents: emptyTalents(), originKey: 'campus', start: 'pre', seed: 13 },
+    { name: 'PreD', region: 'China', role: '先锋', talents: emptyTalents(), originKey: 'late', start: 'pre', seed: 17, year: 2021 },
+  ]
+  let weeks = 0
+  let evs = 0
+  const kinds = new Set<string>()
+  for (const o of PRE) {
+    const s = createCareer(o)
+    const me = s.me!
+    for (let i = 0; i < 52; i++) {
+      if (me.phase === 'pro') break
+      const before = me.eventsSeen
+      if (autoWeek(s).kind === 'game-over') break
+      weeks++
+      evs += me.eventsSeen - before
+    }
+    for (const k of Object.keys(me.eventCounts)) kinds.add(k)
+  }
+  const rate = evs / Math.max(1, weeks) * 52
+  console.log(`  另测 4 条天梯开局，只数签约前的 ${weeks} 周：每季 ${rate.toFixed(1)} 个事件，出现过 ${kinds.size} 种`)
+  if (weeks >= 40 && (rate < 2 || rate > 16)) fail(`职业前每季 ${rate.toFixed(1)} 个事件，不在 2–16 之间`)
+}
+
 /* ---- 三、chains, forced ---- */
 console.log('\n三、连锁：强制开启，一次按推荐走，一次放着不管')
 const warm = createCareer({ name: 'ProbeD', region: 'Europe', role: '先锋', talents: emptyTalents(), originKey: 'streamer', start: 'chal', seed: 31 } as any)

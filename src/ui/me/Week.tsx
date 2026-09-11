@@ -55,6 +55,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}>
+      {/* a chain under way: one line across both columns — how long is left, what it wants (me/story.ts) */}
+      {(() => {
+        const line = chainLine(game)
+        return line ? <div className="node-line" style={{ gridColumn: '1 / -1', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div> : null
+      })()}
       <div>
         <Panel
           title={`本周行动 · 剩 ${me.ap}/${me.apMax} 点`}
@@ -68,11 +73,6 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 <div className="tiny muted" style={{ marginTop: 2 }}>{inj.text}</div>
               </div>
             ) : null
-          })()}
-          {/* a chain under way: one line — what it wants and how long is left (me/story.ts) */}
-          {(() => {
-            const line = chainLine(game)
-            return line ? <div className="node-line" style={{ margin: '0 0 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div> : null
           })()}
           {/* the other budget: what the body has left after this week's plan */}
           {(() => {
