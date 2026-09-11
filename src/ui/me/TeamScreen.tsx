@@ -4,6 +4,7 @@ import { bondBetween } from '../../engine/bonds'
 import { trustLabel } from '../../engine/trust'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, EDGE_NEED } from '../../engine/me/coach'
+import { mateMark } from '../../engine/me/hurtplay'
 import {
   LIST_GATE, SIGN_GATE, attrAvg, canList, canSign, cloutBreakdown, cloutTier,
   doList, doSign, listOdds, signTargets,
@@ -39,7 +40,8 @@ export default function TeamScreen() {
                   <td><Roles p={p} /></td>
                   <td className="num"><OvrBadge value={p.overall} /></td>
                   <td className="num">{p.age}</td>
-                  <td><Condition p={p} day={game.day} /></td>
+                  {/* out hurt: the lay-off in words, with no diagnosis of a real person's body (engine/me/hurtplay.ts) */}
+                  <td>{mateMark(game, p.id) ? <span className="tag warn">{mateMark(game, p.id)}</span> : <Condition p={p} day={game.day} />}</td>
                   <td>{starter ? <span className="tag win">首发</span> : <span className="tag">替补</span>}{target?.id === p.id ? <span className="tag warn" style={{ marginLeft: 4 }}>你的对位</span> : null}</td>
                   <td className="tiny">{isMe ? '—' : `${bondWord(bond)}（${Math.round(bond)}）`}</td>
                 </tr>

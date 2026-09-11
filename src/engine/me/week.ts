@@ -14,6 +14,7 @@ import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek } fr
 import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
+import { hurtBeforeMatch, mateInjuryWeek } from './hurtplay'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
@@ -60,7 +61,10 @@ export function beginWeek(state: GameState): void {
   if (me.phase === 'pro') {
     // who is on the roster this week — and a word for anyone who is not any more
     const before = [...(state.teams[state.myTeam]?.roster ?? [])]
+    const was = [...(state.teams[state.myTeam]?.starters ?? [])]
     weeklyLineup(state)
+    // a team-mate newly out hurt or back, in one line, and whoever steps in (me/hurtplay.ts)
+    mateInjuryWeek(state, was)
     bondSync(state)
     bondReportDepartures(state, before)
   }
@@ -150,6 +154,8 @@ export const LIVING = 0.3
 function keep(n: string): boolean {
   // the manager's desk: sponsors, gigs, staff, the market board, whom to rest
   if (/董事会|行动力|赞助|商务|联盟|捆绑|报价|问价|教练组|分析师|申请|工作邀请|设施|经理|来谈|轮休|状态正热|状态低迷|新挂牌/.test(n)) return false
+  // a lay-off with a diagnosis and a count of days: the week says it in words instead (me/hurtplay.ts mateInjuryWeek)
+  if (n.includes('⚕')) return false
   return true
 }
 
@@ -342,6 +348,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     const today = r.pendingMine && pro ? r.pendingMine : undefined
     if (today) {
       ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
+      // hurt on a day the coach would start me: play through it or sit it out (me/hurtplay.ts)
+      hurtBeforeMatch(state, today)
     }
     if (me.pending.length) {
       if (today) me.dueFixture = today.id
