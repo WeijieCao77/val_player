@@ -104,6 +104,24 @@ export function reachOf(state: GameState): { club: string | null; people: Set<st
 
 const leagueLabel = (c: Pick<TClub, 'l' | 's' | 'r'>): string => (c.l ? `VCT ${c.l}` : `Challengers ${c.s ?? c.r}`)
 
+/**
+ * The tag a club that kept its name went by this year, or null to keep the one it has.
+ *
+ * The book reads each year's tag off that year's scoreboards, so it is right
+ * where a club really changed it — PCIFIC is PCF, Formulation Gaming FMG — and
+ * wrong in two ways a scoreboard can be: a name cut short where the row had no
+ * tag (Team Vikings 「Team」, Anatolia Esports 「Anat」, ANARCHY 「Æ A」), and a
+ * one-event oddity the club never used again (PCIFIC's 「PER」 in 2022). A tag
+ * is taken when it is neither — kept on in a later year of the book, or the
+ * last year the book has the club.
+ */
+function tagOfYear(vlr: string, year: number, c: TClub): string | null {
+  const cut = c.n.normalize('NFD').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toLowerCase()
+  if (!c.t || /[^\x21-\x7e]/.test(c.t) || c.t.toLowerCase() === cut) return null
+  const later = BOOK.meta.years.filter((y) => y > year && BOOK.years[String(y)]?.clubs[vlr])
+  return !later.length || later.some((y) => BOOK.years[String(y)].clubs[vlr].t === c.t) ? c.t : null
+}
+
 function traitsOf(r: TRating | undefined): { key: string; label: string; good: boolean }[] {
   return (r?.t ?? []).map((key) => ({
     key, label: BOOK.meta.traits[key]?.[0] ?? key, good: BOOK.meta.traits[key]?.[1] ?? true,
@@ -537,6 +555,9 @@ export function syncYear(state: GameState, year: number): YearSync {
       out.renamed.push(`${t.name} 更名为 ${c.n}`)
       t.name = c.n
       t.tag = c.t
+    } else if (t.tag !== c.t) {
+      // the name stayed, the tag did not: a club founded in 2022 as 「PER」 plays 2026 as PCF
+      t.tag = tagOfYear(vlr, year, c) ?? t.tag
     }
     wake(state, t)
     t.region = c.r as Region
