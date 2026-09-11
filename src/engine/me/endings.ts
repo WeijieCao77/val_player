@@ -7,6 +7,7 @@ import { WORLD_END } from '../era'
 import { checkAchievements } from './achievements'
 import { retireNight } from './nights'
 import { compClass, isIntlComp } from './compclass'
+import { lifeLines } from './shop'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -44,14 +45,14 @@ export function endingFor(state: GameState): EndingDef {
   return ENDINGS_ME[ENDINGS_ME.length - 1]
 }
 
-/** Hang them up. */
+/** Hang them up. What the money became off the stage (me/shop.ts LIFESTYLE) is the ending's last words. */
 export function retire(state: GameState, why: string): void {
   const me = state.me!
   if (me.phase === 'retired') return
   const e = endingFor(state)
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
-  me.ending = { key: e.key, title: e.title, text: e.text, year: state.year }
+  me.ending = { key: e.key, title: e.title, text: `${e.text}${lifeLines(state).join('')}`, year: state.year }
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)

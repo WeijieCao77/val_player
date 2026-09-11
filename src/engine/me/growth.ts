@@ -9,9 +9,9 @@ import { ACTIONS } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
-import { courseMul, gearTrainMul } from './shop'
+import { REVIEW_MUL, courseMul, gearTrainMul, psychMul } from './shop'
 import { ladderLabel, playRanked } from './prepro'
-import { streamIncome } from './stream'
+import { contentGross, mediaAfterCap, streamWeek } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
 import { cerRestMul } from './ceremony'
@@ -94,7 +94,8 @@ export function primaryFocus(me: MeState, p: Player): keyof Attrs | 'rest' {
   return ATTR_KEYS.filter((k) => open(k) && (k !== 'igl' || p.isIgl)).sort((a, b) => w[b] - w[a])[0] ?? 'rest'
 }
 
-export const tiltDrag = (me: MeState): number => (me.tilt > 55 ? (me.tilt - 55) * 0.04 : 0)
+/** tilt above 55 drags on the calls; 运动心理 takes a fifth off it (me/shop.ts) */
+export const tiltDrag = (me: MeState): number => (me.tilt > 55 ? (me.tilt - 55) * 0.04 * psychMul(me.courses ?? []) : 0)
 
 /** Apply the week's plan at the weekly settlement. */
 export function settleTraining(state: GameState, rng: Rng, notes: string[]): void {
@@ -111,6 +112,15 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   const rose: (keyof Attrs)[] = []
   // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
   const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k)) && !rose.includes(k)) rose.push(k) }
+  // stream and content money share the platform's weekly settlement (me/stream.ts mediaAfterCap)
+  let media = 0
+  let capped = false
+  const payMedia = (gross: number): number => {
+    const got = mediaAfterCap(state, media, gross)
+    media += gross
+    if (got < gross) capped = true
+    return got
+  }
 
   for (const a of ACTIONS) {
     const n = me.plan[a.key] ?? 0
@@ -119,7 +129,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
     switch (a.key) {
       case 'aim': case 'vod': case 'util': {
         const split = SPLIT[a.key]!
-        const mul = a.key === 'vod' ? courseMul(me.courses, 'review', 1.25) : 1
+        const mul = a.key === 'vod' ? courseMul(me.courses, 'review', REVIEW_MUL) : 1
         // without a club the hours are mine alone: no team practice underneath them
         const alone = pro ? 1 : 1.6
         for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) {
@@ -141,7 +151,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         break
       }
       case 'content': {
-        const income = Math.round((80 + me.fans * 1.2) * n)
+        const income = payMedia(contentGross(state, n))
         addMoney(state, 'media', income)
         me.heat += 6 * n
         notes.push(`做了 ${n} 期内容，热度涨了，收入 $${income.toLocaleString()}。`)
@@ -163,13 +173,12 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         bump('communication', g * 0.3 * n)
         break
       case 'stream': {
-        let income = 0
-        for (let i = 0; i < n; i++) income += streamIncome(state)
+        const income = payMedia(streamWeek(state, n))
         addMoney(state, 'media', income)
         me.heat += 9 * n
         me.stream.total += n
         me.stream.thisStage += n
-        notes.push(`直播 ${n} 次，收入 $${income.toLocaleString()}。`)
+        notes.push(`直播 ${n} 次，收入 $${income.toLocaleString()}${n > 1 ? '（同一周里看的是同一批人，后几场礼物少一些）' : ''}。`)
         questProgress(state, 'stream', n)
         break
       }
@@ -186,6 +195,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         break
     }
   }
+  if (capped) notes.push('这周直播和内容挣的钱超过了平台按你工资结算的额度，超出的部分只结了一成。')
   if (me.flags.relax_flat) fatigue -= 3
   // a week passes: the body gets some of it back on its own, more with a
   // better constitution — so an idle week is never a dead week, and a full

@@ -2,7 +2,7 @@ import { useGame } from '../ctx'
 import { Panel, money, moneyFull } from '../common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizePreview, prizeRows } from '../../engine/me/money'
 import type { MeState } from '../../engine/me/types'
-import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, RELAX, buyCourse, buyGear, buyRelax, gearModel, hireAgent } from '../../engine/me/shop'
+import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
 
@@ -102,6 +102,19 @@ export default function EconomyScreen() {
             </div>
           ))}
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>不占行动点；理疗和旅行每周最多两次。</p>
+        </Panel>
+        <Panel title="家人与生活">
+          {LIFESTYLE.map((x) => {
+            const why = lifestyleLocked(game, x)
+            return (
+              <div key={x.key} className="row" style={{ gap: 10, padding: '4px 0' }}>
+                <span style={{ minWidth: 72 }}>{x.name}</span>
+                <span className="tiny muted" style={{ flex: 1 }}>{x.blurb}{why && !me.flags[lifeFlag(x.key)] ? `（${why}）` : ''}</span>
+                {me.flags[lifeFlag(x.key)] ? <span className="tag win">已办</span> : <button className="sm" disabled={!!why} onClick={() => act(buyLifestyle(game, x.key))}>{money(x.price)}</button>}
+              </div>
+            )
+          })}
+          <p className="tiny faint" style={{ margin: '6px 0 0' }}>不改变任何能力和比赛。办过的事，退役时写进你的结局。</p>
         </Panel>
       </div>
     </div>

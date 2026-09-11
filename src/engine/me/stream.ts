@@ -8,9 +8,10 @@ import { addMoney } from './money'
 export const STREAM_CUTS: { at: number; cut: number }[] = [
   { at: 0, cut: 0.50 }, { at: 55, cut: 0.62 }, { at: 160, cut: 0.75 }, { at: 260, cut: 0.88 },
 ]
+/** a contract's guarantee sits a little above what a free channel of that size makes (streamIncome) */
 export const STREAM_TIERS = {
-  B: { minFans: 95, sign: 8000, guarantee: 1500 },
-  S: { minFans: 260, sign: 30000, guarantee: 4000 },
+  B: { minFans: 95, sign: 2000, guarantee: 160 },
+  S: { minFans: 260, sign: 12000, guarantee: 700 },
 }
 export const MIN_STREAMS_PER_STAGE = 2
 export const CLAUSE_FINE = 2000
@@ -25,19 +26,76 @@ export function streamCut(fans: number): number {
   return c
 }
 
-/** One session's money: a floor from the following, gifts from following × heat. */
-export function streamIncome(state: GameState): number {
+/**
+ * One session's money: a little from the following itself, gifts from
+ * following × heat. `mul` is what this session is worth after the week's
+ * earlier ones (STREAM_WEEK_MUL).
+ *
+ * Until 2026-09-11 every session paid a $200 floor and the gifts rose gently,
+ * so a channel of a few thousand followers made $400–750 a stream: measured on
+ * the autopilot, an amateur banked about $35k a season from streams — some
+ * seventeen times what the cups paid him — and a Challengers starter made more
+ * from streams than from his wage. Now a channel
+ * nobody watches earns pocket money and the gifts climb steeply with the
+ * following, so a star's stream is still real money. A signed guarantee is a
+ * guarantee: it is paid in full, whatever the week.
+ */
+export function streamIncome(state: GameState, mul = 1): number {
   const me = state.me!
   const f = Math.min(me.fans, 600)
   const heatMul = clamp(0.45 + me.heat / 730, 0.45, 1.7)
-  const gift = Math.pow(f / 40, 1.22) * 220 * streamCut(me.fans) * heatMul
-  const base = 200 + f * 2.5
+  const gift = Math.pow(f / 40, 1.5) * 60 * streamCut(me.fans) * heatMul
+  const base = f * 0.4
+  const free = (base + gift) * mul
   const streamer = me.originKey === 'streamer' ? 1.5 : 1
   if (me.stream.deal) {
     const d = me.stream.deal
-    return Math.round(Math.max(d.guarantee, (base + gift) * (1 - d.clubCut)) * streamer)
+    return Math.round(Math.max(d.guarantee, free * (1 - d.clubCut)) * streamer)
   }
-  return Math.round((base + gift) * streamer)
+  return Math.round(free * streamer)
+}
+
+/** the same people watch every stream in a week: the second is worth less than the first */
+export const STREAM_WEEK_MUL = [1, 0.75, 0.5, 0.3]
+export const streamWeekMul = (i: number): number => STREAM_WEEK_MUL[Math.min(i, STREAM_WEEK_MUL.length - 1)]
+
+/** A week of `n` streams. */
+export function streamWeek(state: GameState, n: number): number {
+  let sum = 0
+  for (let i = 0; i < n; i++) sum += streamIncome(state, streamWeekMul(i))
+  return sum
+}
+
+/** 做内容: paid by the following, which stops adding views past a point. It used to pay $80 a video to a channel of nobody. */
+export const contentGross = (state: GameState, n: number): number => Math.round(Math.min(state.me!.fans, 1200) * n)
+
+/**
+ * The platform settles side income against the job. In one week, stream and
+ * content money past the larger of a floor and a share of the week's wage pays
+ * only MEDIA_OVER of itself — side income is real income, but it does not
+ * outgrow the salary, the way 破晓's split cap keeps it. A player without a
+ * wage is settled against the floor.
+ *
+ * Measured before (2026-09-11): a player who streamed twice a week took
+ * $400k a season from streams whether his wage was $29k or $132k, and sat on
+ * $3–4M by his eighth season. The target is side income worth about one and a
+ * half Challengers wages, or two thirds of a VCT one, for the same habit.
+ */
+export const MEDIA_FLOOR = 500
+export const MEDIA_WAGE_SHARE = 0.6
+export const MEDIA_OVER = 0.1
+
+export function mediaCapWeek(state: GameState): number {
+  const me = state.me!
+  const wage = me.phase === 'pro' ? (state.players[me.id]?.salary ?? 0) / 52 : 0
+  return Math.max(MEDIA_FLOOR, wage * MEDIA_WAGE_SHARE)
+}
+
+/** What `gross` of side income actually pays, with `before` already earned this week. */
+export function mediaAfterCap(state: GameState, before: number, gross: number): number {
+  const room = Math.max(0, mediaCapWeek(state) - before)
+  const under = Math.min(gross, room)
+  return Math.round(under + (gross - under) * MEDIA_OVER)
 }
 
 /** Weekly: the share moving up, and a platform deciding I am worth a contract. */

@@ -12,7 +12,7 @@ export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | '
 /** The rows a dollar can land on — see me/money.ts for what each one means. */
 export type MoneyKind =
   | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
-  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'fee' | 'fine' | 'outother'
+  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'fee' | 'fine' | 'outother'
 
 /** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
