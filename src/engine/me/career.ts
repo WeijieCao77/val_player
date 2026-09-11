@@ -210,6 +210,8 @@ export function createCareer(o: CareerOpts): GameState {
     achievements: [], titles: [], flags: { ...(origin.flags ?? {}) },
   }
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
+  // the ladder start, remembered: a few achievements are about having come that way (me/achievements.ts)
+  if (o.start === 'pre') me.flags.fromLadder = 1
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
   // the headroom just rolled, split into the eight ceilings (me/bottleneck.ts)

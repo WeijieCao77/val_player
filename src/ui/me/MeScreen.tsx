@@ -8,6 +8,7 @@ import { originOf } from '../../engine/me/origins'
 import { cupOf, cupView } from '../../engine/me/cups'
 import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
+import { wornTitle } from '../../engine/me/achievements'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -39,6 +40,8 @@ export default function MeScreen() {
   const origin = originOf(me.originKey)
   const caps = ceilingsOf(p)
   const pinned = ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k])
+  // the 称号 an achievement gave, picked on the 成就 page (me/achievements.ts)
+  const worn = wornTitle(me)
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
@@ -46,9 +49,12 @@ export default function MeScreen() {
         <Panel
           title={`${p.ign} · ${p.role} · ${p.age} 岁 · ${origin.name}`}
           actions={(
-            <span className="tag t1" title="上限是八项瓶颈按你的位置合起来的综合：破开任何一项，上限跟着涨。">
-              {nums ? `综合 ${p.overall} / 上限 ${p.potential}` : `综合 ${attrWord(p.overall)} · 上限 ${attrWord(p.potential)}`}
-            </span>
+            <>
+              {worn && <span className="tag win" style={{ marginRight: 6 }} title="称号，在「成就」里换">{worn}</span>}
+              <span className="tag t1" title="上限是八项瓶颈按你的位置合起来的综合：破开任何一项，上限跟着涨。">
+                {nums ? `综合 ${p.overall} / 上限 ${p.potential}` : `综合 ${attrWord(p.overall)} · 上限 ${attrWord(p.potential)}`}
+              </span>
+            </>
           )}
         >
           {ATTR_KEYS.map((k) => {

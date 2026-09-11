@@ -23,6 +23,7 @@ import LogScreen from './ui/me/LogScreen'
 import TransferScreen from './ui/me/TransferScreen'
 import EconomyScreen from './ui/me/EconomyScreen'
 import AchievementsScreen from './ui/me/AchievementsScreen'
+import AchPop from './ui/me/AchPop'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
 import Poster from './ui/me/Poster'
@@ -340,6 +341,7 @@ export default function PlayerGame() {
             }}
           />
         )}
+        <AchPop />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>
