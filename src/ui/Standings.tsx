@@ -80,8 +80,10 @@ function Table({ comp, members, cut: cutOverride }: { comp: Competition; members
       {!hasPlayed && <div className="empty">尚未开赛。</div>}
       {concluded && (
         <p className="tiny faint" style={{ padding: '9px 13px', margin: 0 }}>
-          本赛段已结束，排序为<b>最终名次</b>（由季后赛决定），「常规赛」列仍是循环赛战绩——
-          常规赛第一但止步淘汰赛是正常结果。
+          {game.me ? '本赛段已结束，按最终名次排列。' : <>
+            本赛段已结束，排序为<b>最终名次</b>（由季后赛决定），「常规赛」列仍是循环赛战绩——
+            常规赛第一但止步淘汰赛是正常结果。
+          </>}
         </p>
       )}
     </div>
@@ -149,7 +151,8 @@ export default function Standings() {
               <div className={`qual ${qual.tone}`}>
                 <div className="lead">{qual.headline}</div>
                 {qual.lines.map((l, i) => <p key={i}>{l}</p>)}
-                <p className="tiny faint" style={{ margin: 0 }}>{POINTS_NOTE}</p>
+                {/* written for 2025's points table; open years and 2027+ score differently, so the career leaves it out */}
+                {!game.me && <p className="tiny faint" style={{ margin: 0 }}>{POINTS_NOTE}</p>}
               </div>
             </Panel>
           )}
@@ -162,9 +165,12 @@ export default function Standings() {
             >
               {c.format === 'triple' ? (
                 <p className="tiny faint" style={{ padding: '9px 13px', margin: 0 }}>
-                  三败淘汰：十二队，输三场出局。胜者组、中段组、败者组各有一场决赛，三个冠军就是本赛区去 Masters 的三个名额（依次为第 1、2、3 种子）。
-                  上届 Champions 的四队轮空到胜者组第二轮，其余八队抽签进入首轮。
-                  {!c.seeds?.length && '签表还没抽——抽签在总览页弹出，抽完对阵才会出现在这里。'}
+                  {/* the career has no 总览 page and no draw pop-up, and the bye rule is one year's */}
+                  {game.me ? <>三败淘汰；三个组的冠军去 Masters。{!c.seeds?.length && '签表还没抽。'}</> : <>
+                    三败淘汰：十二队，输三场出局。胜者组、中段组、败者组各有一场决赛，三个冠军就是本赛区去 Masters 的三个名额（依次为第 1、2、3 种子）。
+                    上届 Champions 的四队轮空到胜者组第二轮，其余八队抽签进入首轮。
+                    {!c.seeds?.length && '签表还没抽——抽签在总览页弹出，抽完对阵才会出现在这里。'}
+                  </>}
                 </p>
               ) : c.grouped && c.groups ? (
                 <div className="grid c2" style={{ gap: 0 }}>
@@ -228,7 +234,7 @@ export default function Standings() {
                 <tr>
                   <th className="num">#</th><th>选手</th><th>战队</th><th className="num">能力</th>
                   <th className="num">评分</th><th className="num">ACS</th><th className="num">K/D</th>
-                  <th className="num">ADR</th><th className="num">KPR</th>
+                  {!game.me && <><th className="num">ADR</th><th className="num">KPR</th></>}
                   <th className="num">首杀差</th><th className="num">场次</th>
                 </tr>
               </thead>
@@ -248,8 +254,8 @@ export default function Standings() {
                       <td className="num"><b>{ratingOf(p.season).toFixed(2)}</b></td>
                       <td className="num mono">{s.acs.toFixed(0)}</td>
                       <td className="num mono">{s.kd.toFixed(2)}</td>
-                      <td className="num mono">{s.adr.toFixed(0)}</td>
-                      <td className="num mono">{s.kpr.toFixed(2)}</td>
+                      {!game.me && <><td className="num mono">{s.adr.toFixed(0)}</td>
+                      <td className="num mono">{s.kpr.toFixed(2)}</td></>}
                       <td className={`num mono ${s.fkDiff >= 0 ? 'pos' : 'neg'}`}>
                         {s.fkDiff > 0 ? '+' : ''}{s.fkDiff}
                       </td>
@@ -285,7 +291,8 @@ function DrawHistory({ comp }: { comp: Competition }) {
             <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
               <b className="small">{DRAW_KIND_CN[d.kind]}{n ? ` 第 ${n} 轮` : ''}</b>
               <span className="tiny faint">{d.status === 'complete' ? '已完成' : d.status === 'awaiting-choice' ? '等待选择' : '未看完'}</span>
-              <button className="sm ghost" onClick={() => openDraw(d.id)}>{d.watched ? '回看' : '进入抽签'}</button>
+              {/* the career has no draw screen to open: the log below is the draw */}
+              {!game.me && <button className="sm ghost" onClick={() => openDraw(d.id)}>{d.watched ? '回看' : '进入抽签'}</button>}
             </div>
             <p className="tiny muted" style={{ margin: '4px 0' }}>{d.rule}</p>
             <ul className="tiny muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>

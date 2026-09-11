@@ -9,7 +9,8 @@ import { ATTR_KEYS, emptyStats } from '../types'
 import type { Attrs, GameState, Player, Region, Role } from '../types'
 import { recomputeOverall, refreshValue, weightsFor } from '../player'
 import { AP_SEASON } from './actions'
-import { AP_PRE } from './prepro'
+import { AP_PRE, ladderLabel } from './prepro'
+import { fansCn } from './fans'
 import type { MeState } from './types'
 import { beginWeek } from './week'
 import { pushLog } from './log'
@@ -256,7 +257,7 @@ export function createCareer(o: CareerOpts): GameState {
   pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.blurb}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。天梯 ${Math.round(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要 60 个粉丝才请你。`)
+    pushLog(state, 'info', `没有队伍。${ladderLabel(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON

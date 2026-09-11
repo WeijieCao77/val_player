@@ -10,7 +10,7 @@ import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
 import { courseMul, gearTrainMul } from './shop'
-import { playRanked } from './prepro'
+import { ladderLabel, playRanked } from './prepro'
 import { streamIncome } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
@@ -136,7 +136,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         me.body = clamp(me.body + 0.1 * n, 0, 100)
         let w = 0, l = 0
         for (let i = 0; i < n; i++) { const r = playRanked(state, rng); w += r.wins; l += r.losses }
-        notes.push(`排位 ${w} 胜 ${l} 负，天梯 ${Math.round(me.pre.ladder)}。`)
+        notes.push(`排位 ${w} 胜 ${l} 负，${ladderLabel(me.pre.ladder)}。`)
         questProgress(state, 'ranked', n)
         break
       }
@@ -198,7 +198,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
       aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
       clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
     }
-    const line = `${rose.map((k) => `${cn[k]} ${p.attrs[k]}`).join('、')} —— 练上去了（综合 ${p.overall}）。`
+    const line = `${rose.map((k) => cn[k]).join('、')}练上去了。`
     notes.push(line)
     pushLog(state, 'train', line)
   }

@@ -1,5 +1,6 @@
 import type { EdgeBreakdown, MapScore, Role } from '../engine/types'
 import { useGame } from './ctx'
+import { useNumbers } from './me/words'
 
 /**
  * Why the map went the way it did.
@@ -55,6 +56,10 @@ const CORE_ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
 export default function WhyPanel({ map, mineIsA }: { map: MapScore; mineIsA: boolean }) {
   const { game } = useGame()
+  const [nums] = useNumbers()
+  // A player has no coach to replace and no sliders to move: the career says
+  // which terms were ours and which were theirs, and leaves the advice out.
+  const career = !!game.me
   if (!map.edge) {
     return (
       <div className="empty">这场比赛是在此功能上线前打的，没有记录当时的强弱分解。</div>
@@ -114,22 +119,33 @@ export default function WhyPanel({ map, mineIsA }: { map: MapScore; mineIsA: boo
     <div>
       <div className="row wrap" style={{ gap: 10, alignItems: 'baseline', marginBottom: 10 }}>
         <b>综合实力差</b>
-        <span className="mono" style={{
-          fontSize: 18,
-          color: total >= 0 ? 'var(--win)' : 'var(--accent)',
-        }}>
-          {total >= 0 ? '+' : ''}{total.toFixed(1)}
-        </span>
+        {(!career || nums) && (
+          <span className="mono" style={{
+            fontSize: 18,
+            color: total >= 0 ? 'var(--win)' : 'var(--accent)',
+          }}>
+            {total >= 0 ? '+' : ''}{total.toFixed(1)}
+          </span>
+        )}
         <span className="small muted">{verdict}</span>
       </div>
 
       {worst.length > 0 && (
         <p className="small" style={{ marginTop: 0 }}>
           最吃亏的是 <b style={{ color: 'var(--accent)' }}>{worst.map((w) => w.label).join(' 和 ')}</b>
-          。{worst[0].fix}。
+          。{career ? '' : `${worst[0].fix}。`}
         </p>
       )}
 
+      {career ? (
+        <div className="why-me">
+          {rows.map((r) => (
+            <span key={r.key} className={r.diff >= 0 ? 'pos' : 'neg'}>
+              {r.label}{nums ? ` ${r.diff >= 0 ? '+' : ''}${r.diff.toFixed(1)}` : r.diff >= 0 ? ' 占优' : ' 吃亏'}
+            </span>
+          ))}
+        </div>
+      ) : (
       <div className="table-wrap">
         <table>
           <thead>
@@ -158,10 +174,13 @@ export default function WhyPanel({ map, mineIsA }: { map: MapScore; mineIsA: boo
           </tbody>
         </table>
       </div>
+      )}
+      {!career && (
       <p className="tiny faint" style={{ marginBottom: 0 }}>
         这些就是模拟器判定胜负时用的数值本身，不是事后编的解释。数值只决定每回合的胜率，
         不直接决定结果——账面占优照样可能输，那通常意味着状态、体能或运气的问题。
       </p>
+      )}
     </div>
   )
 }

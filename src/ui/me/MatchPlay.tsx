@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Modal, OvrBadge, RoleTag, Roles } from '../common'
-import RoundRibbon, { RibbonLegend } from '../RoundRibbon'
+import RoundRibbon from '../RoundRibbon'
 import MapSchematic from './MapSchematic'
 import { AGENT_ROLE, agentCn, mapCn } from '../../engine/content'
 import { loadRecords, recordsNow } from '../../engine/dossier'
@@ -60,7 +60,7 @@ function RoundFeed({ mm }: { mm: MeMatch }) {
   })
   return (
     <div className="round-feed">
-      <div className="round-feed-head">回合记录 · 共 {total} 回合 · 最新的在最上面</div>
+      <div className="round-feed-head">回合记录</div>
       <div className="round-feed-body">
         {tallied.slice().reverse().map(({ m, mi, rows, my, their }) => (
           <div key={mi}>
@@ -70,7 +70,7 @@ function RoundFeed({ mm }: { mm: MeMatch }) {
                 <span className="round-feed-score">{a} : {b}</span>{roundLine(r, mm.mineIsA)}
                 {mm.nodes.filter((n) => n.map === m.map && n.round === r.n).map((n, i) => (
                   <div key={`call${i}`} className="tiny" style={{ marginTop: 2 }}>
-                    你选了「{n.pick}」—— <b>{n.ok ? '成了' : '没成'}</b>，赢面 {n.before}% → {n.after}%
+                    「{n.pick}」—— <b>{n.ok ? '成了' : '没成'}</b>（赢面 {n.after >= n.before ? '+' : '−'}{Math.abs(n.after - n.before)}）
                   </div>
                 ))}
                 {r.hl?.map((h, i) => <div key={i} className="tiny muted" style={{ marginTop: 2 }}>{h}</div>)}
@@ -182,10 +182,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <p className="center small" style={{ margin: '4px 0 8px' }}>
             <span className={verdictTag(verdict.k)}>{verdict.t}</span>
             <span className="muted" style={{ marginLeft: 8 }}>{verdict.d}</span>
-            <span className="tiny faint" style={{ marginLeft: 8 }}>首图开局赢面 {Math.round((wp ?? 0.5) * 100)}%</span>
           </p>
         )}
-        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="grid mp-sides">
           <div className={`panel ${starterNow ? 'own' : 'alert'}`} style={{ marginTop: 12 }}>
             <div className="panel-head"><h2>{mine.tag} · {starterNow ? '你今晚首发' : '你在替补席'}</h2></div>
             <div className="panel-body">
@@ -228,8 +227,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         )}
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
-            ? '比赛里会有几次要你拿主意的时刻。每次决定后立刻能看到本图赢面怎么变，以及是你的哪一项对上了对方的哪一项。'
-            : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果就行。' : '你不上场就没有决定要做，看结果就行。想上场：跟队训练赛、对位挑战。'}
+            ? '比赛里会有几次要你拿主意。'
+            : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果。' : '你在替补席，这场看结果。'}
         </p>
         <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
           <button className="primary" onClick={() => { startedAt.current = Date.now(); setPhase('live') }}>逐回合观战</button>
@@ -241,7 +240,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
 
   if (phase === 'done' && rec) {
     return (
-      <Modal title={`终场 · ${mine.tag} ${rec.score} ${opp?.tag}`} onClose={onDone} onBgClose={() => {}}>
+      <Modal title="终场" onClose={onDone} onBgClose={() => {}}>
         <div className="score-line" style={{ padding: '6px 0' }}>
           <div className={`t a ${rec.won ? 'win' : ''}`}><Crest id={mm.myTeamId} size={26} /><span>{mine.tag}</span></div>
           <div className="s">{rec.score}</div>
@@ -252,20 +251,12 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <span key={i} className="tag">{mapCn(m.map)} {mm.mineIsA ? `${m.scoreA}-${m.scoreB}` : `${m.scoreB}-${m.scoreA}`}</span>
           ))}
         </div>
-        {rec.mapLog && rec.mapLog.length > 0 && (
-          <p className="tiny muted center" style={{ margin: '0 0 10px' }}>
-            {rec.mapLog.map((m, i) => (
-              <span key={i} style={{ marginRight: 12 }}>{mapCn(m.map)} 开打赢面 {m.before}% → <b style={{ color: m.won ? 'var(--win)' : 'var(--loss)' }}>{m.won ? '拿下' : '丢了'}</b></span>
-            ))}
-          </p>
-        )}
         {rec.started ? (
           <div className="panel own">
             <div className="panel-head"><h2>你的数据</h2></div>
             <div className="panel-body">
               <p className="small" style={{ margin: 0 }}>
-                <b>{rec.kills}/{rec.deaths}/{rec.assists}</b> · ACS <b>{rec.acs}</b> · 首杀 {rec.firstKills} · 残局 {rec.clutches} · 评分 <b>{rec.rating.toFixed(2)}</b>
-                · 队内第 {rec.rank}{rec.mvp ? ' · 全场 MVP' : ''}{rec.carried ? ' · 输了比赛但你全队最高' : ''}
+                <b>{rec.kills}/{rec.deaths}/{rec.assists}</b> · 评分 <b>{rec.rating.toFixed(2)}</b> · 队内第 {rec.rank}{rec.mvp ? ' · MVP' : ''}{rec.carried ? ' · 输了比赛但你全队最高' : ''}
               </p>
             </div>
           </div>
@@ -288,20 +279,16 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               <p className="small" style={{ margin: '0 0 8px' }}>{rec.verdict}</p>
               {rec.blame && <div className={`node-line ${rec.won ? 'ok' : 'bad'}`}>{rec.blame}</div>}
               {rec.edge && rec.edge.length > 0 && (
-                <>
-                  <div className="edge-list">
-                    {rec.edge.slice(0, 7).map((r) => (
-                      <div key={r.key} className="edge-row">
-                        <span className="k">{r.label}</span>
-                        <span className={`v ${r.diff > 0 ? 'up' : 'dn'}`}>{r.diff > 0 ? '+' : ''}{r.diff}</span>
-                        <span className="a muted">{r.advice}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="tiny faint" style={{ margin: '6px 0 0' }}>
-                    正数是你们占优，单位是引擎判定每回合胜率时用的强度。不编解释：这里的每一项都是它真的算过的。
-                  </p>
-                </>
+                <div className="edge-list">
+                  {/* the three that moved it most; which way is the colour and a word, the size rides the 「数值」 switch */}
+                  {rec.edge.slice(0, 3).map((r) => (
+                    <div key={r.key} className="edge-row">
+                      <span className="k">{r.label}</span>
+                      <span className={`v ${r.diff > 0 ? 'up' : 'dn'}`}>{nums ? `${r.diff > 0 ? '+' : ''}${r.diff}` : r.diff > 0 ? '占优' : '吃亏'}</span>
+                      <span className="a muted">{r.advice}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -311,20 +298,22 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <div className="panel" style={{ marginTop: 10 }}>
             <div className="panel-head"><h2>全员数据</h2></div>
             <div className="panel-body">
+              <div className="table-wrap">
               <table className="box">
-                <thead><tr><th></th><th>选手</th><th>K</th><th>D</th><th>A</th><th>ACS</th><th>首杀</th><th>残局</th><th>评分</th></tr></thead>
+                <thead><tr><th></th><th>选手</th><th>K</th><th>D</th><th>A</th><th>ACS</th><th>评分</th></tr></thead>
                 <tbody>
                   {rec.box.map((r) => (
                     <tr key={r.id} className={`${r.mine ? 'mine' : ''}${r.me ? ' me' : ''}`}>
                       <td className="tiny muted">{r.mine ? mine.tag : opp?.tag}</td>
                       <td>{r.ign}<span className="tiny muted"> {r.role}</span></td>
                       <td className="num">{r.k}</td><td className="num">{r.d}</td><td className="num">{r.a}</td>
-                      <td className="num">{r.acs}</td><td className="num">{r.firstKills}</td><td className="num">{r.clutches}</td>
+                      <td className="num">{r.acs}</td>
                       <td className={`num rt ${r.rating >= 1.15 ? 'up' : r.rating < 0.85 ? 'dn' : ''}`}>{r.rating.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         )}
@@ -334,15 +323,12 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-body">
               {rec.nodes.map((n, i) => (
                 <div key={i} className={`node-line ${n.ok ? 'ok' : 'bad'}`}>
-                  <span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · 你选了「{n.pick}」
-                  —— {DIM_CN[n.dim]} <b>{n.mine != null ? sayDim(nums, n.dim, n.mine) : '?'}</b>{n.theirs != null ? <> 对 <b>{sayDim(nums, n.dim, n.theirs)}</b></> : null}（成功率 {n.p}%）
-                  —— <b>{n.ok ? '成了' : '没成'}</b>，赢面 {n.before}% → {n.after}%
+                  <span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · 「{n.pick}」（看{DIM_CN[n.dim]}）—— <b>{n.ok ? '成了' : '没成'}</b> · 赢面 {n.after >= n.before ? '+' : '−'}{Math.abs(n.after - n.before)}
+                  {nums && n.mine != null && <span className="tiny muted">（你 {sayDim(true, n.dim, n.mine)}{n.theirs != null ? ` 对 ${sayDim(true, n.dim, n.theirs)}` : ''}，成功率 {n.p}%）</span>}
                   {n.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{n.hl}</div>}
                 </div>
               ))}
-              <p className="tiny faint" style={{ margin: '6px 0 0' }}>
-                成功率七成看你、三成看队友；风险高的选项成功率更低、摆动更大。做对了不一定赢，做错了也不一定输——但账都在这里。
-              </p>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>做对了不一定赢，做错了也不一定输。</p>
             </div>
           </div>
         )}
@@ -384,7 +370,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <div className="winbar-row">
           <span className="tiny muted">本图赢面</span>
           <div className="winbar" style={{ flex: 1 }}><i style={{ width: `${Math.round(wp * 100)}%` }} /></div>
-          <span className="n">{Math.round(wp * 100)}%</span>
+          {nums && <span className="n">{Math.round(wp * 100)}%</span>}
         </div>
       )}
       {map && (
@@ -394,16 +380,16 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           lastRound={lastRound} mineIsA={mm.mineIsA} agent={mm.myAgent()}
         />
       )}
-      {map && map.rounds.length > 0 && (
+      {/* the legend is on the finished match's sheet; between maps the break panel carries its own ribbon */}
+      {map && !justPlayed && map.rounds.length > 0 && (
         <div style={{ marginBottom: 6 }}>
           <RoundRibbon rounds={map.rounds} mineIsA={mm.mineIsA} mineTag={mine.tag} theirTag={opp?.tag} />
-          <div style={{ marginTop: 6 }}><RibbonLegend /></div>
         </div>
       )}
       {justPlayed ? (
         <div className="node-box">
           <p className="q">{mapCn(justPlayed.map)} {myScore} : {theirScore}，{myScore > theirScore ? '这一把拿下了' : myScore < theirScore ? '这一把丢了' : '这一把打平'}</p>
-          <p className="ctx">大比分 {mm.myMaps} - {mm.theirMaps}{upNext ? `，下一把是${mapCn(upNext)}` : ''}。回到座位上，准备好了再开。</p>
+          {upNext && <p className="ctx">下一把：{mapCn(upNext)}。</p>}
           {justPlayed.rounds && justPlayed.rounds.length > 0 && (
             <div style={{ margin: '8px 0' }}>
               <RoundRibbon rounds={justPlayed.rounds} mineIsA={mm.mineIsA} mineTag={mine.tag} theirTag={opp?.tag} />
@@ -416,7 +402,6 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         </div>
       ) : phase === 'node' && pend ? (
         <div className="node-box">
-          {pend.ctx.agent && <p className="tiny muted" style={{ margin: '0 0 6px' }}>你今晚打 <b>{pend.ctx.agent}</b> · {pend.ctx.role}</p>}
           <RivalNode oppId={oppId} />
           <p className="q">{pend.node.q}</p>
           <p className="ctx">{pend.node.ctx}</p>
@@ -424,12 +409,17 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             {pend.node.a.map((o, i) => {
               const pc = Math.round(nodeChance(game, o, mm.myTeamId) * 100)
               const ro = nodeReadout(game, o, mm.myTeamId, oppId)
+              const risk = o.risk >= 0.85 ? '高风险' : o.risk >= 0.6 ? '中等风险' : '稳健'
+              // who the bet leans on, in a word — within 3 is even; the figures and the odds ride the switch
+              const edge = ro.theirs == null ? `你${sayDim(false, o.dim, ro.mine)}` : Math.abs(ro.mine - ro.theirs) <= 3 ? '差不多' : ro.mine > ro.theirs ? '你占上风' : '对面更强'
               return (
                 <button key={i} onClick={() => choose(i)}>
                   <span>{o.t}</span>
                   <span className="m">
-                    看{DIM_CN[o.dim]}：你 {sayDim(nums, o.dim, ro.mine)}{ro.mates != null ? `（队友均 ${sayDim(nums, o.dim, ro.mates)}）` : ''}{ro.theirs != null ? ` · 对方 ${sayDim(nums, o.dim, ro.theirs)}` : ''}
-                    　成功率 {pc}% · {o.risk >= 0.85 ? '高风险，摆动大' : o.risk >= 0.6 ? '中等风险' : '稳健'}{i === pend.node.rec ? ' · 教练会选这个' : ''}
+                    {nums
+                      ? <>看{DIM_CN[o.dim]}：你 {ro.mine}{ro.mates != null ? `（队友均 ${ro.mates}）` : ''}{ro.theirs != null ? ` · 对方 ${ro.theirs}` : ''}　成功率 {pc}% · {risk}</>
+                      : <>看{DIM_CN[o.dim]} · {edge} · {risk}</>}
+                    {i === pend.node.rec ? ' · 教练会选这个' : ''}
                   </span>
                 </button>
               )
@@ -440,8 +430,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <>
           {last && (
             <div className={`node-line ${last.ok ? 'ok' : 'bad'}`}>
-              你选了「{last.pick}」—— {DIM_CN[last.dim]} <b>{last.mine != null ? sayDim(nums, last.dim, last.mine) : '?'}</b>{last.theirs != null ? <> 对 <b>{sayDim(nums, last.dim, last.theirs)}</b></> : null}
-              —— <b>{last.ok ? '成了' : '没成'}</b>，赢面 {last.before}% → {last.after}%
+              你选了「{last.pick}」（看{DIM_CN[last.dim]}）—— <b>{last.ok ? '成了' : '没成'}</b>，赢面 {last.after >= last.before ? '+' : '−'}{Math.abs(last.after - last.before)}
+              {nums && last.mine != null && <span className="tiny muted">（你 {Math.round(last.mine)}{last.theirs != null ? ` 对 ${Math.round(last.theirs)}` : ''}）</span>}
               {last.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{last.hl}</div>}
             </div>
           )}
@@ -453,7 +443,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       )}
       <RoundFeed mm={mm} />
       {map && (
-        <div className="grid tiny" style={{ gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+        <div className="grid tiny mp-sides" style={{ marginTop: 10 }}>
           <div>
             <div className="faint" style={{ marginBottom: 4 }}>{mine.tag}{!mm.playing && ' · 你不在场上'}</div>
             {myFive.map((p) => {

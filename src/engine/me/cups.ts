@@ -7,6 +7,7 @@ import type { CupRun, PickupMate } from './types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
 import { addMoney } from './money'
+import { fansCn } from './fans'
 
 /**
  * The amateur calendar: what a player with no club can enter, week by week.
@@ -175,11 +176,11 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   if (!cup) return '没有这项赛事。'
   if (me.pre.cup) return `你还在打${cupFor(state, me.pre.cup.key)?.name ?? '另一项赛事'}，打完才能报名。`
   if (me.money < cup.fee) return `报名费 $${cup.fee}，你的钱不够。`
-  if (me.fans < cup.minFans) return `这是邀请赛，要有 ${cup.minFans} 以上的粉丝。`
+  if (me.fans < cup.minFans) return `这是邀请赛，粉丝要过 ${fansCn(cup.minFans)}。`
   addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
   me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [] }
-  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role} ${m.overall}）`).join('、')}。`)
+  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
   return null
 }
 

@@ -186,19 +186,21 @@ function canFire(state: GameState, ev: EventDef): boolean {
 export function describeEffect(e: EffectSpec): string {
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
   const out: string[] = []
-  if (e.money) out.push(`存款 ${num(e.money, ' $')}`)
-  if (e.heat) out.push(`热度 ${num(e.heat)}`)
-  if (e.fans) out.push(`粉丝 ${num(e.fans)}`)
+  // money the way every other screen writes it; followers, heat, nerve and the
+  // room in words — none of their numbers are on a screen any more (fx.ts says the same)
+  if (e.money) out.push(`${e.money > 0 ? '+' : '−'}$${Math.abs(Math.round(e.money)).toLocaleString('en-US')}`)
+  if (e.heat) out.push(e.heat > 0 ? '涨热度' : '热度降')
+  if (e.fans) out.push(e.fans > 0 ? '涨粉' : '掉粉')
   if (e.fatigue) out.push(`体力 ${num(-e.fatigue)}`)
   if (e.form) out.push(`状态 ${num(e.form)}`)
   if (e.mental) out.push(`心态 ${num(e.mental)}`)
   if (e.body) out.push(`体质 ${num(e.body)}`)
-  if (e.tilt) out.push(`气压 ${num(e.tilt)}`)
-  if (e.morale) out.push(`士气 ${num(e.morale)}`)
+  if (e.tilt) out.push(e.tilt < 0 ? '放松' : '上火')
+  if (e.morale) out.push(e.morale > 0 ? '士气涨' : '士气降')
   if (e.coachTrust) out.push(`教练信任 ${num(e.coachTrust)}`)
   if (e.gmTrust) out.push(`经理信任 ${num(e.gmTrust)}`)
   if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
-  if (e.xp) for (const [k, v] of Object.entries(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]} ${num(v as number, '%')}（攒满 100% 涨 1 点）`)
+  if (e.xp) for (const k of Object.keys(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}有长进`)
   if (e.ladder) out.push(`天梯 ${num(e.ladder)}`)
   if (e.scoutSeen) out.push('会有俱乐部记下你')
   if (e.quest) out.push('接一个待办')

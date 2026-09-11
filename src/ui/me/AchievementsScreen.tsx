@@ -51,7 +51,7 @@ export default function AchievementsScreen() {
         })}
       </Panel>
       <Panel title="结局">
-        <p className="tiny faint" style={{ marginTop: 0 }}>退役时按顺序判定，第一个成立的就是你的结局。条件只问存档里的记录。</p>
+        <p className="tiny faint" style={{ marginTop: 0 }}>退役时判定，第一个成立的就是你的结局。</p>
         {ENDINGS_ME.map((e) => (
           <div key={e.key} className="small" style={{ padding: '4px 0', borderBottom: '1px solid var(--line-soft)', opacity: me.ending?.key === e.key ? 1 : 0.7 }}>
             <b>{e.title}</b>{me.ending?.key === e.key ? <span className="tag win" style={{ marginLeft: 6 }}>你的结局</span> : null}

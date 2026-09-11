@@ -373,3 +373,54 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .bar-row .mono.bad { color: var(--loss); }
 /* 试训选项：上面一行是「你在赌什么」，下面一行才是数字 */
 .node-opt button .m.mech { color: var(--faint); }
+
+/* ---- 手机：生涯的页面都是行内写死的两栏（.app.career 只在生涯里有，经理模式不受影响） ----
+   375 宽的时候两栏各剩一百二十几像素，一句话三个字一折行；经济页的按钮直接出了屏幕。 */
+@media (max-width: 720px) {
+  .career { --t-label: 11px; }
+  .career .main .grid[style] { grid-template-columns: minmax(0, 1fr) !important; }
+  .tile b { white-space: normal; font-size: 16px; line-height: 1.25; }
+  .tile b em { display: block; margin: 2px 0 0; }
+  .hero-row, .hero-stage { gap: 4px 10px; }
+  .hero-who, .hero-club, .hero-stage { flex-wrap: wrap; min-width: 0; }
+  .hero-club { margin-left: 0; }
+  .hero-stage b { font-size: 18px; }
+}
+/* 商店一行：名字、档位、型号，按钮放不下就折到下一行，不出屏幕 */
+.shop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 0; }
+.shop-row .nm { min-width: 56px; }
+.shop-row .md { flex: 1 1 8em; min-width: 0; }
+.shop-row button.sm { white-space: normal; text-align: left; margin-left: auto; }
+.clout-row > span:first-child { min-width: 0; }
+.clout-row button.sm { flex: none; }
+/* 对位挑战的八项对照，比赛里两边的五个人：手机上改成两列 / 一列 */
+.duel-compare { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mp-sides { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mp-five .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .duel-compare { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mp-sides { grid-template-columns: minmax(0, 1fr); }
+}
+/* 生涯里的「为什么是这个结果」：只说哪几项占优、哪几项吃亏 */
+.why-me { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-small); margin: 4px 0 0; }
+/* 手机上的共用组件：选手卡标题里的位置标签一个字一行、赛后记录的比分折成两行。经理模式也用这些组件，所以只在 .career 里改 */
+@media (max-width: 720px) {
+  .career .role { white-space: nowrap; }
+  .career .modal-head h3 { min-width: 0; }
+  .career .modal-head h3 .row { flex-wrap: wrap; row-gap: 4px; }
+  .career .mapline { flex-wrap: wrap; row-gap: 4px; }
+  .career .mapline .mono { white-space: nowrap; width: auto !important; }
+}
+/* 平板宽度（768 左右）「我的」还是两栏，一栏只剩两百五十像素：八项的条被挤成 0，文字压在条上。条留 60px 底，文字按自己的宽度，进度说明让位（它有省略号和 title） */
+@media (min-width: 561px) and (max-width: 1100px) {
+  .career .attr-row { grid-template-columns: 48px minmax(60px, 1fr) auto minmax(0, 104px); gap: 6px; }
+}
+/* 平板上本周是两栏，左栏三百来像素，七天挤成一天四十像素，「vs TYL」「负 0-2」都被截断：同样排四列 */
+@media (max-width: 1100px) {
+  .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* 一周七天在手机上排成四列：少一点内边距，「vs NOVA」就不用省略 */
+@media (max-width: 560px) {
+  .week-days { gap: 4px; }
+  .week-day { padding: 5px; }
+}
