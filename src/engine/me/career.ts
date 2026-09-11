@@ -250,6 +250,8 @@ export function createCareer(o: CareerOpts): GameState {
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   // the ladder start, remembered: a few achievements are about having come that way (me/achievements.ts)
   if (o.start === 'pre') me.flags.fromLadder = 1
+  // and a club start's door, for the 成就殿堂's career card (me/hall.ts)
+  else me.flags.startTier = clubTier
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
   // the headroom just rolled, split into the eight ceilings (me/bottleneck.ts)

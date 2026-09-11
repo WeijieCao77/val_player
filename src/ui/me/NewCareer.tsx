@@ -4,7 +4,9 @@ import type { Attrs, GameState, Region, Role } from '../../engine/types'
 import { recomputeOverall } from '../../engine/player'
 import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, startCnOf, startOffers, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
-import { ORIGINS } from '../../engine/me/origins'
+import { ORIGINS, originOf } from '../../engine/me/origins'
+import { hallTitle, readHall } from '../../engine/me/hall'
+import { HallOrigins, HallView } from './HallScreen'
 import { ENTRY_CN, ENTRY_YEARS, regionIn, regionsOf } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel } from '../common'
@@ -37,17 +39,22 @@ export default function NewCareer({
   // who comes for me at a club start: drawn once per visit, so the offers only change with where and how I start
   const [offerSeed] = useState(() => Math.floor(Math.random() * 2 ** 31))
   const [talents, setTalents] = useState(emptyTalents())
+  // the 成就殿堂 opens from here, over the form, and its newest 称号 rides on the button
+  const [hall, setHall] = useState(false)
+  const [hallName] = useState(() => hallTitle(readHall()))
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
   const regions = useMemo(() => regionsFor(year), [year])
   const clubs = useMemo(() => (start === 'pre' ? [] : startOffers(region, start === 't1' ? 1 : 2, year, offerSeed)), [region, start, year, offerSeed])
   const ovr = useMemo(() => recomputeOverall({ role, attrs: buildAttrs(role, talents, originKey), stageBonus: 0 } as never), [role, talents, originKey])
-  const origin = ORIGINS.find((o) => o.key === originKey)!
+  // the twelve, or one of the hall's two
+  const origin = originOf(originKey)
   const starts = startCnOf(year)
   // where a career grinds from, under the league it feeds; 2021 had no leagues to group by
   const groups = useMemo<{ league: Region | null; list: Region[] }[]>(() => (year >= 2023
     ? LEAGUE_ORDER.map((league) => ({ league, list: regions.filter((r) => regionIn(r, year) === league) })).filter((g) => g.list.length)
     : [{ league: null, list: regions }]), [regions, year])
+  if (hall) return <div className="newcareer"><HallView onBack={() => setHall(false)} /></div>
   const homeHint = (year >= 2023
     ? '职业联赛只有这四大赛区，赛区下面的 Challengers 按国家和地区分。'
     : '2021 年还没有联赛，每个赛区各打各的 Challengers。')
@@ -82,6 +89,7 @@ export default function NewCareer({
         世界里的每一支队、每一个人都是真实的 VCT 选手。你是一个虚构的新人——从哪一年、哪里开始，由你定。
       </p>
       {canContinue && <p><button className="primary" onClick={onContinue}>继续上次的生涯</button></p>}
+      <p><button className="sm" onClick={() => setHall(true)}>成就殿堂{hallName ? ` · ${hallName}` : ''} →</button></p>
 
       <Panel title="从哪一年开始" actions={<span className="tiny faint">同一条时间线，两个入口</span>}>
         <div className="start-grid">
@@ -151,6 +159,7 @@ export default function NewCareer({
             </button>
           ))}
         </div>
+        <HallOrigins pick={originKey} onPick={setOriginKey} />
       </Panel>
 
       <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">起始综合约 {ovr}，上限约 {ovr + (origin.flags?.late ? 12 : 16)}</span>}>
