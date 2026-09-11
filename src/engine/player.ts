@@ -36,6 +36,13 @@ export const ROLE_WEIGHT: Record<Role, Record<keyof Attrs, number>> = {
 export const weightsFor = (p: Pick<Player, 'role'>): Record<keyof Attrs, number> =>
   ROLE_WEIGHT[p.role] ?? ATTR_WEIGHT
 
+/** How high this attribute can go: his own ceiling if he carries one (me/bottleneck.ts), otherwise 99. */
+export const ceilingOf = (p: Pick<Player, 'caps'>, k: keyof Attrs): number => p.caps?.[k] ?? 99
+
+/** Sitting at his own ceiling. False for anyone without ceilings, so the rest of the world trains as it always has. */
+export const atOwnCeiling = (p: Pick<Player, 'caps' | 'attrs'>, k: keyof Attrs): boolean =>
+  !!p.caps && p.attrs[k] >= p.caps[k]
+
 export function recomputeOverall(p: Player): number {
   const w = weightsFor(p)
   let v = p.stageBonus ?? 0

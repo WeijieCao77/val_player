@@ -12,9 +12,12 @@ import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from '../../engine/trust'
 import { ladderLabel, ladderTier, skillToLadder, tryoutSkill } from '../../engine/me/prepro'
 import { CUPS, cupView } from '../../engine/me/cups'
+import { attrWord, useNumbers } from './words'
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
+  const [nums] = useNumbers()
+  const say = (v: number) => (nums ? String(Math.round(v)) : attrWord(v))
   const me = game.me!
   const p = game.players[me.id]
   const pro = me.phase === 'pro'
@@ -123,7 +126,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                       <div className="t">对位挑战<span className="tag">2 点</span></div>
                       <div className="d">
                         {target
-                          ? `和 ${target.ign}（${target.overall}）打一场三局两胜的训练赛对位：每局一个场面，你选怎么打。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
+                          ? `和 ${target.ign}（${say(target.overall)}）打一场三局两胜的训练赛对位：每局一个场面，你选怎么打。资本 ${me.edge.toFixed(1)}/${EDGE_NEED}，本周 ${me.duelsThisWeek}/2。`
                           : '替补时向同位置首发发起训练赛对位，三局两胜，赢够三次教练给你试用期。'}
                       </div>
                       {duelWhy && <div className="why">{duelWhy}</div>}
@@ -206,7 +209,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 {me.proven ? '你已经是他认定的首发。' : '在他眼里你还是个没打过多少比赛的新人：跟队训练赛、对位挑战、正赛数据，都会改变这一点。'}
               </p>
               <p className="tiny faint" style={{ margin: 0 }}>
-                首发名单每周一重排。同位置首发：{target ? `${target.ign}（${target.overall}）` : '—'}；你 {p.overall}，上限 {p.potential}。
+                首发名单每周一重排。同位置首发：{target ? `${target.ign}（${say(target.overall)}）` : '—'}；你 {say(p.overall)}，上限 {say(p.potential)}。
               </p>
             </Panel>
             {recent.length > 0 && (
@@ -252,7 +255,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   </p>
                 )
               })}
-              <p className="tiny faint" style={{ margin: '6px 0 0' }}>俱乐部要的水平 vs 你现在：看「转会」页的门槛表。你现在 {Math.round(tryoutSkill(game))}。</p>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>俱乐部要的水平 vs 你现在：看「转会」页的门槛表。你现在 {say(tryoutSkill(game))}。</p>
             </Panel>
             <Panel title="怎么被看见">
               <p className="tiny faint" style={{ margin: 0 }}>

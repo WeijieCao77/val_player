@@ -3,9 +3,11 @@ import { Crest, Panel, money } from '../common'
 import { inWindow, listSelf, nextWindow, perfWord, proPerf, PLAYER_WINDOWS, windowLabel } from '../../engine/me/transfer'
 import { clubBars, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { ROLE_CN } from '../../engine/me/contract'
+import { attrWord, gapWord, useNumbers } from './words'
 
 export default function TransferScreen() {
   const { game, commit, toast } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
   const p = game.players[me.id]
   const pro = me.phase === 'pro'
@@ -59,25 +61,27 @@ export default function TransferScreen() {
         {/* the whole ladder on one card: what each rung asks and how far short
             you are. A locked door has to say what the lock is — grinding
             without seeing the target is what made the pre-pro stretch drag. */}
-        <Panel title="你离下一级还差多少" actions={<span className="tag t1">{Math.round(skill)}</span>}>
+        <Panel title="你离下一级还差多少" actions={<span className="tag t1">{nums ? Math.round(skill) : attrWord(skill)}</span>}>
           <div className="bars">
             {clubBars(game).map((b) => (
               <div key={b.key} className={`bar-row${b.ok ? ' ok' : ''}`}>
                 <span className="n"><b>{b.name}</b> <span className="muted">最低一扇门：{b.example}</span></span>
-                <span className="mono">{b.expect}</span>
+                <span className="mono">{nums ? b.expect : attrWord(b.expect)}</span>
                 <span className={`mono ${b.ok ? 'good' : b.gap <= 6 ? 'warn' : 'bad'}`}>
-                  {b.ok ? '够了' : `差 ${b.gap}`}
+                  {b.ok ? '够了' : nums ? `差 ${b.gap}` : gapWord(b.gap)}
                 </span>
               </div>
             ))}
           </div>
           <p className="tiny faint" style={{ margin: '8px 0 0' }}>
-            差 6 以内还能试一试（评级大概 B/C），差 10 以上基本就是 C/D。
+            {nums ? '差 6 以内还能试一试（评级大概 B/C），差 10 以上基本就是 C/D。' : '「差一点」还能试一试（评级大概 B/C），「差得远」基本就是 C/D。'}
             每一档取的是那一档里<b>最好进的那家</b>，数字会跟着联赛自己变。
           </p>
         </Panel>
       <Panel title="门槛 · 各档俱乐部要什么水平" flush>
-        <p className="tiny faint" style={{ padding: '8px 12px 0' }}>你现在 <b>{Math.round(skill)}</b>（综合 {p.overall} + 战术素养 {Math.round(me.pre.tac)} × 0.15 + 天梯 {Math.round(me.pre.ladder)} × 0.05）。绿色是够得着的。</p>
+        <p className="tiny faint" style={{ padding: '8px 12px 0' }}>{nums
+          ? <>你现在 <b>{Math.round(skill)}</b>（综合 {p.overall} + 战术素养 {Math.round(me.pre.tac)} × 0.15 + 天梯 {Math.round(me.pre.ladder)} × 0.05）。绿色是够得着的。</>
+          : <>你现在 <b>{attrWord(skill)}</b>（综合、战术素养和天梯合起来看）。绿色是够得着的；这张表按俱乐部列，数字照写。</>}</p>
         <table>
           <thead><tr><th>俱乐部</th><th>档</th><th>实力</th><th>要求</th><th>差</th></tr></thead>
           <tbody>

@@ -1,6 +1,6 @@
 import { Rng, clamp } from './rng'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, weightsFor } from './player'
+import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
 import { coachOr, squadOf } from './roster'
 import { duoBonded, weeklyBonds } from './bonds'
 import { analystEdge, staffBonus } from './staff'
@@ -112,6 +112,11 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng): string 
   p.xp[attr] = (p.xp[attr] ?? 0) + gain
   p.fatigue = clamp(p.fatigue + rng.range(5, 11), 0, 100)
 
+  // a player at his own ceiling (me/bottleneck.ts) fills the bar and waits
+  if (atOwnCeiling(p, attr)) {
+    p.xp[attr] = Math.min(p.xp[attr] ?? 0, 100)
+    return null
+  }
   if ((p.xp[attr] ?? 0) >= 100) {
     p.xp[attr] = (p.xp[attr] ?? 0) - 100
     p.attrs[attr] = clamp(p.attrs[attr] + 1, 20, 99)
@@ -129,7 +134,14 @@ function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   // pair drill go through this path, and they used to walk a maxed player
   // several points past his own potential — the number the whole scouting and
   // transfer economy is priced on.
-  if (p.overall >= p.potential) {
+  // A player carrying his own ceilings is held by them instead: the bar fills
+  // and waits, and the one number is re-derived from them (me/bottleneck.ts).
+  if (p.caps) {
+    if (atOwnCeiling(p, k)) {
+      p.xp[k] = Math.min((p.xp[k] ?? 0) + amount, 100)
+      return false
+    }
+  } else if (p.overall >= p.potential) {
     p.xp[k] = Math.min(p.xp[k] ?? 0, 99)
     return false
   }
@@ -549,7 +561,8 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
         // before the loop. Nine attributes each rolling up to +2 against a
         // single stale reading walked a player straight past his own ceiling.
         if (p.overall < p.potential && rng.chance(0.55 * drift)) {
-          p.attrs[k] = clamp(p.attrs[k] + rng.int(0, 2), 20, 99)
+          // his own ceiling holds here too; the dice are rolled the same either way
+          p.attrs[k] = clamp(p.attrs[k] + rng.int(0, 2), 20, Math.max(p.attrs[k], ceilingOf(p, k)))
           recomputeOverall(p)
         }
       } else if (rng.chance(Math.abs(drift) * 0.5)) {
@@ -567,8 +580,8 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     // above, so a fading veteran still trades aim for reading the game.
     recomputeOverall(p)
     if (p.age >= 25 && p.overall < p.potential) {
-      p.attrs.awareness = clamp(p.attrs.awareness + (rng.chance(0.4) ? 1 : 0), 20, 99)
-      if (p.isIgl) p.attrs.igl = clamp(p.attrs.igl + (rng.chance(0.5) ? 1 : 0), 20, 99)
+      p.attrs.awareness = clamp(p.attrs.awareness + (rng.chance(0.4) ? 1 : 0), 20, Math.max(p.attrs.awareness, ceilingOf(p, 'awareness')))
+      if (p.isIgl) p.attrs.igl = clamp(p.attrs.igl + (rng.chance(0.5) ? 1 : 0), 20, Math.max(p.attrs.igl, ceilingOf(p, 'igl')))
     }
 
     recomputeOverall(p)

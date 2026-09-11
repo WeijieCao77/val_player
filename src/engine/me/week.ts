@@ -10,6 +10,7 @@ import type { Fixture, GameState, Player, Role, Team } from '../types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
+import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek } from './bottleneck'
 import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
@@ -239,6 +240,8 @@ function syncTitles(state: GameState): void {
     me.titles.push({ year: t.year, title: t.title, started })
     // whoever was in the room shares it
     bondNoteTitle(state, t.title)
+    // and a trophy I was on the floor for loosens a ceiling (me/bottleneck.ts)
+    if (started) bottleneckTitle(state, t.title)
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? '' : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }
@@ -250,6 +253,8 @@ function onStageChange(state: GameState, rng: Rng): void {
   // the stage's books close with the stage
   ledgerRotate(state)
   cloutStage(state)
+  // a stage at a strong club or beside a veteran loosens a ceiling; read before noteScoutInterest clears the stage's counts
+  bottleneckStage(state)
   if (me.phase !== 'pro') return
   // Champions has just been settled? then whoever lost the final is written down
   const champs = state.comps['champions']
@@ -267,6 +272,8 @@ export function settleWeek(state: GameState): void {
   const notes: string[] = []
   const pro = me.phase === 'pro'
   settleTraining(state, rng, notes)
+  // the plan is still on the board: count it against whatever sits at its ceiling
+  bottleneckWeek(state)
 
   // The pay slip, itemised. The net is unchanged — the agent's cut and the
   // 30% that goes on living have always come off the top — but they used to
@@ -354,7 +361,8 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
     me.pre.year++
     if (me.phase === 'free') me.freeYears++
   }
-  me.seasonStart = { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 }
+  bottleneckSeason(state, pro && s.matches > 0)
+  me.seasonStart ={ year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 }
   me.benchedStages = 0
   me.pre.scoutSeen = Math.round(me.pre.scoutSeen * 0.5)
   // scrimmage rounds the coach saw last year are last year's news

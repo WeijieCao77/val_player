@@ -347,6 +347,29 @@ export interface EffectSpec {
 
 export type Axis = 'hard' | 'warm' | 'grind' | 'show'
 
+/** Where the eight ceilings stand and what already counts toward breaking them — see me/bottleneck.ts. */
+export interface BottleneckState {
+  /** ceiling points opened by the paths you work at, per attribute */
+  mech: Partial<Record<keyof Attrs, number>>
+  /** ceiling points opened by milestones, per attribute — a pool of its own */
+  mile: Partial<Record<keyof Attrs, number>>
+  /** professional seasons that have loosened all eight */
+  exp: number
+  /** one-off sources already paid */
+  seen: string[]
+  /** sessions, clutches or maps counted while an attribute sat at its ceiling */
+  count: Partial<Record<keyof Attrs, number>>
+  /** weeks in a row with at least two 枪法训练 */
+  aimStreak: number
+  /** career clutches and maps at the last count, so only what came after counts */
+  clutchMark: number
+  mapsMark: number
+  /** attributes at their ceiling at the last settlement, so reaching one is said once */
+  pinned: (keyof Attrs)[]
+  /** the potential last derived from the ceilings — anything above it is the winter's re-rating */
+  pot: number
+}
+
 export interface PendingItem {
   kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding'
   id?: string
@@ -399,6 +422,8 @@ export interface MeState {
   money: number
   /** 话语权的两个动作各自的冷却，按赛段计 — see me/clout.ts */
   cloutCd?: { list: number; sign: number }
+  /** the eight ceilings' book; absent in saves from before them, filled at the next settlement */
+  bottleneck?: BottleneckState
   /** the ceremony on screen right now */
   cer?: Ceremony
   /** ceremonies already held, as keys - each fires once */

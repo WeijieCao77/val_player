@@ -124,10 +124,33 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .node-line.ok { border-left-color: var(--win); }
 .node-line.bad { border-left-color: var(--loss); }
 
-.attr-row { display: grid; grid-template-columns: 56px 1fr 44px 70px; gap: 8px; align-items: center; padding: 4px 0; }
+.attr-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 64px 112px; gap: 8px; align-items: center; padding: 4px 0; }
 .attr-row .k { color: var(--muted); font-size: var(--t-small); }
-.attr-row .v { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; }
-.attr-row .xp { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; }
+.attr-row .v { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; white-space: nowrap; }
+.attr-row .v em { font-style: normal; font-weight: 400; color: var(--faint); }
+.attr-row .xp { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attr-row.near .xp { color: var(--warn); }
+.attr-row.capped .xp, .attr-row.capped .v em { color: var(--gold); }
+/* the bar, its ceiling, and the hairline toward the next point */
+.attr-track { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+/* .bar is flex: 1 for rows; stacked in a column that would take its height away */
+.attr-track .bar { flex: none; position: relative; overflow: visible; }
+.attr-track .bar > i { border-radius: 2px; }
+.attr-track .capline { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--gold); border-radius: 1px; }
+.attr-next { height: 2px; background: var(--well); border-radius: 1px; overflow: hidden; }
+.attr-next > i { display: block; height: 100%; background: var(--muted); opacity: .75; }
+.attr-row.capped .attr-next > i { background: var(--gold); }
+@media (max-width: 560px) { .attr-row { grid-template-columns: 44px minmax(0, 1fr) 56px 92px; gap: 6px; } }
+
+/* 怎么破: the attributes at their ceiling, each with its own way through */
+.breaks { margin: 10px 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-left: 2px solid var(--gold); border-radius: var(--radius); }
+.breaks .bh { font-size: var(--t-small); color: var(--muted); margin-bottom: 4px; }
+.breaks .brk { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; font-size: var(--t-small); }
+.breaks .brk .bd { font-weight: 650; }
+.breaks .brk .bp { font-size: var(--t-tiny); color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.breaks .brk.dead .bw, .breaks .brk.dead .bp { color: var(--faint); }
+.breaks .bn { margin: 6px 0 0; font-size: var(--t-tiny); color: var(--faint); }
+.pinbar .pin.cap b { color: var(--gold); }
 
 .diary { list-style: none; margin: 0; padding: 0; }
 .diary li { padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--t-small); display: flex; gap: 10px; }

@@ -40,7 +40,8 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
   if (e.xp && p) {
     for (const [k, v] of Object.entries(e.xp) as [keyof typeof ATTR_CN, number][]) {
       const rose = addXp(p, k, v)
-      out.push(`${ATTR_CN[k]}训练进度 ${num(v)}${rose ? '（升了）' : ''}`)
+      // the bar under each attribute: 100% is one more point
+      out.push(rose ? `${ATTR_CN[k]} 涨到 ${p.attrs[k]}` : `${ATTR_CN[k]} ${num(v, '%')}（攒满 100% 涨 1 点）`)
     }
   }
   if (e.ladder) { me.pre.ladder = clamp(me.pre.ladder + e.ladder, 0, 100); out.push(`天梯 ${num(e.ladder)}`) }

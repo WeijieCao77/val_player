@@ -31,6 +31,8 @@ import Standings from './ui/Standings'
 import MatchModal from './ui/MatchModal'
 import PlayerModal from './ui/PlayerModal'
 import ThemeToggle from './ui/ThemeToggle'
+import { attrWord, bodyWord, fatigueWord, mentalWord, tiltWord, useNumbers } from './ui/me/words'
+import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
@@ -60,9 +62,8 @@ export default function PlayerGame() {
   const [playerId, setPlayerId] = useState<string | null>(null)
   // what a multi-week run did on my behalf, shown once it stops
   const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean } | null>(null)
-  // the attribute strip under the overview; off is remembered per browser
-  const [pins, setPinsRaw] = useState<boolean>(() => { try { return localStorage.getItem('val_player.pins') !== '0' } catch { return true } })
-  const setPins = (f: (v: boolean) => boolean) => setPinsRaw((v) => { const n = f(v); try { localStorage.setItem('val_player.pins', n ? '1' : '0') } catch { /* private mode */ } return n })
+  // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
+  const [nums, setNums] = useNumbers()
   const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => { setBooted(true) }, [])
@@ -148,7 +149,8 @@ export default function PlayerGame() {
         onContinue={() => {
           const g = loadAutosave()
           // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
-          if (g?.me) { resumeTimeline(g); start(g) }
+          // a save from before the eight ceilings gets them now, not at the end of its first week
+          if (g?.me) { resumeTimeline(g); ensureCeilings(g); start(g) }
           else toast('没有找到可用的存档。')
         }}
       />
@@ -157,6 +159,7 @@ export default function PlayerGame() {
 
   const me = game.me
   const p = game.players[me.id]
+  const caps = ceilingsOf(p)
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
@@ -186,13 +189,13 @@ export default function PlayerGame() {
 
         {/* the corner: what changed in this build, and the numbers switch */}
         <Changelog entries={CHANGELOG_ME} latest={LATEST_ME} seenKey="valplayer.changelog.seen" foot="选手生涯 demo · 每一版改了什么都在这里，回看用" />
-        <button className={`support-fab pins-fab${pins ? ' on' : ''}`} onClick={() => setPins((v) => !v)} title="显示或收起属性数字" aria-pressed={pins}>
+        <button className={`support-fab pins-fab${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
           <span className="ico" aria-hidden="true">🔢</span>
-          <span className="lbl">数值 {pins ? '开' : '关'}</span>
+          <span className="lbl">数值 {nums ? '开' : '关'}</span>
         </button>
 
-        {/* who I am, where I am, and the six numbers that matter — the rest of
-            the numbers live one row down and can be switched off */}
+        {/* who I am, where I am, and the six numbers that matter — the rest
+            live one row down, as numbers or as words */}
         <section className="hero" aria-label="总览">
           <div className="hero-row">
             <div className="hero-who">
@@ -236,20 +239,24 @@ export default function PlayerGame() {
           </div>
         )}
 
-        {pins && (
-          <div className="pinbar" role="status" aria-label="属性">
-            {ATTR_KEYS.map((k) => (
-              <span key={k} className="pin"><span>{ATTR_CN[k]}</span><b>{p.attrs[k]}</b></span>
-            ))}
-            <span className="sep" />
-            <span className="pin"><span>综合</span><b>{p.overall}</b></span>
-            <span className="pin"><span>心态</span><b>{Math.round(me.mental)}</b></span>
-            <span className="pin"><span>体质</span><b>{Math.round(me.body)}</b></span>
-            <span className="sep" />
-            <span className={`pin ${p.fatigue >= 60 ? 'dn' : ''}`}><span>疲劳</span><b>{Math.round(p.fatigue)}</b></span>
-            <span className={`pin ${me.tilt >= 55 ? 'dn' : ''}`}><span>气压</span><b>{Math.round(me.tilt)}</b></span>
-          </div>
-        )}
+        <div className="pinbar" role="status" aria-label="属性">
+          {ATTR_KEYS.map((k) => {
+            // an attribute sitting at its ceiling is marked here too; the 我的 page says how to break it
+            const capped = p.attrs[k] >= caps[k]
+            return (
+              <span key={k} className={`pin${capped ? ' cap' : ''}`} title={capped ? `${ATTR_CN[k]}卡在瓶颈，怎么破看「我的」` : undefined}>
+                <span>{ATTR_CN[k]}</span><b>{nums ? p.attrs[k] : attrWord(p.attrs[k])}</b>
+              </span>
+            )
+          })}
+          <span className="sep" />
+          <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
+          <span className="pin"><span>心态</span><b>{nums ? Math.round(me.mental) : mentalWord(me.mental)}</b></span>
+          <span className="pin"><span>体质</span><b>{nums ? Math.round(me.body) : bodyWord(me.body)}</b></span>
+          <span className="sep" />
+          <span className={`pin ${p.fatigue >= 60 ? 'dn' : ''}`}><span>疲劳</span><b>{nums ? Math.round(p.fatigue) : fatigueWord(p.fatigue)}</b></span>
+          <span className={`pin ${me.tilt >= 55 ? 'dn' : ''}`}><span>气压</span><b>{nums ? Math.round(me.tilt) : tiltWord(me.tilt)}</b></span>
+        </div>
 
         <div className="body">
           <nav className="nav">

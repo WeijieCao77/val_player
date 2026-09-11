@@ -1,7 +1,8 @@
 import { Rng, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { GameState } from '../types'
-import { weightsFor } from '../player'
+import { ceilingOf, weightsFor } from '../player'
+import { chasing } from './bottleneck'
 import { ACTION_BY_KEY } from './actions'
 import { advanceWeek, doDuel, setPlan } from './week'
 import type { WeekStop } from './week'
@@ -48,12 +49,15 @@ export function autoPlan(state: GameState): void {
   }
 
   const w = weightsFor(p)
+  // an attribute at its ceiling takes no hours from the steady plan (me/bottleneck.ts) —
+  // except 枪法 while its grind is live, whose ceiling is broken by exactly those hours
   const weakest = ATTR_KEYS
-    .filter((k) => k !== 'igl')
+    .filter((k) => k !== 'igl' && p.attrs[k] < ceilingOf(p, k))
     .sort((a, b) => p.attrs[a] / w[a] - p.attrs[b] / w[b])[0]
   const first = weakest === 'aim' || weakest === 'reaction' ? 'aim'
     : weakest === 'awareness' || weakest === 'clutch' ? 'vod' : 'util'
   spend(first)
+  if (chasing(state, 'aim')) spend('aim')
   if (pro && me.ap >= 3 && !starter) spend('scrim')
   if (!pro) { spend('ranked'); spend('ranked') }
   spend('vod')

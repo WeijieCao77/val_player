@@ -198,7 +198,7 @@ export function describeEffect(e: EffectSpec): string {
   if (e.coachTrust) out.push(`教练信任 ${num(e.coachTrust)}`)
   if (e.gmTrust) out.push(`经理信任 ${num(e.gmTrust)}`)
   if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
-  if (e.xp) for (const [k, v] of Object.entries(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}进度 ${num(v as number)}`)
+  if (e.xp) for (const [k, v] of Object.entries(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]} ${num(v as number, '%')}（攒满 100% 涨 1 点）`)
   if (e.ladder) out.push(`天梯 ${num(e.ladder)}`)
   if (e.scoutSeen) out.push('会有俱乐部记下你')
   if (e.quest) out.push('接一个待办')

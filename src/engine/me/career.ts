@@ -18,6 +18,7 @@ import { makeDeal, joinClub } from './contract'
 import { onTimeline, regionIn, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
+import { ensureCeilings } from './bottleneck'
 
 export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
@@ -210,6 +211,8 @@ export function createCareer(o: CareerOpts): GameState {
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
+  // the headroom just rolled, split into the eight ceilings (me/bottleneck.ts)
+  ensureCeilings(state)
   initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))
   // the ladder starts where the skill puts it, less a season of not having played the top
   me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)

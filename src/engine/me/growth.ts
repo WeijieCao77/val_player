@@ -1,8 +1,9 @@
 import { Rng, clamp } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
-import { recomputeOverall, refreshValue, weightsFor } from '../player'
+import { ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { recommendedTrainingFocus } from '../training'
+import { ceilingRoom } from './bottleneck'
 import { duoBonded } from '../bonds'
 import { ACTIONS } from './actions'
 import type { MeAction, MeState } from './types'
@@ -22,7 +23,8 @@ import { cerRestMul } from './ceremony'
  * well-coached club grows faster from the same eight points — as he should.
  */
 export function gainBase(p: Player, team: Team, rng: Rng): number {
-  const headroom = p.potential - p.overall
+  // with ceilings of his own the headroom is what is left under them (me/bottleneck.ts)
+  const headroom = p.caps ? ceilingRoom(p) : p.potential - p.overall
   if (headroom <= 0) return 0
   const coach = ((team.coach?.development ?? 55) - 55) / 100
   const facility = (team.facilities - 55) / 130
@@ -33,16 +35,22 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
     clamp(headroom / 12, 0.25, 1.6)
 }
 
-/** Progress toward a point; a full bar is a point while there is room under the ceiling. */
+/**
+ * Progress toward a point; a full bar is a point while there is room under the
+ * ceiling. At his own ceiling (me/bottleneck.ts) the bar fills and waits — one
+ * point banked, the rest of the hours go nowhere — and turns into its point the
+ * moment the ceiling moves.
+ */
 export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   if (amount <= 0) return false
   p.xp[k] = (p.xp[k] ?? 0) + amount
   let rose = false
-  while ((p.xp[k] ?? 0) >= 100 && p.overall < p.potential && p.attrs[k] < 99) {
+  while ((p.xp[k] ?? 0) >= 100 && (p.caps || p.overall < p.potential) && p.attrs[k] < ceilingOf(p, k)) {
     p.xp[k] = (p.xp[k] ?? 0) - 100
     p.attrs[k] += 1
     rose = true
   }
+  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = Math.min(p.xp[k] ?? 0, 100)
   if (rose) {
     recomputeOverall(p)
     refreshValue(p)
@@ -66,16 +74,23 @@ const EXTRA = 0.55
  * the way he picks for everyone.
  */
 export function primaryFocus(me: MeState, p: Player): keyof Attrs | 'rest' {
+  // the coach does not spend the club's hours on an attribute sitting at its
+  // ceiling: the next one that session trains, or the heaviest with room
+  const open = (k: keyof Attrs) => p.attrs[k] < ceilingOf(p, k)
   let best: keyof Attrs | null = null
   let bestN = 0
   for (const a of ACTIONS) {
     const n = me.plan[a.key] ?? 0
-    if (!a.attrs || !n) continue
-    if (n > bestN) { bestN = n; best = a.attrs[0] }
+    const k = a.attrs?.find(open)
+    if (!k || !n) continue
+    if (n > bestN) { bestN = n; best = k }
   }
   if (best) return best
   if ((me.plan.rest ?? 0) >= 2) return 'rest'
-  return recommendedTrainingFocus(p)
+  const rec = recommendedTrainingFocus(p)
+  if (rec === 'rest' || open(rec)) return rec
+  const w = weightsFor(p)
+  return ATTR_KEYS.filter((k) => open(k) && (k !== 'igl' || p.isIgl)).sort((a, b) => w[b] - w[a])[0] ?? 'rest'
 }
 
 export const tiltDrag = (me: MeState): number => (me.tilt > 55 ? (me.tilt - 55) * 0.04 : 0)

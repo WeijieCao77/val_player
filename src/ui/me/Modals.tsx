@@ -19,6 +19,7 @@ import { retire } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
+import { attrWord, useNumbers } from './words'
 import Poster from './Poster'
 import ShareCard from './ShareCard'
 import CeremonyModal from './Ceremony'
@@ -97,6 +98,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
 // ------------------------------------------------------------------ invite
 function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => void }) {
   const { game, commit } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   if (!inv) { pop(game, 'invite', inviteId); onDone(); return null }
@@ -114,7 +116,8 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
         </div>
       </div>
       <p className="small" style={{ margin: '12px 0 4px' }}>
-        他们要的水平：<b>{Math.round(expect)}</b>。你现在：<b>{Math.round(skill)}</b>（综合 {game.players[me.id].overall} + 战术素养 + 天梯）。
+        他们要的水平：<b>{nums ? Math.round(expect) : attrWord(expect)}</b>。你现在：<b>{nums ? Math.round(skill) : attrWord(skill)}</b>
+        {nums ? `（综合 ${game.players[me.id].overall} + 战术素养 + 天梯）` : '（综合、战术素养和天梯合起来看）'}。
         {skill >= expect + 8 ? ' 绰绰有余。' : skill >= expect ? ' 够格。' : skill >= expect - 6 ? ' 差一点，四天试训里能补回来。' : ' 差得不少。'}
       </p>
       {/* the most important line on an offer: which game you are signing up for */}

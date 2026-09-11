@@ -6,9 +6,30 @@ import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
 import { fansCn, fanTier } from '../../engine/me/fans'
 import { originOf } from '../../engine/me/origins'
 import { cupOf, cupView } from '../../engine/me/cups'
+import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
+import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
+
+/**
+ * One attribute's bar: the fill is the value, the upright tick is its ceiling
+ * (me/bottleneck.ts), and the hairline under it is the way to the next point.
+ */
+function AttrTrack({ value, cap, next }: { value: number; cap: number; next: number }) {
+  const pct = Math.max(0, Math.min(100, value))
+  const color = pct >= 75 ? 'var(--win)' : pct >= 45 ? 'var(--warn)' : 'var(--loss)'
+  return (
+    <div className="attr-track">
+      <div className="bar">
+        <i style={{ width: `${pct}%`, background: color }} />
+        <span className="capline" style={{ left: `${Math.min(100, cap)}%` }} aria-hidden="true" />
+      </div>
+      <div className="attr-next"><i style={{ width: `${Math.max(0, Math.min(100, next))}%` }} /></div>
+    </div>
+  )
+}
 
 export default function MeScreen() {
   const { game } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
   const p = game.players[me.id]
   const team = me.phase === 'pro' ? game.teams[game.myTeam] : null
@@ -16,28 +37,75 @@ export default function MeScreen() {
   const c = statLine(p.career)
   const recent = me.matches.slice(-10).reverse()
   const origin = originOf(me.originKey)
+  const caps = ceilingsOf(p)
+  const pinned = ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k])
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
-        <Panel title={`${p.ign} · ${p.role} · ${p.age} 岁 · ${origin.name}`} actions={<span className="tag t1">综合 {p.overall} / 上限 {p.potential}</span>}>
-          {ATTR_KEYS.map((k) => (
-            <div key={k} className="attr-row">
-              <span className="k">{ATTR_CN[k]}</span>
-              <Bar value={p.attrs[k]} />
-              <span className="v">{p.attrs[k]}</span>
-              <span className="xp">进度 {Math.round(p.xp[k] ?? 0)}%</span>
+        <Panel
+          title={`${p.ign} · ${p.role} · ${p.age} 岁 · ${origin.name}`}
+          actions={(
+            <span className="tag t1" title="上限是八项瓶颈按你的位置合起来的综合：破开任何一项，上限跟着涨。">
+              {nums ? `综合 ${p.overall} / 上限 ${p.potential}` : `综合 ${attrWord(p.overall)} · 上限 ${attrWord(p.potential)}`}
+            </span>
+          )}
+        >
+          {ATTR_KEYS.map((k) => {
+            const v = p.attrs[k]
+            const cap = caps[k]
+            const next = Math.min(100, Math.round(p.xp[k] ?? 0))
+            const atCap = v >= cap
+            const near = !atCap && cap - v <= 2
+            // 进度 on its own said nothing: say what it is progress toward, and
+            // at the ceiling say that instead
+            const note = atCap ? (cap >= CAP_HARD ? '到头了' : '卡在瓶颈')
+              : nums ? `到 ${v + 1} · ${next}%`
+                : near ? '快到瓶颈'
+                  : attrRank(cap) > attrRank(v) ? `够得着${attrWord(cap)}` : '还在长'
+            const tip = atCap
+              ? (cap >= CAP_HARD ? '99 是所有人的终点。' : '练到瓶颈就上不去了：再练只会把下面那道细线攒满，等瓶颈松开的那一刻涨 1 点。怎么破写在下面。')
+              : nums
+                ? `练到 ${v + 1} 的进度：训练、训练赛、复盘和一些事件都往里攒，攒满 100% 就涨 1 点。瓶颈在 ${cap}，还能再涨 ${cap - v} 点。`
+                : '条下面的细线是练到下一点的进度：训练、训练赛、复盘和一些事件都往里攒，攒满就涨一点。竖线是瓶颈。'
+            return (
+              <div key={k} className={`attr-row${atCap ? ' capped' : near ? ' near' : ''}`}>
+                <span className="k">{ATTR_CN[k]}</span>
+                <AttrTrack value={v} cap={cap} next={next} />
+                <span className="v">{nums ? <>{v}<em>/{cap}</em></> : attrWord(v)}</span>
+                <span className="xp" title={tip}>{note}</span>
+              </div>
+            )
+          })}
+          {pinned.length > 0 && (
+            <div className="breaks">
+              <div className="bh">卡在瓶颈的几项 · 怎么破</div>
+              {pinned.map((k) => {
+                const b = breakInfo(game, k)
+                return (
+                  <div key={k} className={`brk${b.dead ? ' dead' : ''}`}>
+                    <span className="bd">{ATTR_CN[k]}</span>
+                    <span className="bw">{b.dead ?? b.how}{b.locked ? '（签下一支队以后才能开始）' : ''}</span>
+                    <span className="bp">{b.dead ? (caps[k] >= CAP_HARD ? '到头' : '靠里程碑') : b.prog}</span>
+                  </div>
+                )
+              })}
+              <p className="bn">
+                照着做就一定破得开，不看运气。冠军这样的时刻另算，会把残局和沟通的瓶颈顶得更开；每打完一个职业赛季，{SEASON_LOOSENS.map((x) => ATTR_CN[x]).join('、')}也会各松 1 点（最多 {CAP_EXP_MAX} 次）。
+              </p>
             </div>
-          ))}
+          )}
           <div className="attr-row" style={{ marginTop: 8 }}>
-            <span className="k">心态</span><Bar value={me.mental} color="var(--accent)" /><span className="v">{Math.round(me.mental)}</span><span className="xp">大场面的成功率</span>
+            <span className="k">心态</span><Bar value={me.mental} color="var(--accent)" /><span className="v">{nums ? Math.round(me.mental) : mentalWord(me.mental)}</span><span className="xp">大场面里拿主意的成功率</span>
           </div>
           <div className="attr-row">
-            <span className="k">体质</span><Bar value={me.body} color="var(--accent)" /><span className="v">{Math.round(me.body)}</span><span className="xp">休息回多少</span>
+            <span className="k">体质</span><Bar value={me.body} color="var(--accent)" /><span className="v">{nums ? Math.round(me.body) : bodyWord(me.body)}</span><span className="xp">休息能回多少体力</span>
           </div>
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>
             能力是练出来的水位，慢涨慢掉；状态是最近打成什么样。八项按位置加权成综合——{p.role}最看重的是
             {p.role === '决斗者' ? '枪法、反应、残局' : p.role === '先锋' ? '意识、道具、枪法' : p.role === '控场' ? '道具、意识、协同' : '意识、枪法、残局'}。
+            竖线是这一项的瓶颈：练到那里就不涨了，要先把它破开；条下面的细线是练到下一点的进度，攒满涨 1 点。
+            {!nums && ` 文字从低到高：${TIER_LADDER}（职业级 ≈ Challengers 首发，一流起够得上 VCT 联赛首发）。想看具体数字，点右下角的「数值」。`}
           </p>
         </Panel>
         <Panel title="现在">
