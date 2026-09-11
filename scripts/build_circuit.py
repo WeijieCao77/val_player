@@ -628,7 +628,9 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
                 if winner is None:
                     notes['Bo2 平局'] += 1
             else:
-                bo = {1: 1, 2: 3, 3: 5}.get(max(sa or 0, sb or 0), default_bo) if sa is not None and sb is not None else default_bo
+                # a score of 13 or more is one map's rounds: a single map, whatever the unit's default
+                hi = max(sa or 0, sb or 0)
+                bo = (1 if hi >= 13 else {1: 1, 2: 3, 3: 5}.get(hi, default_bo)) if sa is not None and sb is not None else default_bo
                 if winner is None:
                     problems.append(f'{key} 第 {i} 场没有胜者')
             nodes.append({
