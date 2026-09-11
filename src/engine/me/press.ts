@@ -44,9 +44,12 @@ export function weekReport(state: GameState): string[] {
     const f = nextRealFixtureFor(state, state.myTeam)
     if (f) {
       const opp = state.teams[f.teamA === state.myTeam ? f.teamB : f.teamA]
-      const weeks = Math.ceil((f.day - state.day) / 7)
+      // in days under a week: Math.ceil made a match two days off 「1 周后」. The paper is written as
+      // the week's last day closes, so a match still due by today is played tomorrow
+      const days = Math.max(1, f.day - state.day)
+      const when = days < 7 ? `${days} 天后` : `${Math.round(days / 7)} 周后`
       const comp = state.comps[f.comp]?.name ?? f.comp
-      out.push(`📅 下一场 · vs ${opp?.name ?? '?'}（${comp}）· ${weeks <= 0 ? '本周' : `${weeks} 周后`}`)
+      out.push(`📅 下一场 · vs ${opp?.name ?? '?'}（${comp}）· ${when}`)
     }
   }
   return out
