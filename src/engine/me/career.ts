@@ -1,6 +1,8 @@
 import RAW from '../../data/world.json'
 import RAW_2021 from '../../data/world_2021.json'
 import { createNewGame } from '../world'
+import { bookClubsAt, openWorldAt } from '../timeline'
+import { arrive2026 } from '../today'
 import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS, emptyStats } from '../types'
@@ -13,7 +15,7 @@ import { beginWeek } from './week'
 import { pushLog } from './log'
 import { originOf } from './origins'
 import { makeDeal, joinClub } from './contract'
-import { onTimeline, stageNameIn } from '../era'
+import { onTimeline, regionIn, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
 
@@ -73,15 +75,53 @@ export interface ClubChoice { id: string; name: string; tag: string; rating: num
 type BookClub = { id: string; name: string; tag: string; region: string; tier: number; rating: number; roster: string[] }
 
 export function candidateClubs(region: Region, tier: 1 | 2, year = 2026): ClubChoice[] {
+  // 2026 opens on the one timeline: its clubs are the roster book's, as 2026 really opened
+  if (year >= 2026) {
+    return bookClubsAt(year).filter((t) => t.region === region && t.tier === tier)
+      .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster, tier: t.tier }))
+      .sort((a, b) => a.rating - b.rating)
+  }
   return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[])
     .filter((t) => t.region === region && t.tier === tier)
     .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier }))
     .sort((a, b) => a.rating - b.rating)
 }
 
+/** The regions a career can open in that year: the ones its world has clubs in, busiest first. */
+export function careerRegions(year: number): Region[] {
+  if (year < 2026) return []
+  const count = new Map<Region, number>()
+  for (const t of bookClubsAt(year)) count.set(t.region, (count.get(t.region) ?? 0) + 1)
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([r]) => r)
+}
+
+/**
+ * 2026's world, on the one timeline: 2021's roster book brought up to 2026 as it
+ * really opened (engine/timeline.ts openWorldAt), with the coaches and the
+ * professionals below the leagues that 2026's own files know of (engine/today.ts).
+ */
+function createWorldAt(teamId: string, name: string, seed: number, year: number): GameState {
+  const state = createNewGame((RAW_2021.teams as BookClub[])[0].id, name, seed, undefined, 2021)
+  // nobody's club yet: history moves every club while the world is brought up
+  state.myTeam = ''
+  openWorldAt(state, year)
+  if (year === 2026) arrive2026(state, [])
+  state.news = []
+  state.training = {}
+  state.myTeam = teamId
+  const club = state.teams[teamId]
+  state.finances = { balance: club?.budget ?? 0, log: [] }
+  state.startingSquad = [...(club?.roster ?? [])]
+  state.startTier = club?.tier
+  state.startFacilities = club?.facilities
+  return state
+}
+
 function pickClub(region: Region, tier: 1 | 2, rng: Rng, year = 2026): string {
   const pool = candidateClubs(region, tier, year).filter((t) => t.roster <= 6)
   const list = pool.length ? pool : candidateClubs(region, tier, year)
+  // China's second tier plays its first event of 2026 in the summer: on New Year's Day there is no such club to sign for
+  if (!list.length) throw new Error(`${year} 年开季时 ${region} 没有${tier === 1 ? '一线' : '二线'}俱乐部可以签`)
   // the weaker the club, the likelier it takes a chance on an unknown —
   // squared, so a 74 is about five times as likely as an 88
   const w = list.map((t) => Math.max(4, 100 - t.rating) ** 2)
@@ -114,20 +154,25 @@ export function createCareer(o: CareerOpts): GameState {
   const origin = originOf(o.originKey)
   const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
   const year = o.year ?? 2026
+  // a league's name is not a place a club is based: in 2026's world a career asked to open in
+  // 「Pacific」 opens in the busiest real region the Pacific league draws on
+  const region = year >= 2026 && !careerRegions(year).includes(o.region)
+    ? careerRegions(year).find((r) => regionIn(r, year) === o.region) ?? o.region
+    : o.region
   const teamId = o.start === 'pre'
-    ? candidateClubs(o.region, 2, year)[0]?.id ?? candidateClubs(o.region, 1, year)[0].id   // a club to watch until I have one
-    : (o.teamId ?? pickClub(o.region, clubTier, rng, year))
-  const state = createNewGame(teamId, o.name, seed, undefined, year)
+    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // a club to watch until I have one
+    : (o.teamId ?? pickClub(region, clubTier, rng, year))
+  const state = year >= 2026 ? createWorldAt(teamId, o.name, seed, year) : createNewGame(teamId, o.name, seed, undefined, year)
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
 
   const attrs = buildAttrs(o.role, o.talents, o.originKey, rng)
-  const model = Object.values(state.players).find((p) => p.role === o.role && p.region === o.region && (p.agentPool?.length ?? 0) >= 3)
+  const model = Object.values(state.players).find((p) => p.role === o.role && p.region === region && (p.agentPool?.length ?? 0) >= 3)
     ?? Object.values(state.players).find((p) => p.role === o.role && (p.agentPool?.length ?? 0) >= 3)
   const age = origin.flags?.late ? 20 : o.start === 'pre' ? 17 : 18
 
   const p: Player = {
-    id: ME_ID, ign: o.name, teamId: null, region: o.region, nat: o.nat ?? NAT_DEFAULT[o.region],
+    id: ME_ID, ign: o.name, teamId: null, region: region, nat: o.nat ?? NAT_DEFAULT[region],
     realName: null, birth: null, ageEstimated: false,
     role: o.role, roles: [o.role], flex: false, age,
     isIgl: false, iglSource: 'inferred',
@@ -156,7 +201,7 @@ export function createCareer(o: CareerOpts): GameState {
     seasonStart: { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 },
     benchedStages: 0, startedThisStage: 0, playedThisStage: 0,
     pre: { year: 1, ladder: 0, ladderPeak: 0, cups: [], scoutSeen: origin.scoutSeen ?? 0, invites: [], seen: [], tac: origin.tac ?? 0, mates: [], wasPro: false },
-    deals: [], intents: [], declined: [], tenure: 0, freeYears: 0, region: o.region, abroad: false,
+    deals: [], intents: [], declined: [], tenure: 0, freeYears: 0, region: region, abroad: false,
     stream: { cut: 0, thisStage: 0, total: 0 }, gear: {}, courses: [], agentTier: 0, relaxUsed: 0,
     axes: { hard: 0, warm: 0, grind: 0, show: 0 }, traits: [], eventCounts: {}, quests: [], eventsSeen: 0,
     auto: { buy: false, biz: false, daily: false, career: false }, autoNotes: [],

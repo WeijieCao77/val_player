@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { ATTR_CN, ATTR_KEYS, REGION_CN, REGIONS } from '../../engine/types'
+import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
 import { recomputeOverall } from '../../engine/player'
-import { buildAttrs, candidateClubs, createCareer, emptyTalents, startCnOf, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
+import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, startCnOf, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS } from '../../engine/me/origins'
 import { ENTRY_CN, ENTRY_YEARS, regionsOf } from '../../engine/era'
@@ -14,10 +14,11 @@ const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 /**
  * The regions a career can open in that year: the ones that year's world has
  * clubs in. 2021's SEA is a stage its sub-regions played up to, not a place a
- * club was based, so it is not offered.
+ * club was based, so it is not offered. 2026 is the one timeline's 2026: its
+ * clubs are based where they really are, not in the four leagues' names.
  */
 const regionsFor = (year: EntryYear): Region[] => (year >= 2026
-  ? REGIONS
+  ? careerRegions(year)
   : regionsOf(year).filter((r) => candidateClubs(r, 1, year).length + candidateClubs(r, 2, year).length > 0))
 
 export default function NewCareer({
@@ -128,7 +129,7 @@ export default function NewCareer({
         <p className="tiny faint" style={{ marginTop: 0 }}>
           {year <= 2021
             ? '每点 +3。打进过赛区决赛的俱乐部，首发中位数是 81；只打过海选的俱乐部约 68——差距要在天梯、杯赛、训练赛里补。'
-            : '每点 +3。一级联赛首发的中位数是 80，Challengers 首发约 66——差距要在天梯、杯赛、训练赛里补。'}
+            : '每点 +3。一级联赛首发大多在 80 上下，Challengers 首发多在六十几——差距要在天梯、杯赛、训练赛里补。'}
         </p>
         <div className="talent-grid">
           {ATTR_KEYS.map((k) => (

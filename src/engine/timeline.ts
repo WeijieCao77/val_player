@@ -589,6 +589,46 @@ export function syncYear(state: GameState, year: number): YearSync {
   return out
 }
 
+/* ------------------------------------------------------------------ */
+/*  a world that enters the timeline later than 2021                   */
+/* ------------------------------------------------------------------ */
+
+export interface BookClubChoice { id: string; name: string; tag: string; region: Region; tier: 1 | 2; rating: number; roster: number }
+
+/** The clubs the book has playing when `year` opens, for the new-career screen. */
+export function bookClubsAt(year: number): BookClubChoice[] {
+  const Y = BOOK.years[String(year)]
+  if (!Y) return []
+  return Object.entries(Y.clubs)
+    .filter(([vlr, c]) => c.d <= LATE_START && (Y.rosters[vlr]?.length ?? 0) >= 5)
+    .map(([vlr, c]) => ({ id: clubId(vlr), name: c.n, tag: c.t, region: c.r as Region, tier: c.k, rating: c.o, roster: Y.rosters[vlr].length }))
+}
+
+/**
+ * Bring a world built on 2021's roster book up to `year` on the book alone: every
+ * year's clubs founded and gone, rosters as they opened, ratings off that year's
+ * numbers, people who never played again gone — with no season played between.
+ *
+ * It is what a career entering in 2026 opens on: the same world a 2021 career
+ * carries into 2026, on the same ruler, rather than a 2026 some other builder
+ * made. The clubs that stopped playing on the way are not kept — a world that
+ * did not live through those years has no club histories to show them in.
+ */
+export function openWorldAt(state: GameState, year: number): void {
+  for (let y = FIRST + 1; y <= year; y++) {
+    // a winter each, as the rollover would have given it
+    for (const p of Object.values(state.players)) p.age += 1
+    state.year = y
+    const r = syncYear(state, y)
+    for (const id of r.retire) delete state.players[id]
+  }
+  for (const t of Object.values(state.teams)) if (t.dormant) delete state.teams[t.id]
+  for (const p of Object.values(state.players)) {
+    if (p.teamId && !state.teams[p.teamId]) p.teamId = null
+    p.clubHist = (p.clubHist ?? []).filter((h) => !!state.teams[h.team])
+  }
+}
+
 /**
  * Before an event: every real side out of the player's reach takes the field
  * with the people it really brought. Returns the clubs that first appear here.

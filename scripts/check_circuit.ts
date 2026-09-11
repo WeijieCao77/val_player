@@ -22,7 +22,11 @@
  * world at once, 2025 into 2026 included, and the years nobody has played yet
  * change only what the game itself changes.
  *
- *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet]
+ * The 2026 entrance opens on the same timeline: a nobody who starts on the
+ * ladder in 2026 reaches nothing, so every 2026 event played so far keeps
+ * its real result and Champions 2026 is the sixteen that really qualified.
+ *
+ *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet|entry2026]
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
@@ -350,7 +354,34 @@ if (!only || only === 'careers') {
 }
 if (!only || only === 'bystander') bystander()
 if (!only || only === 'lineage') lineage()
+/** The 2026 entrance: 2026 as it really opened, on the timeline's own ruler — not another world. */
+function entry2026(): void {
+  const t0 = Date.now()
+  const state = createCareer({
+    name: 'Watcher', region: 'China', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year: 2026,
+  })
+  const books = Object.values(state.comps).filter((c) => c.format === 'circuit')
+  const clubs = Object.values(state.teams).filter((t) => !t.dormant).length
+  console.log(`\n== 2026 入口：${state.year} 年开局 · 在打的俱乐部 ${clubs} 家 · 日历上 ${books.length} 项赛事（其中还没打的 ${books.filter((c) => c.circuit!.id.startsWith('F')).length} 项）`)
+  if (!Object.keys(state.teams).some((id) => id.startsWith('V21T'))) fail('2026 入口：世界应该是时间线上的 2026，而不是另一套世界')
+  if (clubs < 180) fail(`2026 入口：真实 2026 年开季的俱乐部有两百多家，这里只有 ${clubs} 家`)
+  if (books.length < 50) fail(`2026 入口：日历上只有 ${books.length} 项赛事`)
+  let guard = 0
+  try {
+    while (state.year === 2026 && state.day < 340 && !state.gameOver && guard++ < 60) autoWeek(state)
+  } catch (e) {
+    fail(`2026 入口：第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+    return
+  }
+  season(state, '2026 入口', 2026, state.me?.phase !== 'pro')
+  const sim = Object.values(state.comps).filter((c) => c.circuit?.mode === 'sim' && c.circuit.why !== 'ahead' && c.circuit.why !== 'mine')
+  if (state.me?.phase !== 'pro' && sim.length) fail(`2026 入口：没有俱乐部的人却让 ${sim.length} 场真实赛事被模拟：${sim.slice(0, 4).map((c) => c.name).join('、')}`)
+  champions2026(state)
+  console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
 if (!only || only === 'quiet') quiet()
+if (!only || only === 'entry2026') entry2026()
 
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

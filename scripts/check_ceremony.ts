@@ -28,7 +28,9 @@ const seasons = Number(process.argv[2] ?? 6)
 const seed = Number(process.argv[3] ?? 7)
 
 const state = createCareer({
-  name: 'Probe', region: 'China', role: '决斗者',
+  // 2026 opens on the real 2026, whose Chinese second-tier clubs play their first event in the summer:
+  // a Challengers start is a European club's
+  name: 'Probe', region: 'Europe', role: '决斗者',
   talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed,
 })
 const me = state.me!
