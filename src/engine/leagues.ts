@@ -14,7 +14,8 @@ import type { Competition, GameState, StageKey, Team, VctSeason } from './types'
  * has eight; it has not said how the eight are chosen. Until it does: the day
  * after Champions, next season's eight of each league are this world's best of
  * the two seasons before — chosen for 2027, kept for 2028, chosen again for
- * 2029, 2031 and 2033 — and China's two visitors are the top two of its
+ * 2029, 2031 and 2033, letting in at most MAX_NEW_PARTNERS clubs from outside
+ * each time — and China's two visitors are the top two of its
  * Ascension. At the turn of the year they take their tiers, and the sides the
  * November open qualifiers sent through carry into Kickoff, if three of the
  * five who won the place are still on the team (Riot's rule for a side that is
@@ -28,6 +29,14 @@ import type { Competition, GameState, StageKey, Team, VctSeason } from './types'
 
 /** The day after Champions' final (266–290): next season's leagues are announced. */
 export const ANNOUNCE_DAY = 293
+
+/**
+ * 暂定 7: a reselection lets at most this many clubs from outside into a
+ * league's eight, and one more for each partner since gone — the pace the
+ * leagues really took new clubs at, one a year through Ascension from 2024 to
+ * 2026. The author's call, 2026-09-11. 2027's first eight are not held to it.
+ */
+export const MAX_NEW_PARTNERS = 2
 
 const WEIGHT: Partial<Record<StageKey, number>> = { kickoff: 1, stage1: 1, stage2: 1, masters1: 2, masters2: 2, champions: 3 }
 const placePoints = (p: number): number => (p === 1 ? 10 : p === 2 ? 8 : p === 3 ? 6 : p === 4 ? 5 : p <= 6 ? 4 : p <= 8 ? 3 : p <= 12 ? 2 : 1)
@@ -108,12 +117,22 @@ function drawLeagues(state: GameState, year: number): VctSeason {
     (score[b.id] ?? 0) - (score[a.id] ?? 0) || a.tier - b.tier || b.rating - a.rating || a.id.localeCompare(b.id)
   const partners: Record<string, string[]> = {}
   for (const L of LEAGUES) {
-    const clubs = Object.values(state.teams).filter((t) => active(t) && regionIn(t.region, year) === L)
-    let eight = fresh ? clubs.sort(by(two)).slice(0, 8) : (prev?.partners[L] ?? []).map((id) => state.teams[id]).filter(active)
+    const ranked = Object.values(state.teams).filter((t) => active(t) && regionIn(t.region, year) === L).sort(by(two))
+    const kept = (prev?.partners[L] ?? []).map((id) => state.teams[id]).filter(active)
+    let eight: Team[]
+    if (!fresh) eight = kept
+    else if (!prev) eight = ranked.slice(0, 8)
+    else {
+      // the best eight of the two seasons, but no more than MAX_NEW_PARTNERS of them from outside — one
+      // more for each partner since gone — and the other seats to the best of the partners already there
+      const was = new Set(kept.map((t) => t.id))
+      const newcomers = ranked.slice(0, 8).filter((t) => !was.has(t.id)).slice(0, MAX_NEW_PARTNERS + 8 - kept.length)
+      eight = [...ranked.filter((t) => was.has(t.id)).slice(0, 8 - newcomers.length), ...newcomers]
+    }
     if (eight.length < 8) {
       // a partner that has since folded: the next best of the two seasons takes its seat
       const have = new Set(eight.map((t) => t.id))
-      eight = [...eight, ...clubs.filter((t) => !have.has(t.id)).sort(by(two)).slice(0, 8 - eight.length)]
+      eight = [...eight, ...ranked.filter((t) => !have.has(t.id)).slice(0, 8 - eight.length)]
     }
     // best of the season just played first: Kickoff's four byes
     partners[L] = eight.sort(by(last)).map((t) => t.id)
@@ -136,7 +155,8 @@ function drawLeagues(state: GameState, year: number): VctSeason {
 
 function announce(state: GameState, s: VctSeason, notes: string[]): void {
   const leagues = LEAGUES.map((L) => `${REGION_CN[L]} ${s.partners[L].map((id) => nameOf(state, id)).join('、')}`).join('；')
-  const rule = s.reselected ? `按 ${s.year - 2}–${s.year - 1} 两年成绩取前 8` : '合作名单两年一选，这一年不变'
+  const rule = !s.reselected ? '合作名单两年一选，这一年不变'
+    : `按 ${s.year - 2}–${s.year - 1} 两年成绩取前 8${s.year > FIRST_AHEAD ? `，每个联赛最多换进 ${MAX_NEW_PARTNERS} 支新队` : ''}`
   state.news.push({
     day: state.day, kind: 'league', important: true,
     text: `🏛️ ${s.year} 赛季合作战队${s.reselected ? '公布' : '不变'}（暂定规则：${rule}）：${leagues}。`

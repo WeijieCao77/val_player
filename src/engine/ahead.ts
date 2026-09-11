@@ -28,7 +28,8 @@ import type { Region, StageKey } from './types'
  *  4. Masters in 2026's format: each league's top three of Kickoff, then of Cup 1
  *  5. Champions in 2026's format: each league's top four of Cup 2, and no points
  *  6. 2026's dates, and no host city nobody has announced
- *  7. 2028 as 2027; from 2029 the partners are chosen again every two years
+ *  7. 2028 as 2027; from 2029 the partners are chosen again every two years,
+ *     at most two new clubs a league each time (engine/leagues.ts)
  *
  * Every graph is a real one, retimed: 2026's Kickoffs, Stage 1s and Americas
  * play-ins, Santiago and London, Champions 2025. An open qualifier's last stage

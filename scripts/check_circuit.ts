@@ -40,6 +40,7 @@ import { advanceUntil, autoWeek, quietAhead } from '../src/engine/me/auto'
 import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
+import { MAX_NEW_PARTNERS } from '../src/engine/leagues'
 import type { Competition, GameState, Region } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
@@ -472,8 +473,15 @@ function ahead(): void {
   const now = state.vct?.now
   if (state.year !== 2029 || now?.year !== 2029) { fail(`新赛制：没有走进 2029 赛季（${state.year} 年，${state.gameOver ?? ''}）`); return }
   if (!now.reselected) fail('新赛制：2029 赛季应该按 2027–2028 两年成绩重选合作队')
-  const changed = L4.map((L) => `${L} 换了 ${now.partners[L].filter((t) => !(partners2028?.[L] ?? []).includes(t)).length} 支`).join(' · ')
-  console.log(`  2029 重选合作队：${changed} · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+  const changed = L4.map((L) => {
+    const was = partners2028?.[L] ?? []
+    const fresh = now.partners[L].filter((t) => !was.includes(t)).length
+    // a partner since gone frees its seat on top of the cap
+    const gone = was.filter((t) => !state.teams[t] || state.teams[t].dormant || state.teams[t].roster.length < 5).length
+    if (fresh > MAX_NEW_PARTNERS + gone) fail(`新赛制：2029 ${L} 换进 ${fresh} 支新合作队，每次最多 ${MAX_NEW_PARTNERS} 支`)
+    return `${L} 换了 ${fresh} 支`
+  }).join(' · ')
+  console.log(`  2029 重选合作队（每个联赛最多换 ${MAX_NEW_PARTNERS} 支）：${changed} · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
 if (!only || only === 'quiet') quiet()
