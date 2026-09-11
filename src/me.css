@@ -427,3 +427,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .week-days { gap: 4px; }
   .week-day { padding: 5px; }
 }
+
+/* a club background on a ladder start: visible, greyed, with the reason */
+.origin-pick.locked { opacity: .55; cursor: not-allowed; }
+.origin-pick .why { display: block; margin-top: 4px; font-size: var(--t-tiny); color: var(--warn); }

@@ -9,6 +9,8 @@ export interface Origin {
   key: string
   name: string
   blurb: string
+  /** a background that belongs to a club: only for a career that starts at one (新生涯页 greys it out for 天梯开局) */
+  needsClub?: boolean
   attrs?: Partial<Record<keyof Attrs, number>>
   money?: number
   fans?: number
@@ -31,7 +33,7 @@ export const ORIGINS: Origin[] = [
   { key: 'streamer', name: '小主播', blurb: '直播间已经有一批固定观众，比赛打得少。', fans: 90, attrs: { teamwork: -3 }, money: 6000, flags: { streamer: 1 } },
   { key: 'radiant', name: '国服榜一路人王', blurb: '天梯上的名字，队伍里的新人。', attrs: { aim: 6, reaction: 2, teamwork: -4, communication: -3 }, ladder: 28, fans: 40 },
   { key: 'rich', name: '富裕家庭', blurb: '家里全力支持，也没什么人当回事。', money: 40000, fans: -10, mental: -4 },
-  { key: 'academy', name: '青训营出身', blurb: '在一家俱乐部的青训营待过一年，被教练记住了。', attrs: { utility: 3, teamwork: 3, communication: 2 }, tac: 14, scoutSeen: 3, money: 1000 },
+  { key: 'academy', name: '青训营出身', blurb: '在这家俱乐部的青训营待过一年，被教练提了上来。', needsClub: true, attrs: { utility: 3, teamwork: 3, communication: 2 }, tac: 14, scoutSeen: 3, money: 1000 },
   { key: 'campus', name: '高校战队', blurb: '校队打了两年联赛，指挥过。', attrs: { communication: 3, igl: 5, aim: -2 }, tac: 10, money: 2000 },
   { key: 'town', name: '小镇做题家', blurb: '家里不宽裕，寄钱回家是每周的事；但坐得住。', mental: 6, trainMul: 1.12, upkeep: 120, money: 500 },
   // the key is what saves hold: until 2026-09-11 this card was 「韩服天梯」, a League of Legends story rather than a VALORANT one

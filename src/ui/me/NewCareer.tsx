@@ -97,7 +97,12 @@ export default function NewCareer({
       <Panel title="从哪里开始">
         <div className="start-grid">
           {(Object.keys(starts) as StartPoint[]).map((k) => (
-            <button key={k} className={`start-card${start === k ? ' on' : ''}`} onClick={() => { setStart(k); setTeamId('') }}>
+            <button key={k} className={`start-card${start === k ? ' on' : ''}`} onClick={() => {
+              setStart(k)
+              setTeamId('')
+              // a club background has no club to belong to on the ladder
+              if (k === 'pre' && ORIGINS.find((x) => x.key === originKey)?.needsClub) setOriginKey('netcafe')
+            }}>
               <b>{starts[k].name}</b>
               <span>{starts[k].blurb}</span>
             </button>
@@ -142,14 +147,19 @@ export default function NewCareer({
 
       <Panel title="出身" actions={<span className="tiny faint">刻意不等值，差的是形状</span>}>
         <div className="origin-grid">
-          {ORIGINS.map((o) => (
-            <button key={o.key} className={`origin-pick${originKey === o.key ? ' on' : ''}`} onClick={() => setOriginKey(o.key)}>
-              {/* the card is the story; what it does to the numbers stays in
-                  origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
-              <b>{o.name}</b>
-              <span>{o.blurb}</span>
-            </button>
-          ))}
+          {ORIGINS.map((o) => {
+            // 青训营 is a club's: the card goes with a club start, and on the ladder it says so rather than disappearing
+            const locked = !!o.needsClub && start === 'pre'
+            return (
+              <button key={o.key} className={`origin-pick${originKey === o.key ? ' on' : ''}${locked ? ' locked' : ''}`} disabled={locked} onClick={() => setOriginKey(o.key)}>
+                {/* the card is the story; what it does to the numbers stays in
+                    origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
+                <b>{o.name}</b>
+                <span>{o.blurb}</span>
+                {locked && <span className="why">要从俱乐部开局：选 Challengers 或 VCT 起点</span>}
+              </button>
+            )
+          })}
         </div>
       </Panel>
 

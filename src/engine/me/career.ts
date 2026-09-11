@@ -259,7 +259,7 @@ export function createCareer(o: CareerOpts): GameState {
   me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)
   me.pre.ladderPeak = me.pre.ladder
 
-  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.blurb}`)
+  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.needsClub && o.start !== 'pre' ? origin.blurb.replace('这家俱乐部', state.teams[state.myTeam]?.name ?? '这家俱乐部') : origin.blurb}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
     pushLog(state, 'info', `没有队伍。${ladderLabel(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
