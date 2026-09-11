@@ -379,6 +379,8 @@ export interface PendingItem {
 }
 
 export interface MeState {
+  /** the year this save began on the one timeline; older saves read it off their first season (stars.ts savedFrom) */
+  entryYear?: number
   /** my player id in state.players */
   id: string
   originKey: string

@@ -1,8 +1,8 @@
-import { titleCount } from '../dossier'
 import type { Records } from '../dossier'
-import { honoursOf } from '../dossier'
+import { honoursOf, recordsNow } from '../dossier'
 import type { GameState, Player, Role } from '../types'
 import type { MeMatchRecord } from './types'
+import { compCn } from './compname'
 
 /**
  * Who you are actually up against tonight.
@@ -23,9 +23,9 @@ import type { MeMatchRecord } from './types'
  * doing later — you rewrote history, their CV should say so.
  */
 
-/** How much of a name this player is, before any honours are loaded. */
-export function fame(p: Player): number {
-  return p.overall + titleCount(p.id) * 6
+/** How much of a name this player is, by what this save knows he has won (see shelfOf). */
+export function fame(state: GameState, p: Player): number {
+  return p.overall + shelfOf(state, recordsNow(), p.id).length * 6
 }
 
 export interface Spotlight {
@@ -64,16 +64,46 @@ function eventLabel(event: string, year: number | null): string {
   return year ? `${year} ${name}` : name
 }
 
-export function cvLine(r: Records | null, id: string): string {
-  const n = titleCount(id)
-  if (!r) return n > 0 ? `${n} 个冠军` : '还没有冠军'
-  const hon = honoursOf(r, id)
-  const big = hon.filter((h) => REAL_TITLE.test(h.event)).slice(0, 2)
-  const parts = big.map((h) => eventLabel(h.event, h.year))
-  const rest = hon.length - big.length
+/** The first year of this save: honours before it are history, from it on only what happened here counts. */
+export function savedFrom(state: GameState): number {
+  const me = state.me
+  return me?.entryYear ?? me?.seasons[0]?.year ?? state.year
+}
+
+export interface ShelfItem { label: string; major: boolean; year: number }
+
+/**
+ * What a player has won, as far as this save knows: the real shelf up to the
+ * year the save began, then the titles won inside it. The scraped records run
+ * to the day the data was taken, and reading them whole wrote the future onto
+ * a CV — 「2024 Shanghai Esports Masters」 in a 2023 save (found 2026-09-11), and
+ * in a 2021 save trophies the simulation may well hand to someone else.
+ */
+export function shelfOf(state: GameState, r: Records | null, id: string): ShelfItem[] {
+  const from = savedFrom(state)
+  const real = r
+    ? honoursOf(r, id)
+      .filter((h) => h.year != null && h.year < from)
+      .map((h) => ({ label: eventLabel(h.event, h.year), major: REAL_TITLE.test(h.event), year: h.year as number }))
+    : []
+  const here = (state.players[id]?.titles ?? [])
+    .filter((t) => t.year >= from)
+    .map((t) => {
+      const cn = compCn(t.title)
+      return { label: `${t.year} ${cn}`, major: REAL_TITLE.test(t.title) || /大师赛|冠军赛|联赛/.test(cn), year: t.year }
+    })
+  return [...real, ...here].sort((a, b) => Number(b.major) - Number(a.major) || b.year - a.year)
+}
+
+export function cvLine(state: GameState, r: Records | null, id: string): string {
+  const shelf = shelfOf(state, r, id)
+  // the real half is still loading: say nothing rather than a count that may be wrong
+  if (!r && !shelf.length) return ''
+  const big = shelf.filter((h) => h.major).slice(0, 2)
+  const parts = big.map((h) => h.label)
+  const rest = shelf.length - big.length
   if (rest > 0) parts.push(`另有 ${rest} 个冠军`)
-  if (!parts.length) return n > 0 ? `${n} 个冠军` : '还没有冠军'
-  return parts.join(' · ')
+  return parts.length ? parts.join(' · ') : '还没有冠军'
 }
 
 /**
@@ -89,19 +119,19 @@ export function spotlights(state: GameState, oppTeamId: string, myRole: Role, r:
   // exactly one man is "the matchup": the best of those who actually play my
   // position. Counting every flex player made four of a five my opposite number.
   const sameRole = five.filter((p) => p.role === myRole)
-  const mirror = sameRole.sort((a, b) => fame(b) - fame(a))[0]
-    ?? five.filter((p) => (p.roles ?? []).includes(myRole)).sort((a, b) => fame(b) - fame(a))[0]
+  const mirror = sameRole.sort((a, b) => fame(state, b) - fame(state, a))[0]
+    ?? five.filter((p) => (p.roles ?? []).includes(myRole)).sort((a, b) => fame(state, b) - fame(state, a))[0]
   const out: Spotlight[] = []
   for (const p of five) {
     const opposite = p.id === mirror?.id
     // a name is either decorated or simply very good
-    if (!opposite && fame(p) < 88) continue
+    if (!opposite && fame(state, p) < 88) continue
     out.push({
       id: p.id, ign: p.ign, role: p.role, overall: p.overall, opposite,
-      cv: cvLine(r, p.id), titles: titleCount(p.id),
+      cv: cvLine(state, r, p.id), titles: shelfOf(state, r, p.id).length,
     })
   }
-  return out.sort((a, b) => Number(b.opposite) - Number(a.opposite) || fame(state.players[b.id]) - fame(state.players[a.id])).slice(0, 4)
+  return out.sort((a, b) => Number(b.opposite) - Number(a.opposite) || fame(state, state.players[b.id]) - fame(state, state.players[a.id])).slice(0, 4)
 }
 
 /** Was there a name in my position tonight, and did I beat him on the night? */
@@ -125,9 +155,9 @@ export function starBeat(state: GameState, rec: MeMatchRecord, myRole: Role): St
     .filter((b) => !b.mine)
     .map((b) => ({ b, p: state.players[b.id] }))
     .filter((x) => x.p && (x.p.roles ?? [x.p.role]).includes(myRole))
-    .sort((x, y) => fame(y.p!) - fame(x.p!))[0]
+    .sort((x, y) => fame(state, y.p!) - fame(state, x.p!))[0]
   if (!theirs?.p) return null
-  if (fame(theirs.p) < 88) return null
+  if (fame(state, theirs.p) < 88) return null
   return { ign: theirs.b.ign, theirRating: theirs.b.rating, myRating: me.rating, won: me.rating > theirs.b.rating }
 }
 

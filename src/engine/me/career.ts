@@ -239,7 +239,7 @@ export function createCareer(o: CareerOpts): GameState {
     stream: { cut: 0, thisStage: 0, total: 0 }, gear: {}, courses: [], agentTier: 0, relaxUsed: 0,
     axes: { hard: 0, warm: 0, grind: 0, show: 0 }, traits: [], eventCounts: {}, quests: [], eventsSeen: 0,
     auto: { buy: false, biz: false, daily: false, career: false }, autoNotes: [],
-    achievements: [], titles: [], flags: { ...(origin.flags ?? {}) },
+    achievements: [], titles: [], flags: { ...(origin.flags ?? {}) }, entryYear: year,
   }
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   if (origin.flags?.lang) me.courses.push('lang')
