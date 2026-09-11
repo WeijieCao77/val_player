@@ -100,6 +100,13 @@ export interface CEvent {
 
 const CIRCUIT = raw as unknown as Record<string, CEvent[]>
 
+// A score of 13 or more is one map's rounds, not a series: scripts/build_circuit.py gave such a match
+// its unit's default best-of, so 1440 single maps in 56 events — DACH Evolution 2026's Weekly cups
+// (vlr.gg/601764: Best of 1, Bind 13–11) among them — were played as Bo3. Each is the one map it was.
+for (const evs of Object.values(CIRCUIT)) for (const e of evs) for (const u of e.units) for (const n of u.nodes ?? []) {
+  if (n.bo !== 1 && Math.max(n.score[0] ?? 0, n.score[1] ?? 0) >= 13) n.bo = 1
+}
+
 const BY_ID = new Map<string, CEvent>()
 const YEAR_OF = new Map<string, number>()
 for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) { BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y)) }
