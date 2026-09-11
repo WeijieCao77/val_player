@@ -69,7 +69,6 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
             </span>
             {/* a career names no diagnosis for a real person's body: the lay-off, nothing more */}
             {p.injuredUntil > game.day && <span className="tag warn">⚕ 伤停</span>}
-            {p.listed && <span className="tag warn">已挂牌</span>}
             {p.retiring && <span className="tag warn">📢 本赛季后退役</span>}
           </div>
           {p.traits?.length ? (

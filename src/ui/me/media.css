@@ -34,11 +34,12 @@ td > .face { margin-right: 6px; }
 .face-row { display: flex; justify-content: center; gap: 2px; margin: 0 0 8px; }
 .face-btn {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  width: 58px; min-width: 0; min-height: 0; padding: 2px 0;
+  width: 64px; min-width: 0; min-height: 0; padding: 2px 0;
   background: none; border: 0; color: var(--muted); font-size: var(--t-tiny); font-weight: 400;
 }
 .face-btn:hover { background: none; color: var(--text); }
-.face-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* stretched to the button, so a long ID (「MAGNUM」) ends in an ellipsis inside it instead of poking out */
+.face-name { align-self: stretch; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 /* too narrow for five names (the week's side column on a phone): a small overlapping stack */
 .face-row-box { container-type: inline-size; }
 @container (max-width: 300px) {
