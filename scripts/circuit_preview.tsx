@@ -13,11 +13,11 @@ import { createRoot } from 'react-dom/client'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import Standings from '../src/ui/Standings'
-import Schedule from '../src/ui/Schedule'
-import { GameCtx } from '../src/ui/ctx'
+import Standings from '../src/ui/me/Standings'
+import Schedule from '../src/ui/me/Schedule'
+import { GameCtx } from '../src/ui/me/ctx'
 import type { Region } from '../src/engine/types'
-import '../src/styles.css'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const q = new URLSearchParams(location.search)
@@ -42,8 +42,7 @@ function Harness() {
       game: state,
       commit: () => setN((k) => k + 1),
       toast: () => {},
-      openPlayer: () => {}, loadSlot: () => {}, openMatch: () => {},
-      playLive: () => {}, go: () => {}, startTutorial: () => {}, openDraw: () => {},
+      openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
     }}>
       <div style={{ padding: 16, maxWidth: 1180, margin: '0 auto' }}>
         <p className="small">

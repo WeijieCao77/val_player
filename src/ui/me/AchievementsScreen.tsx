@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel } from '../common'
+import { useGame } from './ctx'
+import { Panel } from './common'
 import { ACHIEVEMENTS, ACH_ROUTES, earnedTitles, rewardText, wearTitle, wornTitle } from '../../engine/me/achievements'
 import { ENDINGS_ME } from '../../engine/me/endings'
 

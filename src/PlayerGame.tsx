@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { GameCtx } from './ui/ctx'
+import { GameCtx } from './ui/me/ctx'
 import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/save'
 import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
@@ -10,11 +10,10 @@ import { MeMatch } from './engine/me/matchplay'
 import { advanceUntil, runAutoPilot } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
-import Changelog from './ui/Changelog'
-import { CHANGELOG_ME, LATEST_ME } from './data/changelog_me'
+import Changelog from './ui/me/Changelog'
 import { ladderLabel } from './engine/me/prepro'
 import { fanTier, fansCn } from './engine/me/fans'
-import { Crest, Modal, money } from './ui/common'
+import { Crest, Modal, money } from './ui/me/common'
 import NewCareer from './ui/me/NewCareer'
 import Week from './ui/me/Week'
 import MatchPlay from './ui/me/MatchPlay'
@@ -29,11 +28,11 @@ import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
 import Poster from './ui/me/Poster'
-import Schedule from './ui/Schedule'
-import Standings from './ui/Standings'
-import MatchModal from './ui/MatchModal'
-import PlayerModal from './ui/PlayerModal'
-import ThemeToggle from './ui/ThemeToggle'
+import Schedule from './ui/me/Schedule'
+import Standings from './ui/me/Standings'
+import MatchModal from './ui/me/MatchModal'
+import PlayerCard from './ui/me/PlayerCard'
+import ThemeToggle from './ui/me/ThemeToggle'
 import { attrWord, useNumbers } from './ui/me/words'
 import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
@@ -55,8 +54,9 @@ const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = 
 ]
 
 /**
- * The player career, whole. The world and its engine are the manager game's;
- * this shell knows about weeks, whatever is waiting on me, and my club's matches.
+ * The player career, whole: a game of its own, drawn only from src/ui/me/
+ * (scripts/check_boundary.ts keeps it that way). This shell knows about weeks,
+ * whatever is waiting on me, and my club's matches.
  */
 export default function PlayerGame() {
   const gameRef = useRef<GameState | null>(null)
@@ -171,13 +171,10 @@ export default function PlayerGame() {
     commit,
     toast,
     openPlayer: (id: string) => setPlayerId(id),
-    loadSlot: () => {},
     openMatch: setFixture,
-    playLive: () => {},
     go: setScreen,
     // the week screen's tour for where the career is now (ui/me/guide.ts); 帮助 opens the others
     startTutorial: () => openTour(weekTourOf(gameRef.current)),
-    openDraw: () => {},
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [commit, toast, gameRef.current, screen])
 
@@ -236,7 +233,7 @@ export default function PlayerGame() {
             <span className="ico" aria-hidden="true">🔢</span>
             <span className="lbl">数值 {nums ? '开' : '关'}</span>
           </button>
-          <Changelog entries={CHANGELOG_ME} latest={LATEST_ME} seenKey="valplayer.changelog.seen" foot="选手生涯 demo · 每一版改了什么都在这里，回看用" />
+          <Changelog />
         </div>
 
         {/* who I am, where I am, and the six numbers that matter — the rest
@@ -327,7 +324,7 @@ export default function PlayerGame() {
         </div>
         {more && <div className="nav-scrim" aria-hidden="true" onClick={() => setMore(false)} />}
 
-        {playerId && <PlayerModal playerId={playerId} onClose={() => setPlayerId(null)} />}
+        {playerId && <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}
         {summary && (
           <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>

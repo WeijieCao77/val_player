@@ -83,6 +83,19 @@ export const tiltWord = (v: number): string => (v >= 75 ? '上头' : v >= 55 ? '
 /** A gap to a club's bar, on the transfer page's own lines: within 6 is worth a try, past 10 is a C or a D. */
 export const gapWord = (gap: number): string => (gap <= 0 ? '够了' : gap <= 6 ? '差一点' : gap <= 10 ? '还差一截' : '差得远')
 
+/**
+ * How the coach reads me, in words. The career's own copy of the scale the
+ * manager game used for its squad (engine/trust.ts), so no career screen
+ * reads the manager's trust module.
+ */
+export function trustLabel(v: number): string {
+  if (v >= 82) return '完全信任'
+  if (v >= 66) return '信任'
+  if (v >= 48) return '中立'
+  if (v >= 30) return '有保留'
+  return '已失去信任'
+}
+
 /** An in-round or duel readout judges on one of the eight or on 心态; say either in the current mode. */
 export const sayDim = (nums: boolean, dim: string, v: number): string =>
   (nums ? String(Math.round(v)) : dim === 'mental' || dim === '心态' ? mentalWord(v) : attrWord(v))

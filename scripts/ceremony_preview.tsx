@@ -18,9 +18,9 @@ import { cerStart } from '../src/engine/me/ceremony'
 import CeremonyModal from '../src/ui/me/Ceremony'
 import PendingModal from '../src/ui/me/Modals'
 import { startTryout } from '../src/engine/me/tryout'
-import { GameCtx } from '../src/ui/ctx'
+import { GameCtx } from '../src/ui/me/ctx'
 import type { CerKind } from '../src/engine/me/types'
-import '../src/styles.css'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const KINDS: CerKind[] = ['draw', 'depart', 'final', 'media', 'rehab', 'farewell', 'awards', 'showmatch', 'patch', 'tryout', 'retire']
@@ -72,8 +72,7 @@ function Harness() {
       game: state,
       commit: () => setN((k) => k + 1),
       toast: (t: string) => setLog((l) => [...l, t]),
-      openPlayer: () => {}, loadSlot: () => {}, openMatch: () => {},
-      playLive: () => {}, go: () => {}, startTutorial: () => {}, openDraw: () => {},
+      openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
     }}>
       <div style={{ padding: 20 }}>
         <p className="small">仪式 <b>{kind}</b> · 第 {n} 次提交 · 换一个：

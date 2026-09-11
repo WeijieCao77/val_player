@@ -1,4 +1,4 @@
-import { useGame } from '../ctx'
+import { useGame } from './ctx'
 import { ACH_BY_KEY, rewardText } from '../../engine/me/achievements'
 
 /**

@@ -1,6 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
-import { TRANSFER_WINDOWS } from '../transfer'
 import { pushLog } from './log'
 import { push } from './pending'
 import { makeDeal, leaveClub } from './contract'
@@ -43,6 +42,18 @@ export function proPerf(state: GameState): number {
 
 export const perfWord = (v: number): string =>
   v >= 15 ? '整个赛区都在看你' : v >= 8 ? '有几家俱乐部在打听' : v >= 3 ? '偶尔有人提到你' : v >= -3 ? '没什么人注意' : '没人问，也不奇怪'
+
+/**
+ * The season's transfer windows, by day. The career's own copy of the world's
+ * calendar (engine/transfer.ts), so it reads no manager module to know when
+ * the market is open.
+ */
+const TRANSFER_WINDOWS: [number, number][] = [
+  [0, 20],    // 季前
+  [63, 90],   // the break before Masters I and its Swiss round
+  [165, 198], // the break before Masters II and its Swiss round
+  [323, 363], // 休赛期
+]
 
 export function inWindow(state: GameState): boolean {
   return TRANSFER_WINDOWS.some(([a, b]) => state.day >= a && state.day <= b)

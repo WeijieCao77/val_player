@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel } from '../common'
+import { useGame } from './ctx'
+import { Panel } from './common'
 
 const DIALS: { key: 'buy' | 'biz' | 'daily' | 'career'; name: string; what: string; rules: string[] }[] = [
   { key: 'buy', name: '采购', what: '外设、课程、理疗', rules: ['先留 $3,000 的安全余额', '疲劳 ≥70 先买理疗', '外设换到职业级为止，旗舰不碰', '心态低于 50 报运动心理课；在外赛区报语言课'] },
