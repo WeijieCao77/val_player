@@ -33,7 +33,12 @@ The engine (engine/timeline.ts) brings a world up to each year at the season
 turn, and each club up to its real roster before each event — for every club
 and person out of the player's reach. Inside that reach the world is his.
 
-    python scripts/build_circuit.py --years 2021,2022,2023,2024,2025
+2026 is a year of the book like the others, as far as it has been played: its
+rosters, its ratings and its league seats are read off the events of 2026 that
+are on record, so the world a 2021 career carries into 2026 is 2026's — not a
+different world put in its place.
+
+    python scripts/build_circuit.py --years 2021,2022,2023,2024,2025,2026
     python scripts/build_timeline.py
 """
 from __future__ import annotations
@@ -52,7 +57,7 @@ import build_circuit as bc  # noqa: E402  names, regions, stages, scenes
 import build_world_2021 as bw  # noqa: E402  the ruler
 
 DATA = bw.DATA
-YEARS = (2021, 2022, 2023, 2024, 2025)
+YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
 LEAGUES = ('Americas', 'EMEA', 'Pacific', 'China')
 CLUB_REGIONS = set(bw.REGIONS_2021) | {'MENA', 'South Asia', 'Oceania'}
 
@@ -169,8 +174,11 @@ def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], cl
         # no agents on record this year: the role he was last seen in, not a guess
         return out or [prev_role.get(pid, '自由人')]
 
-    lines = {pid: merged(pid) for pid in pool}
-    role_of = {pid: roles_for(pid)[0] for pid in pool}
+    # a set's order moves with the interpreter's hash seed, and a percentile tie with it:
+    # the book has to come out the same every time it is built
+    order = sorted(pool, key=int)
+    lines = {pid: merged(pid) for pid in order}
+    role_of = {pid: roles_for(pid)[0] for pid in order}
     anchor = {}
     for k in bw.STAT_KEYS:
         vals = sorted(ln[k] for ln in lines.values() if ln.get(k) is not None)
@@ -187,7 +195,7 @@ def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], cl
     P = {k: bw.pctiles(rows, k) for k in ('acs', 'adr', 'hs', 'kpr', 'fkpr', 'kast', 'apr', 'kd')}
     P['fdpr'] = bw.pctiles(rows, 'fdpr', invert=True)
     P['rating'] = {}
-    for role in set(r['role'] for r in rows):
+    for role in sorted(set(r['role'] for r in rows)):
         peers = [r for r in rows if r['role'] == role]
         P['rating'].update(bw.pctiles(peers if len(peers) >= 12 else rows, 'rating'))
     tot_w = sum(L['clw'] for L in line.values())
@@ -200,7 +208,7 @@ def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], cl
     axis = lambda specific, q: 0.58 * specific + 0.42 * q  # noqa: E731
 
     people: dict[str, dict] = {}
-    for pid in pool:
+    for pid in order:
         g = lambda k, _pid=pid: P[k].get(_pid, 0.5)  # noqa: E731
         q = g('rating')
         role = role_of[pid]
@@ -343,13 +351,17 @@ def main() -> int:
             # not LOCK//IN (no region), not China's 2023 qualifier (no league yet)
             if (Y >= 2023 and cev['stage'] in ('kickoff', 'stage1', 'stage2') and region in LEAGUES
                     and not bc.CHALLENGERS.search(name) and not re.search(r'Qualifier|FGC', name)):
-                for tid in sides:
+                # 2026's Stage 2 opens its play-ins to Challengers sides, and the best of them
+                # go on into the playoffs: a seat is the league's own phase, not whoever came through
+                seated = {x for u in cev['units'] if not re.search(r'Play-?In|Playoff', (u.get('phase') or '') + u['label'], re.I)
+                          for nd in u.get('nodes', []) for x in nd['teams'] if not x.startswith('N:')}
+                for tid in (seated or sides):
                     league_of[tid] = region
             # a club that only came through the open qualifier played this event at the
             # sub-tier, whatever the event itself was: 2022's regional Challengers were
             # the top flight for their eight or ten, not for the fifty who tried to get in
             main = {x for u in cev['units'] if u['type'] != 'open' for nd in u.get('nodes', []) for x in nd['teams']}
-            for tid in sides | set(rosters):
+            for tid in sorted(sides | set(rosters)):
                 club_name[tid] = cev['names'].get(tid) or club_name.get(tid) or tid
                 level = tier if tid in main else 'open'
                 if rank[level] > rank[club_best[tid]]:

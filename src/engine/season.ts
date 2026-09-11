@@ -32,10 +32,10 @@ import type { DrawEvent } from './draw'
 import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
-import { circuitPointsFor, formatOf, stageAtIn, stageNameIn } from './era'
+import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
 import { circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { bookCovers, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
-import { bridgeTo2026 } from './bridge'
+import { arrive2026 } from './today'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
 import {
@@ -142,8 +142,9 @@ export function setupSeason(state: GameState, notes?: string[]): void {
   resetFixtureSeq(0)
   state.fixtures = []
   state.comps = {}
-  // 2021–2025: the season is the one that really happened, event by event
-  if (eventsOf(state.year).length) {
+  // a world that entered in 2021: the season that really happened, event by event,
+  // and past the last real one the same calendar again (engine/circuit.ts projectedOf)
+  if (isTimelineWorld(state) && eventsOf(state.year).length) {
     setupCircuitSeason(state)
     seedMarket(state, notes)
     return
@@ -1481,10 +1482,10 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   dailyLife(state, notes)
 
-  state.stage = stageAtIn(state.year, state.day)
+  state.stage = stageAtIn(state.year, state.day, onTimeline(state))
   const stageChanged = state.stage !== prevStage
   if (stageChanged) {
-    notes.push(`—— 进入 ${stageNameIn(state.year, state.stage)} ——`)
+    notes.push(`—— 进入 ${stageNameIn(state.year, state.stage, onTimeline(state))} ——`)
     // The pool rotates when a new window opens — say which maps moved, or a
     // manager walks into a veto to find a map he trained all stage is gone.
     const prevPool = activePool(state.seed + state.year, poolPhaseOf(prevStage))
@@ -2051,7 +2052,9 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   state.stage = 'preseason'
   // next year's Kickoff byes are this year's Champions field; the draws of
   // the year before last are let go so a save does not grow without bound
-  state.lastChampionsTeams = state.comps.champions?.teams ?? state.lastChampionsTeams
+  state.lastChampionsTeams = (state.comps.champions
+    ?? Object.values(state.comps).find((c) => c.format === 'circuit' && c.stage === 'champions' && !c.region))?.teams
+    ?? state.lastChampionsTeams
   state.draws = (state.draws ?? []).filter((d) => d.year >= state.year - 1)
   state.pendingDrawId = undefined
   openYear(state, rng, notes)
@@ -2063,9 +2066,10 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
  * A world that entered in 2021 is first brought up to the year as history had
  * it (engine/timeline.ts) — clubs founded and gone, rosters as they opened,
  * ratings off that year's numbers — everywhere out of the player's reach. Then
- * the year's real events go on the books. The book reaches 2025; 2026, where
- * the modern season takes over, is not joined yet, and a save that gets there
- * stops honestly rather than drawing a season over a world that does not fit it.
+ * the year's real events go on the books. The book runs through 2026, and 2026
+ * is a year like the ones before it — the same world carried on, not another
+ * one put in its place. Past the book the world keeps what it has, and the
+ * calendar keeps the last real year's shape (engine/circuit.ts projectedOf).
  */
 function openYear(state: GameState, rng: Rng, notes: string[]): void {
   if (isTimelineWorld(state) && bookCovers(state.year)) {
@@ -2099,23 +2103,15 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
     }
     ensureMinimumRosters(state, rng)
   }
-  // 2026: the timeline's world arrives in today's (engine/bridge.ts)
-  if (isTimelineWorld(state) && !state.bridged && state.year === 2026) {
-    const b = bridgeTo2026(state, notes)
-    const gone: string[] = []
-    for (const id of b.retire) {
-      const p = state.players[id]
-      const line = p ? retirePlayer(state, p, notes) : ''
-      if (line) gone.push(line)
-    }
-    if (gone.length) {
-      state.news.push({ day: state.day, kind: 'player', text: `👋 离开职业赛场：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 人` : ''}。` })
-    }
+  // 2026: what the game's own 2026 files know that the book does not — coaches, and the
+  // professionals below the leagues (engine/today.ts)
+  if (isTimelineWorld(state) && state.year === 2026) {
+    arrive2026(state, notes)
     ensureMinimumRosters(state, rng)
   }
-  if (isTimelineWorld(state) && !state.bridged && !eventsOf(state.year).length) {
-    state.timelinePause = `时间线目前做到 ${state.year - 1} 年底。${state.year} 年要接回现代赛季——现在的世界、`
-      + '联赛与赛制——这一段还在做。存档停在这里，更新后从这一天接着打。'
+  if (isTimelineWorld(state) && !eventsOf(state.year).length) {
+    state.timelinePause = `时间线目前做到 ${state.year - 1} 年底，${state.year} 年的赛历还没有排上。`
+      + '存档停在这里，更新后从这一天接着打。'
     state.gameOver = state.timelinePause
     notes.push(state.timelinePause)
     return
@@ -2125,8 +2121,8 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
 
 /** A save that stopped at the edge of the timeline carries on from the same day once the build can play that year. */
 export function resumeTimeline(state: GameState): boolean {
-  // a year this build can play: one on the real calendar, or 2026, where the timeline hands over
-  if (!state.timelinePause || (!eventsOf(state.year).length && state.year !== 2026)) return false
+  // a year this build can play: every year has a calendar now — the real one, and its shape after
+  if (!state.timelinePause || !eventsOf(state.year).length) return false
   state.timelinePause = undefined
   state.gameOver = undefined
   openYear(state, new Rng(hashStr(`resume:${state.seed}:${state.year}`)), [])

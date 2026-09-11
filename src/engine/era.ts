@@ -1,5 +1,5 @@
 import { REGION_CN } from './types'
-import type { Region, StageKey } from './types'
+import type { GameState, Region, StageKey } from './types'
 
 /**
  * What the circuit looked like in a given year.
@@ -268,9 +268,31 @@ const STAGES_2025: StageDef[] = [
 ]
 
 /**
- * 2026 onward: the shape the game already ships. Kept here rather than
- * imported from season.ts so that every calendar lives in one file — but the
- * numbers are season.ts's, unchanged, so existing saves keep their dates.
+ * 2026 as it is really being played: Kickoff in January, Santiago, Stage 1,
+ * London, Stage 2 into September, Champions in Shanghai from 24 September.
+ * Read off circuit.json like the years before it. A world that entered in 2021
+ * lives on this calendar; so do the years after it, which keep its shape.
+ */
+const STAGES_2026: StageDef[] = [
+  { key: 'preseason', name: '季前', start: 0, end: 13 },
+  { key: 'kickoff', name: '揭幕赛', start: 14, end: 57 },
+  { key: 'masters1', name: '圣地亚哥大师赛', start: 58, end: 88 },
+  { key: 'stage1', name: '第一赛段', start: 89, end: 155 },
+  { key: 'masters2', name: '伦敦大师赛', start: 156, end: 187 },
+  { key: 'stage2', name: '第二赛段', start: 188, end: 265 },
+  { key: 'champions', name: '冠军赛', start: 266, end: 290 },
+  { key: 'offseason', name: '休赛期', start: 291, end: 363 },
+]
+
+/** After the last real year: 2026's shape, and no city named that nobody has announced. */
+const STAGES_AHEAD: StageDef[] = STAGES_2026.map((s) =>
+  s.key === 'masters1' ? { ...s, name: '第一站大师赛' } : s.key === 'masters2' ? { ...s, name: '第二站大师赛' } : s)
+
+/**
+ * The 2026 entrance's calendar: the shape the game already ships. Kept here
+ * rather than imported from season.ts so that every calendar lives in one
+ * file — but the numbers are season.ts's, unchanged, so existing saves keep
+ * their dates.
  */
 const STAGES_MODERN: StageDef[] = [
   { key: 'preseason', name: '季前准备', start: 0, end: 20 },
@@ -283,17 +305,28 @@ const STAGES_MODERN: StageDef[] = [
   { key: 'offseason', name: '休赛期', start: 323, end: 363 },
 ]
 
-export function stagesOf(year: number): StageDef[] {
+/**
+ * A world that entered in 2021: it holds the roster book's clubs, and it lives
+ * on the real calendar — 2026 as it is being played, and 2026's shape after.
+ * A 2021 save that was handed to the old 2026 world (`bridged`) plays that
+ * world's calendar, as it did.
+ */
+export const onTimeline = (state: Pick<GameState, 'teams' | 'bridged'>): boolean =>
+  !state.bridged && Object.keys(state.teams).some((id) => id.startsWith('V21T'))
+
+/** `timeline`: see onTimeline. Years up to 2025 have one calendar whoever asks. */
+export function stagesOf(year: number, timeline = year <= 2025): StageDef[] {
   if (year <= 2021) return STAGES_2021
   if (year === 2022) return STAGES_2022
   if (year === 2023) return STAGES_2023
   if (year === 2024) return STAGES_2024
   if (year === 2025) return STAGES_2025
-  return STAGES_MODERN
+  if (!timeline) return STAGES_MODERN
+  return year === 2026 ? STAGES_2026 : STAGES_AHEAD
 }
 
-export const stageAtIn = (year: number, day: number): StageKey =>
-  stagesOf(year).find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
+export const stageAtIn = (year: number, day: number, timeline?: boolean): StageKey =>
+  stagesOf(year, timeline).find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
 
 /**
  * Tier-2 splits and Ascension run beside the partnered calendar rather than
@@ -305,8 +338,8 @@ const OFF_CALENDAR: Partial<Record<StageKey, string>> = {
   ascension: '晋升赛',
 }
 
-export const stageNameIn = (year: number, key: StageKey): string =>
-  stagesOf(year).find((s) => s.key === key)?.name
+export const stageNameIn = (year: number, key: StageKey, timeline?: boolean): string =>
+  stagesOf(year, timeline).find((s) => s.key === key)?.name
   ?? (formatOf(year) === 'partnered' ? OFF_CALENDAR[key] : undefined)
   ?? key
 

@@ -818,8 +818,8 @@ export interface Competition {
     fill?: Record<string, string>
     /** the player's club's one match for the qualifier's last place */
     playin?: { key: string; fixture: string }
-    /** why it is played rather than replayed: his club is in it, it is his region's, or its field changed upstream */
-    why?: 'mine' | 'home' | 'ripple'
+    /** why it is played rather than replayed: his club is in it, it is his region's, its field changed upstream, or nobody has played it yet */
+    why?: 'mine' | 'home' | 'ripple' | 'ahead'
     /** real seeds whose place went to somebody else, and the event that decided it — 「你顶掉了谁」 */
     swaps?: { real: string; now: string | null; from: string }[]
     /** over, with nobody in this world to place — see circuit.ts progressCircuit */

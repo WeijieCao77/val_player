@@ -29,8 +29,9 @@ let bad = 0
 const fail = (msg: string) => { bad++; console.log(`✗ ${msg}`) }
 
 /* ---- 1. the calendar must partition the season, every year ---- */
-for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
-  const st = stagesOf(year)
+// 2026 twice: the 2026 entrance's calendar, and a 2021 world's, which is 2026 as it is really played; 2027 keeps that shape
+for (const [year, timeline] of [[2021], [2022], [2023], [2024], [2025], [2026, false], [2026, true], [2027, true]] as [number, boolean?][]) {
+  const st = stagesOf(year, timeline)
   if (st[0].start !== 0) fail(`${year} 赛历不是从第 0 天开始（${st[0].start}）`)
   for (let i = 1; i < st.length; i++) {
     if (st[i].start !== st[i - 1].end + 1) {
@@ -42,16 +43,16 @@ for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
   if (new Set(keys).size !== keys.length) fail(`${year} 赛历有重复的 key`)
   // and every day of the season must land in exactly one stage
   for (const day of [0, 1, 100, 200, 300, st[st.length - 1].end]) {
-    if (!stageAtIn(year, day)) fail(`${year} 第 ${day} 天落不到任何赛段`)
+    if (!stageAtIn(year, day, timeline)) fail(`${year} 第 ${day} 天落不到任何赛段`)
   }
-  console.log(`  ${year} 赛历 ${st.length} 段，覆盖 0–${st[st.length - 1].end} 天，无缝无重叠`)
+  console.log(`  ${year}${timeline === undefined ? '' : timeline ? '（2021 入口）' : '（2026 入口）'} 赛历 ${st.length} 段，覆盖 0–${st[st.length - 1].end} 天，无缝无重叠`)
 }
 
 /* ---- 1b. and it must hold the real events: every international inside its own window ---- */
 const circuit: Record<string, { cn: string; stage: string | null; region: string | null; start: number; end: number }[]> =
   JSON.parse(readFileSync('src/data/circuit.json', 'utf8'))
-for (const year of [2021, 2022, 2023, 2024, 2025]) {
-  const st = stagesOf(year)
+for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
+  const st = stagesOf(year, true)
   // LOCK//IN was 2023's international kickoff; from 2024 each league holds its own
   const held = ['masters1', 'masters2', 'champions', ...(year === 2021 ? ['lcq'] : []), ...(year === 2023 ? ['kickoff'] : [])]
   for (const e of circuit[String(year)] ?? []) {

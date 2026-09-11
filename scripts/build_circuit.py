@@ -57,7 +57,9 @@ DATA = os.path.join(ROOT, 'src', 'data')
 THIRD_PARTY = re.compile(
     r'game on masters|bechampions|becontender|ultimasters|guns and masters|mockern|'
     # CECC is a North American college cup that vlr files beside the Challengers
-    r'rog x|road to vct|thinkpro|metafy|masters pro league|valorant east|cecc', re.I)
+    r'rog x|road to vct|thinkpro|metafy|masters pro league|valorant east|cecc|'
+    # FGC LATAM 2026 is a Challengermode cup, not TJ Sports' Chinese FGC
+    r'fgc \d{4} qualifier: latam', re.I)
 
 # the region an event belongs to, most specific first: 「Asia-Pacific」 must not
 # be read as Pacific, and 「EMEA Challengers Playoffs」 is the combining layer,
@@ -65,7 +67,7 @@ THIRD_PARTY = re.compile(
 REGION_BY_NAME: list[tuple[str, str]] = [
     (r'North America', 'North America'),
     # 2022's CN Invitation door: China, Korea and Japan for one place
-    (r'East Asia', 'East Asia'),
+    (r'(?<!South)East Asia', 'East Asia'),
     (r'Turkey|Türkiye', 'Turkey'),
     (r'\bCIS\b', 'CIS'),
     (r'Brazil', 'Brazil'),
@@ -131,19 +133,19 @@ CN_NUM = {'1': '一', '2': '二', '3': '三', '4': '四', '5': '五', '6': '六'
 LEAGUE_EVENT = re.compile(r'(?<!-)\b(Americas|EMEA|Pacific|China)\b:? (?:League|Kickoff|Stage \d|Ascension|Last Chance)', re.I)
 LEAGUE_NAME = {'americas': 'Americas', 'emea': 'EMEA', 'pacific': 'Pacific', 'china': 'China'}
 # the tier-two circuit: national Challengers leagues, and China's Evolution Series
-CHALLENGERS = re.compile(r'Challengers|Evolution Series|FGC .*Qualifiers', re.I)
+CHALLENGERS = re.compile(r'Challengers|Evolution Series|FGC .*Qualifiers|\bVCL\b', re.I)
 # the scene a Challengers league belongs to, most specific first. A French club
 # plays France Revolution, not DACH Evolution, though both are 「Europe」
 SCENES = [
     (r'LATAM North', 'LATAM North'), (r'LATAM South', 'LATAM South'), (r'Latin America|LATAM', 'LATAM'),
     (r'NORTH//EAST', 'NORTH//EAST'), (r'Northern Europe|North: Polaris|Polaris', 'Northern Europe'),
-    (r'East:? Surge|\bEast\b', 'East'), (r'DACH', 'DACH'), (r'France', 'France'), (r'Spain', 'Spain'),
+    (r'East:? Surge|(?<!Middle )\bEast\b', 'East'), (r'DACH', 'DACH'), (r'France', 'France'), (r'Spain', 'Spain'),
     (r'Italy', 'Italy'), (r'Portugal', 'Portugal'), (r'Turkey|Türkiye', 'Turkey'), (r'\bMENA\b', 'MENA'),
     (r'North America', 'North America'), (r'Brazil', 'Brazil'), (r'Japan', 'Japan'), (r'Korea', 'Korea'),
     (r'South Asia', 'South Asia'), (r'Vietnam', 'Vietnam'), (r'Thailand', 'Thailand'),
     (r'Philippines', 'Philippines'), (r'Indonesia', 'Indonesia'), (r'Malaysia', 'Malaysia & Singapore'),
     (r'Taiwan|Hong Kong', 'Hong Kong & Taiwan'), (r'Southeast Asia|\bSEA\b', 'SEA'), (r'Oceania', 'Oceania'),
-    (r'China', 'China'), (r'EMEA', 'EMEA'),
+    (r'China', 'China'), (r'EMEA', 'EMEA'), (r'\bVCL\b.*Americas', 'Americas'),
 ]
 SCENE_CN = {
     'LATAM North': '拉美北区', 'LATAM South': '拉美南区', 'LATAM': '拉美', 'NORTH//EAST': '北欧与东欧',
@@ -152,8 +154,10 @@ SCENE_CN = {
     'Brazil': '巴西', 'Japan': '日本', 'Korea': '韩国', 'South Asia': '南亚', 'Vietnam': '越南',
     'Thailand': '泰国', 'Philippines': '菲律宾', 'Indonesia': '印尼', 'Malaysia & Singapore': '马新',
     'Hong Kong & Taiwan': '港台', 'SEA': '东南亚', 'Oceania': '大洋洲', 'China': '中国', 'EMEA': 'EMEA',
+    'Americas': '美洲',
 }
-MASTERS_CN = {'Tokyo': '东京', 'Madrid': '马德里', 'Shanghai': '上海', 'Bangkok': '曼谷', 'Toronto': '多伦多'}
+MASTERS_CN = {'Tokyo': '东京', 'Madrid': '马德里', 'Shanghai': '上海', 'Bangkok': '曼谷', 'Toronto': '多伦多',
+              'Santiago': '圣地亚哥', 'London': '伦敦'}
 LEAGUE_CN = {'Americas': '美洲联赛', 'EMEA': 'EMEA 联赛', 'Pacific': '太平洋联赛', 'China': '中国联赛'}
 
 
@@ -173,9 +177,9 @@ def stage_partnered(name: str, year: int, start: int | None) -> str | None:
         return 'champions'
     if re.search(r'LOCK//IN', name, re.I):
         return 'kickoff'
-    m = re.search(r'Masters (Tokyo|Madrid|Bangkok|Shanghai|Toronto)', name, re.I)
+    m = re.search(r'Masters (Tokyo|Madrid|Bangkok|Santiago|Shanghai|Toronto|London)', name, re.I)
     if m:
-        return 'masters1' if m.group(1).lower() in ('tokyo', 'madrid', 'bangkok') else 'masters2'
+        return 'masters1' if m.group(1).lower() in ('tokyo', 'madrid', 'bangkok', 'santiago') else 'masters2'
     if CHALLENGERS.search(name):
         m = re.search(r'(?:Split|Stage|Act) (\d)', name)
         if m:
@@ -207,7 +211,7 @@ def stage_partnered(name: str, year: int, start: int | None) -> str | None:
 def cn_partnered(ev: dict, region: str | None, stage: str | None) -> str:
     n = ev['name']
     y = ev['year']
-    m = re.search(r'Masters (Tokyo|Madrid|Shanghai|Bangkok|Toronto)', n)
+    m = re.search(r'Masters (Tokyo|Madrid|Shanghai|Bangkok|Toronto|Santiago|London)', n)
     if m:
         return f'{MASTERS_CN[m.group(1)]}大师赛'
     if stage == 'champions':

@@ -1,7 +1,7 @@
 import raw from '../data/timeline.json'
 import lineageRaw from '../data/lineage.json'
 import { canonAgents } from './content'
-import { regionIn } from './era'
+import { onTimeline, regionIn } from './era'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
 import type { RawTeam } from './teams'
@@ -57,12 +57,14 @@ const FIRST = BOOK.meta.years[0]
 /** A club that first played after February joins the world at that event, not on New Year's Day. */
 const LATE_START = 60
 
-/** A world that entered the timeline in 2021: its clubs carry the roster book's ids. */
-export const isTimelineWorld = (state: GameState): boolean =>
-  Object.keys(state.teams).some((id) => id.startsWith('V21T'))
+/** A world that entered the timeline in 2021: its clubs carry the roster book's ids (engine/era.ts onTimeline). */
+export const isTimelineWorld = (state: GameState): boolean => onTimeline(state)
 
 /** Does the book have this year? */
 export const bookCovers = (year: number): boolean => !!BOOK.years[String(year)]
+
+/** The league a club held a seat in that year, as the book has it. */
+export const bookLeague = (year: number, vlr: string): string | null => BOOK.years[String(year)]?.clubs[vlr]?.l ?? null
 
 const clubId = (vlr: string): string => `V21T${vlr}`
 const vlrOf = (playerId: string): string | null => (/^V\d+$/.test(playerId) ? playerId.slice(1) : null)

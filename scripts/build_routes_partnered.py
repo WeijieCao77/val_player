@@ -1,4 +1,4 @@
-"""How every seat at every partnered-era international was really won — 2023 to 2025 — and what the points paid.
+"""How every seat at every partnered-era international was really won — 2023 to 2026 — and what the points paid.
 
 build_routes.py did this for the open era. From 2023 the grammar is different
 and smaller: a seat at Masters or Champions came from a league's own event
@@ -15,8 +15,13 @@ Sources, all from pages fetch_lp_events.py already cached:
     (Masters Tokyo 2023, Champions 2023, Masters Bangkok 2025). A row names
     its feeder and how many places it sent; the places go to that feeder's
     real top of the table, so no team-template alias ever has to be read
-  * Championship Points tabs, 2024 and 2025 — what each placing paid, and the
+  * Championship Points tabs, 2024 to 2026 — what each placing paid, and the
     match-win, group-win and bye points on top
+  * 2026's pages, which no longer carry team cards: each side's
+    {{Opponent|…|qualification={{Qualification|…|text=Americas Kickoff|placement=1}}}}
+    says the same thing a card's label did. Champions 2026 has not been played
+    and is not in circuit.json; its sixteen are written out as `fields` for the
+    game to hold its own field against
 
 It then adds history up on paper: every league side's real points for the
 year, from the real placings and the real match results, and holds them
@@ -38,7 +43,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
-YEARS = ('2023', '2024', '2025')
+YEARS = ('2023', '2024', '2025', '2026')
 LEAGUES = ('Americas', 'EMEA', 'Pacific', 'China')
 POOL_REGIONS = {
     'Americas': ['North America', 'Brazil', 'LATAM'],
@@ -49,9 +54,9 @@ POOL_REGIONS = {
 }
 L = r'(Americas|EMEA|Pacific|China)'
 KEEP = re.compile(r'Partner Team|Replacement Invite|Invited|^Ascension|^Act \d|Preliminary|Gauntlet', re.I)
-# 2024's tables say 「Match Victory」 without saying which matches. Counting every
-# match win, playoffs included, reproduces who went through on points in three
-# of the four leagues; group-stage wins alone, two
+# 2024's tables say 「Match Victory」 without saying which matches. Riot's rules count
+# every regular-season win and every playoff win or earned bye; that reproduces who went
+# through on points in all four leagues. Group-stage wins alone put Team Secret over TALON
 WIN_MODE = os.environ.get('WIN_MODE', 'all')
 HIDDEN = os.environ.get('HIDDEN', 'tie')
 STAGE_OF = {'Kickoff': 'kickoff', 'Stage 1': 'stage1', 'Stage 2': 'stage2', 'League': 'stage1', 'LCQ': 'lcq'}
@@ -148,6 +153,11 @@ def main() -> int:
     league_of: dict[str, dict[str, str]] = {
         y: {tid: c['l'] for tid, c in timeline['years'][y]['clubs'].items() if c['l']} for y in YEARS}
     by_id = {e['id']: e for y in YEARS for e in circuit[y]}
+    year_of_event = {e['id']: y for y in YEARS for e in circuit[y]}
+
+    def tagged(name: str, tid: str, year: str) -> bool:
+        tag = norm((timeline['years'][year]['clubs'].get(tid) or {}).get('t'))
+        return len(tag) >= 3 and norm(name).startswith(tag)
 
     def real_order(e: dict) -> list[str]:
         return [t for t, _ in e['places'] if not t.startswith('N:')]
@@ -168,6 +178,9 @@ def main() -> int:
         for tid, nm in e['names'].items():
             k = norm(nm)
             if k and (k == cn or (min(len(k), len(cn)) >= 3 and (cn in k or k in cn))):
+                return tid
+        for tid in e['names']:
+            if tagged(card['team'], tid, year_of_event[e['id']]):
                 return tid
         return None
 
@@ -193,7 +206,7 @@ def main() -> int:
         return {'kind': 'keep', 'why': 'unparsed: ' + s}
 
     for title, v in lp.items():
-        if not re.search(r'/(2023|2024|2025)/', title):
+        if not re.search(r'/(2023|2024|2025|2026)/', title):
             continue
         e = book.for_title(title)
         if not e or not v.get('teams'):
@@ -211,6 +224,34 @@ def main() -> int:
         if routes:
             out_events.setdefault(e['id'], {'lp': title, 'routes': {}})['routes'].update(routes)
             report['队卡给出来路的赛事'] += 1
+
+    # ---- 1b. 2026: the same labels, on each Opponent's qualification
+    OPPONENT = re.compile(r'\{\{Opponent\|([^|}]+)\|[^{}]*?qualification=\{\{Qualification\|[^}]*?text=([^|}]*)\|placement=(\d+)')
+    fields: dict[str, dict[str, list[list[str]]]] = {}
+    for title, text in pages.items():
+        mt = re.match(r'VCT/(2026)/(Stage \d/Masters|Champions)$', title)
+        if not mt:
+            continue
+        rows = [[n.strip(), f'{t.strip()} (#{p})'] for n, t, p in OPPONENT.findall(text)]
+        # and the club each is here, for the game to hold its own field against
+        clubs26 = timeline['years'][mt.group(1)]['clubs']
+        for row in rows:
+            k = norm(row[0])
+            tid = next((t for t, c in clubs26.items() if norm(c['n']) == k), None) \
+                or next((t for t in clubs26 if tagged(row[0], t, mt.group(1))), None) \
+                or next((t for t, c in clubs26.items() if min(len(k), len(norm(c['n']))) >= 4 and (k in norm(c['n']) or norm(c['n']) in k)), None)
+            row.append(tid)
+        e = book.for_title(title)
+        if not e:
+            if mt.group(2) == 'Champions':
+                fields.setdefault(mt.group(1), {})['champions'] = rows
+            continue
+        got = out_events.setdefault(e['id'], {'lp': title, 'routes': {}})['routes']
+        for name, label, _ in rows:
+            tid = card_side(e, {'team': name, 'players': []})
+            if tid and tid in e['seeds'] and got.get(tid, {}).get('kind') in (None, 'keep'):
+                got[tid] = label_route(label, e, mt.group(1))
+        report['2026 队伍模板给出来路的赛事'] += 1
 
     # ---- 2. Qualification tabs: a feeder and how many places it sent
     def qual_rows(text: str) -> list[tuple[str, str | None, int]]:
@@ -301,6 +342,11 @@ def main() -> int:
     def bonus(e: dict, rules: dict) -> collections.Counter:
         """Real match-win, group-win and bye points at one event."""
         pts = collections.Counter()
+        # a titled event pays its winner for the title, and the final it won is that title, not a
+        # match win on top: 100 Thieves, FNATIC and Paper Rex took 9, 9 and 10 from 2024 Stage 1
+        champ = next((t for t, p in e['places'] if p == 1), None) if rules.get('award', {}).get('1') else None
+        # the sides seeded past the Knockout Round, straight into the upper semifinals
+        seeded: set[str] = set()
         for u in e['units']:
             nodes = u.get('nodes', [])
             if not nodes:
@@ -308,50 +354,30 @@ def main() -> int:
             wins = collections.Counter(nd['winner'] for nd in nodes if nd['winner'])
             where = rules.get('winsIn', 'groups')
             if is_playoffs(u):
+                if champ and any('总决赛' in nd['round'] and nd['winner'] == champ for nd in nodes):
+                    wins[champ] -= 1
                 if rules.get('wins') and where in ('playoffs', 'all'):
                     for t, n in wins.items():
                         pts[t] += n * rules['wins']
-                if rules.get('bye'):
-                    for nd in nodes:
-                        kinds = (nd['a'][0], nd['b'][0])
-                        if '胜者组' in nd['round'] and set(kinds) & {'g', 's'} and set(kinds) & {'w', 'l'}:
-                            pts[nd['teams'][0] if nd['a'][0] in 'gs' else nd['teams'][1]] += rules['bye']
+                for nd in nodes:
+                    kinds = (nd['a'][0], nd['b'][0])
+                    if '胜者组' in nd['round'] and set(kinds) & {'g', 's'} and set(kinds) & {'w', 'l'}:
+                        seeded.add(nd['teams'][0] if nd['a'][0] in 'gs' else nd['teams'][1])
                 continue
             if rules.get('wins') and where in ('groups', 'all'):
                 for t, n in wins.items():
                     pts[t] += n * rules['wins']
-            if rules.get('groupWin'):
-                # the groups are the match graph's connected parts
-                adj = collections.defaultdict(set)
-                for nd in nodes:
-                    a, b = nd['teams']
-                    adj[a].add(b)
-                    adj[b].add(a)
-                seen: set[str] = set()
-                for start in list(adj):
-                    if start in seen:
-                        continue
-                    comp, stack = [], [start]
-                    while stack:
-                        x = stack.pop()
-                        if x in seen:
-                            continue
-                        seen.add(x)
-                        comp.append(x)
-                        stack.extend(adj[x] - seen)
-                    diff = collections.Counter()
-                    for nd in nodes:
-                        a, b = nd['teams']
-                        sa, sb = nd['score']
-                        if a in comp and sa is not None and sb is not None:
-                            diff[a] += sa - sb
-                            diff[b] += sb - sa
-                    top = max(comp, key=lambda t: (wins[t], diff[t]))
-                    pts[top] += rules['groupWin']
+        # 2024 Stage 1 was played across two groups, so its match graph is one piece and cannot name
+        # the group winners: they are the two sides that skipped the Knockout Round. Americas lists
+        # 「Group Victory」 and 「Bye Round」 both, but it is one point — Riot's 「earned bye」
+        per = rules.get('bye') or rules.get('groupWin')
+        if per:
+            for t in seeded:
+                pts[t] += per
         return pts
 
     pools_out: dict[str, dict] = {}
-    for year in ('2024', '2025'):
+    for year in ('2024', '2025', '2026'):
         for lg in LEAGUES:
             title = f'VCT/{year}/Championship Points/{lg}'
             text = pages.get(title, '')
@@ -434,8 +460,10 @@ def main() -> int:
             # Liquipedia's hidden points order sides level on points; they are not points
             # the tiebreaks as each page writes them: 2025 Americas goes to head-to-head
             # first; the other leagues to the last event's standings, then the one before.
-            # 2024 writes none down; the same chain puts TALON over Team Secret and BLG
-            # over DRG, as it went. Liquipedia's hidden ordering settles whatever is left
+            # 2024 writes none down: Americas went to head-to-head as in 2025 (100 Thieves and
+            # Sentinels both ended on 12; Sentinels, 2-1 up on them, went to Seoul), and the chain
+            # puts TALON over Team Secret and BLG over DRG, as it went. Liquipedia's hidden ordering
+            # settles whatever is left
             places_by = {by_id[eid]['stage']: places_of(by_id[eid]) for eid in pool_events}
             chain = ['stage2', 'masters2', 'stage1', 'masters1', 'kickoff']
 
@@ -453,7 +481,8 @@ def main() -> int:
                 return score
 
             def tiebreak(t: str) -> tuple:
-                first = -h2h(t) if (year, lg) == ('2025', 'Americas') else 0
+                # 2026 writes head-to-head down ninth, after every event's standings
+                first = -h2h(t) if lg == 'Americas' and year != '2026' else 0
                 later = [places_by.get(k, {}).get(t, 99) for k in chain]
                 return (-total[t], first, *later, -hidden[t] if HIDDEN == 'tie' else 0)
             standings = sorted(members, key=tiebreak)
@@ -466,6 +495,15 @@ def main() -> int:
             champs = book.find(year, 'champions', None)
             croutes = out_events.get(champs['id'], {}).get('routes', {}) if champs else {}
             up = {t for t, r in croutes.items() if r['kind'] == 'points' and r.get('pool') == lg}
+            if not champs:
+                # a Champions not yet played: Liquipedia's list of who is through on points
+                for name, label, tid in fields.get(year, {}).get('champions', []):
+                    if re.match(rf'^{lg} Points', label):
+                        t = tid if tid in members else next((t for t in members if same(name, names[t]['n'])), None)
+                        if t:
+                            up.add(t)
+                        else:
+                            problems.append(f'{year} {lg}：积分晋级的 {name} 在联赛名单里没找到')
             stage2 = book.find(year, 'stage2', lg)
             direct = set(real_order(stage2)[:k_direct]) if stage2 else set()
             ours = [t for t in standings if t not in direct][:len(up)]
@@ -496,7 +534,12 @@ def main() -> int:
                 kinds = collections.Counter(routes.get(s, {'kind': '无'})['kind'] for s in seeds)
                 print(f'  {y} {e["cn"]}：{len(seeds)} 个种子 · ' + ' · '.join(f'{k} {v}' for k, v in kinds.items()))
 
-    out = {'events': out_events, 'pools': pools_out}
+    out = {'events': out_events, 'pools': pools_out, 'fields': fields}
+    for y, f in fields.items():
+        print(f'  {y} 冠军赛（未开打）真实名单 {len(f.get("champions", []))} 队：' + '、'.join(n for n, _, _ in f.get('champions', [])))
+        for n, label, tid in f.get('champions', []):
+            if not tid:
+                problems.append(f'{y} 冠军赛：{n}（{label}）在 {y} 名册里没对上俱乐部')
     with open(os.path.join(DATA, 'routes_partnered.json'), 'w', encoding='utf-8', newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     print('写入 src/data/routes_partnered.json')

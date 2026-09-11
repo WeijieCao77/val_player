@@ -4,7 +4,7 @@ import { mapCn } from '../engine/content'
 import { useGame } from './ctx'
 import { Bar, Condition, money, OvrBadge, Panel, Roles, Potential } from './common'
 import { callerOf, squadOf } from '../engine/roster'
-import { stageNameIn } from '../engine/era'
+import { onTimeline, stageNameIn } from '../engine/era'
 import { ATTR_CN, ATTR_KEYS, ROLES } from '../engine/types'
 import type { Role } from '../engine/types'
 import { poolFor } from '../engine/match'
@@ -344,7 +344,7 @@ export default function Training() {
 
       <Panel
         tut="focus"
-        title={`训练计划 · ${stageNameIn(game.year, game.stage)}`}
+        title={`训练计划 · ${stageNameIn(game.year, game.stage, onTimeline(game))}`}
         actions={
           <div className="row" style={{ gap: 8 }}>
             <button className="sm" onClick={restTired}>让疲劳选手休息</button>

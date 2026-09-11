@@ -2,7 +2,7 @@ import raw from '../data/circuit.json'
 import routesRaw from '../data/routes.json'
 import partneredRaw from '../data/routes_partnered.json'
 import { regionIn, stageAtIn } from './era'
-import { sceneFor, syncEvent } from './timeline'
+import { bookLeague, sceneFor, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import type { Competition, Fixture, GameState, Region, StageKey, Team } from './types'
 
@@ -90,15 +90,121 @@ export interface CEvent {
   names: Record<string, string>
   /** the vlr player ids each side brought */
   rosters?: Record<string, string[]>
+  /** an event of a year nobody has played yet, drawn from `base` — see projectedOf */
+  projected?: { year: number; base: string }
 }
 
 const CIRCUIT = raw as unknown as Record<string, CEvent[]>
 
-export const eventsOf = (year: number): CEvent[] => CIRCUIT[String(year)] ?? []
-
 const BY_ID = new Map<string, CEvent>()
-for (const evs of Object.values(CIRCUIT)) for (const e of evs) BY_ID.set(e.id, e)
-export const eventOf = (id: string): CEvent | undefined => BY_ID.get(id)
+const YEAR_OF = new Map<string, number>()
+for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) { BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y)) }
+
+/* ------------------------------------------------------------------ */
+/*  the years nobody has played yet                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Past the last real match the calendar does not stop, and it does not turn
+ * into some other calendar either. circuit.json runs to 2026's Stage 2; every
+ * season after 2026 is 2026 again — the same events in the same formats on the
+ * same days, each field drawn by the rule that really drew it (projectedSeeds),
+ * every match played, because nobody has played them yet. 2026 itself still
+ * owes what closes its season, Champions in Shanghai: that takes 2025's
+ * format — four GSL groups, then eight in double elimination, as 2026 has it
+ * too — on the dates announced for it.
+ *
+ * A projected event is never written into a save. Its id — `F2027:2682`, the
+ * 2027 edition of 2026's Americas Kickoff — is enough to draw it again.
+ */
+const REAL_YEARS = Object.keys(CIRCUIT).map(Number).sort((a, b) => a - b)
+export const LAST_REAL_YEAR = REAL_YEARS[REAL_YEARS.length - 1]
+// Americas, EMEA and Pacific have no Ascension in 2026 — Riot folded it into the leagues' Stage 2
+// Play-Ins, which are on the books. China kept its own, after Evolution Series Act 3
+const owes = (e: CEvent): boolean => e.stage === 'champions' || (e.stage === 'ascension' && e.region === 'China')
+/** VALORANT Champions Shanghai 2026: 24 September to 18 October (Liquipedia). */
+const OWED_DATES: Partial<Record<StageKey, [number, number]>> = { champions: [266, 290] }
+
+const slotKey = (e: CEvent): string => `${e.stage}|${e.region ?? ''}|${e.scene ?? ''}`
+const bareName = (e: CEvent): string =>
+  e.name.replace(/\b20\d\d\b|VCT|Champions Tour|Challengers( League)?|Valorant/gi, '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+
+/** What the last real year closes with that its calendar has not reached. */
+const OWED_EVENTS: CEvent[] = (() => {
+  const have = new Set((CIRCUIT[String(LAST_REAL_YEAR)] ?? []).map(slotKey))
+  return (CIRCUIT[String(LAST_REAL_YEAR - 1)] ?? []).filter((e) => owes(e) && !have.has(slotKey(e)))
+})()
+
+/**
+ * Every season after the last real one is drawn from these. Not an event that
+ * was only an open qualifier: its sides were five friends and a Discord server,
+ * nobody this world holds, and a qualifier nobody can name is not played here —
+ * the places it sent come through the next event's own open phase instead.
+ */
+const TEMPLATE: CEvent[] = [
+  ...(CIRCUIT[String(LAST_REAL_YEAR)] ?? []).filter((e) => !!e.stage && e.stage !== 'offseason' && e.start != null
+    && e.units.some((u) => u.type !== 'open')),
+  ...OWED_EVENTS,
+]
+
+function project(year: number, baseId: string): CEvent | undefined {
+  const src = BY_ID.get(baseId)
+  const from = YEAR_OF.get(baseId)
+  if (!src || from == null || src.start == null || src.end == null || src.projected) return undefined
+  const owed = from === LAST_REAL_YEAR - 1
+  if (year < LAST_REAL_YEAR || (year === LAST_REAL_YEAR && !owed)) return undefined
+  const [start, end] = (owed && src.stage && OWED_DATES[src.stage]) || [src.start, src.end]
+  const s0 = src.start
+  const span = src.end - s0
+  const at = (d: number): number => (span ? Math.round(start + ((d - s0) * (end - start)) / span) : start)
+  const n = src.stage === 'masters1' ? 1 : src.stage === 'masters2' ? 2 : 0
+  return {
+    ...src,
+    id: `F${year}:${baseId}`,
+    // no host city is named that nobody has announced
+    name: n ? `Valorant Masters ${year} Stage ${n}` : src.name.replace(/\b20\d\d\b/g, String(year)),
+    cn: src.stage === 'champions' ? `${year} 全球冠军赛` : n ? `${year} 第${n === 1 ? '一' : '二'}站大师赛` : src.cn,
+    start,
+    end,
+    units: src.units.map((u) => ({
+      ...u,
+      first: u.first == null ? u.first : at(u.first),
+      last: u.last == null ? u.last : at(u.last),
+      ranked: undefined,
+      nodes: u.nodes?.map((nd) => ({ ...nd, day: at(nd.day), winner: null, teams: ['', ''] as [string, string], score: [null, null] as [null, null] })),
+    })),
+    places: [],
+    names: {},
+    rosters: {},
+    projected: { year, base: baseId },
+  }
+}
+
+const PROJECTED = new Map<number, CEvent[]>()
+function projectedOf(year: number): CEvent[] {
+  if (year < LAST_REAL_YEAR) return []
+  let hit = PROJECTED.get(year)
+  if (!hit) {
+    hit = (year === LAST_REAL_YEAR ? OWED_EVENTS : TEMPLATE)
+      .map((e) => project(year, e.id))
+      .filter((e): e is CEvent => !!e)
+      .sort((a, b) => a.start! - b.start! || a.id.localeCompare(b.id))
+    for (const e of hit) BY_ID.set(e.id, e)
+    PROJECTED.set(year, hit)
+  }
+  return hit
+}
+
+export const eventsOf = (year: number): CEvent[] => [...(CIRCUIT[String(year)] ?? []), ...projectedOf(year)]
+
+export const eventOf = (id: string): CEvent | undefined => {
+  const hit = BY_ID.get(id)
+  if (hit) return hit
+  const m = /^F(\d{4}):/.exec(id)
+  if (!m) return undefined
+  projectedOf(Number(m[1]))
+  return BY_ID.get(id)
+}
 
 /** A vlr team id as this world knows it. Sides from open qualifiers are not clubs. */
 export const worldIdOf = (vlr: string): string | null => (vlr.startsWith('N:') ? null : `V21T${vlr}`)
@@ -123,7 +229,8 @@ const idIn = (state: GameState, vlr: string | null | undefined): string | null =
  * own name is never somebody else's alias.
  */
 function teamOf(state: GameState, ev: CEvent, vlr: string | null | undefined): string | null {
-  if (!vlr) return null
+  // a projected event's seeds are the places of the year it is drawn from, not anyone's
+  if (!vlr || ev.projected) return null
   const direct = idIn(state, vlr)
   if (direct) return direct
   const roster = ev.rosters?.[vlr]
@@ -339,13 +446,13 @@ function placesFrom(units: CUnit[], tiers: string[][][]): [string, number][] {
 export function setupCircuitSeason(state: GameState): void {
   for (const ev of eventsOf(state.year)) {
     if (ev.start == null || ev.end == null || !ev.units.length) continue
-    const teams = uniq(ev.seeds.map((v) => idIn(state, v)).filter((x): x is string => !!x))
+    const teams = ev.projected ? [] : uniq(ev.seeds.map((v) => idIn(state, v)).filter((x): x is string => !!x))
     const comp: Competition = {
       key: `ev:${ev.id}`,
       name: ev.cn,
       region: ev.region && !ev.layer ? (ev.region as Region) : undefined,
       tier: tierOf(ev),
-      stage: ev.stage ?? stageAtIn(state.year, ev.start),
+      stage: ev.stage ?? stageAtIn(state.year, ev.start, true),
       teams,
       standings: newStandings(teams),
       finished: [],
@@ -425,25 +532,45 @@ const ROUTES: RouteBook = {
   pools: { ...OPEN_ROUTES.pools, ...PARTNERED_ROUTES.pools },
 }
 
+/** An event's rules. A projected event plays by the rules of the event it is drawn from. */
+function rulesOf(id: string): EventRules | undefined {
+  const own = ROUTES.events[id]
+  if (own) return own
+  const base = eventOf(id)?.projected?.base
+  return base ? ROUTES.events[base] : undefined
+}
+
+type Pool = RouteBook['pools'][string][string]
+/** A points pool as a year had it. A year past the last real table plays by that table's rules, with no standings of its own. */
+function poolOf(year: number, pool: string): (Pool & { real: boolean }) | undefined {
+  for (let y = year; y >= 2021; y--) {
+    const p = ROUTES.pools[String(y)]?.[pool]
+    if (p) return { ...p, real: y === year }
+  }
+  return undefined
+}
+
 /** What a placing at this event really paid in circuit points — null where no prize table is on record. */
 export function circuitAward(comp: Competition, place: number): number | null {
-  const table = comp.circuit && ROUTES.events[comp.circuit.id]?.award
+  const table = comp.circuit && rulesOf(comp.circuit.id)?.award
   if (!table) return null
   return table[String(place)] ?? 0
 }
 
-const poolRegions = (year: number, pool: string): string[] => ROUTES.pools[String(year)]?.[pool]?.regions ?? []
+const poolRegions = (year: number, pool: string): string[] => poolOf(year, pool)?.regions ?? []
 
 /**
  * Has anything this world played reached into a points pool? Until it has,
  * the pool's standings are history's, and so is every seat drawn from them.
  */
 function poolTouched(state: GameState, pool: string): boolean {
+  // a year with no real table has only this world's
+  if (!poolOf(state.year, pool)?.real) return true
   const regions = new Set(poolRegions(state.year, pool))
   // only an event that pays points can move a points table: a Taiwanese club
   // playing the Huya cups changes nothing about SEA's standings
   return Object.values(state.comps).some((c) => c.circuit?.mode === 'sim' && !!c.champion
-    && !!ROUTES.events[c.circuit.id]?.award
+    && !!rulesOf(c.circuit.id)?.award
     && c.teams.some((t) => regions.has(state.teams[t]?.region ?? '')))
 }
 
@@ -451,9 +578,10 @@ function poolTouched(state: GameState, pool: string): boolean {
 function poolRanking(state: GameState, pool: string): string[] {
   const regions = new Set(poolRegions(state.year, pool))
   // from 2024 a pool is a league: the clubs that hold its seats, wherever they are from
-  const league = ROUTES.pools[String(state.year)]?.[pool]?.league
+  const def = poolOf(state.year, pool)
+  const league = def?.league
   const realOrder = new Map<string, number>()
-  ;(ROUTES.pools[String(state.year)]?.[pool]?.standings ?? []).forEach((r, i) => {
+  ;((def?.real && def.standings) || []).forEach((r, i) => {
     const id = r.team ? worldIdOf(r.team) : null
     if (id && !realOrder.has(id)) realOrder.set(id, i)
   })
@@ -475,7 +603,7 @@ function poolRanking(state: GameState, pool: string): string[] {
  */
 function championsDirect(state: GameState): Set<string> {
   const champs = eventsOf(state.year).find((e) => /Valorant Champions 20/i.test(e.name))
-  const book = champs && ROUTES.events[champs.id]?.routes
+  const book = champs && rulesOf(champs.id)?.routes
   const out = new Set<string>()
   if (!champs || !book) return out
   const perPool = new Map<string, number>()
@@ -483,16 +611,17 @@ function championsDirect(state: GameState): Set<string> {
   const perFeeder = new Map<string, { event: string; league?: string; n: number; real: string[] }>()
   for (const v of champs.seeds) {
     const r = book[v]
-    if (r?.kind === 'top' && r.event && eventOf(r.event)?.stage !== 'lcq') {
-      const key = `${r.event}|${r.league ?? ''}`
-      const f = perFeeder.get(key) ?? { event: r.event, league: r.league, n: 0, real: [] }
+    const event = r?.event && counterpart(r.event, champs)
+    if (r?.kind === 'top' && event && eventOf(event)?.stage !== 'lcq') {
+      const key = `${event}|${r.league ?? ''}`
+      const f = perFeeder.get(key) ?? { event, league: r.league, n: 0, real: [] }
       f.n++
       const t = teamOf(state, champs, v)
       if (t) f.real.push(t)
       perFeeder.set(key, f)
     }
-    if (r?.kind === 'winner' && r.event) {
-      const c = state.comps[`ev:${r.event}`]
+    if (r?.kind === 'winner' && event) {
+      const c = state.comps[`ev:${event}`]
       const w = c?.champion ?? teamOf(state, champs, v)
       if (w) out.add(w)
     }
@@ -500,13 +629,13 @@ function championsDirect(state: GameState): Set<string> {
   }
   for (const f of perFeeder.values()) {
     const c = state.comps[`ev:${f.event}`]
-    if (c?.champion && c.circuit?.mode === 'sim') {
+    if (c?.champion && (c.circuit?.mode === 'sim' || champs.projected)) {
       const inLeague = (t: string) => !f.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === f.league
       for (const t of c.finished.filter(inLeague).slice(0, f.n)) out.add(t)
     } else for (const t of f.real) out.add(t)
   }
   for (const [pool, n] of perPool) {
-    if (!poolTouched(state, pool)) {
+    if (!champs.projected && !poolTouched(state, pool)) {
       for (const v of champs.seeds) {
         if (book[v]?.kind === 'points' && book[v]?.pool === pool) {
           const t = teamOf(state, champs, v)
@@ -538,7 +667,8 @@ function championsDirect(state: GameState): Set<string> {
  * event's own scene so that no Chinese cup can reach a Taiwanese qualifier.
  */
 function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swaps: Swap[] } {
-  const book = ROUTES.events[ev.id]?.routes
+  if (ev.projected) return projectedSeeds(state, ev)
+  const book = rulesOf(ev.id)?.routes
   if (!book) return legacySeeds(state, ev)
   const real: (string | null)[] = []
   for (const v of ev.seeds) {
@@ -662,6 +792,143 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
   return { seeds: out, swaps }
 }
 
+/* ------------------------------------------------------------------ */
+/*  a projected event's field                                          */
+/* ------------------------------------------------------------------ */
+
+/** The event of `ev`'s own year that stands where `id` stood in its year — for a projected event's feeders and routes. */
+function counterpart(id: string, ev: CEvent): string {
+  const p = ev.projected
+  const src = BY_ID.get(id)
+  if (!p || !src) return id
+  const like = (list: CEvent[]): CEvent | undefined => {
+    const hits = list.filter((e) => slotKey(e) === slotKey(src))
+    return hits.find((e) => bareName(e) === bareName(src)) ?? (hits.length === 1 ? hits[0] : undefined)
+  }
+  const real = like(CIRCUIT[String(p.year)] ?? [])
+  if (real) return real.id
+  if (YEAR_OF.get(id) !== LAST_REAL_YEAR && p.year > LAST_REAL_YEAR) {
+    const last = like(CIRCUIT[String(LAST_REAL_YEAR)] ?? [])
+    if (last) return `F${p.year}:${last.id}`
+  }
+  return `F${p.year}:${id}`
+}
+
+/** Where each of a real event's seeds came from: the latest earlier event of its scene it placed in, and where among the clubs. */
+const FEEDERS = new Map<string, ({ from: string; k: number } | null)[]>()
+function feedersOf(base: CEvent): ({ from: string; k: number } | null)[] {
+  const hit = FEEDERS.get(base.id)
+  if (hit) return hit
+  const earlier = (CIRCUIT[String(YEAR_OF.get(base.id))] ?? [])
+    .filter((e) => e.id !== base.id && e.end != null && base.start != null && e.end < base.start && e.places.length && sameScene(base, e))
+  const out = base.seeds.map((v) => {
+    if (v.startsWith('N:')) return null
+    let best: { from: string; k: number; end: number } | null = null
+    for (const e of earlier) {
+      const k = e.places.filter(([t]) => !t.startsWith('N:')).findIndex(([t]) => t === v)
+      if (k >= 0 && (!best || e.end! > best.end)) best = { from: e.id, k, end: e.end! }
+    }
+    return best ? { from: best.from, k: best.k } : null
+  })
+  FEEDERS.set(base.id, out)
+  return out
+}
+
+/**
+ * The field of an event nobody has played yet. No seat here is history's, so
+ * each is drawn the way it was drawn in the year the event is copied from:
+ *
+ *  - a league's own event: the clubs that hold the league's seats this year
+ *  - a seat with a route on record (a Masters, Champions): that route, off
+ *    this world's results
+ *  - any other seat: the placing it really came out of, in this year's edition
+ *    of that event — or, where this year has none, in its scene's last event
+ *  - whatever is left: the best clubs of the event's own scene not already in
+ */
+function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; swaps: Swap[] } {
+  const { year, base: baseId } = ev.projected!
+  const base = BY_ID.get(baseId)
+  const baseYear = YEAR_OF.get(baseId) ?? year
+  const out: (string | null)[] = ev.seeds.map(() => null)
+  const used = new Set<string>()
+  const take = (i: number, t: string | null | undefined): boolean => {
+    if (!t || out[i] || used.has(t) || !state.teams[t] || state.teams[t].dormant) return false
+    out[i] = t
+    used.add(t)
+    return true
+  }
+  const league = isLeagueEvent(year, ev)
+
+  if (league && ev.region) {
+    const members = Object.values(state.teams)
+      .filter((t) => !t.dormant && t.tier === 1 && t.league === `VCT ${ev.region}`)
+      .sort((a, b) => b.rating - a.rating)
+      .map((t) => t.id)
+    const seats = ev.seeds.map((v, i) => ({ v, i })).filter(({ v }) => bookLeague(baseYear, v) === ev.region)
+    seats.forEach(({ i }, n) => { take(i, members[n]) })
+  }
+
+  const book = rulesOf(ev.id)?.routes
+  if (book) {
+    const order: Record<Route['kind'], number> = { winner: 0, top: 1, rest: 2, points: 3, keep: 4 }
+    const items = ev.seeds.map((v, i) => ({ i, r: book[v] }))
+      .filter((x): x is { i: number; r: Route } => !!x.r && x.r.kind !== 'keep' && !out[x.i])
+      .sort((a, b) => order[a.r.kind] - order[b.r.kind] || (a.r.rank ?? 99) - (b.r.rank ?? 99) || (a.r.k ?? 0) - (b.r.k ?? 0))
+    let direct: Set<string> | null = null
+    for (const { i, r } of items) {
+      const c = r.event ? state.comps[`ev:${counterpart(r.event, ev)}`] : undefined
+      if (r.kind === 'winner') take(i, c?.champion)
+      else if (r.kind === 'top') {
+        const inLeague = (t: string) => !r.league || regionIn(state.teams[t]?.region ?? 'Europe', year) === r.league
+        take(i, c?.finished.find((t) => !used.has(t) && inLeague(t)))
+      } else if (r.kind === 'rest') {
+        direct ??= championsDirect(state)
+        const through = direct
+        take(i, c?.finished.find((t) => !used.has(t) && !through.has(t)))
+      } else if (r.kind === 'points' && r.pool) {
+        if (/Last Chance/i.test(ev.name)) direct ??= championsDirect(state)
+        const through = direct
+        take(i, poolRanking(state, r.pool).find((t) => !used.has(t) && !through?.has(t)))
+      }
+    }
+  }
+
+  if (base) {
+    const feeders = feedersOf(base)
+    const list = ev.seeds.map((_, i) => ({ i, f: feeders[i] }))
+      .filter((x): x is { i: number; f: { from: string; k: number } } => !!x.f && !out[x.i])
+      .sort((a, b) => a.f.from.localeCompare(b.f.from) || a.f.k - b.f.k)
+    for (const { i, f } of list) {
+      const src = BY_ID.get(f.from)
+      let c: Competition | undefined = state.comps[`ev:${counterpart(f.from, ev)}`]
+      if (!c?.champion && src?.scene) {
+        c = Object.values(state.comps)
+          .filter((x) => x.format === 'circuit' && !!x.champion && !!x.circuit && x.circuit.end < (ev.start ?? 0)
+            && eventOf(x.circuit.id)?.scene === src.scene)
+          .sort((x, y) => y.circuit!.end - x.circuit!.end)[0]
+      }
+      if (!c?.champion) continue
+      for (let j = f.k; j < c.finished.length; j++) if (take(i, c.finished[j])) break
+    }
+  }
+
+  const scope = scopeOf(ev)
+  const want = league ? 2 : tierOf(ev)
+  const pool = Object.values(state.teams)
+    .filter((t) => !t.dormant && t.roster.length >= 5 && !used.has(t.id)
+      && (ev.scene ? t.scene === ev.scene : !scope || scope.includes(t.region) || scope.includes(regionIn(t.region, year))))
+    .sort((a, b) => Number(b.tier === want) - Number(a.tier === want) || b.rating - a.rating)
+  const mainSeeds = new Set<number>()
+  for (const u of ev.units) {
+    if (isOpen(u)) continue
+    for (const n of u.nodes ?? []) for (const s of [n.a, n.b]) if (s[0] === 's') mainSeeds.add(s[1])
+  }
+  for (const i of [...mainSeeds].sort((a, b) => a - b)) {
+    while (!out[i] && pool.length) take(i, pool.shift()!.id)
+  }
+  return { seeds: out, swaps: [] }
+}
+
 /** A partnered league's own events: closed to everyone without a seat, whatever region they are in. */
 export function isLeagueEvent(year: number, ev: CEvent): boolean {
   return year >= 2023 && !ev.scene && !!ev.region && ['Americas', 'EMEA', 'Pacific', 'China'].includes(ev.region)
@@ -708,7 +975,7 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   c.seeds = takeSeat(state, ev, seeds)
   const club = playerClub(state)
   const mine = !!club && c.seeds.includes(club)
-  c.why = mine ? 'mine' : isHome(state, ev, state.teams[state.myTeam], club) ? 'home' : swaps.length ? 'ripple' : undefined
+  c.why = mine ? 'mine' : isHome(state, ev, state.teams[state.myTeam], club) ? 'home' : swaps.length ? 'ripple' : ev.projected ? 'ahead' : undefined
   if (swaps.length) c.swaps = swaps.slice(0, 8)
   c.mode = c.why ? 'sim' : 'history'
   // a side that is here under its own real name takes it, rebrand and all
@@ -749,7 +1016,8 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const taken = new Set(c.seeds.filter((x): x is string => !!x))
   const pool = Object.values(state.teams)
     .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && (!scope || scope.includes(t.region)))
-    .sort((x, y) => Number(y.tier === comp.tier) - Number(x.tier === comp.tier) || y.rating - x.rating)
+    .sort((x, y) => (ev.projected && ev.scene ? Number(y.scene === ev.scene) - Number(x.scene === ev.scene) : 0)
+      || Number(y.tier === comp.tier) - Number(x.tier === comp.tier) || y.rating - x.rating)
   const next = (): string | null => {
     const t = pool.shift()
     if (t) taken.add(t.id)
@@ -811,7 +1079,7 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
 export function circuitBonus(state: GameState, comp: Competition): Map<string, number> {
   const out = new Map<string, number>()
   const c = comp.circuit
-  const rules = c ? ROUTES.events[c.id] : undefined
+  const rules = c ? rulesOf(c.id) : undefined
   const ev = c ? eventOf(c.id) : undefined
   if (!c || !rules || !ev || !(rules.wins || rules.groupWin || rules.bye)) return out
   const add = (t: string | null | undefined, v: number) => { if (t && v) out.set(t, (out.get(t) ?? 0) + v) }
@@ -830,55 +1098,35 @@ export function circuitBonus(state: GameState, comp: Competition): Map<string, n
     }
   }
   const where = rules.winsIn ?? 'groups'
+  // a titled event pays its winner for the title, and the final it won is that title, not a
+  // match win on top (100 Thieves, FNATIC and Paper Rex took 9, 9 and 10 from 2024 Stage 1)
+  const champion = rules.award?.['1'] ? comp.champion : undefined
+  // the sides seeded past the knockout round, straight into the upper semi-finals
+  const seeded = new Set<string>()
   ev.units.forEach((u, ui) => {
     const ns = (u.nodes ?? []).map((_, i) => nodes[base[ui] + i])
     if (!ns.length) return
     const games = ns.map(resultOf)
     const playoffs = /Playoff|季后赛|Main Event|正赛/.test((u.phase ?? '') + u.label)
-    if (rules.wins && (playoffs ? where !== 'groups' : where !== 'playoffs')) for (const g of games) add(g.w, rules.wins)
-    if (playoffs) {
-      // a bye: straight into the upper bracket's later rounds, against someone who came through
-      if (rules.bye) {
-        ns.forEach((n, i) => {
-          const entry = (s: Slot) => s[0] === 'g' || s[0] === 's'
-          const fed = (s: Slot) => s[0] === 'w' || s[0] === 'l'
-          if (!n.round.includes('胜者组')) return
-          if (entry(n.a) && fed(n.b)) add(games[i].a, rules.bye!)
-          else if (entry(n.b) && fed(n.a)) add(games[i].b, rules.bye!)
-        })
-      }
-      return
+    if (rules.wins && (playoffs ? where !== 'groups' : where !== 'playoffs')) {
+      games.forEach((g, i) => {
+        if (playoffs && champion && g.w === champion && ns[i].round.includes('总决赛')) return
+        add(g.w, rules.wins!)
+      })
     }
-    if (rules.groupWin) {
-      // the groups are the match graph's connected parts; the group's winner has the most wins, then the best map difference
-      const adj = new Map<string, Set<string>>()
-      const wins = new Map<string, number>()
-      const md = new Map<string, number>()
-      for (const g of games) {
-        if (!g.a || !g.b) continue
-        adj.set(g.a, (adj.get(g.a) ?? new Set<string>()).add(g.b))
-        adj.set(g.b, (adj.get(g.b) ?? new Set<string>()).add(g.a))
-        if (g.w) wins.set(g.w, (wins.get(g.w) ?? 0) + 1)
-        md.set(g.a, (md.get(g.a) ?? 0) + g.md)
-        md.set(g.b, (md.get(g.b) ?? 0) - g.md)
-      }
-      const seen = new Set<string>()
-      for (const start of adj.keys()) {
-        if (seen.has(start)) continue
-        const group: string[] = []
-        const stack = [start]
-        while (stack.length) {
-          const x = stack.pop()!
-          if (seen.has(x)) continue
-          seen.add(x)
-          group.push(x)
-          for (const y of adj.get(x) ?? []) if (!seen.has(y)) stack.push(y)
-        }
-        const top = group.sort((x, y) => (wins.get(y) ?? 0) - (wins.get(x) ?? 0) || (md.get(y) ?? 0) - (md.get(x) ?? 0))[0]
-        add(top, rules.groupWin)
-      }
-    }
+    if (!playoffs) return
+    ns.forEach((n, i) => {
+      const entry = (s: Slot) => s[0] === 'g' || s[0] === 's'
+      const fed = (s: Slot) => s[0] === 'w' || s[0] === 'l'
+      if (!n.round.includes('胜者组')) return
+      if (entry(n.a) && fed(n.b) && games[i].a) seeded.add(games[i].a!)
+      else if (entry(n.b) && fed(n.a) && games[i].b) seeded.add(games[i].b!)
+    })
   })
+  // 2024 Stage 1 was played across both groups and lists 「Group Victory」 and 「Bye Round」 both,
+  // but it is one point, Riot's 「earned bye」: to the sides that skipped the knockout round
+  const per = rules.bye || rules.groupWin
+  if (per) for (const t of seeded) add(t, per)
   return out
 }
 
@@ -993,7 +1241,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
  */
 export function realResultOf(state: GameState, comp: Competition, f: Fixture): { winner: string; line: string } | null {
   const ev = comp.circuit && eventOf(comp.circuit.id)
-  if (!ev || f.node == null || f.node < 0) return null
+  if (!ev || ev.projected || f.node == null || f.node < 0) return null
   const n = flat(ev).nodes[f.node]
   if (!n) return null
   const nm = (t: string) => ev.names[t] ?? t.replace(/^N:/, '')
@@ -1016,6 +1264,6 @@ export function realResultOf(state: GameState, comp: Competition, f: Fixture): {
 /** The real placings of an event, for the standings page. */
 export function realPlacesOf(comp: Competition): { name: string; place: number }[] {
   const ev = comp.circuit && eventOf(comp.circuit.id)
-  if (!ev) return []
+  if (!ev || ev.projected) return []
   return ev.places.slice(0, 8).map(([t, place]) => ({ name: ev.names[t] ?? t.replace(/^N:/, ''), place }))
 }

@@ -23,7 +23,7 @@ export function circuitShows(comp: Competition, region: string): boolean {
   return !ev.region || ev.region === region
 }
 
-const WHY: Record<string, string> = { mine: '你们在打', home: '本赛区 · 模拟', ripple: '名额被改写 · 模拟' }
+const WHY: Record<string, string> = { mine: '你们在打', home: '本赛区 · 模拟', ripple: '名额被改写 · 模拟', ahead: '还没有发生 · 模拟' }
 
 export default function CircuitPanel({ comp }: { comp: Competition }) {
   const { game, openMatch } = useGame()

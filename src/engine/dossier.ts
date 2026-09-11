@@ -18,6 +18,7 @@
  * placements, winnings) and Liquipedia's team history.
  */
 import RAW from '../data/dossier.json'
+import idsRaw from '../data/bridge_2026.json'
 
 export interface DossierEntry {
   img?: string
@@ -66,8 +67,19 @@ export interface LegendPhoto {
 
 export const DOSSIER = RAW as unknown as DossierFile
 
+/**
+ * The dossier is keyed by the 2026 world file's ids (P…, T…). A world that
+ * entered in 2021 keeps the roster book's (V…, V21T…) — the same people and
+ * clubs, matched by scripts/build_bridge_2026.py — so a lookup reads either,
+ * and a face is there from the first season it can be.
+ */
+const IDS = idsRaw as unknown as { players: Record<string, string>; teams: Record<string, string | null> }
+const PERSON = new Map(Object.entries(IDS.players).map(([P, vlr]) => [`V${vlr}`, P]))
+const CLUB = new Map(Object.entries(IDS.teams).flatMap(([T, vlr]) => (vlr ? [[`V21T${vlr}`, T] as [string, string]] : [])))
+const personKey = (id: string): string => PERSON.get(id) ?? id
+
 export const dossierOf = (playerId: string): DossierEntry | undefined =>
-  DOSSIER.players[playerId]
+  DOSSIER.players[personKey(playerId)]
 
 export const titleCount = (playerId: string): number => dossierOf(playerId)?.t ?? 0
 
@@ -109,10 +121,11 @@ export const faceUrl = (file: string, v?: string): string => {
 
 /** The club crest, where we have one, stamped the same way. */
 export const crestUrl = (clubId: string | null | undefined): string | null => {
-  const v = clubId ? DOSSIER.logos?.[clubId] : undefined
-  if (!clubId || !v) return null
+  const key = clubId ? CLUB.get(clubId) ?? clubId : undefined
+  const v = key ? DOSSIER.logos?.[key] : undefined
+  if (!key || !v) return null
   const base = typeof import.meta.env !== 'undefined' ? import.meta.env.BASE_URL : './'
-  return `${base}logos/${clubId}.webp?v=${v}`
+  return `${base}logos/${key}.webp?v=${v}`
 }
 
 // ---------------------------------------------------------------- records
@@ -178,7 +191,7 @@ const ordinal = (place: string | null): number | null => {
 const MAJOR = /champions|masters|esports world cup|game changers|vct \d{4}|champions tour/i
 
 export function placementsOf(r: Records, playerId: string): Placement[] {
-  const rows = r.players[playerId]?.ev ?? []
+  const rows = r.players[personKey(playerId)]?.ev ?? []
   return rows.map(([eid, place, club, stage]) => {
     const [event, year] = r.events[eid] ?? [eid, null]
     const n = ordinal(place)
@@ -224,7 +237,7 @@ const monthsBetween = (a: string | null, b: string | null): number | null => {
  * happened.
  */
 export function tenuresOf(r: Records, playerId: string): Tenure[] {
-  const rows = r.players[playerId]?.th ?? []
+  const rows = r.players[personKey(playerId)]?.th ?? []
   const out: Tenure[] = []
   for (const [from, to, club] of rows) {
     const prev = out[out.length - 1]

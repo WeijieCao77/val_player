@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { GameCtx } from './ui/ctx'
 import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/save'
 import { dateLabel, resumeTimeline } from './engine/season'
-import { formatOf, stageNameIn } from './engine/era'
+import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceWeek } from './engine/me/week'
@@ -217,7 +217,7 @@ export default function PlayerGame() {
           </div>
           <div className="hero-stage">
             <small>{game.year}</small>
-            <b>{stageNameIn(game.year, game.stage)}</b>
+            <b>{stageNameIn(game.year, game.stage, onTimeline(game))}</b>
             <span className="muted">{dateLabel(game)} · 第 {Math.floor(game.day / 7)} 周</span>
           </div>
           <div className="tiles">
@@ -279,7 +279,7 @@ export default function PlayerGame() {
         {summary && (
           <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             <p className="small muted" style={{ marginTop: 0 }}>
-              现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage)}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
+              现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage, onTimeline(game))}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
             </p>
             {summary.notes.length === 0
               ? <p className="muted">一路没有需要拿主意的事。</p>

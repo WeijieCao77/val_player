@@ -1,5 +1,5 @@
 import { PRIZE } from '../finance'
-import { stageNameIn } from '../era'
+import { onTimeline, stageNameIn } from '../era'
 import type { GameState, StageKey } from '../types'
 import { pushLog } from './log'
 import type { LedgerBook, MoneyKind } from './types'
@@ -70,7 +70,7 @@ export function addMoney(state: GameState, kind: MoneyKind, amount: number): num
   if (!me) return 0
   const n = Math.round(amount || 0)
   if (!n) return 0
-  if (!me.ledger) initLedger(state, stageNameIn(state.year, state.stage))
+  if (!me.ledger) initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))
   me.money += n
   const led = me.ledger!
   const side = n > 0 ? led.cur.in : led.cur.out
@@ -83,11 +83,11 @@ export function addMoney(state: GameState, kind: MoneyKind, amount: number): num
 /** At a stage's end: this stage's book becomes last stage's, and a new one opens. */
 export function ledgerRotate(state: GameState): void {
   const me = state.me!
-  if (!me.ledger) { initLedger(state, stageNameIn(state.year, state.stage)); return }
+  if (!me.ledger) { initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state))); return }
   me.ledger.prev = me.ledger.cur
   me.ledger.prevLabel = me.ledger.label
   me.ledger.cur = emptyBook()
-  me.ledger.label = stageNameIn(state.year, state.stage)
+  me.ledger.label = stageNameIn(state.year, state.stage, onTimeline(state))
 }
 
 export const ledgerSum = (o: Record<string, number> | undefined): number =>

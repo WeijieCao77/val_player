@@ -12,21 +12,24 @@
  *  - 够不着的地方保持原样: an international this career never reached, whose
  *    field nothing upstream changed, has its real champion
  *
- * Then a bystander: nobody signs him, and the world runs from 2021 to the end
- * of 2025 on its own. Nothing he does reaches anywhere, so every international
- * of all five years must end exactly as it really did — which it can only do
- * if the clubs and rosters followed history too (engine/timeline.ts): EDward
- * Gaming did not exist in January 2021 and won Champions 2024. And at 2026,
- * where the timeline hands over to the modern season, the save stops honestly.
+ * Then a bystander: nobody signs him, and the world runs from 2021 into 2028
+ * on its own. Nothing he does reaches anywhere, so every international that
+ * has really been played must end exactly as it did — which it can only do if
+ * the clubs and rosters followed history too (engine/timeline.ts): EDward
+ * Gaming did not exist in January 2021 and won Champions 2024. Champions 2026
+ * has not been played; its field must be the sixteen that really qualified.
+ * And the author's rule for the seam: 连贯 — no year turn may change the whole
+ * world at once, 2025 into 2026 included, and the years nobody has played yet
+ * change only what the game itself changes.
  *
- *   npx tsx scripts/check_circuit.ts [seed=11]
+ *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet]
  */
+import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { advanceUntil, autoWeek, quietAhead } from '../src/engine/me/auto'
 import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
-import { WORLD_TEAMS } from '../src/engine/teams'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
 import type { Competition, GameState, Region } from '../src/engine/types'
 
@@ -42,13 +45,14 @@ const mem: Record<string, string> = {}
 ;(globalThis as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error('offline'))
 
 const seed = Number(process.argv[2] ?? 11)
+const only = process.argv[3]
 let bad = 0
 const fail = (msg: string) => { bad++; console.log(`✗ ${msg}`) }
 
 /** A year's internationals and who really won each, read off the events themselves. */
 function internationals(year: number): { id: string; vlr: string; real: string }[] {
   return eventsOf(year)
-    .filter((e) => !e.region && (e.stage === 'masters1' || e.stage === 'masters2' || e.stage === 'champions' || /LOCK\/\/IN/.test(e.name)))
+    .filter((e) => !e.projected && !e.region && (e.stage === 'masters1' || e.stage === 'masters2' || e.stage === 'champions' || /LOCK\/\/IN/.test(e.name)))
     .map((e) => { const vlr = e.places[0]?.[0] ?? ''; return { id: e.id, vlr, real: e.names[vlr] ?? vlr } })
 }
 
@@ -144,14 +148,89 @@ function run(label: string, region: Region, start: StartPoint): void {
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+/** A year's world as it opens: what anyone would notice changing overnight. */
+interface Snap { year: number; clubs: number; scenes: Set<string>; leagues: Record<string, number>; rostered: Map<string, number> }
+
+function snap(state: GameState): Snap {
+  const active = Object.values(state.teams).filter((t) => !t.dormant && t.roster.length >= 5)
+  const leagues: Record<string, number> = {}
+  for (const t of active) if (t.tier === 1 && t.league?.startsWith('VCT ')) leagues[t.league.slice(4)] = (leagues[t.league.slice(4)] ?? 0) + 1
+  const rostered = new Map<string, number>()
+  for (const p of Object.values(state.players)) {
+    const t = p.teamId ? state.teams[p.teamId] : undefined
+    if (t && !t.dormant) rostered.set(p.id, p.overall)
+  }
+  return { year: state.year, clubs: active.length, scenes: new Set(active.map((t) => t.scene).filter((s): s is string => !!s)), leagues, rostered }
+}
+
+interface Turn { into: number; clubs: number; clubsWas: number; scenesLost: string[]; kept: number; bigMoves: number }
+
+function turnOf(a: Snap, b: Snap): Turn {
+  let kept = 0
+  let big = 0
+  for (const [id, was] of a.rostered) {
+    const now = b.rostered.get(id)
+    if (now == null) continue
+    kept++
+    if (Math.abs(now - was) >= 10) big++
+  }
+  return {
+    into: b.year, clubs: b.clubs, clubsWas: a.clubs, scenesLost: [...a.scenes].filter((s) => !b.scenes.has(s)),
+    kept: kept / Math.max(1, a.rostered.size), bigMoves: big / Math.max(1, kept),
+  }
+}
+
+const pct = (x: number): string => `${Math.round(x * 100)}%`
+
+/**
+ * 连贯. Real off-seasons change a lot — clubs fold, Challengers leagues merge,
+ * ratings are re-read off a new year's numbers — so the turn into 2026 is held
+ * to the turn before it, not to zero. The years nobody has played yet have no
+ * book behind them: only the game's own ageing, retirements and transfers move
+ * anything, and none of that empties a league or rewrites a rating overnight.
+ */
+function continuity(turns: Turn[]): void {
+  const at = (y: number) => turns.find((t) => t.into === y)
+  const [t25, t26] = [at(2025), at(2026)]
+  if (t25 && t26) {
+    if (t26.clubs < t26.clubsWas * 0.8) fail(`连贯：2026 开季在打的俱乐部从 ${t26.clubsWas} 家掉到 ${t26.clubs} 家`)
+    if (t26.scenesLost.length > 2) fail(`连贯：2026 开季消失了 ${t26.scenesLost.length} 个 Challengers 联赛：${t26.scenesLost.join('、')}`)
+    if (t26.bigMoves > t25.bigMoves * 1.5 + 0.05) fail(`连贯：2026 开季能力变动 10 分以上的人占 ${pct(t26.bigMoves)}，上一个换季是 ${pct(t25.bigMoves)}`)
+    if (t26.kept < t25.kept * 0.8) fail(`连贯：2026 开季留在场上的人只有 ${pct(t26.kept)}，上一个换季是 ${pct(t25.kept)}`)
+  }
+  for (const t of [at(2027), at(2028)]) {
+    if (!t) continue
+    if (t.clubs < t.clubsWas * 0.9) fail(`连贯：${t.into} 开季在打的俱乐部从 ${t.clubsWas} 家掉到 ${t.clubs} 家`)
+    if (t.scenesLost.length) fail(`连贯：${t.into} 开季消失了 Challengers 联赛：${t.scenesLost.join('、')}`)
+    if (t.bigMoves > 0.05) fail(`连贯：${t.into} 开季能力变动 10 分以上的人占 ${pct(t.bigMoves)}——没有真实数据的年份不该有这种变化`)
+  }
+}
+
+/** Champions 2026 has not been played. Nothing a bystander does reaches anywhere, so its field must be the sixteen that really qualified. */
+function champions2026(state: GameState): void {
+  const c = Object.values(state.comps).find((x) => x.format === 'circuit' && x.stage === 'champions' && !!x.circuit?.id.startsWith('F2026:'))
+  if (!c) { fail('旁观者：2026 的日历上没有冠军赛'); return }
+  const book = JSON.parse(readFileSync('src/data/routes_partnered.json', 'utf8')) as { fields?: Record<string, { champions?: [string, string, string | null][] }> }
+  const real = book.fields?.['2026']?.champions ?? []
+  const got = c.teams.map((t) => state.teams[t]?.name ?? t)
+  const missing = real.filter(([, , tid]) => !tid || !c.teams.includes(worldIdOf(tid) ?? '')).map(([name]) => name)
+  console.log(`    2026 全球冠军赛（还没打，模拟）：${c.teams.length} 队 · ${got.join('、')}${c.champion ? ` · 这个世界的冠军 ${state.teams[c.champion]?.name}` : ''}`)
+  if (c.teams.length !== 16) fail(`旁观者：2026 冠军赛应该是 16 队，实际 ${c.teams.length}`)
+  if (!real.length) fail('旁观者：routes_partnered.json 里没有 2026 冠军赛的真实名单')
+  else if (missing.length) fail(`旁观者：2026 冠军赛应该是真实晋级的 16 队，缺 ${missing.join('、')}`)
+}
+
 function bystander(): void {
   const t0 = Date.now()
   const state = createCareer({
     name: 'Watcher', region: 'China', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year: 2021,
   })
-  console.log('\n== 旁观者：中国天梯上没人签他，世界自己从 2021 走到 2025')
+  console.log('\n== 旁观者：中国天梯上没人签他，世界自己从 2021 一路走到 2028')
   const day = () => { advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true }) }
-  for (const year of [2021, 2022, 2023, 2024, 2025]) {
+  let was = snap(state)
+  const turns: Turn[] = []
+  for (const year of [2021, 2022, 2023, 2024, 2025, 2026, 2027]) {
+    const y0 = Date.now()
     if (!playYear(state, '旁观者', year, day, 400)) return
     season(state, '旁观者', year, true)
     if (year === 2021) {
@@ -159,38 +238,27 @@ function bystander(): void {
       if (leaked.length) fail(`旁观者：中国赛事的结果波及到了中国以外 ${leaked.length} 场：${leaked.slice(0, 4).map((c) => c.name).join('、')}`)
     }
     if (year >= 2023) {
-      const sim = Object.values(state.comps).filter((c) => c.circuit?.mode === 'sim')
+      // what has really been played stays as it was; only what nobody has played yet is played
+      const sim = Object.values(state.comps).filter((c) => c.circuit?.mode === 'sim' && c.circuit.why !== 'ahead')
       if (sim.length) fail(`旁观者：${year} 年他没有俱乐部，却有 ${sim.length} 场被模拟：${sim.slice(0, 4).map((c) => c.name).join('、')}`)
     }
+    if (year === 2026) champions2026(state)
     if (!cross(state, '旁观者', year, day, 40)) return
-    const teams = Object.values(state.teams)
-    console.log(`  → ${state.year}：俱乐部 ${teams.filter((t) => !t.dormant).length} 家在打（休眠 ${teams.filter((t) => t.dormant).length}）· 选手 ${Object.keys(state.players).length} 人`
-      + (state.year >= 2023 && state.year <= 2025 ? `；联赛 ${leagues(state, state.year)}` : ''))
+    if (state.year !== year + 1 || state.gameOver) {
+      fail(`旁观者：${year} 打完应该进入 ${year + 1} 年，实际 ${state.year} 年，${state.timelinePause ?? state.gameOver ?? ''}`)
+      return
+    }
+    const now = snap(state)
+    const t = turnOf(was, now)
+    turns.push(t)
+    was = now
+    console.log(`  → ${state.year}：俱乐部 ${now.clubs} 家在打（休眠 ${Object.values(state.teams).filter((x) => x.dormant).length}）`
+      + ` · Challengers 联赛 ${now.scenes.size} 个 · 联赛 ${Object.entries(now.leagues).map(([k, v]) => `${k} ${v}`).join(' / ') || '—'}`
+      + ` · 在队选手 ${now.rostered.size} 人，上一年的人留在场上 ${pct(t.kept)}，能力变动 10 分以上 ${pct(t.bigMoves)}`
+      + (t.scenesLost.length ? ` · 不再有的联赛：${t.scenesLost.join('、')}` : '')
+      + ` · ${((Date.now() - y0) / 1000).toFixed(1)}s`)
   }
-  // 2026: the timeline hands over to the world the game ships
-  if (state.year !== 2026 || state.timelinePause || state.bridged !== 2026) {
-    fail(`旁观者：2025 年底应该接上 2026 的现代赛季，实际 ${state.year} 年，${state.timelinePause ?? state.gameOver ?? '没有接上'}`)
-    return
-  }
-  const modern = Object.values(state.teams).filter((t) => /^T\d+$/.test(t.id) && !t.dormant)
-  const kickoffs = Object.values(state.comps).filter((c) => c.stage === 'kickoff')
-  const sen = WORLD_TEAMS.find((t) => t.name === 'Sentinels')
-  const same = !!sen && [...sen.roster].sort().join() === [...(state.teams[sen.id]?.roster ?? [])].sort().join()
-  const loose = Object.values(state.teams).filter((t) => !/^T\d+$/.test(t.id) && !t.dormant)
-  console.log(`  → 2026：接上现在的世界，${modern.length} 家俱乐部开季（其余 ${Object.values(state.teams).filter((t) => t.dormant).length} 家休眠）；`
-    + `揭幕赛 ${kickoffs.length} 个赛区；Sentinels 的名单${same ? '和 2026 真实名单一致' : '和真实名单不一致'}`)
-  if (modern.length !== WORLD_TEAMS.length) fail(`旁观者：2026 应该有 ${WORLD_TEAMS.length} 家现代俱乐部开季，实际 ${modern.length}`)
-  if (loose.length) fail(`旁观者：没有俱乐部的旁观者世界里，2026 还有 ${loose.length} 家时间线俱乐部在打：${loose.slice(0, 4).map((t) => t.name).join('、')}`)
-  if (kickoffs.length !== 4) fail(`旁观者：2026 揭幕赛应该有 4 个赛区，实际 ${kickoffs.length}`)
-  for (const c of kickoffs) {
-    const want = WORLD_TEAMS.filter((t) => t.region === c.region && t.tier === 1).length
-    if (c.teams.length !== want) fail(`旁观者：2026 ${c.name} 应该是今天这个赛区的 ${want} 支一线队，实际 ${c.teams.length} 支`)
-  }
-  if (!same) fail('旁观者：Sentinels 2026 的名单应该是真实的开季名单')
-  if (!playYear(state, '旁观者', 2026, day, 400)) return
-  if (!cross(state, '旁观者', 2026, day, 40)) return
-  if (state.year !== 2027 || state.gameOver) fail(`旁观者：2026 打完应该进入 2027，实际 ${state.year} 年，${state.gameOver ?? ''}`)
-  else console.log(`  → 2027：${Object.keys(state.comps).length} 项赛事排上日历，选手 ${Object.keys(state.players).length} 人`)
+  continuity(turns)
   const size = JSON.stringify(state).length
   console.log(`  存档体积 ${(size / 1024 / 1024).toFixed(1)} MB（未压缩）· ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   void eventOf
@@ -263,12 +331,14 @@ function quiet(): void {
   if (!runs) fail('空窗期：一次按月推进都没有发生')
 }
 
-run('北美 · Challengers 首发', 'North America', 'chal')
-run('中国 · 从天梯开始', 'China', 'pre')
-run('欧洲 · 强队替补', 'Europe', 't1')
-bystander()
-lineage()
-quiet()
+if (!only || only === 'careers') {
+  run('北美 · Challengers 首发', 'North America', 'chal')
+  run('中国 · 从天梯开始', 'China', 'pre')
+  run('欧洲 · 强队替补', 'Europe', 't1')
+}
+if (!only || only === 'bystander') bystander()
+if (!only || only === 'lineage') lineage()
+if (!only || only === 'quiet') quiet()
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2025 按真实赛历逐年打完，够不着的国际赛保持了真实冠军，2026 接上现在的世界、打进 2027；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

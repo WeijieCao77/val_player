@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useGame } from './ctx'
 import { Panel, fmtDay, Crest } from './common'
 import { fixturesFor } from '../engine/season'
-import { formatOf, stageNameIn, stagesOf } from '../engine/era'
+import { formatOf, onTimeline, stageNameIn, stagesOf } from '../engine/era'
 import { realResultOf } from '../engine/circuit'
 import { INTERNATIONAL_START, eventRounds, nextInEvent, upcomingInternational } from '../engine/qualify'
 import { hostCity } from '../engine/hosts'
@@ -64,7 +64,7 @@ export default function Schedule() {
     const list = game.fixtures.slice().sort((a, b) => a.day - b.day).filter((f) => Math.abs(f.day - game.day) <= 10)
     const byStage = new Map<string, Row[]>()
     for (const f of list) {
-      const k = stageNameIn(game.year, f.stage)
+      const k = stageNameIn(game.year, f.stage, onTimeline(game))
       byStage.set(k, [...(byStage.get(k) ?? []), rowOf(f, f.teamA !== me && f.teamB !== me)])
     }
     for (const [title, rows] of byStage) groups.push({ key: title, title, day: rows[0].day, rows })
@@ -75,7 +75,7 @@ export default function Schedule() {
     const byStage = new Map<string, Row[]>()
     for (const f of mine) {
       if (intlKeys.has(f.comp as 'masters1')) continue
-      const k = stageNameIn(game.year, f.stage)
+      const k = stageNameIn(game.year, f.stage, onTimeline(game))
       byStage.set(k, [...(byStage.get(k) ?? []), rowOf(f)])
     }
     // a playoff we are out of still has a winner to find: its remaining ties
@@ -85,7 +85,7 @@ export default function Schedule() {
       const rest = game.fixtures.filter((f) => f.comp === comp.key && !f.played
         && f.label.startsWith('KO:') && f.teamA !== me && f.teamB !== me)
       if (!rest.length) continue
-      const k = stageNameIn(game.year, comp.stage)
+      const k = stageNameIn(game.year, comp.stage, onTimeline(game))
       byStage.set(k, [...(byStage.get(k) ?? []), ...rest.map((f) => rowOf(f, true))].sort((x, y) => x.day - y.day))
     }
     // The rounds of a regional playoff that have not been drawn are on the
@@ -99,7 +99,7 @@ export default function Schedule() {
       // a bracket whose draw has not been held has no ties, but its days are
       // known — every round shows as 待定 vs 待定 until the balls are out
       if (!comp.bracketStarted && comp.plannedStart == null) continue
-      const k = stageNameIn(game.year, comp.stage)
+      const k = stageNameIn(game.year, comp.stage, onTimeline(game))
       const rows = byStage.get(k) ?? []
       for (const r of eventRounds(game, comp)) {
         if (r.drawn) continue
@@ -166,7 +166,7 @@ export default function Schedule() {
     <>
       <Panel title="赛季日历">
         <div className="row wrap" style={{ gap: 6 }}>
-          {stagesOf(game.year).map((s) => {
+          {stagesOf(game.year, onTimeline(game)).map((s) => {
             const active = game.stage === s.key
             const done = game.day > s.end
             return (

@@ -1,11 +1,12 @@
-"""Who the 2026 world file's people and clubs are in the timeline — so a 2021 career can arrive in today.
+"""Who the 2026 world file's people and clubs are in the timeline.
 
 The two entrances were built by two builders. world.json (Val_Manager's) keys
 the world of 2026 as P0…P523 and T0…T77; the timeline keys everyone by their
-vlr.gg ids. A save that entered in 2021 reaches the end of 2025 holding the
-timeline's ids, and the season it has to play next is 2026's — the world the
-game already ships, with its coaches, photographs, logos and prospects all
-keyed P and T.
+vlr.gg ids. A world that entered in 2021 keeps the timeline's ids all the way
+through — 2026 is a year of the book like the others — but the photographs,
+crests and coaches the game already ships are keyed P and T. This says which
+is which, so a 2021 world can show them (engine/dossier.ts) and seat 2026's
+real coaches (engine/today.ts).
 
 The people are exact: dossier.json carries every P's vlr player id.
 A club is itself if it kept its name, whoever it signed — GIANTX bought UCAM's
