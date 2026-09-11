@@ -67,8 +67,6 @@ const ALLOWED_FOR_NOW: Record<string, string> = {
   'src/engine/endings.ts': 'engine split: season.ts; the event names ui/me/Schedule.tsx reads move to the world core',
   'src/engine/trust.ts': 'engine split: season.ts, training.ts',
   'src/engine/telemetry.ts': 'engine split: season.ts:42',
-  // the manager's stylesheet, until the career's own copy is the one main.tsx loads
-  'src/styles.css': 'player stylesheet pending',
 }
 
 type Kind = 'static' | 'dynamic' | 'reexport' | 'side-effect' | 'type'

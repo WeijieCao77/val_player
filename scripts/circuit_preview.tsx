@@ -17,7 +17,7 @@ import Standings from '../src/ui/me/Standings'
 import Schedule from '../src/ui/me/Schedule'
 import { GameCtx } from '../src/ui/me/ctx'
 import type { Region } from '../src/engine/types'
-import '../src/styles.css'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const q = new URLSearchParams(location.search)

@@ -13,7 +13,7 @@ import { autoWeek } from '../src/engine/me/auto'
 import { cloutBreakdown } from '../src/engine/me/clout'
 import TeamScreen from '../src/ui/me/TeamScreen'
 import { GameCtx } from '../src/ui/me/ctx'
-import '../src/styles.css'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const q = new URLSearchParams(location.search)

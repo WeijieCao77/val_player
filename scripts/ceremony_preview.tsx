@@ -20,7 +20,7 @@ import PendingModal from '../src/ui/me/Modals'
 import { startTryout } from '../src/engine/me/tryout'
 import { GameCtx } from '../src/ui/me/ctx'
 import type { CerKind } from '../src/engine/me/types'
-import '../src/styles.css'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const KINDS: CerKind[] = ['draw', 'depart', 'final', 'media', 'rehab', 'farewell', 'awards', 'showmatch', 'patch', 'tryout', 'retire']
