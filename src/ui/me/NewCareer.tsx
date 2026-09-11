@@ -6,7 +6,7 @@ import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, 
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originOf } from '../../engine/me/origins'
 import { hallTitle, readHall } from '../../engine/me/hall'
-import { HallOrigins, HallView } from './HallScreen'
+import { HallView } from './HallScreen'
 import { ENTRY_CN, ENTRY_YEARS, regionIn, regionsOf } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel } from '../common'
@@ -47,7 +47,6 @@ export default function NewCareer({
   const regions = useMemo(() => regionsFor(year), [year])
   const clubs = useMemo(() => (start === 'pre' ? [] : startOffers(region, start === 't1' ? 1 : 2, year, offerSeed)), [region, start, year, offerSeed])
   const ovr = useMemo(() => recomputeOverall({ role, attrs: buildAttrs(role, talents, originKey), stageBonus: 0 } as never), [role, talents, originKey])
-  // the twelve, or one of the hall's two
   const origin = originOf(originKey)
   const starts = startCnOf(year)
   // where a career grinds from, under the league it feeds; 2021 had no leagues to group by
@@ -169,7 +168,6 @@ export default function NewCareer({
             )
           })}
         </div>
-        <HallOrigins pick={originKey} onPick={setOriginKey} />
       </Panel>
 
       <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">起始综合约 {ovr}，上限约 {ovr + (origin.flags?.late ? 12 : 16)}</span>}>
