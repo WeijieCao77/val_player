@@ -7,6 +7,7 @@ import { MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { doorsOf, formatOf } from '../../engine/era'
+import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
 import { Rng, hashStr } from '../../engine/rng'
@@ -117,6 +118,13 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
       </p>
       {/* the most important line on an offer: which game you are signing up for */}
       <p className="small" style={{ margin: '4px 0' }}>接了之后头顶的门：<b>{doorsOf(team.region, game.year)}</b></p>
+      {/* from 2023 the leagues are closed: say which one this club is in, or that it is in none */}
+      {formatOf(game.year) === 'partnered' && (
+        <p className="small" style={{ margin: '4px 0' }}>
+          今年打的联赛：<b>{team.league ?? (team.tier === 1 ? 'VCT' : 'Challengers')}</b>
+          {!hasPlace(game, team) && <span className="warn">（这家俱乐部今年没有联赛席位，签过去可能无赛可打）</span>}
+        </p>
+      )}
       <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : '四天：枪法测试、训练赛、复盘会、经理面谈。每天一个选择，成败对称。'} {inv.expires - game.day} 天内答复；回绝的话今年他们不会再来。</p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>

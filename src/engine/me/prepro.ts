@@ -5,6 +5,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { CUPS } from './cups'
 import { formatOf } from '../era'
+import { hasPlace } from '../timeline'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -142,7 +143,8 @@ export function reachableClubs(state: GameState, slack = 6): Team[] {
   const me = state.me!
   const skill = tryoutSkill(state)
   return Object.values(state.teams)
-    .filter((t) => t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant)
+    // a club with nowhere to play this year is not holding tryouts
+    .filter((t) => t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant && hasPlace(state, t))
     .filter((t) => expectOf(t) <= skill + slack)
     .sort((a, b) => (Number(b.region === me.region) - Number(a.region === me.region)) || b.rating - a.rating)
 }

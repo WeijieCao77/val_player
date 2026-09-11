@@ -6,6 +6,7 @@ import { push } from './pending'
 import { makeDeal, leaveClub } from './contract'
 import { gradeOf } from './tryout'
 import { expectOf, tryoutSkill } from './prepro'
+import { hasPlace } from '../timeline'
 
 /**
  * How the market reads a professional: 破晓's proPerf, on this game's scale.
@@ -81,11 +82,16 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   pushLog(state, 'info', `看台上出现了 ${t.name} 的教练。转会窗开了再说。`)
 }
 
+/** Where a buyer plays, in the words an offer uses. */
+const leagueWord = (t: Team): string => t.league ?? (t.tier === 1 ? '一线' : '二线')
+
 function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
   const me = state.me!
   const p = state.players[me.id]
   const mine = state.teams[state.myTeam]
-  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant)
+  // a club with nowhere to play this year is not hiring
+  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !me.declined.includes(t.id)
+    && !t.dormant && hasPlace(state, t))
   const fit = rut
     ? pool.filter((t) => t.tier === 2 || t.rating <= mine.rating - 4)
     : pool.filter((t) => expectOf(t) <= p.overall + 4 && (t.tier === 1 || mine.tier === 2))
@@ -118,7 +124,10 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
   else if (me.titles.some((t) => t.year === state.year)) p = Math.max(p, 0.96)
   if (perf >= 13 && (me.flags.dryWindows ?? 0) >= 2) p = Math.max(p, 0.92)
   if (listed) p = Math.min(0.97, p * 1.3 + 0.15)
-  const rut = perf < 3 && (me.benchedStages > 0 || state.teams[state.myTeam]?.tier === 2)
+  // a club with no league this year: the market knows its players are free to talk
+  const nowhere = !!team && !hasPlace(state, team)
+  if (nowhere) p = Math.max(p, 0.6)
+  const rut = nowhere || (perf < 3 && (me.benchedStages > 0 || state.teams[state.myTeam]?.tier === 2))
   let n = 0
   const count = rng.chance(p) ? 1 + (rng.chance(0.3 + me.agentTier * 0.2) ? 1 : 0) : 0
   for (let i = 0; i < count; i++) {
@@ -128,7 +137,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
     const deal = makeDeal(state, t.id, 'transfer', gradeOf(d + 4), rng)
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
-    pushLog(state, 'deal', `转会窗：${t.name}${t.region !== me.region ? '（外赛区）' : ''} 开价了。`)
+    pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${t.region !== me.region ? '（外赛区）' : ''} 开价了。`)
     n++
   }
   if (!n && rut && rng.chance(0.26)) {
@@ -138,7 +147,9 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
       deal.role = t.tier === 2 ? 'star' : 'starter'
       me.deals.push(deal)
       push(state, { kind: 'deal', id: deal.id })
-      pushLog(state, 'deal', `${t.name} 来问了：那边给首发。低谷期的退路，接不接看你。`)
+      pushLog(state, 'deal', nowhere
+        ? `你的俱乐部今年没有联赛可打。${t.name}（${leagueWord(t)}）来问了：那边给首发。`
+        : `${t.name}（${leagueWord(t)}）来问了：那边给首发。低谷期的退路，接不接看你。`)
       n++
     }
   }

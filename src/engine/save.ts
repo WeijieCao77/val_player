@@ -1,7 +1,8 @@
 import { canonAgents } from './content'
 import { pruneMatchDetail, stripToTheBone } from './match'
 import { WORLD_TEAMS } from './teams'
-import type { GameState } from './types'
+import { emptyStats } from './types'
+import type { GameState, Stats } from './types'
 
 /**
  * Where saves live. /manager/test plays the 2026 rulebook with its draws
@@ -46,7 +47,12 @@ type PackedLine = number[]
  * and it works — but both are called once per key in a 1.3MB document, which
  * measured 2x the cost to write and 7x to read. Scoreboards only ever live in
  * one place, so going there directly costs a shallow copy of the fixture list
- * and nothing else. Players, teams and news are never touched or copied.
+ * and nothing else. Teams and news are never touched or copied.
+ *
+ * Players are, where it pays: a man who has not played a map in this save
+ * carries a season table and a career table of zeros and an empty notebook of
+ * XP — about 390 KB of a 2021 save by 2026, most of its people being history's.
+ * They are written without them and read back with them.
  */
 export function packState(state: GameState): string {
   const fixtures = state.fixtures.map((f) => {
@@ -64,7 +70,18 @@ export function packState(state: GameState): string {
     })
     return packed ? { ...f, result: { ...f.result, maps } } : f
   })
-  return JSON.stringify({ ...state, fixtures })
+  const zero = (s: Stats | undefined): boolean => !!s && !Object.values(s).some((v) => v)
+  const players: Record<string, unknown> = {}
+  for (const [id, p] of Object.entries(state.players)) {
+    const emptyXp = !!p.xp && !Object.keys(p.xp).length
+    if (!zero(p.season) && !zero(p.career) && !emptyXp) { players[id] = p; continue }
+    const q: Record<string, unknown> = { ...p }
+    if (zero(p.season)) delete q.season
+    if (zero(p.career)) delete q.career
+    if (emptyXp) delete q.xp
+    players[id] = q
+  }
+  return JSON.stringify({ ...state, fixtures, players })
 }
 
 /** ...and back, whichever of the two shapes it was written in. */
@@ -84,6 +101,11 @@ export function unpackState(raw: string): GameState {
       }
       m.lines = lines as unknown as typeof m.lines
     }
+  }
+  for (const p of Object.values(state.players ?? {})) {
+    p.season ??= emptyStats()
+    p.career ??= emptyStats()
+    p.xp ??= {}
   }
   return state
 }

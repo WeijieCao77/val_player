@@ -66,6 +66,22 @@ export const bookCovers = (year: number): boolean => !!BOOK.years[String(year)]
 /** The league a club held a seat in that year, as the book has it. */
 export const bookLeague = (year: number, vlr: string): string | null => BOOK.years[String(year)]?.clubs[vlr]?.l ?? null
 
+/**
+ * Whether a club has somewhere to play this year. From 2023 the leagues are
+ * closed: a club with no seat, that history does not have in any Challengers
+ * league that year and that has not played its way into an event — a club
+ * history let go, or one the player kept alive outside every league — has
+ * nowhere to play, and does not go shopping for professionals to sit.
+ */
+export function hasPlace(state: GameState, t: Team): boolean {
+  if (t.dormant) return false
+  if (!isTimelineWorld(state) || state.year < 2023 || t.tier === 1) return true
+  const Y = BOOK.years[String(state.year)]
+  // past the book a club keeps the Challengers league it last played
+  if (!Y) return !!t.scene
+  return !!bookClubOf(state, Y, t.id) || Object.values(state.comps).some((c) => c.format === 'circuit' && c.teams.includes(t.id))
+}
+
 const clubId = (vlr: string): string => `V21T${vlr}`
 const vlrOf = (playerId: string): string | null => (/^V\d+$/.test(playerId) ? playerId.slice(1) : null)
 
@@ -193,6 +209,27 @@ function sign(state: GameState, p: Player, team: Team, year: number, rng: Rng): 
   p.clubHist ??= []
   const last = p.clubHist[p.clubHist.length - 1]
   if (!last || last.team !== team.id) p.clubHist.push({ team: team.id, from: year, to: year })
+}
+
+/**
+ * A club that has stopped playing keeps its name, its region and its place in
+ * everyone's club history — not a playing club's kit. Its map preferences and
+ * sponsors were most of a quiet club's weight in a save (270 KB of 473 by 2026)
+ * and nothing reads them until it plays again, when wake() draws them afresh.
+ */
+function quiet(t: Team): void {
+  t.dormant = true
+  t.starters = []
+  t.sponsors = []
+  t.mapPrefs = {}
+}
+
+function wake(state: GameState, t: Team): void {
+  t.dormant = false
+  if (t.sponsors.length && Object.keys(t.mapPrefs ?? {}).length) return
+  const fresh = teamFromRaw({ ...(t as unknown as RawTeam), roster: [] }, state.seed)
+  if (!t.sponsors.length) t.sponsors = fresh.sponsors
+  if (!Object.keys(t.mapPrefs ?? {}).length) t.mapPrefs = fresh.mapPrefs
 }
 
 function rerate(state: GameState, t: Team): void {
@@ -352,7 +389,7 @@ function inherit(state: GameState, mine: string | null, year: number, day: numbe
     const successor: Team | undefined = state.teams[to]
     if (successor && successor.id !== mine) {
       for (const pid of [...successor.roster]) release(state, state.players[pid])
-      successor.dormant = true
+      quiet(successor)
     }
     state.heirs = { ...(state.heirs ?? {}), [to]: mine }
     const book = BOOK.years[String(year)]?.clubs[e.to]
@@ -366,7 +403,7 @@ function inherit(state: GameState, mine: string | null, year: number, day: numbe
   }
 }
 
-/** The same moves the timeline makes, for engine/bridge.ts's turn into 2026. */
+/** The same moves the timeline makes, for whoever else has to sign or release on history's behalf. */
 export { sign as signForHistory, release as releaseForHistory }
 
 export interface YearSync {
@@ -410,7 +447,7 @@ export function syncYear(state: GameState, year: number): YearSync {
       t.name = c.n
       t.tag = c.t
     }
-    t.dormant = false
+    wake(state, t)
     t.region = c.r as Region
     t.tier = c.k
     t.league = leagueLabel(c)
@@ -434,7 +471,7 @@ export function syncYear(state: GameState, year: number): YearSync {
   for (const t of Object.values(state.teams)) {
     if (!t.id.startsWith('V21T') || active.has(t.id) || t.id === mine || t.dormant) continue
     for (const pid of [...t.roster]) release(state, state.players[pid])
-    t.dormant = true
+    quiet(t)
     out.folded.push(t.name)
   }
 
@@ -454,7 +491,8 @@ export function syncYear(state: GameState, year: number): YearSync {
   }
 
   for (const t of Object.values(state.teams)) {
-    if (t.dormant) continue
+    // a save written before quiet() was: its quiet clubs lose their kit on the next turn
+    if (t.dormant) { quiet(t); continue }
     ensureCaller(state, t.id)
     if (t.id !== mine) t.starters = autoStarters(state, t.id)
     rerate(state, t)
@@ -488,7 +526,7 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
     }
     const team = t
     const want = ids.map((x) => ensurePlayer(state, x, year, team.region)).filter((p): p is Player => !!p && !people.has(p.id))
-    team.dormant = false
+    wake(state, team)
     let moved = false
     for (const p of want) {
       if (p.teamId === team.id) continue
