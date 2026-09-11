@@ -199,15 +199,19 @@ export class MeMatch {
       if (this.sim.decided) { this.finishInternal(); return 'done' }
       return 'map-end'
     }
-    // a decision only when the map is still in the balance — nobody needs to
-    // be asked anything at 12-2 — and only while I am the one playing: a
-    // skipped match is the engine's numbers against theirs, nothing of mine
+    // a decision only while I am the one playing — a skipped match is the
+    // engine's numbers against theirs, nothing of mine — and, past the first,
+    // only while the map is still in the balance: nobody needs to be asked
+    // anything at 12-2. But every map I play asks me once, by its seventh
+    // round: a lopsided series that asked nothing at all read as a broken
+    // screen (「有时候一整场都打完都不会跳出选项」, 2026-09-11)
     const open = this.winProb()
+    const owed = this.perMap === 0 && m.round >= 6
     if (!this.skipNodes && this.playing && this.side && this.perMap < NODES_PER_MAP && m.round - this.lastNodeRound >= NODE_GAP &&
-        open > 0.06 && open < 0.94) {
+        (owed || (open > 0.06 && open < 0.94))) {
       const c = this.ctxOf()
       const pool = eligibleNodes(c, this.seen)
-      const chance = c.pistol || c.mapPoint || c.ot ? 0.6 : 0.28
+      const chance = owed ? 1 : c.pistol || c.mapPoint || c.ot ? 0.6 : 0.28
       if (pool.length && this.nodeRng.chance(chance)) {
         const node = pool[this.nodeRng.int(0, pool.length - 1)]
         this.pending = { node, ctx: c }

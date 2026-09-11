@@ -12,7 +12,7 @@ import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nod
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { RoundLog } from '../../engine/types'
 
-type Phase = 'pre' | 'live' | 'node' | 'done'
+type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
 
 const BUY_CN = { full: '满配', force: '半配', eco: '经济局' } as const
@@ -67,6 +67,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const step = useCallback(() => {
     const k = mm.step()
     if (k === 'node') { setPhase('node'); rerender(); return }
+    // a map just ended and another is to come: the clock stops until the player starts it
+    if (k === 'map-end') { setPhase('break'); rerender(); return }
     if (k === 'done') { finishUp(); return }
     rerender()
   }, [mm, finishUp, rerender])
@@ -295,13 +297,18 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   // ---- live / node
   const roundNo = Math.max(1, (map?.round ?? 0) + 1)
   const pend = mm.pending
+  // between two maps: the one just played, and the one after it
+  const justPlayed = phase === 'break' ? mm.sim.played[mm.sim.played.length - 1] : undefined
+  const upNext = phase === 'break' ? mm.sim.maps[mm.sim.mapIndex + 1] : undefined
+  const myScore = justPlayed ? (mm.mineIsA ? justPlayed.scoreA : justPlayed.scoreB) : myR
+  const theirScore = justPlayed ? (mm.mineIsA ? justPlayed.scoreB : justPlayed.scoreA) : theirR
   const lastRound = map && map.rounds.length ? map.rounds[map.rounds.length - 1] : null
   const myFive = map ? (mm.mineIsA ? map.A : map.B).players : []
   const theirFive = map ? (mm.mineIsA ? map.B : map.A).players : []
   const lineOf = (id: string) => map?.lines[id]
 
   return (
-    <Modal wide title={`${map ? mapCn(map.map) : '换图中'} · 第 ${roundNo} 回合`} onClose={skip} onBgClose={() => {}}>
+    <Modal wide title={justPlayed ? `${mapCn(justPlayed.map)} 打完了` : `${map ? mapCn(map.map) : '换图中'} · 第 ${roundNo} 回合`} onClose={skip} onBgClose={() => {}}>
       <div className="row wrap" style={{ gap: 8, justifyContent: 'center', marginBottom: 6 }}>
         {mm.sim.played.map((m, i) => (
           <span key={i} className="tag">{mapCn(m.map)} {mm.mineIsA ? `${m.scoreA}-${m.scoreB}` : `${m.scoreB}-${m.scoreA}`}</span>
@@ -310,9 +317,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         {verdict && <span className={verdictTag(verdict.k)} title={verdict.d}>{verdict.t}</span>}
       </div>
       <div className="score-line" style={{ padding: '8px 0' }}>
-        <div className={`t a ${myR > theirR ? 'win' : ''}`}><Crest id={mm.myTeamId} size={26} /><span>{mine.tag}</span></div>
-        <div className="s">{myR} : {theirR}</div>
-        <div className={`t ${theirR > myR ? 'win' : ''}`}><Crest id={oppId} size={26} /><span>{opp?.tag}</span></div>
+        <div className={`t a ${myScore > theirScore ? 'win' : ''}`}><Crest id={mm.myTeamId} size={26} /><span>{mine.tag}</span></div>
+        <div className="s">{myScore} : {theirScore}</div>
+        <div className={`t ${theirScore > myScore ? 'win' : ''}`}><Crest id={oppId} size={26} /><span>{opp?.tag}</span></div>
       </div>
       {wp !== null && (
         <div className="winbar-row">
@@ -341,7 +348,21 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         </div>
       )}
 
-      {phase === 'node' && pend ? (
+      {justPlayed ? (
+        <div className="node-box">
+          <p className="q">{mapCn(justPlayed.map)} {myScore} : {theirScore}，{myScore > theirScore ? '这一把拿下了' : myScore < theirScore ? '这一把丢了' : '这一把打平'}</p>
+          <p className="ctx">大比分 {mm.myMaps} - {mm.theirMaps}{upNext ? `，下一把是${mapCn(upNext)}` : ''}。回到座位上，准备好了再开。</p>
+          {justPlayed.rounds && justPlayed.rounds.length > 0 && (
+            <div style={{ margin: '8px 0' }}>
+              <RoundRibbon rounds={justPlayed.rounds} mineIsA={mm.mineIsA} mineTag={mine.tag} theirTag={opp?.tag} />
+            </div>
+          )}
+          <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 8 }}>
+            <button className="primary" onClick={() => setPhase('live')}>开始下一把{upNext ? `：${mapCn(upNext)}` : ''}</button>
+            <button onClick={skip}>快进剩余</button>
+          </div>
+        </div>
+      ) : phase === 'node' && pend ? (
         <div className="node-box">
           {pend.ctx.agent && <p className="tiny muted" style={{ margin: '0 0 6px' }}>你今晚打 <b>{pend.ctx.agent}</b> · {pend.ctx.role}</p>}
           <p className="q">{pend.node.q}</p>
@@ -371,6 +392,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               {last.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{last.hl}</div>}
             </div>
           )}
+          {map && !mm.playing && <p className="tiny faint center" style={{ margin: '6px 0 0' }}>你不在场上，这张图没有要你拿主意的回合。</p>}
           <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 8 }}>
             <button onClick={skip}>快进剩余</button>
           </div>

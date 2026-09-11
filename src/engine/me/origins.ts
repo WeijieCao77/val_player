@@ -34,7 +34,8 @@ export const ORIGINS: Origin[] = [
   { key: 'academy', name: '青训营出身', blurb: '在一家俱乐部的青训营待过一年，被教练记住了。', attrs: { utility: 3, teamwork: 3, communication: 2 }, tac: 14, scoutSeen: 3, money: 1000 },
   { key: 'campus', name: '高校战队', blurb: '校队打了两年联赛，指挥过。', attrs: { communication: 3, igl: 5, aim: -2 }, tac: 10, money: 2000 },
   { key: 'town', name: '小镇做题家', blurb: '家里不宽裕，寄钱回家是每周的事；但坐得住。', mental: 6, trainMul: 1.12, upkeep: 120, money: 500 },
-  { key: 'korea', name: '韩服天梯', blurb: '在韩服打到过前 500，英语韩语都会一点。', attrs: { awareness: 3, reaction: 2 }, ladder: 12, flags: { lang: 1 }, money: 2500 },
+  // the key is what saves hold: until 2026-09-11 this card was 「韩服天梯」, a League of Legends story rather than a VALORANT one
+  { key: 'korea', name: '留学生', blurb: '在国外读书时一直在当地服务器打排位，英语语音交流没问题。', attrs: { awareness: 3, reaction: 2 }, ladder: 12, flags: { lang: 1 }, money: 2500 },
   { key: 'late', name: '大龄新人', blurb: '20 岁才决定试一次，上限低一点，但心态稳。', mental: 10, body: 4, attrs: { clutch: 3 }, flags: { late: 1 }, money: 5000 },
   { key: 'exchild', name: '退役选手之子', blurb: '父亲打过职业，圈里人都认识，也都盯着看。', scoutSeen: 5, fans: 30, mental: -3, attrs: { igl: 2 }, money: 8000 },
   { key: 'grinder', name: '死练型', blurb: '天赋一般，但每天十二小时。', attrs: { aim: -2, awareness: -2 }, trainMul: 1.2, body: 8, money: 1500 },

@@ -151,6 +151,13 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+/* where a career grinds from: from 2023 its places under the four leagues they feed */
+.home-pick { display: grid; gap: 8px; margin-top: 14px; }
+.home-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.home-group { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; align-items: center; }
+.home-group.flat { grid-template-columns: minmax(0, 1fr); }
+.home-league { color: var(--muted); font-size: var(--t-small); font-weight: 700; }
+@media (max-width: 560px) { .home-group { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .talent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
 @media (max-width: 560px) { .talent-grid { grid-template-columns: 1fr; } }
 .talent-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 8px; align-items: center; }

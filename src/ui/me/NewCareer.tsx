@@ -5,11 +5,14 @@ import { recomputeOverall } from '../../engine/player'
 import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, startCnOf, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS } from '../../engine/me/origins'
-import { ENTRY_CN, ENTRY_YEARS, regionsOf } from '../../engine/era'
+import { ENTRY_CN, ENTRY_YEARS, regionIn, regionsOf } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel } from '../common'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
+
+/** From 2023 every place a career can start from is under one of the four leagues. */
+const LEAGUE_ORDER: Region[] = ['Americas', 'EMEA', 'Pacific', 'China']
 
 /**
  * The regions a career can open in that year: the ones that year's world has
@@ -39,6 +42,16 @@ export default function NewCareer({
   const ovr = useMemo(() => recomputeOverall({ role, attrs: buildAttrs(role, talents, originKey), stageBonus: 0 } as never), [role, talents, originKey])
   const origin = ORIGINS.find((o) => o.key === originKey)!
   const starts = startCnOf(year)
+  // where a career grinds from, under the league it feeds; 2021 had no leagues to group by
+  const groups = useMemo<{ league: Region | null; list: Region[] }[]>(() => (year >= 2023
+    ? LEAGUE_ORDER.map((league) => ({ league, list: regions.filter((r) => regionIn(r, year) === league) })).filter((g) => g.list.length)
+    : [{ league: null, list: regions }]), [regions, year])
+  const homeHint = (year >= 2023
+    ? '职业联赛只有这四大赛区，赛区下面的 Challengers 按国家和地区分。'
+    : '2021 年还没有联赛，每个赛区各打各的 Challengers。')
+    + (start === 'pre'
+      ? '天梯开局没有队伍：你在这里的服务器打排位，试训邀请由俱乐部发来，本地俱乐部最先注意到你。'
+      : '下面「签哪家」列的是这里的俱乐部。')
 
   const pickYear = (y: EntryYear) => {
     setYear(y)
@@ -94,18 +107,27 @@ export default function NewCareer({
             <span className="muted">游戏 ID</span>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Rookie" maxLength={16} style={{ width: 160 }} />
           </label>
-          <div className="row wrap" style={{ gap: 6 }}>
-            <span className="muted">赛区</span>
-            <div className="seg" style={{ flexWrap: 'wrap' }}>
-              {regions.map((r) => <button key={r} className={region === r ? 'on' : ''} onClick={() => { setRegion(r); setTeamId('') }}>{REGION_CN[r]}</button>)}
-            </div>
-          </div>
           <div className="row" style={{ gap: 6 }}>
             <span className="muted">位置</span>
             <div className="seg">
               {ROLES_PICK.map((r) => <button key={r} className={role === r ? 'on' : ''} onClick={() => setRole(r)}>{r}</button>)}
             </div>
           </div>
+        </div>
+        {/* not a league to pick: the server he grinds ranked on, which decides whose clubs notice him first */}
+        <div className="home-pick">
+          <div className="home-head">
+            <span className="muted">来自</span>
+            <span className="tiny faint">{homeHint}</span>
+          </div>
+          {groups.map(({ league, list }) => (
+            <div key={league ?? 'all'} className={`home-group${league ? '' : ' flat'}`}>
+              {league && <span className="home-league">{REGION_CN[league]}赛区</span>}
+              <div className="seg" style={{ flexWrap: 'wrap' }}>
+                {list.map((r) => <button key={r} className={region === r ? 'on' : ''} onClick={() => { setRegion(r); setTeamId('') }}>{REGION_CN[r]}</button>)}
+              </div>
+            </div>
+          ))}
         </div>
         {year <= 2021 && region === 'China' && (
           <p className="tiny faint" style={{ margin: '8px 0 0' }}>
@@ -156,7 +178,7 @@ export default function NewCareer({
                 <Crest id={c.id} size={22} /><span>{c.tag}</span><span className="r">实力 {c.rating} · {c.roster} 人</span>
               </button>
             ))}
-            {!clubs.length && <div className="empty">{year}年这个赛区没有这一档的俱乐部。</div>}
+            {!clubs.length && <div className="empty">{year} 年开季时这里没有这一档的俱乐部。</div>}
           </div>
         </Panel>
       )}
