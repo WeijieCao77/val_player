@@ -130,6 +130,38 @@ function pickClub(region: Region, tier: 1 | 2, rng: Rng, year = 2026): string {
   return rng.weighted(list, w).id
 }
 
+export interface StartOffer extends ClubChoice {
+  /** where the club stands among its tier in the region, in words */
+  standing: '强队' | '中游' | '弱队'
+}
+
+/**
+ * Who comes for a new player who starts at a club. The new-career screen used
+ * to list every club of the tier and let an 18-year-old pick one — the reigning
+ * champions included (asked 2026-09-11: 「为什么玩家在创号的时候就可以选俱乐部？」).
+ * A newcomer does not choose his club; the clubs that want him ask. Two or three
+ * of the region's clubs at that tier with room on the roster, drawn the way
+ * pickClub signs one (the weaker, the likelier to take a chance), and he signs
+ * with one of those.
+ */
+export function startOffers(region: Region, tier: 1 | 2, year: number, seed: number, n = 3): StartOffer[] {
+  const all = candidateClubs(region, tier, year)
+  const room = all.filter((t) => t.roster <= 6)
+  const left = [...(room.length ? room : all)]
+  const rng = new Rng(seed ^ 0x51a7)
+  const out: StartOffer[] = []
+  // a tier of three clubs does not all come knocking: at least one of them is not interested
+  const want = Math.min(n, Math.max(1, left.length - 1))
+  while (out.length < want && left.length) {
+    const c = rng.weighted(left, left.map((t) => Math.max(4, 100 - t.rating) ** 2))
+    left.splice(left.indexOf(c), 1)
+    // all is weakest first
+    const at = all.length > 1 ? all.findIndex((t) => t.id === c.id) / (all.length - 1) : 0.5
+    out.push({ ...c, standing: at >= 2 / 3 ? '强队' : at >= 1 / 3 ? '中游' : '弱队' })
+  }
+  return out.sort((a, b) => b.rating - a.rating)
+}
+
 export function emptyTalents(): Record<keyof Attrs, number> {
   return { aim: 3, reaction: 3, awareness: 3, utility: 3, clutch: 2, teamwork: 2, communication: 2, igl: 2 }
 }

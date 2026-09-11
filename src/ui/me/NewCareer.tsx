@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
 import { recomputeOverall } from '../../engine/player'
-import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, startCnOf, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
+import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, startCnOf, startOffers, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS } from '../../engine/me/origins'
 import { ENTRY_CN, ENTRY_YEARS, regionIn, regionsOf } from '../../engine/era'
@@ -34,11 +34,13 @@ export default function NewCareer({
   const [start, setStart] = useState<StartPoint>('pre')
   const [originKey, setOriginKey] = useState('netcafe')
   const [teamId, setTeamId] = useState('')
+  // who comes for me at a club start: drawn once per visit, so the offers only change with where and how I start
+  const [offerSeed] = useState(() => Math.floor(Math.random() * 2 ** 31))
   const [talents, setTalents] = useState(emptyTalents())
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
   const regions = useMemo(() => regionsFor(year), [year])
-  const clubs = useMemo(() => (start === 'pre' ? [] : candidateClubs(region, start === 't1' ? 1 : 2, year)), [region, start, year])
+  const clubs = useMemo(() => (start === 'pre' ? [] : startOffers(region, start === 't1' ? 1 : 2, year, offerSeed)), [region, start, year, offerSeed])
   const ovr = useMemo(() => recomputeOverall({ role, attrs: buildAttrs(role, talents, originKey), stageBonus: 0 } as never), [role, talents, originKey])
   const origin = ORIGINS.find((o) => o.key === originKey)!
   const starts = startCnOf(year)
@@ -51,7 +53,7 @@ export default function NewCareer({
     : '2021 年还没有联赛，每个赛区各打各的 Challengers。')
     + (start === 'pre'
       ? '天梯开局没有队伍：你在这里的服务器打排位，试训邀请由俱乐部发来，本地俱乐部最先注意到你。'
-      : '下面「签哪家」列的是这里的俱乐部。')
+      : '不是你挑俱乐部，是俱乐部挑你：下面是这里来找你的几家，从里面签一家。')
 
   const pickYear = (y: EntryYear) => {
     setYear(y)
@@ -66,7 +68,9 @@ export default function NewCareer({
   }
   const go = () => {
     const ign = name.trim() || 'Rookie'
-    onStart(createCareer({ name: ign, region, role, talents, originKey, start, teamId: teamId || undefined, year }))
+    // nothing picked: one of the clubs that came, never any club in the region
+    const signed = teamId || (clubs.length ? clubs[offerSeed % clubs.length].id : undefined)
+    onStart(createCareer({ name: ign, region, role, talents, originKey, start, teamId: signed, year }))
   }
 
   return (
@@ -171,11 +175,11 @@ export default function NewCareer({
       </Panel>
 
       {start !== 'pre' && (
-        <Panel title="签哪家" actions={<span className="tiny faint">不选就随机，弱队更愿意赌新人</span>}>
+        <Panel title="谁来找你" actions={<span className="tiny faint">弱队更愿意赌新人；不选就随便签一家</span>}>
           <div className="club-list">
             {clubs.map((c) => (
-              <button key={c.id} className={teamId === c.id ? 'on' : ''} onClick={() => setTeamId(teamId === c.id ? '' : c.id)}>
-                <Crest id={c.id} size={22} /><span>{c.tag}</span><span className="r">实力 {c.rating} · {c.roster} 人</span>
+              <button key={c.id} className={teamId === c.id ? 'on' : ''} onClick={() => setTeamId(teamId === c.id ? '' : c.id)} title={c.name}>
+                <Crest id={c.id} size={22} /><span>{c.tag}</span><span className="r">{c.standing}</span>
               </button>
             ))}
             {!clubs.length && <div className="empty">{year} 年开季时这里没有这一档的俱乐部。</div>}
