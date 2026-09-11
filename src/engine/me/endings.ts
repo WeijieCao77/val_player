@@ -4,6 +4,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { leaveClub } from './contract'
 import { WORLD_END } from '../era'
+import { checkAchievements } from './achievements'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -51,6 +52,8 @@ export function retire(state: GameState, why: string): void {
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)
+  // no week settles after this one: what the last day earned is counted now
+  checkAchievements(state)
   push(state, { kind: 'ending' })
 }
 

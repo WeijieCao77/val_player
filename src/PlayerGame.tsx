@@ -23,6 +23,7 @@ import LogScreen from './ui/me/LogScreen'
 import TransferScreen from './ui/me/TransferScreen'
 import EconomyScreen from './ui/me/EconomyScreen'
 import AchievementsScreen from './ui/me/AchievementsScreen'
+import AchPop from './ui/me/AchPop'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
 import Poster from './ui/me/Poster'
@@ -348,6 +349,7 @@ export default function PlayerGame() {
         )}
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
         <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture} />
+        <AchPop />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>

@@ -503,6 +503,8 @@ export interface MeState {
   autoNotes: string[]
 
   achievements: string[]
+  /** achievement rewards already paid (by key), how far the unlock card has shown, the 称号 picked — me/achievements.ts; absent in older saves */
+  achState?: { paid: string[]; seen: number; worn?: string }
   titles: { year: number; title: string; started: boolean }[]
   ending?: { key: string; title: string; text: string; year: number }
   retireAsk?: boolean
