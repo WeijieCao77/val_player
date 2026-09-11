@@ -4,6 +4,7 @@ import { closeDuel, duelCompare, duelOptP, duelPick, duelScene, DIM_CN } from '.
 import { EDGE_NEED } from '../../engine/me/coach'
 import type { DuelSceneLog } from '../../engine/me/types'
 import { attrWord, sayDim, useNumbers } from './words'
+import Face from './Face'
 
 /** A scene's line in words: the same sentence the engine writes, without the two numbers. */
 const wordsLine = (r: DuelSceneLog) =>
@@ -30,9 +31,9 @@ export default function DuelPlay({ onDone }: { onDone: () => void }) {
   return (
     <Modal title={`训练赛 · 对位挑战 vs ${him?.ign ?? '首发'}`} onClose={live.done ? close : () => {}} onBgClose={() => {}}>
       <div className="score-line" style={{ padding: '4px 0 8px' }}>
-        <div className="t a"><Roles p={p} /><span>{p.ign}</span><OvrBadge value={p.overall} /></div>
+        <div className="t a"><Face id={p.id} name={p.ign} size={28} /><Roles p={p} /><span>{p.ign}</span><OvrBadge value={p.overall} /></div>
         <div className="s">{live.sc[0]} : {live.sc[1]}</div>
-        <div className="t"><Roles p={him} /><span>{him?.ign}</span><OvrBadge value={him?.overall ?? 0} /></div>
+        <div className="t">{him && <Face id={him.id} name={him.ign} size={28} />}<Roles p={him} /><span>{him?.ign}</span><OvrBadge value={him?.overall ?? 0} /></div>
       </div>
 
       {scene && !live.done ? (

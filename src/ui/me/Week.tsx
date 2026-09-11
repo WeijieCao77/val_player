@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { useGame } from '../ctx'
 import { Crest, Panel, fmtDay } from '../common'
+import { FaceRow } from './Face'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
 import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays, weekMatches } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
@@ -218,6 +219,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                     <div className="s muted" style={{ fontSize: 18 }}>VS</div>
                     <div className="t"><Crest id={opp.id} size={28} /><span>{opp.tag}</span></div>
                   </div>
+                  <FaceRow ids={opp.starters.length ? opp.starters : opp.roster.slice(0, 5)} />
                   <p className="small" style={{ margin: '0 0 6px' }}>
                     {game.comps[next.comp]?.name ?? next.comp} · {next.label.replace(/^(KO|SW):\d+:/, '')} · BO{next.bo} · {fmtDay(next.day, game.year)}（{next.day - game.day <= 0 ? '今天' : `${next.day - game.day} 天后`}）
                   </p>

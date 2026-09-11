@@ -10,6 +10,7 @@ import {
 } from '../../engine/me/clout'
 import { moneyFull } from '../common'
 import { useState } from 'react'
+import Face from './Face'
 
 const bondWord = (v: number) => v >= 45 ? '很铁' : v >= 20 ? '不错' : v >= 0 ? '一般' : v >= -30 ? '有点疏远' : '闹掰了'
 
@@ -34,7 +35,7 @@ export default function TeamScreen() {
               const bond = isMe ? 0 : bondBetween(game, me.id, p.id)
               return (
                 <tr key={p.id} className={isMe ? 'me' : 'clickable'} onClick={() => !isMe && openPlayer(p.id)}>
-                  <td><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className="tag" style={{ marginLeft: 6 }}>IGL</span> : null}</td>
+                  <td><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className="tag" style={{ marginLeft: 6 }}>IGL</span> : null}</td>
                   <td><Roles p={p} /></td>
                   <td className="num"><OvrBadge value={p.overall} /></td>
                   <td className="num">{p.age}</td>
