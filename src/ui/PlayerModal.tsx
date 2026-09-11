@@ -116,8 +116,9 @@ export default function PlayerModal(
               {p.age} 岁{p.ageEstimated ? '（推算）' : ''}
             </span>
             <span className="tag">潜力 <Potential p={p} game={game} /></span>
+            {/* a player career names no diagnosis for a real person's body: the lay-off, nothing more */}
             {p.injuredUntil > game.day && (
-              <span className="tag warn">⚕ {p.injuryNote}（{p.injuredUntil - game.day} 天）</span>
+              <span className="tag warn">⚕ {game.me ? '伤停' : `${p.injuryNote}（${p.injuredUntil - game.day} 天）`}</span>
             )}
             {p.listed && <span className="tag warn">已挂牌</span>}
             {p.retiring && <span className="tag warn">📢 本赛季后退役</span>}

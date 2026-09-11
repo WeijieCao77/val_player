@@ -23,6 +23,8 @@ import { attrWord, useNumbers } from './words'
 import Poster from './Poster'
 import ShareCard from './ShareCard'
 import CeremonyModal from './Ceremony'
+import HurtModal from './HurtModal'
+import { injuryStatus } from '../../engine/me/injury'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
 export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
@@ -39,6 +41,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'folding': return <FoldingModal onDone={onDone} />
     case 'ending': return <EndingModal onDone={onDone} />
     case 'ceremony': return <CeremonyModal onDone={onDone} />
+    case 'hurt': return <HurtModal fixtureId={item.id!} onDone={onDone} />
   }
   return null
 }
@@ -83,6 +86,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
         {cup.minFans ? ` · 邀请制（粉丝 ≥ ${cup.minFans}）` : ''}
       </p>
       <p className="small muted">走得越远，越可能有俱乐部的人记下你的名字。你会抽到四个路人队友。</p>
+      {injuryStatus(game) && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{injuryStatus(game)!.line}。硬打发挥打折扣，伤可能加重。</p>}
       <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
         <button className="primary" onClick={() => {
           const why = enterCup(game, cupKey, cupRng(game, 'enter'))

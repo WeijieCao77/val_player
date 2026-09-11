@@ -12,6 +12,8 @@ import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nod
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
 import { sayDim, useNumbers } from './words'
+import { playsHurt } from '../../engine/me/hurtplay'
+import { injuryStatus } from '../../engine/me/injury'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -102,7 +104,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const mine = game.teams[mm.myTeamId]
   const oppId = mm.oppTeamId
   const opp = game.teams[oppId]
-  const starterNow = mine.starters.includes(me.id) && game.players[me.id].injuredUntil <= game.day
+  // playing through an injury I said I would, or a cup entered hurt, is still starting (engine/me/hurtplay.ts)
+  const starterNow = mine.starters.includes(me.id) && (game.players[me.id].injuredUntil <= game.day || playsHurt(game, f.id, !!mm.friendly))
 
   // bring the first map up before kickoff so the pre-match screen can read
   // the engine's own estimate, not a guess from team ratings
@@ -222,7 +225,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
             ? '比赛里会有几次要你拿主意的时刻。每次决定后立刻能看到本图赢面怎么变，以及是你的哪一项对上了对方的哪一项。'
-            : mm.friendly ? '车队赛，你当然上。' : '你不上场就没有决定要做，看结果就行。想上场：跟队训练赛、对位挑战。'}
+            : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果就行。' : '你不上场就没有决定要做，看结果就行。想上场：跟队训练赛、对位挑战。'}
         </p>
         <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
           <button className="primary" onClick={() => { startedAt.current = Date.now(); setPhase('live') }}>逐回合观战</button>

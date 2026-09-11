@@ -5,6 +5,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import type { CerKind, CerTier, Ceremony } from './types'
 import { compCn } from './compname'
+import { injuryKey, rehabStory } from './injury'
 
 /**
  * The nights that are not matches.
@@ -87,7 +88,8 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
   },
   rehab: {
     kind: 'rehab', name: '康复训练', game: 'rhythm',
-    story: (_s, about) => `${about}。理疗师给你排了一套节奏训练——不碰鼠标，只做手腕。`,
+    // what the physio has me do depends on what is wrong (me/injury.ts)
+    story: (s, about) => `${about}。${rehabStory(s)}`,
     blurb: {
       gold: '恢复比预期快，少养一周。',
       silver: '按原计划养。',
@@ -287,7 +289,8 @@ export function ceremonyTick(state: GameState): void {
   }
 
   // 1. hurt, with enough of the lay-off left that a week off it means something
-  if (p.injuredUntil > state.day + 7 && once(`rehab:${p.injuredUntil}`)) {
+  //    keyed on the lay-off, not its last day: rest, 理疗 and playing through all move that day (me/injury.ts)
+  if (p.injuredUntil > state.day + 7 && once(`rehab:${injuryKey(state)}`)) {
     cerStart(state, 'rehab', p.injuryNote ?? '伤病')
     return
   }

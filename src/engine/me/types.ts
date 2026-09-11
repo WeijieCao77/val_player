@@ -370,8 +370,26 @@ export interface BottleneckState {
   pot: number
 }
 
+/** What can be wrong with me - see me/injury.ts. */
+export type InjuryKind = 'wrist' | 'back' | 'eyes' | 'ill' | 'burnout'
+
+/** The lay-off I am in, as the player layer tracks it; `injuredUntil` on the player stays the engine's clock. */
+export interface MeInjury {
+  kind: InjuryKind
+  /** the day it began, this season: the key a lay-off is said and held under */
+  from: number
+  /** the match I told the coach I would play through */
+  play?: string
+  /** told the coach I sit out until it heals: not asked again */
+  sit?: boolean
+  /** the coach has said he will not play me on it */
+  benched?: boolean
+  /** matches played through it */
+  played: number
+}
+
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding'
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt'
   id?: string
   day: number
 }
@@ -432,6 +450,10 @@ export interface MeState {
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */
   cerMatch?: { fixture: string; nudge: number; node: number; until: number }
+  /** the lay-off I am in, by kind - see me/injury.ts; absent when healthy and in saves from before it */
+  injury?: MeInjury
+  /** team-mates out hurt when the week last opened, so a lay-off is said when it starts and when it ends */
+  mateHurt?: { club: string; ids: string[] }
   /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
   ledger?: Ledger
   /** competitions whose prize share has already been paid, as `year:compKey` */

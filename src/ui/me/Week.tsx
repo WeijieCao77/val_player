@@ -63,8 +63,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             const inj = injuryStatus(game)
             return inj ? (
               <div className="node-line bad" style={{ marginBottom: 10 }}>
-                <b>{inj.note}</b> · 还要 {inj.weeksLeft} 周
-                <div className="tiny muted" style={{ marginTop: 2 }}>{inj.text}</div>
+                <b>{inj.note}</b>：{inj.effect}，{inj.duration}
+                <div className="tiny muted" style={{ marginTop: 2 }}>{inj.text}{inj.care}</div>
               </div>
             ) : null
           })()}

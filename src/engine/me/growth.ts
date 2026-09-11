@@ -15,6 +15,7 @@ import { streamIncome } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
 import { cerRestMul } from './ceremony'
+import { injuryTrainMul } from './injury'
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -108,7 +109,8 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
   let fatigue = 0
   const rose: (keyof Attrs)[] = []
-  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt) && !rose.includes(k)) rose.push(k) }
+  // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
+  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k)) && !rose.includes(k)) rose.push(k) }
 
   for (const a of ACTIONS) {
     const n = me.plan[a.key] ?? 0

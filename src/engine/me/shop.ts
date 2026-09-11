@@ -2,6 +2,7 @@ import { clamp } from '../rng'
 import type { GameState } from '../types'
 import { pushLog } from './log'
 import { addMoney } from './money'
+import { injuryRelax } from './injury'
 
 /**
  * Where the money goes. The rule from 破晓: nothing here turns money into the
@@ -93,6 +94,8 @@ export function buyRelax(state: GameState, key: string): string | null {
   me.tilt = clamp(me.tilt + r.tilt, 0, 100)
   me.mental = clamp(me.mental + r.mental, 0, 100)
   pushLog(state, 'money', `${r.name}（$${r.price.toLocaleString()}）${r.fatigue ? `，体力回了 ${-r.fatigue}` : ''}。`)
+  // treatment for what I have shortens the lay-off (me/injury.ts)
+  injuryRelax(state, key)
   return null
 }
 
