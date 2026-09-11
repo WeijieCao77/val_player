@@ -30,6 +30,8 @@
     { "from": "2304", "to": "14419", "year": 2024, "day": 0, "kind": "merger", "fromName": "Giants Gaming", "toName": "GIANTX",
       "source": "https://www.dexerto.com/esports/excel-esports-and-giants-gaming-announce-merger-forming-giantx-2430097/" },
     { "from": "14422", "to": "11060", "year": 2025, "day": 0, "kind": "roster", "fromName": "Sin Prisa Gaming", "toName": "Nongshim RedForce",
-      "source": "https://valorantesports.com/en-SG/news/sin-prisa-gaming-to-compete-as-nongshim-redforce-in-2025" }
+      "source": "https://valorantesports.com/en-SG/news/sin-prisa-gaming-to-compete-as-nongshim-redforce-in-2025" },
+    { "from": "283", "to": "18299", "year": 2025, "day": 64, "kind": "rebrand", "fromName": "Sengoku Gaming", "toName": "QT DIG∞",
+      "source": "https://www.valorant4jp.com/2025/04/sengoku-gamingqt-dig.html" }
   ]
 }

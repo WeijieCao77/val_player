@@ -12,6 +12,7 @@ import { freeAgentPool } from './prospects'
 import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
 import { currentRuleset } from './ruleset'
+import { historyNames } from './names'
 
 export interface RawPlayer {
   id: string; ign: string; teamId: string | null; region: string; role: string
@@ -279,6 +280,8 @@ export function createNewGame(
     const p = state.players[id]
     if (p) p.arrivedOverall = p.overall
   }
+  // world_2021.json has vlr's names of today: a club opens the year under the one it had then (engine/names.ts)
+  historyNames(state, [])
 
   void rng
   return state

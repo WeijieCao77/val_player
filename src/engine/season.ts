@@ -36,6 +36,7 @@ import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from '
 import { bookAheadEvents, circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { announceLeagues, keepScore, turnLeagues } from './leagues'
 import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
+import { historyNames } from './names'
 import { arrive2026 } from './today'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
@@ -1491,6 +1492,8 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
       text: `🕯️ 宣布解散、不再参赛：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 家` : ''}。`,
     })
   }
+  // a club takes the name it really had today: DRX is KIWOOM DRX from 2026-03-19 (engine/names.ts)
+  historyNames(state, notes)
   // 2027 on: the day after Champions, next season's leagues are announced (engine/leagues.ts)
   if (onTimeline(state)) {
     bookAheadEvents(state)
