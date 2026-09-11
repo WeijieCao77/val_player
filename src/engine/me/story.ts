@@ -235,13 +235,14 @@ export function storyHint(opt: EventOpt): string {
   const out: string[] = []
   const op = opt.ch
   if (op) {
-    if (op.mate) out.push(`和他的关系 ${op.mate > 0 ? '+' : ''}${op.mate}`)
-    if (op.add) out.push(`进度 +${op.add}`)
+    // words, not figures: the screen already carries too many numbers
+    if (op.mate) out.push(op.mate > 0 ? '和他近一点' : '和他远一点')
+    if (op.add) out.push('往前一步')
     if (op.end === 'drop') out.push('就此放下')
     else if (op.track) out.push(TASK_CN(op.track, op.need ?? 1, op.weeks ?? 2))
     else if (!op.end && op.weeks) out.push(`再给 ${op.weeks} 周`)
   }
-  if (opt.seed) out.push('伏笔')
+  // no 「伏笔」 on the button: that a choice comes back is the echo card's to say, weeks later, not a label to read now
   return out.filter(Boolean).join(' · ')
 }
 
