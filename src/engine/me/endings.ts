@@ -4,6 +4,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { leaveClub } from './contract'
 import { WORLD_END } from '../era'
+import { retireNight } from './nights'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -51,6 +52,8 @@ export function retire(state: GameState, why: string): void {
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)
+  // the night of it goes on screen before the card (me/nights.ts)
+  retireNight(state)
   push(state, { kind: 'ending' })
 }
 

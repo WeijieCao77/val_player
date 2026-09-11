@@ -333,6 +333,20 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .cer-tier.silver { color: var(--muted); }
 .cer-tier.bronze { color: var(--neg-ink); }
 
+/* 后加的五个夜晚（engine/me/nights.ts）：颁奖夜的致辞、表演赛的五连靶、发布会和退役的选择 */
+.cer-story { white-space: pre-line; }
+.cer-line { text-align: center; font-size: 15px; line-height: 1.7; margin: 0 0 12px; color: var(--faint); }
+.cer-line span.said { color: var(--text); }
+.cer-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.cer-chip { min-height: 44px; padding: 8px 14px; font-size: 15px; touch-action: manipulation; }
+.cer-chip.used { opacity: .3; }
+.cer-chip.bad { border-color: var(--neg-ink); color: var(--neg-ink); }
+.cer-ace { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0;
+  border-radius: 50%; border: 2px solid var(--accent); background: rgba(255, 70, 85, .16); cursor: crosshair; }
+.cer-ace::after { content: ''; position: absolute; inset: 15px; border-radius: 50%; background: var(--accent); }
+.cer-ace.hit { visibility: hidden; }
+.cer-tier.pick { font-size: 20px; letter-spacing: 1px; color: var(--text); }
+
 /* 话语权（engine/me/clout.ts）：一个读数和两个很难用的动作 */
 .clout-parts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--t-tiny); color: var(--muted); }
 .clout-parts b { color: var(--text); font-variant-numeric: tabular-nums; }
