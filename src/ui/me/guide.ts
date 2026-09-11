@@ -126,8 +126,8 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
       body: `${pro ? '效力的队、首发还是替补' : '段位、粉丝、资金'}、体力、状态都在这里。下面一行是综合能力，有卡在瓶颈的会点出来；八项属性的细节在「我的」页。`,
     },
     {
-      screen: WEEK, at: [{ sel: '.pins-fab' }], title: '文字还是数字',
-      body: '属性默认用文字说：职业级、一流、顶级……右上角「数值」换成具体数字，再点一下换回来。',
+      screen: WEEK, at: [{ sel: '.num-switch' }], title: '文字还是数字',
+      body: '属性默认用文字说：职业级、一流、顶级……「综合」那一行右端的「数值」换成具体数字，再点一下换回来。',
     },
     {
       screen: WEEK, at: [{ sel: '.nav' }], title: '栏目',

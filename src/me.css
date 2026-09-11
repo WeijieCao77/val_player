@@ -29,6 +29,8 @@
 .hero-stage { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .hero-stage small { color: var(--accent); letter-spacing: .12em; font-weight: 700; }
 .hero-stage b { font-size: 22px; font-weight: 700; }
+/* the week's button mirrored into the overview: a phone only (below) */
+.hero-go { display: none; }
 .tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .tile { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
 .tile:last-child { border-right: 0; }
@@ -87,10 +89,17 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .bond-tag.passed, .bond-tag.carried { border-color: var(--accent-line); color: var(--accent); }
 .bond-gone { opacity: .55; }
 
-/* the corner stack: changelog sits at 62px, the numbers switch above it */
-.pins-fab { bottom: 108px; }
-.support-fab.pins-fab.on .ico { color: var(--win); }
-@media (max-width: 720px) { .pins-fab { bottom: 100px; } }
+/* the numbers switch: the right end of the one line under the tiles, on every screen — 破晓 keeps its 「数值」 on the attribute bar */
+.pinbar .to-me { margin-left: auto; }
+.pinbar .num-switch { margin-left: auto; }
+.pinbar .to-me + .num-switch { margin-left: 0; }
+.pinbar .num-switch.on { color: var(--win); border-color: var(--win); }
+/* what changed in this build: one round 40px button in the bottom-right corner, the way 破晓 keeps its corner tools
+   (.audiofab: 38px circles, the name in the tooltip). As small as a button gets, because whatever scrolls under a
+   corner button sits under it; the page leaves room under its last line. A phone's corner is further up (below). */
+.app.career > .log-fab { right: 16px; bottom: 16px; width: 40px; height: 40px; padding: 0; justify-content: center; }
+.app.career > .log-fab .lbl { display: none; }
+.app.career > .body > .main { padding-bottom: 72px; }
 
 /* the week board: the card is the button */
 .act-card:not(.locked) { cursor: pointer; }
@@ -165,11 +174,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
 .advance-me .hint { color: var(--muted); font-size: var(--t-small); }
-/* the button and the longer runs: two more controls in this row, and on a phone the bar over the tabs (below) */
-.advance-go { display: contents; }
 /* the longer runs, one control beside the button */
 .advance-me select.advance-far { min-height: 34px; max-width: 100%; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--t-small); cursor: pointer; }
-.pinbar .sm.ghost { margin-left: auto; }
 /* a match week, a day to a press: the week's seven days and what is on each.
    As many days to a row as are at least 72px wide — seven on a monitor, four
    on a phone, three on the smallest — so 「4/10 周五」 and 「vs FMG」 never
@@ -430,33 +436,35 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
    像素，内容在剩下的框里自己滚；正文 12.5px、小字 11px、左边栏目 11px；按钮、
    下拉、能点的行大多 34–37px；右下角两颗浮窗压着卡片右边的字。
 
-   现在（≤720px），参考破晓（底栏四个入口加「更多」、属性条贴顶、触控往 40px
-   靠、避开安全区）和经理模式（手机上推进钉在屏幕底部），样子还是这个游戏的：
-   - 整页自己滚：总览跟着滚走，「综合」那一行贴顶；
-   - 栏目在底栏：四个加「更多」，其余的从底栏上面弹出来，当前页不在四个里就顶替第四个；
-   - 本周页：底栏上面一条推进，一个主按钮加「快进到…」；
-   - 停下来等你的卡片、比赛、选手卡占满全屏：标题贴顶，回答它的那排按钮贴底；
-   - 表格横着滚，名字那一列钉住；
-   - 字：正文 15px，小字 13.5px，最小 12px；按钮、下拉、能点的行不低于 40px。
-   只挂在 .app.career（生涯）和 .newcareer（开局页）下，经理模式不受影响。
+   现在（≤720px），照破晓的手机版（lol选手 demo/theme.css、demo/src/main.ts），样子还是这个游戏的：
+   - 整页自己滚：总览跟着滚走，「综合」那一行贴顶，「数值」在它右端（破晓的属性条）；
+   - 栏目在底栏：四个加「更多」，48px，其余的从底栏上面弹出来，当前页不在四个里就顶替第四个；
+   - 本周页：推进留在「本周行动」末尾那一行，一个主按钮加「快进到…」；总览里有一颗同样的
+     按钮，页面一打开就够得着（破晓 HUD 里的主按钮镜像）。底栏上面不再钉东西；
+   - 停下来等你的卡片、比赛、选手卡：离屏幕四边 8px 的一张卡，自己滚，标题和关闭贴顶，
+     按钮跟着内容走（破晓的事件卡、仪式卡）；
+   - 表格在面板里横着滚，不钉列（破晓的 .tw）；
+   - 主按钮按自己的宽度，不拉满一整行；
+   - 更新日志：右下角一颗 40px，站在底栏上面，「更多」打开时让开（破晓折成一颗的「⋯」）；
+   - 字：正文 15px，小字 13.5px，最小 12px（破晓的小字到 8.5–11.5px，这里守作者要的 12px）；
+     按钮、下拉、能点的行不低于 40px。
+   只挂在 .app.career（生涯）和 .newcareer（开局页）下。
 
-   叠放次序：推进条 38 < 「更多」的遮罩 39 < 底栏 40 < 成就卡 45 < 卡片 50 < 提示 100。 */
+   叠放次序：更新日志 30 < 「更多」的遮罩 39 < 底栏 40 < 成就卡 45 < 卡片 50 < 提示 100。 */
 @media (max-width: 720px) {
   .app.career, .newcareer {
     --t-body: 15px; --t-small: 13.5px; --t-tiny: 12px; --t-label: 12px;
     --t-h2: 17px; --t-h1: 20px;
-    /* the bottom of the screen: the tab bar, the advance bar over it on the week page, the phone's own strip under both */
+    /* the bottom of the screen: the tab bar (破晓's is 48px), and the phone's own strip under it */
     --safe-b: env(safe-area-inset-bottom, 0px);
-    --dock-h: 54px;
-    --go-h: 61px;
+    --dock-h: 48px;
     font-size: var(--t-body);
   }
 
-  /* -- the page scrolls, not a box inside it */
+  /* -- the page scrolls, not a box inside it; its last line clears the tab bar and the changelog button standing on it */
   .app.career { height: auto; min-height: 100%; }
   .app.career > .body { display: block; }
-  .app.career > .body > .main { overflow: visible; padding: 10px 10px calc(var(--dock-h) + var(--safe-b) + 20px); }
-  .app.career:has(.advance-go) > .body > .main { padding-bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 20px); }
+  .app.career > .body > .main { overflow: visible; padding: 10px 10px calc(var(--dock-h) + var(--safe-b) + 64px); }
 
   /* -- the top: the wordmark, and the corner buttons at its right end (below), because the bottom of the screen is the tabs' */
   .app.career > .topbar { min-height: 48px; padding: 4px 10px; flex-wrap: nowrap; }
@@ -482,11 +490,12 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career .log-kind { font-size: var(--t-tiny); }
   .app.career .log-list li { min-width: 0; overflow-wrap: anywhere; }
 
-  /* -- the one line under it stays on top while the page scrolls; 我的 is on the tab bar, so the shortcut to it goes */
-  .app.career > .pinbar { min-height: 40px; padding: 6px 12px; flex-wrap: nowrap; gap: 4px 14px; }
+  /* -- the one line under it stays on top while the page scrolls; 我的 is on the tab bar, so the shortcut to it goes; 数值 keeps its end */
+  .app.career > .pinbar { min-height: 48px; padding: 4px 12px; flex-wrap: nowrap; gap: 4px 14px; }
   .app.career > .pinbar .pin { white-space: normal; min-width: 0; }
   .app.career > .pinbar .pin > span { white-space: nowrap; }
-  .app.career > .pinbar > button { display: none; }
+  .app.career > .pinbar > .to-me { display: none; }
+  .app.career > .pinbar > .num-switch { flex: none; margin-left: auto; }
 
   /* -- the screens: a tab bar along the bottom, four and 更多 */
   .app.career .nav {
@@ -517,44 +526,44 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career .nav .nav-foot .theme-cycle { width: auto; min-height: 40px; padding: 0 14px; font-size: var(--t-small); }
   .app.career > .nav-scrim { position: fixed; inset: 0; z-index: 39; background: var(--scrim-soft); }
 
-  /* -- the week page: the way forward rides over the tab bar */
-  .app.career .advance-go {
-    position: fixed; left: 0; right: 0; z-index: 38;
-    bottom: calc(var(--dock-h) + var(--safe-b) + 1px);
-    display: flex; gap: 8px; align-items: stretch;
-    padding: 8px calc(10px + env(safe-area-inset-right, 0px)) 8px calc(10px + env(safe-area-inset-left, 0px));
-    background: var(--bg-rail); border-top: 1px solid var(--line);
-  }
-  .app.career .advance-go > button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 10px; font-size: 16px; }
+  /* -- the week page: the button ends the week's panel, and its copy sits in the overview where the page opens
+        (破晓: 进入下一周 in the row under the actions; its HUD's 主按钮镜像 takes the full width on a phone) */
+  .app.career .hero-go { display: block; flex: 1 1 100%; min-height: 44px; margin: 4px 0 2px; font-size: 16px; }
+  .app.career .advance-me button.primary { min-height: 44px; font-size: 16px; }
   /* 16px: a smaller select zooms the whole page on iOS when it opens */
-  .app.career .advance-me select.advance-far { flex: 0 1 40%; width: auto; min-width: 0; min-height: 44px; font-size: 16px; }
-  .app.career > .toast { bottom: calc(var(--dock-h) + var(--safe-b) + 12px); max-width: calc(100vw - 24px); }
-  .app.career:has(.advance-go) > .toast { bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 12px); }
-  .app.career > .ach-pop { bottom: calc(var(--dock-h) + var(--safe-b) + 10px) !important; }
-  .app.career:has(.advance-go) > .ach-pop { bottom: calc(var(--dock-h) + var(--go-h) + var(--safe-b) + 10px) !important; }
+  .app.career .advance-me select.advance-far { width: auto; min-height: 44px; font-size: 16px; }
+  /* a toast and an achievement card stand above the changelog button, which stands on the tab bar */
+  .app.career > .toast { bottom: calc(var(--dock-h) + var(--safe-b) + 60px); max-width: calc(100vw - 24px); }
+  .app.career > .ach-pop { bottom: calc(var(--dock-h) + var(--safe-b) + 58px) !important; }
 
-  /* -- a card the clock stopped on takes the whole screen: its title on top, its answer at the bottom */
-  /* not stretched: a stretched card is exactly the screen's height and a long match spills out of it; min-height fills a short one */
-  .app.career .modal-bg { padding: 0; }
+  /* -- a card the clock stopped on: a card 8px in from the screen's edges that scrolls inside itself, its title and
+        close held at its top, its buttons where its text ends (破晓's event and ceremony cards, .ev-inner / .cer-inner) */
+  .app.career .modal-bg {
+    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px))
+      calc(8px + var(--safe-b)) calc(8px + env(safe-area-inset-left, 0px));
+  }
+  /* the small viewport, as 破晓 measures it: with the browser's toolbars showing, the card's end is still on screen */
   .app.career .modal {
-    max-width: none !important; min-height: 100%;
-    border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column;
+    max-width: none !important;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100svh - 16px - env(safe-area-inset-top, 0px) - var(--safe-b));
+    overflow-y: auto; overscroll-behavior: contain;
   }
   .app.career .modal-head {
     position: sticky; top: 0; z-index: 3; background: var(--panel);
-    min-height: 52px; padding: calc(4px + env(safe-area-inset-top, 0px)) 6px 4px 12px; gap: 8px;
+    min-height: 52px; padding: 4px 4px 4px 12px; gap: 8px;
   }
   .app.career .modal-head h3 { flex: 1 1 auto; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
   .app.career .modal-head > .spacer { display: none; }
-  .app.career .modal-head > button { flex: none; }
-  /* a column, so a short card still has its answer down where the thumb is */
-  .app.career .modal-body { flex: 1 0 auto; display: flex; flex-direction: column; padding: 12px 12px calc(16px + var(--safe-b)); }
-  .app.career .modal-body > .row:has(> button.primary) {
-    position: sticky; bottom: 0; z-index: 2; flex-wrap: wrap; margin-top: auto !important;
-    margin-left: -12px !important; margin-right: -12px !important;
-    padding: 10px 12px calc(10px + var(--safe-b)); background: var(--panel); border-top: 1px solid var(--line);
-  }
-  .app.career .modal-body > .row:has(> button.primary) > button { flex: 1 1 0; min-height: 44px; }
+  /* 破晓's close on a card is 44px */
+  .app.career .modal-head > button { flex: none; min-height: 44px; }
+  .app.career .modal-body { padding: 12px 12px 16px; }
+  /* a row of answers wraps rather than squeezing, each button at its own width (破晓's .row) */
+  .app.career .modal-body .row:has(> button) { flex-wrap: wrap; }
+  /* one column, and a column never wider than the card: a table in it scrolls inside its own box (the match sheet's
+     表现对比 at 320 was 10px wider than the inset card, pushed by its table's narrowest width) */
+  .app.career .grid.c2, .app.career .grid.c3 { grid-template-columns: minmax(0, 1fr); }
+  .app.career .modal-body button.primary { min-height: 44px; }
   .app.career .share-card { max-height: calc(100dvh - 32px); }
 
   /* -- the match, stacked: score, map, the call, the rounds */
@@ -564,16 +573,6 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career .map-real { max-width: 300px; justify-self: center; }
   .app.career .round-feed-body { height: min(240px, 42vh); }
   .app.career .node-opt button { min-height: 48px; }
-
-  /* -- tables scroll sideways with the row's name pinned: the first column, or the one after a rank */
-  .app.career :is(.table-wrap, .me-recent-wrap) > table > * > tr > :first-child:not(.num),
-  .app.career :is(.table-wrap, .me-recent-wrap) > table > * > tr > :first-child.num:not(.sticky-name) + * {
-    position: sticky; left: 0; z-index: 1; background: var(--panel);
-  }
-  .app.career :is(.table-wrap, .me-recent-wrap) > table > tbody > tr:is(.me, .mine) > :first-child:not(.num),
-  .app.career :is(.table-wrap, .me-recent-wrap) > table > tbody > tr:is(.me, .mine) > :first-child.num:not(.sticky-name) + * {
-    background: var(--panel-me);
-  }
 
   /* -- anything to tap is 40px, the way 破晓 measured it */
   .app.career button, .newcareer button, .app.career select, .newcareer select { min-height: 40px; }
@@ -587,13 +586,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
     .app.career .face-btn + .face-btn { margin-left: 0; }
   }
 
-  /* -- the new career: the start button stays in reach */
-  .newcareer { padding: 12px 10px 0; }
-  .newcareer > .row:last-child {
-    position: sticky; bottom: 0; z-index: 5; margin: 12px -10px 0; padding: 10px 10px calc(10px + var(--safe-b));
-    background: var(--bg); border-top: 1px solid var(--line);
-  }
-  .newcareer > .row:last-child > button.primary { flex: 1 1 auto; min-height: 48px; font-size: 16px; }
+  /* -- the new career: the start button ends the page at its own width, as 破晓's 建档 ends with its button */
+  .newcareer { padding: 12px 10px calc(24px + var(--safe-b)); }
+  .newcareer > .row:last-child > button.primary { min-height: 48px; padding: 0 24px; font-size: 16px; }
 }
 @media (min-width: 721px) {
   .app.career .nav > .nav-more, .app.career > .nav-scrim { display: none; }
@@ -603,16 +598,12 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
    comparison radar is wider than a 320px phone's card: it scales down to the card (common.tsx gives it a viewBox). */
 .app.career .radar-wrap svg { overflow: visible; max-width: 100%; height: auto; }
 
-/* The corner buttons — the numbers switch and what changed in this build — at the right end of the top bar, at
-   every width. Floating over the bottom-right of the screen they covered the right edge of whatever panel was under
-   them, at 375, 768 and 1280 alike; on a phone that corner is the tab bar's now. No z-index on the row, so the
-   changelog card it opens still stacks over the tab bar. */
-.app.career > .corner { position: absolute; top: 10px; right: 16px; display: flex; align-items: center; gap: 8px; }
-.app.career > .corner > .support-fab { position: static; white-space: nowrap; }
+/* 更新日志 on a phone: one 40px button standing on the tab bar at the right, the way 破晓 folds its corner tools into
+   one 「⋯」 over its bottom bar (.audiofab.fold), and out of the way while 更多 is open (body.moreopen .audiofab).
+   One button rather than the old stack of two, and the page's last line clears it (the main's bottom padding). */
 @media (max-width: 720px) {
-  .app.career > .corner { top: 4px; right: 10px; gap: 6px; }
-  .app.career > .corner > .support-fab { min-width: 40px; min-height: 40px; padding: 0 12px; justify-content: center; font-size: var(--t-small); }
-  .app.career > .corner > .pins-fab .lbl { display: inline; }
+  .app.career > .log-fab { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(var(--dock-h) + var(--safe-b) + 8px); }
+  .app.career:has(> .nav-scrim) > .log-fab { display: none; }
 }
 
 /* a club background on a ladder start: visible, greyed, with the reason */

@@ -17,6 +17,26 @@ import { CUPS, cupView } from '../../engine/me/cups'
 import { fansCn } from '../../engine/me/fans'
 import { useNumbers } from './words'
 import { chainLine } from '../../engine/me/story'
+import type { GameState } from '../../engine/types'
+
+/**
+ * The week's one way forward, as its button says it: a day of a match week, a
+ * month when the next four weeks hold nothing of mine, otherwise a week. The
+ * button ends the week's panel; on a phone the overview carries a copy of it
+ * where the page opens (PlayerGame .hero-go), the way 破晓's HUD mirrors the
+ * page's main button. One function, so the two never say different things.
+ */
+export function advanceOf(game: GameState): { label: string; month: boolean; title?: string } {
+  if (weekInDays(game)) {
+    return {
+      label: weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →',
+      month: false,
+      title: '过一天；比赛日当天开打，打完回到这里',
+    }
+  }
+  if (quietAhead(game, 28)) return { label: '推进一个月 →', month: true, title: '四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停' }
+  return { label: '推进一周 →', month: false }
+}
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
   const { game, commit, toast, openMatch } = useGame()
@@ -185,13 +205,13 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           <div className="advance-me">
             <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
             {/* one way forward on the button; the longer runs share one control (asked 2026-09-11: four advance buttons read as clutter) */}
-            {/* the pair rides the bottom of a phone's screen over the tab bar (me.css .advance-go); elsewhere it is two more controls in this row */}
-            <div className="advance-go">
-            {days
-              ? <button className="primary" onClick={onAdvance} title="过一天；比赛日当天开打，打完回到这里">{weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →'}</button>
-              : quiet
-                ? <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title="四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停">推进一个月 →</button>
-                : <button className="primary" onClick={onAdvance}>推进一周 →</button>}
+            {/* here, at the end of the week's panel, on a phone too: 破晓 keeps its 进入下一周 in the row under the actions, not pinned over the tab bar */}
+            {(() => {
+              const go = advanceOf(game)
+              return go.month
+                ? <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title={go.title}>{go.label}</button>
+                : <button className="primary" onClick={onAdvance} title={go.title}>{go.label}</button>
+            })()}
             <select
               className="advance-far"
               value=""
@@ -209,7 +229,6 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               <option value="stage">赛段末</option>
               <option value="season">赛季末</option>
             </select>
-            </div>
             <span className="hint">
               {me.ap > 0 ? `还有 ${me.ap} 点没用，${days ? '这一周过完' : '推进后'}作废。` : ''}
               {quiet ? '接下来四周没有你的比赛。' : ''}
