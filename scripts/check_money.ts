@@ -9,14 +9,16 @@
  *
  * If any site still writes `me.money` directly, the two sides drift apart and
  * this fails. It also prints what a career actually earns, so the prize-share
- * numbers can be looked at rather than assumed.
+ * numbers can be looked at rather than assumed, and holds the prize table to a
+ * few amounts anyone can check on Liquipedia.
  *
  *   npx tsx scripts/check_money.ts [seasons=4] [seed=7]
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { KIND_CN, prizePreview, prizeRows } from '../src/engine/me/money'
-import type { GameState } from '../src/engine/types'
+import { KIND_CN, prizeRows } from '../src/engine/me/money'
+import { prizeFor, prizeTableOf } from '../src/engine/me/prizes'
+import type { Competition, GameState } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -93,16 +95,33 @@ if (prizeLines.length > 12) console.log(`  …另有 ${prizeLines.length - 12} �
 
 if (state.me && me.phase === 'pro') {
   const p = state.players[me.id]
-  console.log(`\n当前合同分成 ${p.contract?.bonusShare ?? 0}%，队伍 ${state.teams[p.teamId ?? '']?.roster.length ?? 0} 人，冠/亚/四强到手：`)
-  for (const r of prizeRows(state.year)) {
-    const v = prizePreview(state, r.stage)
-    if (!v.some((x) => x > 0)) continue
-    console.log(`  ${r.name.padEnd(12)} ${v.map((x) => `$${x.toLocaleString()}`).join('  ')}`)
+  console.log(`\n当前合同分成 ${p.contract?.bonusShare ?? 0}%，队伍 ${state.teams[p.teamId ?? '']?.roster.length ?? 0} 人，接下来的赛事冠/亚/季军到手：`)
+  for (const r of prizeRows(state)) {
+    const v = r.table.status === 'paid' ? r.mine.map((x) => `$${x.toLocaleString()}`).join('  ') : r.table.status === 'none' ? '无奖金' : '奖金未公开'
+    console.log(`  ${r.name}  ${v}${r.table.status === 'paid' && r.table.basis ? `（按 ${r.table.basis} 年金额暂定）` : ''}`)
   }
 }
 
+// the table is the events' own: amounts anyone can look up on the events' Liquipedia pages
+const ev = (id: string): Competition =>
+  ({ key: `ev:${id}`, name: id, stage: 'champions', teams: [], standings: {}, finished: [], circuit: { id, start: 0, end: 0, seeds: [] } }) as Competition
+const facts: [string, boolean][] = [
+  ['2021 冠军赛冠军 $350,000', prizeFor(ev('449'), 1, 2021) === 350000],
+  ['2023 冠军赛冠军 $1,000,000、亚军 $400,000', prizeFor(ev('1657'), 1, 2023) === 1000000 && prizeFor(ev('1657'), 2, 2023) === 400000],
+  ['东京大师赛冠军 $350,000', prizeFor(ev('1494'), 1, 2023) === 350000],
+  ['东京大师赛并列第三平分三、四名（$125,000 与 $75,000）', prizeFor(ev('1494'), 3, 2023, 2) === 100000],
+  ['2024 美洲揭幕赛奖金未公开', prizeTableOf(ev('1923'), 2024).status === 'unpublished' && prizeFor(ev('1923'), 1, 2024) === 0],
+  ['2027 冠军赛按 2026 年金额暂定', prizeTableOf(ev('F2027:champions'), 2027).basis === 2026 && prizeFor(ev('F2027:champions'), 1, 2027) === 1000000],
+]
+console.log('')
+for (const [what, ok] of facts) console.log(`${ok ? '✓' : '✗'} ${what}`)
+
 if (drift !== 0) {
   console.log(`\n✗ 有 ${drift} 美元没走 addMoney()——还有地方在直接写 me.money。`)
+  process.exit(1)
+}
+if (facts.some(([, ok]) => !ok)) {
+  console.log('\n✗ 奖金表和真实赛事的金额对不上。')
   process.exit(1)
 }
 if (!prizeLines.length && me.phase === 'pro') {

@@ -1,7 +1,9 @@
 import { useGame } from '../ctx'
 import { Panel, money, moneyFull } from '../common'
-import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizePreview, prizeRows } from '../../engine/me/money'
+import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizeRows } from '../../engine/me/money'
+import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'
+import type { GameState } from '../../engine/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
@@ -21,30 +23,9 @@ export default function EconomyScreen() {
           </p>
           <LedgerTable me={me} />
         </Panel>
-        <Panel title="奖金标准">
+        <Panel title="赛事奖金">
           {me.phase === 'pro' && (p.contract?.bonusShare ?? 0) > 0 ? (
-            <>
-              <p className="small" style={{ marginTop: 0 }}>
-                奖金分成 <b>{p.contract!.bonusShare}%</b>，下面是你个人能拿的。
-              </p>
-              <div className="table-wrap">
-              <table className="small">
-                <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">四强</th></tr></thead>
-                <tbody>
-                  {prizeRows(game.year).map((r) => {
-                    const v = prizePreview(game, r.stage)
-                    if (!v.some((x) => x > 0)) return null
-                    return (
-                      <tr key={r.stage}>
-                        <td>{r.name}</td>
-                        {v.map((x, i) => <td key={i} className="num">{x ? moneyFull(x) : '—'}</td>)}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              </div>
-            </>
+            <PrizeList game={game} />
           ) : (
             <p className="small" style={{ margin: 0 }}>还没有职业合同，赛事奖金分成也就无从谈起。业余赛事的奖金是全额归你的。</p>
           )}
@@ -118,6 +99,48 @@ export default function EconomyScreen() {
         </Panel>
       </div>
     </div>
+  )
+}
+
+/**
+ * What the events in front of me pay me, read off each event's own table
+ * (engine/me/prizes.ts). An event with no published amounts says so instead of
+ * showing a number; one from 2027 on says whose amounts it is using.
+ */
+function PrizeList({ game }: { game: GameState }) {
+  const me = game.me!
+  const p = game.players[me.id]
+  const team = game.teams[p.teamId ?? '']
+  const rows = prizeRows(game)
+  return (
+    <>
+      <p className="small" style={{ marginTop: 0 }}>
+        分成 <b>{p.contract!.bonusShare}%</b> · {team?.roster.length ?? 0} 人分 · 下面是你个人到手
+      </p>
+      {rows.length ? (
+        <div className="table-wrap">
+          <table className="small">
+            <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">季军</th></tr></thead>
+            <tbody>
+              {rows.map((r) => {
+                const note = [r.now ? '进行中' : '', r.table.status === 'paid' && r.table.basis ? `按 ${r.table.basis} 年金额暂定` : ''].filter(Boolean).join(' · ')
+                return (
+                  <tr key={r.key}>
+                    <td>{compCn(r.name)}{note && <div className="tiny faint">{note}</div>}</td>
+                    {r.table.status === 'paid'
+                      ? r.mine.map((x, i) => <td key={i} className="num">{x ? moneyFull(x) : '—'}</td>)
+                      : <td colSpan={3} className="num muted">{r.table.status === 'none' ? '无奖金' : '奖金未公开'}</td>}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="small muted" style={{ margin: 0 }}>眼下没有你的队伍够得着的赛事。</p>
+      )}
+      <p className="tiny faint" style={{ margin: '6px 0 0' }}>金额取自各赛事 Liquipedia 奖金表；本地货币按页面给出的美元计。</p>
+    </>
   )
 }
 

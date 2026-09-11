@@ -1,6 +1,8 @@
-import { prizeFor } from './prizes'
-import { onTimeline, stageNameIn } from '../era'
-import type { GameState, StageKey } from '../types'
+import { prizeFor, prizeTableOf } from './prizes'
+import type { PrizeTable } from './prizes'
+import { eventOf, isLeagueEvent } from '../circuit'
+import { onTimeline, regionIn, stageNameIn, stagesOf } from '../era'
+import type { Competition, GameState, Team } from '../types'
 import { pushLog } from './log'
 import type { LedgerBook, MoneyKind } from './types'
 import { compCn } from './compname'
@@ -21,13 +23,9 @@ import { compCn } from './compname'
  *  2. **奖金是制度不是彩蛋.** Not a one-off achievement for the first title —
  *     every event, every placement, every time.
  *
- * Rule 2 needed less work than expected. engine/finance.ts's `awardPrize`
- * already reads each man's contracted `bonusShare`, already subtracts the
- * squad's cut from what the club banks, and already writes 「选手奖金分成」
- * into the club's books. The money was being taken out of the club and paid
- * to nobody. `prizeShare()` below is the same arithmetic, so the two halves
- * cannot drift, and the player finally receives what the club was already
- * being charged for.
+ * The player's part of a prize is his contracted `bonusShare` of what his club
+ * won, split between the roster (`prizeShare()` below), and what his club won
+ * is the event's own published table (me/prizes.ts), not the manager game's.
  */
 
 /** Where money comes from. */
@@ -99,20 +97,38 @@ export const ledgerSum = (o: Record<string, number> | undefined): number =>
 /* ------------------------------------------------------------------ */
 
 /**
- * One man's slice of a competition's prize: his contracted share of the
- * club's prize, split between the roster. The table is the career's own copy
- * (me/prizes.ts), not the manager game's.
+ * The place the side at `index` of the finishing order took, and which rows of
+ * the event's table pay it. Sides level on a place share the rows they fill.
+ * Where one event is two conferences played side by side — MENA's Resilience
+ * leagues, whose two winners are joint first — each conference was paid off its
+ * own copy of the table, so joint first of two is each conference's 1st.
  */
-export function prizeShare(state: GameState, stage: StageKey, place: number): number {
+function placeAt(comp: Competition, index: number): { place: number; row: number; span: number } {
+  const place = comp.places?.[index] ?? index + 1
+  const level = comp.places ? comp.places.filter((x) => x === place).length : 1
+  const sides = comp.places ? Math.max(1, comp.places.filter((x) => x === 1).length) : 1
+  return { place, row: Math.floor((place - 1) / sides) + 1, span: Math.max(1, Math.round(level / sides)) }
+}
+
+/** A club prize as my part of it: my contracted share, split between the roster. */
+function myCut(state: GameState, amount: number): number {
   const me = state.me
-  if (!me) return 0
+  if (!me || !amount) return 0
   const p = state.players[me.id]
   const team = state.teams[p?.teamId ?? '']
   const pct = p?.contract?.bonusShare ?? 0
   if (!team || !pct) return 0
-  const amount = prizeFor(stage, place)
-  if (!amount) return 0
   return Math.round((amount * pct) / 100 / Math.max(1, team.roster.length))
+}
+
+/**
+ * One man's slice of what his club won at a competition: the event's own table
+ * at the place the club took, his contracted share of it, split between the
+ * roster. `index` is the club's position in `comp.finished`.
+ */
+export function prizeShare(state: GameState, comp: Competition, index: number): number {
+  const { row, span } = placeAt(comp, index)
+  return myCut(state, prizeFor(comp, row, state.year, span))
 }
 
 /**
@@ -122,7 +138,8 @@ export function prizeShare(state: GameState, stage: StageKey, place: number): nu
  *
  * A competition is only counted once — the key is year + competition — and
  * only if I was on that roster when it was settled, which is what
- * `finished.includes(my team)` and the club check together mean.
+ * `finished.includes(my team)` and the club check together mean. An event
+ * whose amounts were never published pays nothing.
  */
 export function prizeWeek(state: GameState): void {
   const me = state.me!
@@ -137,31 +154,71 @@ export function prizeWeek(state: GameState): void {
     const key = `${state.year}:${comp.key}`
     if (me.prizePaid.includes(key)) continue
     me.prizePaid.push(key)
-    const cut = prizeShare(state, comp.stage, place)
+    const cut = prizeShare(state, comp, place)
     if (!cut) continue
     addMoney(state, 'prize', cut)
-    pushLog(state, 'money', `${compCn(comp.name)} 第 ${place + 1} 名，奖金分成到账 $${cut.toLocaleString()}。`)
+    pushLog(state, 'money', `${compCn(comp.name)} 第 ${placeAt(comp, place).place} 名，奖金分成到账 $${cut.toLocaleString()}。`)
   }
   if (me.prizePaid.length > 60) me.prizePaid.splice(0, me.prizePaid.length - 60)
 }
 
+/* ------------------------------------------------------------------ */
+/*  the economy page: what the events in front of me pay               */
+/* ------------------------------------------------------------------ */
+
+export interface PrizeLine {
+  key: string
+  name: string
+  table: PrizeTable
+  /** my own part of 1st, 2nd and 3rd */
+  mine: number[]
+  /** under way, with my club in it */
+  now: boolean
+}
+
+/** What 1st, 2nd and 3rd at a competition would come to for me, on my contract. */
+export function prizePreview(state: GameState, comp: Competition): number[] {
+  return [1, 2, 3].map((place) => myCut(state, prizeFor(comp, place, state.year)))
+}
+
 /**
- * The published table, for the screen that says what a placing is worth.
- *
- * The names come from that year's stage table in era.ts rather than being typed
- * again here — written out by hand they had already drifted (「启航赛」 and
- * 「第一次大师赛」 against the calendar's 「揭幕赛」 and 「第一站大师赛」).
+ * Could my club end up at this event? Only for choosing what the economy page
+ * lists — the circuit decides who really plays. A league club: its league's
+ * events and the internationals. A Challengers club: its own scene, its
+ * league's Ascension and open events. Before 2023: its region's circuit.
  */
-export const PRIZE_STAGES: StageKey[] =
-  ['challengers1', 'challengers2', 'kickoff', 'stage1', 'stage2', 'masters1', 'masters2', 'champions']
+function inReach(state: GameState, comp: Competition, team: Team): boolean {
+  const y = state.year
+  if (!comp.circuit) return comp.region ? comp.region === team.region && (comp.tier ?? team.tier) === team.tier : team.tier === 1
+  const ev = eventOf(comp.circuit.id)
+  if (!ev) return false
+  if (!ev.region) return y <= 2022 || team.tier === 1
+  const home = ev.region === team.region || !!ev.layer?.includes(team.region)
+  if (y <= 2022) return home
+  if (ev.scene) return team.tier === 2 && (team.scene ? team.scene === ev.scene : home)
+  const league = regionIn(team.region, y) === ev.region
+  // 2023: China had no league, and its FGC acts were its clubs' events
+  if (y === 2023 && ev.region === 'China') return league || home
+  const kind = ev.plan?.kind
+  // 2027 on: the Open Playoffs take a league's bottom four and the open qualifiers' best
+  if (kind === 'open') return league
+  if (kind === 'kickoff' || kind === 'cup' || (!kind && isLeagueEvent(y, ev))) return team.tier === 1 && league
+  return team.tier === 2 && (league || home)
+}
 
-export const prizeRows = (year: number): { stage: StageKey; name: string }[] =>
-  PRIZE_STAGES
-    .map((stage) => ({ stage, name: stageNameIn(year, stage) }))
-    // a year without that stage has no row for it, rather than a raw key
-    .filter((r) => r.name !== r.stage)
+const startOf = (state: GameState, comp: Competition): number =>
+  comp.circuit?.start ?? stagesOf(state.year, onTimeline(state)).find((s) => s.key === comp.stage)?.start ?? 0
 
-/** What the top three places pay a player on my contract, for the prize table. */
-export function prizePreview(state: GameState, stage: StageKey): number[] {
-  return [0, 1, 2].map((i) => prizeShare(state, stage, i))
+/** The events under way with my club in them, then the next ones it can reach, soonest first. */
+export function prizeRows(state: GameState, limit = 5): PrizeLine[] {
+  const me = state.me
+  const team = state.teams[state.players[me?.id ?? '']?.teamId ?? '']
+  if (!me || !team) return []
+  return Object.values(state.comps)
+    .filter((c) => !c.awarded && !c.champion && !c.circuit?.done)
+    .map((c) => ({ c, start: startOf(state, c), entered: c.teams.includes(team.id) }))
+    .filter((x) => (x.start <= state.day ? x.entered : x.entered || inReach(state, x.c, team)))
+    .sort((a, b) => a.start - b.start)
+    .slice(0, limit)
+    .map(({ c, start }) => ({ key: c.key, name: c.name, table: prizeTableOf(c, state.year), mine: prizePreview(state, c), now: start <= state.day }))
 }
