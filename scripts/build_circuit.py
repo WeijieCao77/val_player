@@ -133,7 +133,8 @@ CN_NUM = {'1': '一', '2': '二', '3': '三', '4': '四', '5': '五', '6': '六'
 LEAGUE_EVENT = re.compile(r'(?<!-)\b(Americas|EMEA|Pacific|China)\b:? (?:League|Kickoff|Stage \d|Ascension|Last Chance)', re.I)
 LEAGUE_NAME = {'americas': 'Americas', 'emea': 'EMEA', 'pacific': 'Pacific', 'china': 'China'}
 # the tier-two circuit: national Challengers leagues, and China's Evolution Series
-CHALLENGERS = re.compile(r'Challengers|Evolution Series|FGC .*Qualifiers|\bVCL\b', re.I)
+# China's second tier in 2024 and 2025 was the National Competition (全国大赛), Tencent and TJ Sports'
+CHALLENGERS = re.compile(r'Challengers|Evolution Series|FGC .*Qualifiers|\bVCL\b|China National Competition', re.I)
 # the scene a Challengers league belongs to, most specific first. A French club
 # plays France Revolution, not DACH Evolution, though both are 「Europe」
 SCENES = [
@@ -222,6 +223,10 @@ def cn_partnered(ev: dict, region: str | None, stage: str | None) -> str:
         act = re.search(r'Act (\d)', n)
         base = f'FGC 邀请赛 {y}' + (f' · 第{CN_NUM.get(act.group(1), act.group(1))}幕' if act else '')
         return base + (' · 资格赛' if re.search(r'Qualif', n) else '')
+    if re.search(r'China National Competition', n):
+        season = re.search(r'Season (\d)', n)
+        part = f'第{CN_NUM.get(season.group(1), season.group(1))}赛季' if season else ''
+        return ' · '.join(x for x in ('中国全国大赛', part, '第三方突围赛' if re.search(r'3rd Party', n) else '') if x)
     if re.search(r'Evolution Series', n):
         act = re.search(r'Act (\d)', n)
         tail = f'第{CN_NUM.get(act.group(1), act.group(1))}幕' if act else '终章' if re.search(r'Epilogue', n) else ''
@@ -427,10 +432,11 @@ def team_index(history: dict) -> tuple[dict[str, set[str]], dict[tuple[int, str]
     by_year: dict[tuple[int, str], collections.Counter] = collections.defaultdict(collections.Counter)
     for e in history.values():
         for t in e.get('teams', []):
-            by_name[norm(t['name'])].add(t['id'])
-            by_year[(e['year'], norm(t['name']))][t['id']] += 1
+            if norm(t['name']):
+                by_name[norm(t['name'])].add(t['id'])
+                by_year[(e['year'], norm(t['name']))][t['id']] += 1
         for st in e.get('standings', []):
-            if st.get('name'):
+            if st.get('name') and norm(st['name']):
                 by_name[norm(st['name'])].add(st['teamId'])
                 by_year[(e['year'], norm(st['name']))][st['teamId']] += 1
     return by_name, by_year
@@ -536,6 +542,11 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
         if side['id']:
             return side['id']
         key = norm(side['name'])
+        if not key:
+            # a name in a script norm() cannot read — Cyrillic, kana, hangul, Thai, hanzi — comes out
+            # empty, and every such side used to share that one key: for years it resolved all of
+            # them to the one real team that happened to be indexed under it. Each is its own side
+            return 'N:' + re.sub(r'\s+', ' ', side['name'].strip().lower())
         ids = by_name.get(key, set())
         if len(ids) == 1:
             return next(iter(ids))

@@ -20,7 +20,13 @@
  *    2023 and that never played again. The club tells him two or three weeks
  *    ahead, closes after its last event, and he is a free agent.
  *
- *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold]
+ * And China, whose second tier in 2024 was no Challengers league at all:
+ *
+ *  - china: Attacking Soul Esports, outside the league and strong from 2024,
+ *    plays the National Competition's Season 2 — and, finishing where one of
+ *    its real top five did, takes that place at the Ascension.
+ *
+ *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold|china]
  */
 import { eventOf } from '../src/engine/circuit'
 import { autoResolve, autoWeek } from '../src/engine/me/auto'
@@ -223,8 +229,28 @@ function fold(): void {
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+function china(): void {
+  const club = 'V21T1837'
+  const t0 = Date.now()
+  const state = createNewGame(club, 'Probe', seed, undefined, 2021)
+  setupSeason(state)
+  console.log(`\n== 中国二线：执教 ${nameOf(state, club)}，2024 年起阵容顶满`)
+  if (!runTo(state, '中国二线', 2024, 350, club, 2024)) return
+  const t = state.teams[club]
+  const nc = circuitComps(state).find((c) => /China National Competition: Season 2/.test(eventOf(c.circuit!.id)?.name ?? ''))
+  const asc = circuitComps(state).find((c) => c.stage === 'ascension' && eventOf(c.circuit!.id)?.region === 'China')
+  const place = nc ? nc.finished.indexOf(club) + 1 : 0
+  console.log(`  2024：你的俱乐部 ${t.tier === 1 ? '一线' : '二线'} · ${t.league} · 全国大赛第二赛季${nc?.teams.includes(club) ? `打了，第 ${place || '—'} 名` : '没打'}`
+    + ` · 中国 Ascension ${asc?.teams.includes(club) ? '有你' : '没有你'}（${asc?.teams.length ?? 0} 队）`)
+  if (!nc) { fail('中国二线：2024 年的日历上没有全国大赛第二赛季'); return }
+  if (!nc.teams.includes(club)) fail('中国二线：没有联赛席位的中国俱乐部应该能打 2024 年全国大赛')
+  if (place >= 1 && place <= 5 && !asc?.teams.includes(club)) fail(`中国二线：全国大赛第 ${place} 名，应该拿到 2024 中国 Ascension 的名额`)
+  console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
 if (!only || only === 'seat') seat()
 if (!only || only === 'promo') promo()
 if (!only || only === 'fold') fold()
+if (!only || only === 'china') china()
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人。')
 process.exit(bad ? 1 : 0)

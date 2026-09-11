@@ -127,6 +127,9 @@ def main() -> int:
     ap.add_argument('--years', default='2021,2022,2023')
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--out', default=os.path.join(ROOT, 'src', 'data', 'stats_history.json'))
+    # events the index filter leaves out (China's National Competition): fetched by id and merged in
+    ap.add_argument('--ids', default='')
+    ap.add_argument('--year', type=int, default=0)
     a = ap.parse_args()
     years = {int(y) for y in a.years.split(',') if y.strip()}
 
@@ -137,9 +140,15 @@ def main() -> int:
             and not (v[1] >= 2024 and LATER_DROP.search(v[0])))
     if a.limit:
         todo = todo[:a.limit]
+    if a.ids:
+        todo = [(int(i), index.get(i, ['', a.year])[0], a.year or index.get(i, ['', 0])[1])
+                for i in a.ids.split(',') if i.strip()]
     print(f'{len(todo)} 场要抓 stats（{sorted(years)}）', flush=True)
 
     out: dict = {}
+    if a.ids and os.path.exists(a.out):
+        with open(a.out, encoding='utf-8') as f:
+            out = json.load(f)
     fresh = 0
     for i, (eid, name, year) in enumerate(todo, 1):
         cache_name = f's{eid}.html'
