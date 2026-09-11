@@ -43,7 +43,7 @@ export const ENTRY_CN: Record<EntryYear, { name: string; tag: string; blurb: str
     name: '2026 · 创造未来',
     tag: '从现在开始',
     blurb: '真实的 2026 年：四大联赛、各国 Challengers，俱乐部和选手都是这一年真实的样子。'
-      + '已经打完的比赛照真实历史，之后的转会和比赛由这个世界自己打出来——世界线到 2034 赛季为止。',
+      + '已经打完的比赛照真实历史，之后的转会和比赛由这个世界自己打出来；2027 起照 Riot 公布的新赛制，没公布的细节暂定——世界线到 2034 赛季为止。',
   },
 }
 
@@ -291,9 +291,15 @@ const STAGES_2026: StageDef[] = [
   { key: 'offseason', name: '休赛期', start: 291, end: 363 },
 ]
 
-/** After the last real year: 2026's shape, and no city named that nobody has announced. */
-const STAGES_AHEAD: StageDef[] = STAGES_2026.map((s) =>
-  s.key === 'masters1' ? { ...s, name: '第一站大师赛' } : s.key === 'masters2' ? { ...s, name: '第二站大师赛' } : s)
+/**
+ * After the last real year: 2026's shape, no city named that nobody has
+ * announced, and 2027's two Cups where 2026 had its stages (engine/ahead.ts).
+ */
+const AHEAD_NAMES: Partial<Record<StageKey, string>> = { masters1: '第一站大师赛', stage1: '杯赛 1', masters2: '第二站大师赛', stage2: '杯赛 2' }
+const STAGES_AHEAD: StageDef[] = STAGES_2026.map((s) => {
+  const name = AHEAD_NAMES[s.key]
+  return name ? { ...s, name } : s
+})
 
 /**
  * The 2026 entrance's calendar: the shape the game already ships. Kept here
@@ -347,6 +353,8 @@ const OFF_CALENDAR: Partial<Record<StageKey, string>> = {
 
 export const stageNameIn = (year: number, key: StageKey, timeline?: boolean): string =>
   stagesOf(year, timeline).find((s) => s.key === key)?.name
+  // from November 2026 the open qualifiers for next season's Kickoff sit beside China's Ascension
+  ?? (key === 'ascension' && year >= 2026 && timeline ? '晋级赛与公开资格赛' : undefined)
   ?? (formatOf(year) === 'partnered' ? OFF_CALENDAR[key] : undefined)
   ?? key
 

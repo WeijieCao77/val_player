@@ -873,6 +873,19 @@ export interface StageObjective {
   met?: boolean
 }
 
+/** One season's leagues from 2027 (engine/leagues.ts) — 暂定 until Riot publishes how they are chosen. */
+export interface VctSeason {
+  year: number
+  /** each league's eight partners, the best of the season before first */
+  partners: Record<string, string[]>
+  /** China's two visitors */
+  visitors: string[]
+  /** each league's sides from the November open qualifiers, once the year has turned */
+  qualified?: Record<string, string[]>
+  /** chosen afresh on the two seasons before, rather than kept */
+  reselected?: boolean
+}
+
 export interface GameState {
   version: number
   seed: number
@@ -911,6 +924,12 @@ export interface GameState {
   foldNotice?: { club: string; day: number; reason: string; told?: boolean }
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
+  /**
+   * 2027 on: the leagues as this world has drawn them — `now` the season being
+   * played, `next` announced the day after Champions — and what each recent
+   * season's placings were worth toward a partner seat (engine/leagues.ts)
+   */
+  vct?: { now?: VctSeason; next?: VctSeason; results?: Record<string, Record<string, number>> }
   /** day index since career start */
   day: number
   year: number

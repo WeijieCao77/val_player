@@ -30,7 +30,12 @@
  *    league's Promotion Cup is its bottom two against two challengers from
  *    outside; the club plays the weaker challenger for that seat.
  *
- *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold|china|east]
+ *  - oq: 2027's way in from outside the league. A 2026 career at a European
+ *    Challengers club with the best teammates in the world enters November's
+ *    European open qualifier, takes one of Europe's two places, and plays the
+ *    2027 EMEA Kickoff as a side from outside the league.
+ *
+ *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold|china|east|end|oq]
  */
 import { eventOf, eventsOf } from '../src/engine/circuit'
 import RAW_2021 from '../src/data/world_2021.json'
@@ -281,6 +286,71 @@ function east(): void {
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+/** oq: see the top of the file. His teammates are made the best in the world, not him: a man rated 96 is bought by a partner before November. */
+function oq(): void {
+  const t0 = Date.now()
+  const state = createCareer({
+    name: 'Probe', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2026,
+  })
+  const club = state.myTeam
+  console.log(`\n== 公开资格赛：2026 入口，${nameOf(state, club)}（${state.teams[club]?.tier === 1 ? '一线' : '二线'}），队友顶满`)
+  const mates = () => {
+    const t = state.teams[club]
+    if (!t) return
+    const rng = new Rng(hashStr(`probe:${state.year}:${state.day}`))
+    const free = Object.values(state.players).filter((p) => !p.teamId && !p.retiring && p.id !== state.me?.id).sort((a, b) => b.overall - a.overall)
+    while (t.roster.length < 6 && free.length) signForHistory(state, free.shift()!, t, state.year, rng)
+    for (const pid of t.roster) {
+      const p = state.players[pid]
+      if (!p || pid === state.me?.id) continue
+      for (const k of ATTR_KEYS) p.attrs[k] = 96
+      recomputeOverall(p)
+      p.form = 95
+      p.morale = 95
+      p.fatigue = 0
+      p.injuredUntil = 0
+      p.retiring = false
+      p.contractYears = Math.max(p.contractYears, 3)
+      refreshValue(p)
+    }
+  }
+  let moved = false
+  const run = (year: number, day: number): boolean => {
+    let guard = 0
+    try {
+      while ((state.year < year || (state.year === year && state.day < day)) && !state.gameOver && guard++ < 120) {
+        mates()
+        autoWeek(state)
+      }
+    } catch (e) {
+      fail(`公开资格赛：${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+      return false
+    }
+    // the probe follows the club: he may be bought away, and the club goes on without him
+    if (state.myTeam !== club && !moved) {
+      moved = true
+      console.log(`  （他在 ${state.year} 年第 ${state.day} 天前离开了 ${nameOf(state, club)}，去了 ${nameOf(state, state.myTeam)}；接着看这家俱乐部）`)
+    }
+    return true
+  }
+  if (!run(2026, 320)) return
+  const q = state.comps['ev:F2026:oq0:eu']
+  const decider = state.fixtures.find((f) => f.comp === q?.key && f.label.includes('决胜局'))
+  const place = q ? q.finished.indexOf(club) + 1 : 0
+  console.log(`  2026 年 11 月欧洲公开资格赛：${q?.teams.includes(club) ? `参赛${decider ? '（先打了报名决胜局）' : ''}，第 ${place || '—'} 名` : '没有参赛'} · 冠军 ${nameOf(state, q?.champion)}`)
+  if (!q?.teams.includes(club)) { fail('公开资格赛：没有联赛席位的欧洲俱乐部应该能打 11 月的欧洲公开资格赛'); return }
+  if (!place || place > 2) { fail(`公开资格赛：顶满的阵容在欧洲公开资格赛只拿到第 ${place || '—'} 名`); return }
+  if (!run(2027, 50)) return
+  const qualified = state.vct?.now?.qualified?.EMEA ?? []
+  const kickoff = state.comps['ev:F2027:kickoff:EMEA']
+  const lost = state.news.find((n) => n.text.includes('冬窗换人太多') && n.text.includes(nameOf(state, club)))
+  console.log(`  2027 EMEA 揭幕赛公开资格赛出线：${qualified.map((id) => nameOf(state, id)).join('、')}`
+    + ` · ${nameOf(state, club)} ${kickoff?.teams.includes(club) ? `打了揭幕赛，第 ${kickoff.finished.indexOf(club) + 1 || '—'} 名` : '没打揭幕赛'}${lost ? `（${lost.text}）` : ''}`
+    + ` · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+  if (!lost && !qualified.includes(club)) fail('公开资格赛：拿到欧洲前两名，却没有带进 2027 揭幕赛')
+  if (qualified.includes(club) && !kickoff?.teams.includes(club)) fail('公开资格赛：出线了，却没打 2027 EMEA 揭幕赛')
+}
+
 /** end: the world line stops when the 2034 season is over, whatever the career is doing. */
 function end(): void {
   const state = createCareer({
@@ -295,5 +365,6 @@ function end(): void {
 if (!only || only === 'china') china()
 if (!only || only === 'east') east()
 if (!only || only === 'end') end()
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人；中国二线打全国大赛进 Ascension；东欧升级杯给外来队伍的名额可以去争。')
+if (!only || only === 'oq') oq()
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人；中国二线打全国大赛进 Ascension；东欧升级杯给外来队伍的名额可以去争；2027 起没有席位的俱乐部从 11 月的公开资格赛打进揭幕赛。')
 process.exit(bad ? 1 : 0)

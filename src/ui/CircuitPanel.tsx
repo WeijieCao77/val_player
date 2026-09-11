@@ -33,7 +33,12 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
   const scope = ev?.layer
     ? ev.layer.map((r) => REGION_CN[r as Region] ?? r).join('、')
     : ev?.region ? REGION_CN[ev.region as Region] ?? ev.region : '国际赛事'
-  const badge = !c.mode ? `${fmtDay(c.start, game.year)} 开打` : c.mode === 'history' ? '照真实历史' : WHY[c.why ?? 'home']
+  // 2027 on: the format is Riot's, its unannounced parts 暂定 (engine/ahead.ts)
+  const badge = !c.mode ? `${fmtDay(c.start, game.year)} 开打`
+    : c.done && !comp.champion && ev?.plan ? '报名队伍不足 · 没有举行'
+    : c.mode === 'history' ? '照真实历史'
+    : ev?.plan && c.why !== 'mine' ? '还没有发生 · 模拟 · 赛制暂定'
+    : WHY[c.why ?? 'home']
   const champName = comp.champion ? game.teams[comp.champion]?.name : undefined
   const realChamp = realPlacesOf(comp).find((r) => r.place === 1)?.name
 

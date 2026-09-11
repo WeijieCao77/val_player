@@ -33,7 +33,8 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
-import { circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { bookAheadEvents, circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { announceLeagues, keepScore, turnLeagues } from './leagues'
 import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { arrive2026 } from './today'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
@@ -1490,6 +1491,11 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
       text: `🕯️ 宣布解散、不再参赛：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 家` : ''}。`,
     })
   }
+  // 2027 on: the day after Champions, next season's leagues are announced (engine/leagues.ts)
+  if (onTimeline(state)) {
+    bookAheadEvents(state)
+    announceLeagues(state, notes)
+  }
 
   state.stage = stageAtIn(state.year, state.day, onTimeline(state))
   const stageChanged = state.stage !== prevStage
@@ -2077,10 +2083,13 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
  * ratings off that year's numbers — everywhere out of the player's reach. Then
  * the year's real events go on the books. The book runs through 2026, and 2026
  * is a year like the ones before it — the same world carried on, not another
- * one put in its place. Past the book the world keeps what it has, and the
- * calendar keeps the last real year's shape (engine/circuit.ts projectedOf).
+ * one put in its place. Past the book the world keeps what it has: its leagues
+ * play the format Riot announced for 2027 (engine/ahead.ts, engine/leagues.ts),
+ * and its Challengers the last real year's shape (engine/circuit.ts projectedOf).
  */
 function openYear(state: GameState, rng: Rng, notes: string[]): void {
+  // what last season's placings were worth toward a partner seat, before its events are cleared
+  keepScore(state, state.year - 1)
   if (isTimelineWorld(state) && bookCovers(state.year)) {
     const r = syncYear(state, state.year)
     notes.push(...r.notes)
@@ -2118,6 +2127,8 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
     arrive2026(state, notes)
     ensureMinimumRosters(state, rng)
   }
+  // 2027 on: the leagues as announced, and November's qualifiers into Kickoff
+  if (isTimelineWorld(state) && !bookCovers(state.year)) turnLeagues(state, notes)
   if (isTimelineWorld(state) && !eventsOf(state.year).length) {
     state.timelinePause = `时间线目前做到 ${state.year - 1} 年底，${state.year} 年的赛历还没有排上。`
       + '存档停在这里，更新后从这一天接着打。'

@@ -55,6 +55,7 @@ interface Book {
 const BOOK = raw as unknown as Book
 const ATTRS = BOOK.meta.attrs as (keyof Attrs)[]
 const FIRST = BOOK.meta.years[0]
+const LAST_BOOK = BOOK.meta.years[BOOK.meta.years.length - 1]
 /** A club that first played after February joins the world at that event, not on New Year's Day. */
 const LATE_START = 60
 
@@ -270,7 +271,8 @@ for (const [scenes, codes] of [
  * NORTH//EAST league that replaced it.
  */
 export function sceneFor(state: GameState, t: Team): string | undefined {
-  const Y = BOOK.years[String(state.year)]
+  // past the book the Challengers leagues are its last year's: the seasons after it play that year's again (engine/circuit.ts)
+  const Y = BOOK.years[String(Math.min(state.year, LAST_BOOK))]
   if (!Y) return t.scene
   const have = new Set(Object.values(Y.clubs).map((c) => c.s).filter((s): s is string => !!s))
   if (t.scene && have.has(t.scene)) return t.scene

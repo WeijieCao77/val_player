@@ -26,7 +26,12 @@
  * ladder in 2026 reaches nothing, so every 2026 event played so far keeps
  * its real result and Champions 2026 is the sixteen that really qualified.
  *
- *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet|entry2026]
+ * From 2027 the leagues play the format Riot announced for 2027, its gaps
+ * 暂定 (engine/ahead.ts): a nobody from the 2026 entrance is left alone into
+ * 2029, and each season is held to that format as written — and the partners
+ * are chosen again for 2029.
+ *
+ *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet|entry2026|ahead]
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
@@ -380,8 +385,100 @@ function entry2026(): void {
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+/**
+ * 2027 on (engine/ahead.ts, engine/leagues.ts), 暂定 rules as written: eight
+ * partners a league, announced the day after Champions; Kickoff's twelve with
+ * November's qualifiers; Masters from each league's top three; a Cup's twelve
+ * from the event before and its Open Playoffs — China's partners and visitors
+ * in by right; Champions from Cup 2's top four; 2028's partners 2027's, and
+ * 2029's chosen again.
+ */
+function ahead(): void {
+  const t0 = Date.now()
+  const state = createCareer({
+    name: 'Watcher', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year: 2026,
+  })
+  console.log('\n== 2027 起的新赛制（暂定规则）：2026 入口，没人签他，一路走到 2029')
+  const L4 = ['Americas', 'EMEA', 'Pacific', 'China']
+  const seeded = (c: Competition | undefined) => new Set(c?.circuit?.seeds.filter((x): x is string => !!x) ?? [])
+  const tag = (id: string | undefined) => (id ? state.teams[id]?.tag || state.teams[id]?.name || id : '—')
+  let partners2028: Record<string, string[]> | undefined
+  const check = (year: number): void => {
+    const by = (key: string) => state.comps[`ev:F${year}:${key}`]
+    const plans = Object.values(state.comps).filter((c) => !!c.circuit && !!eventOf(c.circuit.id)?.plan)
+    const late = plans.filter((c) => !c.champion && !c.circuit!.done && c.circuit!.end < state.day)
+    const idle = plans.filter((c) => c.circuit!.done && !c.champion)
+    console.log(`  ${year}：新赛制赛事 ${plans.length} 项 · 打完 ${plans.filter((c) => c.champion).length} · 报名队伍不足没有举行 ${idle.length}`)
+    for (const c of late) fail(`新赛制：${c.name} 过了结束日（第 ${c.circuit!.end} 天）没打完`)
+    for (const c of plans) if (new Set(c.finished).size !== c.finished.length) fail(`新赛制：${c.name} 名次表里有人出现两次`)
+    const now = state.vct?.now
+    const next = state.vct?.next
+    if (next?.year !== year + 1) fail(`新赛制：${year} 年冠军赛之后没有公布 ${year + 1} 赛季的联赛`)
+    else {
+      for (const L of L4) if (next.partners[L]?.length !== 8) fail(`新赛制：${year + 1} ${L} 合作队 ${next.partners[L]?.length ?? 0} 支`)
+      if (next.visitors.length !== 2) fail(`新赛制：${year + 1} 中国访客 ${next.visitors.length} 支`)
+      if (!!next.reselected !== (year + 1 === 2027 || year + 1 === 2029)) fail(`新赛制：${year + 1} 赛季${next.reselected ? '不该' : '应该'}重选合作队`)
+      if (year === 2027 && now) {
+        partners2028 = next.partners
+        for (const L of L4) {
+          const was = new Set(now.partners[L])
+          if (next.partners[L].some((t) => !was.has(t))) fail(`新赛制：2028 ${L} 合作队应该和 2027 一样（两年一选）`)
+        }
+      }
+    }
+    if (year === 2026) return
+    for (const L of L4) {
+      const field = seeded(by(`kickoff:${L}`))
+      const own = [...(now?.partners[L] ?? []), ...(L === 'China' ? now?.visitors ?? [] : []), ...(now?.qualified?.[L] ?? [])]
+      const missing = own.filter((t) => !field.has(t))
+      if (field.size !== 12 || missing.length) fail(`新赛制：${year} ${L} 揭幕赛 ${field.size} 队${missing.length ? `，缺 ${missing.map(tag).join(' ')}` : ''}`)
+      for (const cup of [1, 2]) {
+        const before = by(cup === 1 ? `kickoff:${L}` : `cup1:${L}`)
+        const open = by(`open${cup}:${L}`)
+        const cupField = seeded(by(`cup${cup}:${L}`))
+        const want = L === 'China'
+          ? [...(now?.partners.China ?? []), ...(now?.visitors ?? []), ...(open?.finished.slice(0, 2) ?? [])]
+          : [...(before?.finished.slice(0, 8) ?? []), ...(open?.finished.slice(0, 4) ?? [])]
+        const miss = want.filter((t) => !cupField.has(t))
+        if (cupField.size !== 12 || miss.length) fail(`新赛制：${year} ${L} 杯赛 ${cup} ${cupField.size} 队${miss.length ? `，缺 ${miss.map(tag).join(' ')}` : ''}`)
+        if (L !== 'China') {
+          const openField = seeded(open)
+          const lost = (before?.finished.slice(8, 12) ?? []).filter((t) => !openField.has(t))
+          if (lost.length) fail(`新赛制：${year} ${L} 杯赛 ${cup} 公开季后赛缺上一站后四 ${lost.map(tag).join(' ')}`)
+        }
+      }
+    }
+    for (const [m, feeder] of [['masters1', 'kickoff'], ['masters2', 'cup1']] as const) {
+      const field = seeded(by(m))
+      const miss = L4.flatMap((L) => by(`${feeder}:${L}`)?.finished.slice(0, 3) ?? []).filter((t) => !field.has(t))
+      if (field.size !== 12 || miss.length) fail(`新赛制：${year} ${m} ${field.size} 队${miss.length ? `，缺 ${miss.map(tag).join(' ')}` : ''}`)
+    }
+    const champs = seeded(by('champions'))
+    const miss = L4.flatMap((L) => by(`cup2:${L}`)?.finished.slice(0, 4) ?? []).filter((t) => !champs.has(t))
+    if (champs.size !== 16 || miss.length) fail(`新赛制：${year} 冠军赛 ${champs.size} 队${miss.length ? `，缺 ${miss.map(tag).join(' ')}` : ''}`)
+    console.log(`    大师赛 ${tag(by('masters1')?.champion)} / ${tag(by('masters2')?.champion)} · 冠军赛 ${tag(by('champions')?.champion)}`
+      + ` · 公开资格赛打进揭幕赛的 ${L4.map((L) => (now?.qualified?.[L] ?? []).map(tag).join(' ') || '—').join(' | ')}`)
+  }
+  let guard = 0
+  try {
+    while (state.year < 2029 && !state.gameOver && guard++ < 1300) {
+      advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
+      if (state.day === 345) check(state.year)
+    }
+  } catch (e) {
+    fail(`新赛制：${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+    return
+  }
+  const now = state.vct?.now
+  if (state.year !== 2029 || now?.year !== 2029) { fail(`新赛制：没有走进 2029 赛季（${state.year} 年，${state.gameOver ?? ''}）`); return }
+  if (!now.reselected) fail('新赛制：2029 赛季应该按 2027–2028 两年成绩重选合作队')
+  const changed = L4.map((L) => `${L} 换了 ${now.partners[L].filter((t) => !(partners2028?.[L] ?? []).includes(t)).length} 支`).join(' · ')
+  console.log(`  2029 重选合作队：${changed} · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
 if (!only || only === 'quiet') quiet()
 if (!only || only === 'entry2026') entry2026()
+if (!only || only === 'ahead') ahead()
 
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

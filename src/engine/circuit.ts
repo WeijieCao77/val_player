@@ -1,10 +1,12 @@
 import raw from '../data/circuit.json'
 import routesRaw from '../data/routes.json'
 import partneredRaw from '../data/routes_partnered.json'
+import { aheadEventsOf, oqPoolOf } from './ahead'
+import type { Plan, Seat } from './ahead'
 import { regionIn, stageAtIn } from './era'
 import { bookLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
-import type { Competition, Fixture, GameState, Region, StageKey, Team } from './types'
+import type { Competition, Fixture, GameState, Region, StageKey, Team, VctSeason } from './types'
 
 /**
  * The open era's season: the events that really happened, in the formats they
@@ -32,9 +34,9 @@ import type { Competition, Fixture, GameState, Region, StageKey, Team } from './
  * drawn up: a result in March decides whether an event in May still matches.
  */
 
-type Slot = [string, number, number?]
+export type Slot = [string, number, number?]
 
-interface CNode {
+export interface CNode {
   day: number
   round: string
   /** 2 is a Bo2 group game, which could end level */
@@ -46,7 +48,7 @@ interface CNode {
   score: [number | null, number | null]
 }
 
-interface CUnit {
+export interface CUnit {
   label: string
   /** `open`: a qualifier, kept only as its result — see isOpen */
   type: 'rr' | 'bracket' | 'open'
@@ -92,6 +94,8 @@ export interface CEvent {
   rosters?: Record<string, string[]>
   /** an event of a year nobody has played yet, drawn from `base` — see projectedOf */
   projected?: { year: number; base: string }
+  /** 2027 on: an event of the new format, and how each of its places is filled (engine/ahead.ts) */
+  plan?: Plan
 }
 
 const CIRCUIT = raw as unknown as Record<string, CEvent[]>
@@ -105,17 +109,21 @@ for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) { BY_ID.set
 /* ------------------------------------------------------------------ */
 
 /**
- * Past the last real match the calendar does not stop, and it does not turn
- * into some other calendar either. circuit.json runs to 2026's Stage 2; every
- * season after 2026 is 2026 again — the same events in the same formats on the
- * same days, each field drawn by the rule that really drew it (projectedSeeds),
- * every match played, because nobody has played them yet. 2026 itself still
- * owes what closes its season, Champions in Shanghai: that takes 2025's
- * format — four GSL groups, then eight in double elimination, as 2026 has it
- * too — on the dates announced for it.
+ * Past the last real match the calendar does not stop. circuit.json runs to
+ * 2026's Stage 2. 2026 itself still owes what closes its season — Champions in
+ * Shanghai, in 2025's format (four GSL groups, then eight in double
+ * elimination, as 2026 has it too) on the dates announced for it, and China's
+ * Ascension — and from November the open qualifiers for 2027's Kickoff.
  *
- * A projected event is never written into a save. Its id — `F2027:2682`, the
- * 2027 edition of 2026's Americas Kickoff — is enough to draw it again.
+ * From 2027 the leagues and internationals play the format Riot announced for
+ * 2027, its unannounced parts 暂定 (engine/ahead.ts). The Challengers leagues
+ * below them are 2026's again — the same events in the same formats on the
+ * same days, each field drawn by the rule that really drew it (projectedSeeds).
+ * Every match is played, because nobody has played them yet.
+ *
+ * A projected event is never written into a save. Its id — `F2027:2796`, the
+ * 2027 edition of 2026's North America ACE qualifier, or `F2027:kickoff:Americas` —
+ * is enough to draw it again.
  */
 const REAL_YEARS = Object.keys(CIRCUIT).map(Number).sort((a, b) => a - b)
 export const LAST_REAL_YEAR = REAL_YEARS[REAL_YEARS.length - 1]
@@ -136,16 +144,16 @@ const OWED_EVENTS: CEvent[] = (() => {
 })()
 
 /**
- * Every season after the last real one is drawn from these. Not an event that
- * was only an open qualifier: its sides were five friends and a Discord server,
- * nobody this world holds, and a qualifier nobody can name is not played here —
- * the places it sent come through the next event's own open phase instead.
+ * Every Challengers season after the last real one is drawn from these. Not an
+ * event that was only an open qualifier: its sides were five friends and a
+ * Discord server, nobody this world holds, and a qualifier nobody can name is
+ * not played here — the places it sent come through the next event's own open
+ * phase instead. Not the leagues, their internationals, or a Last Chance
+ * Qualifier into 2026's play-ins either: from 2027 those are the new format's.
  */
-const TEMPLATE: CEvent[] = [
-  ...(CIRCUIT[String(LAST_REAL_YEAR)] ?? []).filter((e) => !!e.stage && e.stage !== 'offseason' && e.start != null
-    && e.units.some((u) => u.type !== 'open')),
-  ...OWED_EVENTS,
-]
+const LEAGUE_STAGES = new Set<StageKey>(['kickoff', 'stage1', 'stage2', 'masters1', 'masters2', 'champions', 'lcq'])
+const TEMPLATE: CEvent[] = (CIRCUIT[String(LAST_REAL_YEAR)] ?? []).filter((e) => !!e.stage && e.stage !== 'offseason' && e.start != null
+  && e.units.some((u) => u.type !== 'open') && !LEAGUE_STAGES.has(e.stage) && !/Last Chance/i.test(e.name))
 
 function project(year: number, baseId: string): CEvent | undefined {
   const src = BY_ID.get(baseId)
@@ -185,10 +193,10 @@ function projectedOf(year: number): CEvent[] {
   if (year < LAST_REAL_YEAR) return []
   let hit = PROJECTED.get(year)
   if (!hit) {
-    hit = (year === LAST_REAL_YEAR ? OWED_EVENTS : TEMPLATE)
-      .map((e) => project(year, e.id))
-      .filter((e): e is CEvent => !!e)
-      .sort((a, b) => a.start! - b.start! || a.id.localeCompare(b.id))
+    hit = [
+      ...(year === LAST_REAL_YEAR ? OWED_EVENTS : TEMPLATE).map((e) => project(year, e.id)).filter((e): e is CEvent => !!e),
+      ...aheadEventsOf(year),
+    ].sort((a, b) => a.start! - b.start! || a.id.localeCompare(b.id))
     for (const e of hit) BY_ID.set(e.id, e)
     PROJECTED.set(year, hit)
   }
@@ -200,10 +208,15 @@ export const eventsOf = (year: number): CEvent[] => [...(CIRCUIT[String(year)] ?
 export const eventOf = (id: string): CEvent | undefined => {
   const hit = BY_ID.get(id)
   if (hit) return hit
-  const m = /^F(\d{4}):/.exec(id)
+  const m = /^F(\d{4}):(.+)$/.exec(id)
   if (!m) return undefined
   projectedOf(Number(m[1]))
-  return BY_ID.get(id)
+  const drawn = BY_ID.get(id)
+  if (drawn || !/^\d+$/.test(m[2])) return drawn
+  // a save that reached 2027 before 2027 had its own format plays out that year on the 2026 copy it was drawn with
+  const old = project(Number(m[1]), m[2])
+  if (old) BY_ID.set(id, old)
+  return old
 }
 
 /** A vlr team id as this world knows it. Sides from open qualifiers are not clubs. */
@@ -444,22 +457,35 @@ function placesFrom(units: CUnit[], tiers: string[][][]): [string, number][] {
 
 /** Every event of the year on the books, nothing drawn yet: fields are settled the day before each opens. */
 export function setupCircuitSeason(state: GameState): void {
+  for (const ev of eventsOf(state.year)) bookEvent(state, ev)
+}
+
+function bookEvent(state: GameState, ev: CEvent): void {
+  if (ev.start == null || ev.end == null || !ev.units.length) return
+  const teams = ev.projected ? [] : uniq(ev.seeds.map((v) => idIn(state, v)).filter((x): x is string => !!x))
+  const comp: Competition = {
+    key: `ev:${ev.id}`,
+    name: ev.cn,
+    region: ev.region && !ev.layer ? (ev.region as Region) : undefined,
+    tier: tierOf(ev),
+    stage: ev.stage ?? stageAtIn(state.year, ev.start, true),
+    teams,
+    standings: newStandings(teams),
+    finished: [],
+    format: 'circuit',
+    circuit: { id: ev.id, start: ev.start, end: ev.end, seeds: [] },
+  }
+  state.comps[comp.key] = comp
+}
+
+/**
+ * A 2026 save already under way when November's open qualifiers were put on
+ * the calendar: they go on its books now, before they open.
+ */
+export function bookAheadEvents(state: GameState): void {
+  if (state.year !== LAST_REAL_YEAR) return
   for (const ev of eventsOf(state.year)) {
-    if (ev.start == null || ev.end == null || !ev.units.length) continue
-    const teams = ev.projected ? [] : uniq(ev.seeds.map((v) => idIn(state, v)).filter((x): x is string => !!x))
-    const comp: Competition = {
-      key: `ev:${ev.id}`,
-      name: ev.cn,
-      region: ev.region && !ev.layer ? (ev.region as Region) : undefined,
-      tier: tierOf(ev),
-      stage: ev.stage ?? stageAtIn(state.year, ev.start, true),
-      teams,
-      standings: newStandings(teams),
-      finished: [],
-      format: 'circuit',
-      circuit: { id: ev.id, start: ev.start, end: ev.end, seeds: [] },
-    }
-    state.comps[comp.key] = comp
+    if (ev.plan && ev.start != null && ev.start > state.day + 1 && !state.comps[`ev:${ev.id}`]) bookEvent(state, ev)
   }
 }
 
@@ -667,6 +693,7 @@ function championsDirect(state: GameState): Set<string> {
  * event's own scene so that no Chinese cup can reach a Taiwanese qualifier.
  */
 function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swaps: Swap[] } {
+  if (ev.plan) return planSeeds(state, ev)
   if (ev.projected) return projectedSeeds(state, ev)
   const book = rulesOf(ev.id)?.routes
   if (!book) return legacySeeds(state, ev)
@@ -929,6 +956,95 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
   return { seeds: out, swaps: [] }
 }
 
+/* ------------------------------------------------------------------ */
+/*  2027 on: the new format's places (engine/ahead.ts)                 */
+/* ------------------------------------------------------------------ */
+
+/** A season's leagues as engine/leagues.ts has drawn them: the one being played, or the one announced for next. */
+function vctSeason(state: GameState, year: number): VctSeason | undefined {
+  const v = state.vct
+  return v?.now?.year === year ? v.now : v?.next?.year === year ? v.next : undefined
+}
+
+/** In a season's leagues: a partner, or one of China's visitors. Before that season is drawn, a tier-one club. */
+function leagueClub(state: GameState, year: number, t: Team): boolean {
+  const s = vctSeason(state, year)
+  if (!s) return t.tier === 1
+  return Object.values(s.partners).some((ids) => ids.includes(t.id)) || s.visitors.includes(t.id)
+}
+
+/**
+ * Who can take a place in an event of the new format: for an open place, who
+ * may enter; for any other, who stands in when the place's own side is not
+ * there — a region with too few clubs to hold its qualifier, a side since gone.
+ */
+function planEligible(state: GameState, ev: CEvent, t: Team, seat: Seat | null): boolean {
+  if (t.dormant || t.roster.length < 5 || t.id.startsWith('CUP_')) return false
+  const plan = ev.plan!
+  const year = ev.projected!.year
+  const league = regionIn(t.region, year)
+  const played = (key: string) => !!state.comps[`ev:F${year}:${key}`]?.teams.includes(t.id)
+  // an Open Playoffs, and a qualifier into one, is for the sides the event before did not already place
+  const before = `${plan.cup === 1 ? 'kickoff' : 'cup1'}:${plan.league}`
+  switch (plan.kind) {
+    case 'oq':
+      if (oqPoolOf(t.region, t.roster.map((id) => state.players[id]?.nat), t.scene) !== plan.pool) return false
+      return plan.cup === 0 ? !leagueClub(state, year + 1, t) : !leagueClub(state, year, t) && !played(before)
+    case 'open':
+      return league === plan.league && !leagueClub(state, year, t) && !played(before)
+    case 'kickoff':
+      return league === plan.league && !leagueClub(state, year, t)
+    case 'oqFinal':
+      return league === 'Pacific' && !leagueClub(state, year + 1, t)
+    case 'ascension': {
+      const s = vctSeason(state, year)
+      return league === 'China' && (s ? !(s.partners.China ?? []).includes(t.id) : t.tier !== 1)
+    }
+    case 'cup':
+      return league === plan.league && !played(`open${plan.cup}:${plan.league}`)
+    default:
+      return seat?.from === 'place' && !!seat.league && league === seat.league && t.tier === 1
+  }
+}
+
+/**
+ * The field of an event of the new format: each place filled by its own rule
+ * (engine/ahead.ts `Seat`) off this world's results, the open places by the
+ * best of those who could enter, and a place nobody took by the next best who
+ * could take it.
+ */
+function planSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; swaps: Swap[] } {
+  const plan = ev.plan!
+  const s = vctSeason(state, ev.projected!.year)
+  const L = plan.league ?? ''
+  const out: (string | null)[] = plan.seats.map(() => null)
+  const used = new Set<string>()
+  const take = (i: number, t: string | null | undefined): boolean => {
+    if (!t || out[i] || used.has(t) || !state.teams[t] || state.teams[t].dormant) return false
+    out[i] = t
+    used.add(t)
+    return true
+  }
+  plan.seats.forEach((seat, i) => {
+    if (seat.from === 'partner') take(i, s?.partners[L]?.[seat.k])
+    else if (seat.from === 'visitor') take(i, s?.visitors[seat.k])
+    else if (seat.from === 'qualified') take(i, s?.qualified?.[L]?.[seat.k])
+    else if (seat.from === 'place') take(i, state.comps[`ev:${seat.event}`]?.finished[seat.k])
+  })
+  const who = (seat: Seat | null): Team[] => Object.values(state.teams)
+    .filter((t) => !used.has(t.id) && planEligible(state, ev, t, seat))
+    .sort((a, b) => a.tier - b.tier || b.rating - a.rating || a.id.localeCompare(b.id))
+  const open = plan.seats.map((seat, i) => ({ seat, i })).filter((x) => x.seat.from === 'pool').sort((a, b) => a.seat.k - b.seat.k)
+  if (open.length) {
+    const entered = who(null)
+    for (const { i } of open) while (!out[i] && entered.length) take(i, entered.shift()!.id)
+  }
+  plan.seats.forEach((seat, i) => {
+    if (!out[i] && seat.from !== 'pool') take(i, who(seat)[0]?.id)
+  })
+  return { seeds: out, swaps: [] }
+}
+
 /** A partnered league's own events: closed to everyone without a seat, whatever region they are in. */
 export function isLeagueEvent(year: number, ev: CEvent): boolean {
   return year >= 2023 && !ev.scene && !!ev.region && ['Americas', 'EMEA', 'Pacific', 'China'].includes(ev.region)
@@ -955,7 +1071,8 @@ function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: stri
 /** 方案 C: the seat the player's club took stays taken, in every event that seat plays. */
 function takeSeat(state: GameState, ev: CEvent, seeds: (string | null)[]): (string | null)[] {
   const s = state.seat
-  if (!s || state.year < s.from) return seeds
+  // the new format has no seats to take: its leagues are drawn afresh (engine/leagues.ts)
+  if (!s || state.year < s.from || ev.plan) return seeds
   const seatEvent = (isLeagueEvent(state.year, ev) && ev.region === s.league) || /LOCK\/\/IN/i.test(ev.name)
   // the seat's real holder at this event: the club it was taken from, or what history carried that club on as
   const holders = [s.displaced, ...successorsOf(s.displaced, state.year)]
@@ -983,7 +1100,17 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   // a side that is here under its own real name takes it, rebrand and all
   const swapped = new Set(swaps.map((s) => s.real))
   ev.seeds.forEach((v, i) => { if (c.seeds[i] && !swapped.has(v)) adoptName(state, ev, v, c.seeds[i]!) })
-  if (c.mode === 'sim') {
+  if (c.mode === 'sim' && ev.plan) {
+    planPlayIn(state, comp, ev, club, notes)
+    if (club && c.seeds.includes(club)) c.why = 'mine'
+    if (c.seeds.filter(Boolean).length + (c.playin ? 1 : 0) < 2) {
+      // a qualifier in a region this world holds too few clubs to hold one: its place passes on (planSeeds)
+      const playin = c.playin
+      if (playin) state.fixtures = state.fixtures.filter((f) => f.id !== playin.fixture)
+      c.playin = undefined
+      c.done = true
+    }
+  } else if (c.mode === 'sim') {
     fillGaps(state, comp, ev)
     offerPlayIn(state, comp, ev, club, notes)
   }
@@ -1084,6 +1211,31 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   state.fixtures.push(f)
   c.playin = { key, fixture: f.id }
   notes.push(`📝 ${comp.name} 开放报名，${state.teams[club].name} 报了海选：打赢 ${state.teams[rival].name} 就进正赛。`)
+}
+
+/**
+ * The new format's qualifiers are open: a club that can enter and is not in the
+ * draw plays the weakest side that is, for its place — or, where a place went
+ * untaken, simply takes it.
+ */
+function planPlayIn(state: GameState, comp: Competition, ev: CEvent, club: string | null, notes: string[]): void {
+  const c = comp.circuit!
+  const team = club ? state.teams[club] : undefined
+  if (!club || !team || c.seeds.includes(club)) return
+  const open = ev.plan!.seats.map((seat, i) => ({ seat, i })).filter((x) => x.seat.from === 'pool').sort((a, b) => b.seat.k - a.seat.k)
+  if (!open.length || !planEligible(state, ev, team, null)) return
+  const empty = open.find((x) => !c.seeds[x.i])
+  if (empty) {
+    c.seeds[empty.i] = club
+    notes.push(`📝 ${team.name} 报名了${comp.name}。`)
+    return
+  }
+  const rival = c.seeds[open[0].i]!
+  const f = makeFixture(state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:公开资格赛 · 决胜局')
+  f.node = -1
+  state.fixtures.push(f)
+  c.playin = { key: `s:${open[0].i}`, fixture: f.id }
+  notes.push(`📝 ${team.name} 报名了${comp.name}：打赢 ${state.teams[rival]?.name ?? rival} 就进最后阶段。`)
 }
 
 const PROMO_WORDS = /Promotion|Relegation|Up and Down|Pro\/Rel|Acesso|Repescagem/i
