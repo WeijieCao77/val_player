@@ -315,11 +315,11 @@ function oq(): void {
     }
   }
   let moved = false
-  const run = (year: number, day: number): boolean => {
+  const run = (year: number, day: number, boost = true): boolean => {
     let guard = 0
     try {
       while ((state.year < year || (state.year === year && state.day < day)) && !state.gameOver && guard++ < 120) {
-        mates()
+        if (boost) mates()
         autoWeek(state)
       }
     } catch (e) {
@@ -333,6 +333,9 @@ function oq(): void {
     }
     return true
   }
+  // strong only once 2026's leagues are over: a squad this good all year plays its way through the Stage 2
+  // play-ins into Champions, and a club that wins Champions is a 2027 partner, not an open qualifier's
+  if (!run(2026, 250, false)) return
   if (!run(2026, 320)) return
   const q = state.comps['ev:F2026:oq0:eu']
   const decider = state.fixtures.find((f) => f.comp === q?.key && f.label.includes('决胜局'))

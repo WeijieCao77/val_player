@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGame } from '../ctx'
-import { Crest, Modal, OvrBadge, Roles } from '../common'
+import { Crest, Modal, OvrBadge, RoleTag, Roles } from '../common'
 import RoundRibbon, { RibbonLegend } from '../RoundRibbon'
 import MapSchematic from './MapSchematic'
-import { agentCn, mapCn } from '../../engine/content'
+import { AGENT_ROLE, agentCn, mapCn } from '../../engine/content'
 import { loadRecords, recordsNow } from '../../engine/dossier'
 import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
 import type { NodeLogEntry } from '../../engine/me/types'
-import type { RoundLog } from '../../engine/types'
+import type { Player, Role, RoundLog } from '../../engine/types'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -27,6 +27,55 @@ function roundLine(r: RoundLog, mineIsA: boolean): string {
   const theirBuy = mineIsA ? r.buyB : r.buyA
   const buy = pistol ? '手枪局' : `${BUY_CN[myBuy]} 对 ${BUY_CN[theirBuy]}`
   return `第 ${r.n} 回合 · ${mineAttack ? '我方进攻' : '我方防守'} · ${buy} · ${mineWon ? '拿下' : '丢了'}（${END_CN[r.end]}）`
+}
+
+/**
+ * Every round of the series so far, newest first — the round's line with the
+ * score it left, the call I made on it, and what the engine wrote about it —
+ * in a box of its own height that scrolls, so a thirty-round map does not push
+ * the rest of the screen away. Maps already played stay in it.
+ */
+function RoundFeed({ mm }: { mm: MeMatch }) {
+  const maps = [
+    ...mm.sim.played.map((s) => ({ map: s.map, rounds: s.rounds ?? [], live: false })),
+    ...(mm.map ? [{ map: mm.map.map, rounds: mm.map.rounds, live: true }] : []),
+  ]
+  const total = maps.reduce((s, m) => s + m.rounds.length, 0)
+  if (!total) return null
+  const tallied = maps.map((m, mi) => {
+    let my = 0
+    let their = 0
+    const rows = m.rounds.map((r) => {
+      const won = (r.winner === 'A') === mm.mineIsA
+      if (won) my++
+      else their++
+      return { r, won, my, their }
+    })
+    return { m, mi, rows, my, their }
+  })
+  return (
+    <div className="round-feed">
+      <div className="round-feed-head">回合记录 · 共 {total} 回合 · 最新的在最上面</div>
+      <div className="round-feed-body">
+        {tallied.slice().reverse().map(({ m, mi, rows, my, their }) => (
+          <div key={mi}>
+            <div className="round-feed-map">{mapCn(m.map)} · {m.live ? `进行中 ${my} : ${their}` : `${my} : ${their}`}</div>
+            {rows.slice().reverse().map(({ r, won, my: a, their: b }) => (
+              <div key={r.n} className={`node-line ${won ? 'ok' : 'bad'}`}>
+                <span className="round-feed-score">{a} : {b}</span>{roundLine(r, mm.mineIsA)}
+                {mm.nodes.filter((n) => n.map === m.map && n.round === r.n).map((n, i) => (
+                  <div key={`call${i}`} className="tiny" style={{ marginTop: 2 }}>
+                    你选了「{n.pick}」—— <b>{n.ok ? '成了' : '没成'}</b>，赢面 {n.before}% → {n.after}%
+                  </div>
+                ))}
+                {r.hl?.map((h, i) => <div key={i} className="tiny muted" style={{ marginTop: 2 }}>{h}</div>)}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -107,9 +156,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
 
   // the five on the floor for the current map, with the agent each is on;
   // before the first map is built, the club's starters without agents
-  const five = (teamId: string) => {
+  const five = (teamId: string): { p: Player; agent: string; role?: Role }[] => {
     const side = map ? (teamId === mm.myTeamId ? (mm.mineIsA ? map.A : map.B) : (mm.mineIsA ? map.B : map.A)) : null
-    if (side) return side.players.map((p) => ({ p, agent: side.agents[p.id] ? agentCn(side.agents[p.id]) : '' }))
+    if (side) return side.players.map((p) => ({ p, agent: side.agents[p.id] ? agentCn(side.agents[p.id]) : '', role: AGENT_ROLE[side.agents[p.id]] }))
     return (game.teams[teamId]?.starters ?? []).map((id) => game.players[id]).filter(Boolean).map((p) => ({ p, agent: '' }))
   }
 
@@ -134,9 +183,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-head"><h2>{mine.tag} · {starterNow ? '你今晚首发' : '你在替补席'}</h2></div>
             <div className="panel-body">
               <div className="col tiny" style={{ gap: 4 }}>
-                {five(mm.myTeamId).map(({ p, agent }) => (
+                {five(mm.myTeamId).map(({ p, agent, role }) => (
                   <span key={p.id} className="row" style={{ gap: 4, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                    <Roles p={p} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
+                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -146,9 +195,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <div className="panel-head"><h2>{opp?.tag ?? '对手'}</h2></div>
             <div className="panel-body">
               <div className="col tiny" style={{ gap: 4 }}>
-                {five(oppId).map(({ p, agent }) => (
+                {five(oppId).map(({ p, agent, role }) => (
                   <span key={p.id} className="row" style={{ gap: 4 }}>
-                    <Roles p={p} /><span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
+                    {role ? <RoleTag role={role} /> : <Roles p={p} />}<span>{p.ign}</span>{agent && <span className="muted">{agent}</span>}<OvrBadge value={p.overall} />
                   </span>
                 ))}
               </div>
@@ -341,13 +390,6 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <div style={{ marginTop: 6 }}><RibbonLegend /></div>
         </div>
       )}
-      {lastRound && phase === 'live' && (
-        <div className={`node-line ${((lastRound.winner === 'A') === mm.mineIsA) ? 'ok' : 'bad'}`}>
-          {roundLine(lastRound, mm.mineIsA)}
-          {lastRound.hl?.map((h, i) => <div key={i} className="tiny muted" style={{ marginTop: 2 }}>{h}</div>)}
-        </div>
-      )}
-
       {justPlayed ? (
         <div className="node-box">
           <p className="q">{mapCn(justPlayed.map)} {myScore} : {theirScore}，{myScore > theirScore ? '这一把拿下了' : myScore < theirScore ? '这一把丢了' : '这一把打平'}</p>
@@ -398,6 +440,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           </div>
         </>
       )}
+      <RoundFeed mm={mm} />
       {map && (
         <div className="grid tiny" style={{ gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
           <div>
@@ -407,7 +450,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               const ag = map ? (mm.mineIsA ? map.A : map.B).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6, color: p.id === me.id ? 'var(--accent)' : undefined }}>
-                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
+                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )
@@ -420,7 +463,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               const ag = map ? (mm.mineIsA ? map.B : map.A).agents[p.id] : ''
               return (
                 <div key={p.id} className="row" style={{ gap: 6 }}>
-                  <Roles p={p} /><span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
+                  {ag && AGENT_ROLE[ag] ? <RoleTag role={AGENT_ROLE[ag]} /> : <Roles p={p} />}<span style={{ flex: 1 }}>{p.ign}{ag && <span className="muted"> · {agentCn(ag)}</span>}</span>
                   <span className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{l ? `${l.kills}/${l.deaths}/${l.assists}` : '0/0/0'}</span>
                 </div>
               )

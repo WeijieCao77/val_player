@@ -158,6 +158,16 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .home-group.flat { grid-template-columns: minmax(0, 1fr); }
 .home-league { color: var(--muted); font-size: var(--t-small); font-weight: 700; }
 @media (max-width: 560px) { .home-group { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+/* the live match's round log: a box that keeps its height and scrolls */
+.round-feed { margin: 8px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.round-feed-head { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: var(--t-tiny); }
+.round-feed-body { height: 240px; overflow-y: auto; overscroll-behavior: contain; padding: 0 10px 8px; }
+.round-feed-map {
+  position: sticky; top: 0; z-index: 1; background: var(--panel-2);
+  padding: 6px 0 2px; color: var(--muted); font-size: var(--t-small); font-weight: 700;
+}
+.round-feed .node-line { margin: 4px 0; }
+.round-feed-score { display: inline-block; min-width: 52px; color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .talent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
 @media (max-width: 560px) { .talent-grid { grid-template-columns: 1fr; } }
 .talent-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 8px; align-items: center; }

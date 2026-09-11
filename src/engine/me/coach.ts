@@ -94,6 +94,19 @@ export function coachStarters(state: GameState): string[] {
       if (out) five[five.indexOf(out)] = mine
     }
   }
+  // a starting place written into my contract is kept — every Challengers signing, and 「承诺首发」
+  // bought at the table — unless the coach has just benched me for my form or to try another five.
+  // Until 2026-09-11 nothing read it: a rookie signed as a starter sat on the bench from day one
+  const promised = me ? state.players[me.id]?.contract?.promisedRole : undefined
+  if (me && !me.trial && (promised === 'starter' || promised === 'star') && !(me.benchLock && me.benchLock > state.day)) {
+    const mine = state.players[me.id]
+    if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
+      const sameRole = five.filter((p) => !p.isIgl && (p.roles ?? [p.role]).includes(mine.role))
+      const out = (sameRole.length ? sameRole : five.filter((p) => !p.isIgl))
+        .sort((a, b) => coachView(state, a) - coachView(state, b))[0]
+      if (out) five[five.indexOf(out)] = mine
+    }
+  }
   return five.map((p) => p.id)
 }
 
