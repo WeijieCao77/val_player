@@ -102,10 +102,15 @@ export default function EconomyScreen() {
   )
 }
 
+/** Four columns on a phone: thousands as $47K, a smaller prize to the dollar. */
+const prizeAmount = (x: number): string => (x >= 10_000 ? money(x) : moneyFull(x))
+
 /**
  * What the events in front of me pay me, read off each event's own table
  * (engine/me/prizes.ts). An event with no published amounts says so instead of
- * showing a number; one from 2027 on says whose amounts it is using.
+ * showing a number — next to the event's name, where a phone shows it, not at
+ * the far end of a table it would have to scroll; one from 2027 on says whose
+ * amounts it is using.
  */
 function PrizeList({ game }: { game: GameState }) {
   const me = game.me!
@@ -128,8 +133,8 @@ function PrizeList({ game }: { game: GameState }) {
                   <tr key={r.key}>
                     <td>{compCn(r.name)}{note && <div className="tiny faint">{note}</div>}</td>
                     {r.table.status === 'paid'
-                      ? r.mine.map((x, i) => <td key={i} className="num">{x ? moneyFull(x) : '—'}</td>)
-                      : <td colSpan={3} className="num muted">{r.table.status === 'none' ? '无奖金' : '奖金未公开'}</td>}
+                      ? r.mine.map((x, i) => <td key={i} className="num">{x ? prizeAmount(x) : '—'}</td>)
+                      : <td colSpan={3} className="muted">{r.table.status === 'none' ? '无奖金' : '奖金未公开'}</td>}
                   </tr>
                 )
               })}
