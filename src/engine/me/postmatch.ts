@@ -108,22 +108,23 @@ export function verdict(rec: MeMatchRecord, rows: EdgeRow[]): string {
   // the biggest thing that was against us, for the "no wonder" case
   const worst = rows.filter((r) => r.diff < 0)[0]?.label ?? '五人能力'
 
+  // the size of the gap is in the rows under this line (and behind the 「数值」 switch); the sentence only says which way
   if (ahead && !rec.won) {
-    return `账面上你们领先 ${total.toFixed(1)}，还是输了。数值只决定每回合的胜率，不保证结果——这一场就是没走出来，不用找别的理由。`
+    return '账面上你们占优，还是输了。账面只决定每回合的胜率，不保证结果——这一场就是没走出来，不用找别的理由。'
   }
   if (behind && rec.won) {
-    return `账面上你们落后 ${Math.abs(total).toFixed(1)}，赢下来了。${n.made > n.missed ? '你的临场决定是原因之一。' : '这一场赢在运气和队友。'}`
+    return `账面上你们处下风，赢下来了。${n.made > n.missed ? '你的临场决定是原因之一。' : '这一场赢在运气和队友。'}`
   }
   if (ahead && rec.won) {
-    return `账面领先 ${total.toFixed(1)}，赢下来了。${n.missed > n.made ? '你的几次决定没打成，但队伍兜住了。' : ''}`
+    return `账面占优，赢下来了。${n.missed > n.made ? '你的几次决定没打成，但队伍兜住了。' : ''}`
   }
   if (behind && !rec.won) {
-    return `账面落后 ${Math.abs(total).toFixed(1)}，输得不冤。差得最多的是${worst}。`
+    return `账面处下风，输得不冤。差得最多的是${worst}。`
   }
   // within a point of each other — the match was decided on the night
   return rec.won
-    ? `两边账面基本持平（差 ${total.toFixed(1)}），你们拿下了。${n.made > n.missed ? '关键回合是你选对的。' : '这种局赢在临场。'}`
-    : `两边账面基本持平（差 ${total.toFixed(1)}），输在临场。${n.missed > n.made ? '你有几次决定没打成。' : '不是数值的问题。'}`
+    ? `两边账面基本持平，你们拿下了。${n.made > n.missed ? '关键回合是你选对的。' : '这种局赢在临场。'}`
+    : `两边账面基本持平，输在临场。${n.missed > n.made ? '你有几次决定没打成。' : '不是账面的问题。'}`
 }
 
 /**

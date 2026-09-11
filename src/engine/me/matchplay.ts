@@ -7,6 +7,7 @@ import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine } from '../types'
 import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
 import { cerMatchEdge } from './ceremony'
+import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
 
 const clamp01 = (v: number) => Math.max(0.03, Math.min(0.97, v))
 import type { NodeCtx, NodeDef } from './nodes'
@@ -178,7 +179,8 @@ export class MeMatch {
     if (this.pending) return 'node'
     const m = this.sim.current
     if (!m) {
-      if (!this.sim.nextMap()) { this.finishInternal(); return 'done' }
+      // playing through an injury, or a cup entered hurt: on the five, as I actually am (me/hurtplay.ts)
+      if (!hurtMap(this.state, this.fixture.id, !!this.friendly, () => this.sim.nextMap())) { this.finishInternal(); return 'done' }
       this.perMap = 0
       this.lastNodeRound = -99
       if (!this.mapStarted) {
@@ -334,8 +336,10 @@ export class MeMatch {
     const notes: string[] = []
     const opp = state.teams[this.mineIsA ? f.teamB : f.teamA]
     if (!this.friendly) {
-      commitFixture(state, f, result, notes)
-      me.weekNotes.push(...notes)
+      // booked with me counted as having played, not as a short club's injured man (me/hurtplay.ts)
+      hurtBook(state, f.id, () => commitFixture(state, f, result, notes))
+      // a lay-off with a diagnosis and a count of days is said in words when the week opens instead
+      me.weekNotes.push(...notes.filter((n) => !n.includes('⚕')))
     }
 
     const comp = state.comps[f.comp]
@@ -381,6 +385,8 @@ export class MeMatch {
       this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
       pushLog(state, 'cup', `${compCn(rec.comp)} ${rec.label} vs ${rec.opp} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
+      // a cup played hurt: what it did, after the result (me/hurtplay.ts)
+      injuryAfterMatch(state, rec)
       me.pendingFixture = undefined
       return
     }
@@ -412,6 +418,8 @@ export class MeMatch {
         : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— 你在替补席看完了这场。`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)
+      // played through an injury, or stepped in for an injured team-mate (me/hurtplay.ts)
+      injuryAfterMatch(state, rec)
     }
     me.pendingFixture = undefined
     refreshMyRounds(state)

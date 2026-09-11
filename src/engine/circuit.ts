@@ -4,8 +4,9 @@ import partneredRaw from '../data/routes_partnered.json'
 import { aheadEventsOf, oqPoolOf } from './ahead'
 import type { Plan, Seat } from './ahead'
 import { regionIn, stageAtIn } from './era'
-import { bookLeague, sceneFor, successorsOf, syncEvent } from './timeline'
+import { bookLeague, inVctLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
+import { realName } from './names'
 import type { Competition, Fixture, GameState, Region, StageKey, Team, VctSeason } from './types'
 
 /**
@@ -100,9 +101,20 @@ export interface CEvent {
 
 const CIRCUIT = raw as unknown as Record<string, CEvent[]>
 
+// A score of 13 or more is one map's rounds, not a series: scripts/build_circuit.py gave such a match
+// its unit's default best-of, so 1440 single maps in 56 events — DACH Evolution 2026's Weekly cups
+// (vlr.gg/601764: Best of 1, Bind 13–11) among them — were played as Bo3. Each is the one map it was.
+for (const evs of Object.values(CIRCUIT)) for (const e of evs) for (const u of e.units) for (const n of u.nodes ?? []) {
+  if (n.bo !== 1 && Math.max(n.score[0] ?? 0, n.score[1] ?? 0) >= 13) n.bo = 1
+}
+
 const BY_ID = new Map<string, CEvent>()
 const YEAR_OF = new Map<string, number>()
-for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) { BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y)) }
+for (const [y, evs] of Object.entries(CIRCUIT)) for (const e of evs) {
+  BY_ID.set(e.id, e); YEAR_OF.set(e.id, Number(y))
+  // vlr names every side by its name of today; an event names each by the one it had when the event began (engine/names.ts)
+  for (const v of Object.keys(e.names ?? {})) e.names[v] = realName(v, Number(y), e.start ?? 0)?.name ?? e.names[v]
+}
 
 /* ------------------------------------------------------------------ */
 /*  the years nobody has played yet                                    */
@@ -1063,6 +1075,8 @@ function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: stri
   // a player with no club moves nothing, in any year: the world is his only once he is in it
   if (!team || !club) return false
   if (state.year < 2023) return inScope(ev, team.region)
+  // a VCT league club is in no Challengers-tier event's reach: it plays one only where history put it (leagueOut)
+  if (inVctLeague(state, team) && tierOf(ev) === 2) return false
   if (ev.scene) return sceneFor(state, team) === ev.scene
   if (isLeagueEvent(state.year, ev)) return false
   return inScope(ev, team.region)
@@ -1083,6 +1097,24 @@ function takeSeat(state: GameState, ev: CEvent, seeds: (string | null)[]): (stri
   return out
 }
 
+/**
+ * From 2023 a Challengers-tier event's places are not a VCT league club's, except where history gave
+ * one to a league club: China's partners played the Evolution Series, Eternal Fire the 2026 Turkey
+ * Kickoff. A league club that a route, a feeder's placings or a projected field put anywhere else hands
+ * the place back to the side history had there, or leaves it to fillGaps and a club outside the
+ * leagues — FUT had taken a Turkish club's place in Turkey's Stage 2, three Chinese partners places at
+ * China's 2026 Ascension.
+ */
+function leagueOut(state: GameState, ev: CEvent, seeds: (string | null)[]): (string | null)[] {
+  if (state.year < 2023 || ev.plan || tierOf(ev) !== 2) return seeds
+  const year = YEAR_OF.get(ev.projected?.base ?? ev.id) ?? state.year
+  return seeds.map((t, i) => {
+    if (!t || !inVctLeague(state, state.teams[t]) || bookLeague(year, ev.seeds[i] ?? '')) return t
+    const real = teamOf(state, ev, ev.seeds[i])
+    return real && !seeds.includes(real) && !inVctLeague(state, state.teams[real]) ? real : null
+  })
+}
+
 function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[]): void {
   const c = comp.circuit!
   // out of the player's reach, each side takes the field with the people it really brought
@@ -1091,7 +1123,7 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
     state.news.push({ day: state.day, kind: 'club', text: `🆕 ${founded.slice(0, 6).join('、')}${founded.length > 6 ? ` 等 ${founded.length} 家` : ''} 以新俱乐部的身份登场（${ev.cn}）。` })
   }
   const { seeds, swaps } = seedsFor(state, ev)
-  c.seeds = takeSeat(state, ev, seeds)
+  c.seeds = leagueOut(state, ev, takeSeat(state, ev, seeds))
   const club = playerClub(state)
   const mine = !!club && c.seeds.includes(club)
   c.why = mine ? 'mine' : isHome(state, ev, state.teams[state.myTeam], club) ? 'home' : swaps.length ? 'ripple' : ev.projected ? 'ahead' : undefined
@@ -1144,7 +1176,9 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const scope = scopeOf(ev)
   const taken = new Set(c.seeds.filter((x): x is string => !!x))
   const pool = Object.values(state.teams)
-    .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && (!scope || scope.includes(t.region)))
+    .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && (!scope || scope.includes(t.region))
+      // no VCT league club stands in for a Challengers-tier side (leagueOut)
+      && !(comp.tier === 2 && inVctLeague(state, t)))
     .sort((x, y) => (ev.projected && ev.scene ? Number(y.scene === ev.scene) - Number(x.scene === ev.scene) : 0)
       || Number(y.tier === comp.tier) - Number(x.tier === comp.tier) || y.rating - x.rating)
   const next = (): string | null => {

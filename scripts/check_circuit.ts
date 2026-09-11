@@ -41,6 +41,8 @@ import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
 import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
 import { MAX_NEW_PARTNERS } from '../src/engine/leagues'
+import { historyNames } from '../src/engine/names'
+import { bookClubsAt } from '../src/engine/timeline'
 import type { Competition, GameState, Region } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
@@ -239,11 +241,15 @@ function bystander(): void {
   // the months in which a club went quiet, per year: history let them go one at a time
   const foldMonths = new Map<number, Set<number>>()
   let quietNow = Object.values(state.teams).filter((t) => t.dormant).length
+  // DRX by date: vlr has every year of it as KIWOOM DRX, a name it took on 2026-03-19 (engine/names.ts)
+  const drx: [number, number, string][] = []
   const day = () => {
     advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
     const q = Object.values(state.teams).filter((t) => t.dormant).length
     if (q > quietNow && state.day > 3) foldMonths.set(state.year, (foldMonths.get(state.year) ?? new Set<number>()).add(Math.floor(state.day / 30)))
     quietNow = q
+    const t = state.teams.V21T8185
+    if (t && (state.day === 150 || (state.year === 2026 && (state.day === 76 || state.day === 77)))) drx.push([state.year, state.day, t.name])
   }
   let was = snap(state)
   const turns: Turn[] = []
@@ -277,6 +283,10 @@ function bystander(): void {
       + ` · ${((Date.now() - y0) / 1000).toFixed(1)}s`)
   }
   continuity(turns)
+  const drxWant = (y: number, d: number) => (y < 2026 || (y === 2026 && d < 77) ? 'DRX' : 'KIWOOM DRX')
+  const drxBad = drx.filter(([y, d, n]) => n !== drxWant(y, d))
+  console.log(`  DRX 的队名：${drx.map(([y, d, n]) => `${y} 第 ${d} 天 ${n}`).join(' · ')}`)
+  if (drx.length < 6 || drxBad.length) fail(`队名：DRX 2022–2025 应该叫 DRX，2026-03-19 起叫 KIWOOM DRX，实际 ${drxBad.map(([y, d, n]) => `${y} 第 ${d} 天 ${n}`).join('、') || `只看到 ${drx.length} 次`}`)
   console.log('  俱乐部在哪几个月陆续解散：' + [2022, 2023, 2024, 2025].map((y) => `${y} 年 ${foldMonths.get(y)?.size ?? 0} 个月`).join(' · '))
   for (const y of [2023, 2024]) {
     if ((foldMonths.get(y)?.size ?? 0) < 4) fail(`连贯：${y} 年真实历史里不再参赛的俱乐部应该分散在一年里陆续解散，实际只在 ${foldMonths.get(y)?.size ?? 0} 个月里有`)
@@ -294,7 +304,7 @@ function bystander(): void {
  */
 function lineage(): void {
   for (const [label, club, successor, year, want] of [
-    ['Vision Strikers → DRX', 'V21T198', 'V21T8185', 2022, 'KIWOOM DRX'],
+    ['Vision Strikers → DRX', 'V21T198', 'V21T8185', 2022, 'DRX'],
     ['DAMWON → Dplus', 'V21T2542', 'V21T11348', 2023, 'Dplus Esports'],
   ] as [string, string, string, number, string][]) {
     const state = createNewGame(club, 'Probe', seed, undefined, 2021)
@@ -323,6 +333,20 @@ function lineage(): void {
     const other = state.teams[successor]
     if (other && !other.dormant && other.roster.length) fail(`传承 ${label}：${other.name} 还作为另一家俱乐部在打`)
     if (inIt.length < seeded.length) fail(`传承 ${label}：${seeded.length - inIt.length} 场本该由你承接的赛事里没有你`)
+    if (club === 'V21T198' && t) {
+      // the club carried on as DRX takes KIWOOM DRX with the naming deal, not before (engine/names.ts)
+      const notes: string[] = []
+      state.year = 2026
+      state.day = 76
+      historyNames(state, notes)
+      const before = `${t.name}（${t.tag}）`
+      state.day = 77
+      historyNames(state, notes)
+      console.log(`  队名：2026-03-18 叫 ${before}，2026-03-19 叫 ${t.name}（${t.tag}）${notes.length ? ` · ${notes[0]}` : ''}`)
+      if (before !== 'DRX（DRX）' || t.name !== 'KIWOOM DRX' || t.tag !== 'KRX' || !notes.length) {
+        fail(`传承 ${label}：2026-03-18 应该叫 DRX（DRX），03-19 起叫 KIWOOM DRX（KRX）并通知你，实际 ${before} → ${t.name}（${t.tag}）`)
+      }
+    }
   }
 }
 
@@ -372,6 +396,7 @@ function entry2026(): void {
   if (!Object.keys(state.teams).some((id) => id.startsWith('V21T'))) fail('2026 入口：世界应该是时间线上的 2026，而不是另一套世界')
   if (clubs < 180) fail(`2026 入口：真实 2026 年开季的俱乐部有两百多家，这里只有 ${clubs} 家`)
   if (books.length < 50) fail(`2026 入口：日历上只有 ${books.length} 项赛事`)
+  const drxOpen = state.teams.V21T8185?.name
   let guard = 0
   try {
     while (state.year === 2026 && state.day < 340 && !state.gameOver && guard++ < 60) autoWeek(state)
@@ -382,6 +407,16 @@ function entry2026(): void {
   season(state, '2026 入口', 2026, state.me?.phase !== 'pro')
   const sim = Object.values(state.comps).filter((c) => c.circuit?.mode === 'sim' && c.circuit.why !== 'ahead' && c.circuit.why !== 'mine')
   if (state.me?.phase !== 'pro' && sim.length) fail(`2026 入口：没有俱乐部的人却让 ${sim.length} 场真实赛事被模拟：${sim.slice(0, 4).map((c) => c.name).join('、')}`)
+  // DRX until the naming deal of 2026-03-19, KIWOOM DRX from it: in this world, the roster book and every real event (engine/names.ts)
+  const drxName = (y: number, d: number) => (y < 2026 || d < 77 ? 'DRX' : 'KIWOOM DRX')
+  const drxNow = state.teams.V21T8185?.name
+  const drxWrong = [
+    ...[2022, 2023, 2024, 2025, 2026].map((y) => bookClubsAt(y).find((t) => t.id === 'V21T8185')).filter((t) => !!t && t.name !== 'DRX').map((t) => `名册书开季 ${t!.name}`),
+    ...[2022, 2023, 2024, 2025, 2026].flatMap((y) => eventsOf(y).filter((e) => !e.projected && e.names['8185'] && e.names['8185'] !== drxName(y, e.start ?? 0)).map((e) => `${e.name} ${e.names['8185']}`)),
+  ]
+  console.log(`  DRX：开局叫 ${drxOpen}，第 ${state.day} 天叫 ${drxNow}；2022–2026 名册书和真实赛事里叫错的 ${drxWrong.length} 处`)
+  if (drxOpen !== 'DRX' || drxNow !== 'KIWOOM DRX') fail(`2026 入口：DRX 开局应该叫 DRX，2026-03-19 起叫 KIWOOM DRX，实际 ${drxOpen} → ${drxNow}`)
+  for (const x of drxWrong.slice(0, 5)) fail(`队名：${x}——DRX 2026-03-19 以前叫 DRX，之后叫 KIWOOM DRX`)
   champions2026(state)
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
@@ -488,5 +523,5 @@ if (!only || only === 'quiet') quiet()
 if (!only || only === 'entry2026') entry2026()
 if (!only || only === 'ahead') ahead()
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；中国的空窗期按月推进。')
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；队名按真实改名的日期换（DRX 2026-03-19 才叫 KIWOOM DRX）；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

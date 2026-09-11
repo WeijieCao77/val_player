@@ -1,0 +1,32 @@
+/* ---- 导览（ui/me/Tour.tsx）：点亮一处，其余压暗，说明卡贴在旁边 ---- */
+
+/* catches every click under the tour; dims the page itself only when nothing is lit */
+.mt-veil { position: fixed; inset: 0; z-index: 94; }
+.mt-veil.dim { background: var(--scrim-soft); }
+/* the ring: a clear box whose shadow is the dimmed page */
+.mt-hole {
+  position: fixed; z-index: 95; pointer-events: none; border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 200vmax var(--scrim-soft);
+  transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease;
+}
+.mt-card {
+  position: fixed; z-index: 97; box-sizing: border-box;
+  background: var(--panel); border: 1px solid var(--accent-line); border-radius: var(--radius);
+  box-shadow: var(--shadow-card); padding: 10px 14px 12px;
+}
+.mt-head { display: flex; align-items: center; gap: 8px; }
+.mt-head button { margin-left: auto; }
+.mt-count { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; }
+.mt-card h3 { margin: 2px 0 4px; font-size: 15px; font-weight: 700; }
+.mt-card p { margin: 0 0 12px; font-size: var(--t-small); line-height: 1.7; }
+.mt-foot { display: flex; align-items: center; gap: 6px; }
+.mt-foot .mt-off { margin-right: auto; color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .mt-hole { transition: none; } }
+
+/* ---- 帮助（ui/me/HelpScreen.tsx） ---- */
+.help-tours { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; align-items: start; }
+@media (max-width: 900px) { .help-grid { grid-template-columns: minmax(0, 1fr); } }
+.help-list { margin: 0; padding-left: 1.1em; }
+.help-list li { font-size: var(--t-small); line-height: 1.7; margin: 0 0 4px; }
+.help-list li:last-child { margin-bottom: 0; }

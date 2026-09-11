@@ -6,7 +6,7 @@ export default function LogScreen() {
   const me = game.me!
   const rows = me.log.slice().reverse()
   return (
-    <Panel title={`生涯日志 · ${rows.length} 条`}>
+    <Panel title="生涯日志">
       <ul className="diary">
         {rows.map((l, i) => (
           <li key={i} className={l.kind}>

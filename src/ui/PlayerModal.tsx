@@ -21,6 +21,7 @@ import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../engine/types'
 import { agentCn } from '../engine/content'
 import type { Stats } from '../engine/types'
 import { StarTitleTag } from './me/Rivals'
+import Face from './me/Face'
 
 export default function PlayerModal(
   { playerId, onClose, startRenewing = false }:
@@ -104,27 +105,33 @@ export default function PlayerModal(
     >
       <div className="grid c2" style={{ marginBottom: 14 }}>
         <div>
-          {(p.realName || p.nat) && (
-            <div className="small muted" style={{ marginBottom: 8 }}>
-              {p.realName}
-              {p.realName && p.nat ? ' · ' : ''}
-              {p.nat ? natName(p.nat) : ''}
-            </div>
-          )}
+          <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+            <Face id={p.id} name={p.ign} size={56} />
+            {(p.realName || p.nat) && (
+              <div className="small muted">
+                {p.realName}
+                {p.realName && p.nat ? ' · ' : ''}
+                {p.nat ? natName(p.nat) : ''}
+              </div>
+            )}
+          </div>
           <div className="row wrap" style={{ gap: 7, marginBottom: 12 }}>
             <span className="tag">{team?.name ?? '自由人'}</span>
             <span className="tag">{REGION_CN[p.region]}</span>
             <span className="tag" title={p.birth ? `生日 ${p.birth}` : '未收录生日，年龄为推算值'}>
               {p.age} 岁{p.ageEstimated ? '（推算）' : ''}
             </span>
-            <span className="tag">潜力 <Potential p={p} game={game} /></span>
+            {/* potential is the manager's scouting read; a career player has no scouts */}
+            {!game.me && <span className="tag">潜力 <Potential p={p} game={game} /></span>}
+            {/* a player career names no diagnosis for a real person's body: the lay-off, nothing more */}
             {p.injuredUntil > game.day && (
-              <span className="tag warn">⚕ {p.injuryNote}（{p.injuredUntil - game.day} 天）</span>
+              <span className="tag warn">⚕ {game.me ? '伤停' : `${p.injuryNote}（${p.injuredUntil - game.day} 天）`}</span>
             )}
             {p.listed && <span className="tag warn">已挂牌</span>}
             {p.retiring && <span className="tag warn">📢 本赛季后退役</span>}
           </div>
-          {p.retiring && (
+          {/* the retirement talk is a manager's conversation; in the career the tag above is the news */}
+          {p.retiring && !game.me && (
             <div className="panel own" style={{ marginBottom: 12 }}>
               <div className="panel-body">
                 <p className="small" style={{ margin: 0 }}>
@@ -202,7 +209,7 @@ export default function PlayerModal(
               ))}
             </div>
           )}
-          {p.vlr?.rating != null && (
+          {p.vlr?.rating != null && !game.me && (
             <div className="tiny faint center" style={{ lineHeight: 1.7 }}>
               属性来源 · vlr.gg 2026 赛季真实数据<br />
               Rating {p.vlr.rating.toFixed(2)}
@@ -227,12 +234,16 @@ export default function PlayerModal(
               <span className="k">剩余年限</span>
               <span className="v sm">{p.contractYears > 0 ? `${p.contractYears} 年` : '已到期'}</span>
             </div>
-            <div className="stat"><span className="k">身价</span><span className="v sm">{money(p.value)}</span></div>
+            {/* what he is worth on the market and what keeps him at the club is the manager's book, not a teammate's */}
+            {!game.me && <div className="stat"><span className="k">身价</span><span className="v sm">{money(p.value)}</span></div>}
+            {!game.me && (
             <div className="stat">
               <span className="k">{mine ? '外队报价参考' : '要价'}</span>
               <span className="v sm">{p.teamId ? money(askingPrice(p)) : '免签'}</span>
             </div>
+            )}
           </div>
+          {!game.me && (
           <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
             <span className="tag">忠诚 {p.loyalty}</span>
             <span className="tag">野心 {p.ambition}</span>
@@ -251,7 +262,8 @@ export default function PlayerModal(
               <span className="tag warn">不满 {Math.round(p.grievance)}</span>
             )}
           </div>
-          {renewing && mine && (
+          )}
+          {renewing && mine && !game.me && (
             <div className="panel own" style={{ marginTop: 14 }}>
               <div className="panel-head"><h2>续约谈判</h2></div>
               <div className="panel-body">
@@ -267,7 +279,8 @@ export default function PlayerModal(
               </div>
             </div>
           )}
-          {mine && (
+          {/* 续约、挂牌、任命指挥 are the manager's calls; in the career my club is not mine to run */}
+          {mine && !game.me && (
             <div className="row wrap" data-tut="player-actions" style={{ gap: 8, marginTop: 14 }}>
               <button className="primary sm" onClick={() => setRenewing(true)}>续约 / 谈条件</button>
               <button className="sm" onClick={toggleList}>

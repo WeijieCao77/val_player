@@ -161,6 +161,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 .advance-me { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 0 4px; }
 .advance-me .hint { color: var(--muted); font-size: var(--t-small); }
+/* the longer runs, one control beside the button */
+.advance-me select.advance-far { min-height: 34px; max-width: 100%; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: var(--t-small); cursor: pointer; }
+.pinbar .sm.ghost { margin-left: auto; }
 /* a match week, a day to a press: the week's seven days and what is on each */
 .week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 14px 0 0; }
 @media (max-width: 560px) { .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -224,6 +227,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .club-list button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding: 8px 10px; }
 .club-list button.on { border-color: var(--accent); background: var(--accent-wash); }
 .club-list button .r { margin-left: auto; color: var(--muted); font-size: var(--t-tiny); }
+/* nobody at that tier this year: the sentence takes the whole row, not one narrow cell */
+.club-list .empty { grid-column: 1 / -1; }
 
 /* ---- new career: start points and origins ---- */
 .start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -333,6 +338,20 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .cer-tier.silver { color: var(--muted); }
 .cer-tier.bronze { color: var(--neg-ink); }
 
+/* 后加的五个夜晚（engine/me/nights.ts）：颁奖夜的致辞、表演赛的五连靶、发布会和退役的选择 */
+.cer-story { white-space: pre-line; }
+.cer-line { text-align: center; font-size: 15px; line-height: 1.7; margin: 0 0 12px; color: var(--faint); }
+.cer-line span.said { color: var(--text); }
+.cer-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.cer-chip { min-height: 44px; padding: 8px 14px; font-size: 15px; touch-action: manipulation; }
+.cer-chip.used { opacity: .3; }
+.cer-chip.bad { border-color: var(--neg-ink); color: var(--neg-ink); }
+.cer-ace { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; padding: 0;
+  border-radius: 50%; border: 2px solid var(--accent); background: rgba(255, 70, 85, .16); cursor: crosshair; }
+.cer-ace::after { content: ''; position: absolute; inset: 15px; border-radius: 50%; background: var(--accent); }
+.cer-ace.hit { visibility: hidden; }
+.cer-tier.pick { font-size: 20px; letter-spacing: 1px; color: var(--text); }
+
 /* 话语权（engine/me/clout.ts）：一个读数和两个很难用的动作 */
 .clout-parts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--t-tiny); color: var(--muted); }
 .clout-parts b { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -357,3 +376,54 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .bar-row .mono.bad { color: var(--loss); }
 /* 试训选项：上面一行是「你在赌什么」，下面一行才是数字 */
 .node-opt button .m.mech { color: var(--faint); }
+
+/* ---- 手机：生涯的页面都是行内写死的两栏（.app.career 只在生涯里有，经理模式不受影响） ----
+   375 宽的时候两栏各剩一百二十几像素，一句话三个字一折行；经济页的按钮直接出了屏幕。 */
+@media (max-width: 720px) {
+  .career { --t-label: 11px; }
+  .career .main .grid[style] { grid-template-columns: minmax(0, 1fr) !important; }
+  .tile b { white-space: normal; font-size: 16px; line-height: 1.25; }
+  .tile b em { display: block; margin: 2px 0 0; }
+  .hero-row, .hero-stage { gap: 4px 10px; }
+  .hero-who, .hero-club, .hero-stage { flex-wrap: wrap; min-width: 0; }
+  .hero-club { margin-left: 0; }
+  .hero-stage b { font-size: 18px; }
+}
+/* 商店一行：名字、档位、型号，按钮放不下就折到下一行，不出屏幕 */
+.shop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 0; }
+.shop-row .nm { min-width: 56px; }
+.shop-row .md { flex: 1 1 8em; min-width: 0; }
+.shop-row button.sm { white-space: normal; text-align: left; margin-left: auto; }
+.clout-row > span:first-child { min-width: 0; }
+.clout-row button.sm { flex: none; }
+/* 对位挑战的八项对照，比赛里两边的五个人：手机上改成两列 / 一列 */
+.duel-compare { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mp-sides { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mp-five .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .duel-compare { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mp-sides { grid-template-columns: minmax(0, 1fr); }
+}
+/* 生涯里的「为什么是这个结果」：只说哪几项占优、哪几项吃亏 */
+.why-me { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-small); margin: 4px 0 0; }
+/* 手机上的共用组件：选手卡标题里的位置标签一个字一行、赛后记录的比分折成两行。经理模式也用这些组件，所以只在 .career 里改 */
+@media (max-width: 720px) {
+  .career .role { white-space: nowrap; }
+  .career .modal-head h3 { min-width: 0; }
+  .career .modal-head h3 .row { flex-wrap: wrap; row-gap: 4px; }
+  .career .mapline { flex-wrap: wrap; row-gap: 4px; }
+  .career .mapline .mono { white-space: nowrap; width: auto !important; }
+}
+/* 平板宽度（768 左右）「我的」还是两栏，一栏只剩两百五十像素：八项的条被挤成 0，文字压在条上。条留 60px 底，文字按自己的宽度，进度说明让位（它有省略号和 title） */
+@media (min-width: 561px) and (max-width: 1100px) {
+  .career .attr-row { grid-template-columns: 48px minmax(60px, 1fr) auto minmax(0, 104px); gap: 6px; }
+}
+/* 平板上本周是两栏，左栏三百来像素，七天挤成一天四十像素，「vs TYL」「负 0-2」都被截断：同样排四列 */
+@media (max-width: 1100px) {
+  .week-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* 一周七天在手机上排成四列：少一点内边距，「vs NOVA」就不用省略 */
+@media (max-width: 560px) {
+  .week-days { gap: 4px; }
+  .week-day { padding: 5px; }
+}

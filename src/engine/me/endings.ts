@@ -4,21 +4,25 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { leaveClub } from './contract'
 import { WORLD_END } from '../era'
+import { checkAchievements } from './achievements'
+import { retireNight } from './nights'
+import { compClass, isIntlComp } from './compclass'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
-const intl = (s: GameState, re: RegExp) => s.me!.titles.filter((t) => re.test(t.title))
+// by what the event is, not by an English word in its name: on the timeline Masters is 「伦敦大师赛」
+const intl = (s: GameState, kind: 'masters' | 'champions') => s.me!.titles.filter((t) => compClass(t.title) === kind)
 const proSeasons = (s: GameState) => s.me!.seasons.filter((x) => x.tier > 0).length
 
 /** In order: the first that holds is the ending. */
 export const ENDINGS_ME: EndingDef[] = [
   { key: 'breaker', title: '破局者', text: '同一年捧起大师赛和冠军赛。这个赛区的天花板，是你亲手推上去的。',
-    cond: (s) => { const y = new Set(intl(s, /Masters/).filter((t) => t.started).map((t) => t.year)); return intl(s, /Champions/).some((t) => t.started && y.has(t.year)) } },
-  { key: 'dynasty', title: '王朝', text: '两座冠军赛奖杯。以后人们提起这个时代，会先提你的名字。', cond: (s) => intl(s, /Champions/).filter((t) => t.started).length >= 2 },
-  { key: 'world', title: '世界冠军', text: '你站在了那个舞台的最中央。一次就够写进历史。', cond: (s) => intl(s, /Champions/).some((t) => t.started) },
-  { key: 'master', title: '大师', text: '大师赛冠军。离最高处只差一步，但你确实站上去过。', cond: (s) => intl(s, /Masters/).some((t) => t.started) },
+    cond: (s) => { const y = new Set(intl(s, 'masters').filter((t) => t.started).map((t) => t.year)); return intl(s, 'champions').some((t) => t.started && y.has(t.year)) } },
+  { key: 'dynasty', title: '王朝', text: '两座冠军赛奖杯。以后人们提起这个时代，会先提你的名字。', cond: (s) => intl(s, 'champions').filter((t) => t.started).length >= 2 },
+  { key: 'world', title: '世界冠军', text: '你站在了那个舞台的最中央。一次就够写进历史。', cond: (s) => intl(s, 'champions').some((t) => t.started) },
+  { key: 'master', title: '大师', text: '大师赛冠军。离最高处只差一步，但你确实站上去过。', cond: (s) => intl(s, 'masters').some((t) => t.started) },
   { key: 'uncrowned', title: '无冕之王', text: '打进过冠军赛决赛，输了。那一晚很多人记得你，没有奖杯记得你。', cond: (s) => !!s.me!.flags.champFinalLost },
-  { key: 'regional', title: '赛区功勋', text: '三个以上赛区冠军。国际赛没有站上顶点，但这个赛区的每个人都认识你。', cond: (s) => s.me!.titles.filter((t) => !/Masters|Champions/.test(t.title) && t.started).length >= 3 },
+  { key: 'regional', title: '赛区功勋', text: '三个以上赛区冠军。国际赛没有站上顶点，但这个赛区的每个人都认识你。', cond: (s) => s.me!.titles.filter((t) => !isIntlComp(t.title) && t.started).length >= 3 },
   { key: 'ring', title: '板凳上的冠军', text: '你的名字在冠军名单上，你的位置在替补席。这枚戒指是真的，也是别人的。', cond: (s) => s.me!.titles.length > 0 && !s.me!.titles.some((t) => t.started) },
   { key: 'oneclub', title: '一队终老', text: '六个赛季，一家俱乐部。这在这个行业里比冠军还少见。', cond: (s) => s.me!.tenure >= 6 },
   { key: 'evergreen', title: '常青树', text: '八个赛季。天赋比你高的人来了又走，你还在名单上。', cond: (s) => proSeasons(s) >= 8 },
@@ -51,6 +55,10 @@ export function retire(state: GameState, why: string): void {
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)
+  // no week settles after this one: what the last day earned is counted now
+  checkAchievements(state)
+  // the night of it goes on screen before the card (me/nights.ts)
+  retireNight(state)
   push(state, { kind: 'ending' })
 }
 

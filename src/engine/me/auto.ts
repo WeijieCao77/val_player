@@ -22,6 +22,8 @@ import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
 import { CEREMONIES, cerSkip } from './ceremony'
 import { compCn } from './compname'
+import { injuryHelpedBy, injuryStatus } from './injury'
+import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
 import { storyPlan } from './storyweek'
 
@@ -84,6 +86,12 @@ export function autoPlan(state: GameState): void {
   const end = () => weekEndFatigue(state, load)
   const spend = (k: keyof typeof ACTION_BY_KEY) => setPlan(state, k, 1) === null
   const rest = ACTION_BY_KEY.rest
+  // hurt: the week goes on rest, which is what heals it (me/injury.ts) — a signed stream minimum aside
+  if (injuryStatus(state)) {
+    if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage) spend('stream')
+    while (me.ap > 0 && spend('rest')) { /* resting */ }
+    return
+  }
   // an hour of k if the week can take it; rest first while that makes the room and still leaves the hour's points
   const want = (k: keyof typeof ACTION_BY_KEY): boolean => {
     const d = ACTION_BY_KEY[k]
@@ -149,6 +157,8 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       // a run already entered is played out — entering it again failed, and skipping it left it hanging
       if (me.pre.cup?.key !== item.id) {
         if (me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup.name}` }
+        // a cup is several matches back to back: not entered on anything serious or anything that can leave a mark
+        if (autoSitsOut(state)) { skipCup(state, item.id!); return `带伤，没报${cup.name}` }
         const why = enterCup(state, item.id!, rng)
         if (why) { skipCup(state, item.id!); return why }
       }
@@ -214,6 +224,8 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       return ''
     }
     case 'ending': pop(state, 'ending'); return ''
+    // hurt on a match day: a cold or tired eyes played through, anything that can leave a mark sat out
+    case 'hurt': return autoHurt(state, item.id!)
   }
   return ''
 }
@@ -246,7 +258,9 @@ export function autoBuy(state: GameState): string[] {
   const p = state.players[me.id]
   const out: string[] = []
   const reserve = 3000
-  if (p.fatigue >= 70 && me.money - 400 >= reserve && !buyRelax(state, 'physio')) out.push('买了理疗')
+  // 理疗 also shortens a lay-off it treats; a short trip, one that is in the head (me/injury.ts)
+  if ((p.fatigue >= 70 || injuryHelpedBy(state, 'physio')) && me.money - 400 >= reserve && !buyRelax(state, 'physio')) out.push('买了理疗')
+  if (injuryHelpedBy(state, 'trip') && me.money - 2500 >= reserve * 2 && !buyRelax(state, 'trip')) out.push('出去散了两天心')
   for (const s of GEAR_SLOTS) {
     if ((me.gear[s.key] ?? 0) >= 1) continue
     if (me.money - 900 < reserve) break

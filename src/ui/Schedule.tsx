@@ -146,7 +146,7 @@ export default function Schedule() {
       } else if (up?.key === ev.key) {
         groups.push({
           key: ev.key, title: `${ev.name} · ${hostCity(game, ev.key)}`, day: up.day,
-          note: `已锁定：${up.how}。对阵要等四个赛区都打完才抽，抽出来会补进这里。`,
+          note: game.me ? `已锁定：${up.how}。对阵待抽签。` : `已锁定：${up.how}。对阵要等四个赛区都打完才抽，抽出来会补进这里。`,
           rows: [{ key: ev.key + ':pending', day: up.day, comp: ev.name, round: up.swiss ? '瑞士轮 第1轮' : '季后赛', a: me, pending: '对手待定' }],
         })
       } else if (game.day <= INTERNATIONAL_START[ev.key] + 30 && game.stage !== 'offseason') {
@@ -185,11 +185,14 @@ export default function Schedule() {
             )
           })}
         </div>
-        <p className="tiny muted" style={{ marginBottom: 0, marginTop: 10 }}>
-          {formatOf(game.year) === 'open'
-            ? '这一年没有联赛：每个赛段是各赛区的开放海选和挑战者赛，打进赛区决赛才去得了大师赛。所有赛事按真实日期排。'
-            : '次级联赛的两个赛段与一级联赛并行进行；Challengers 第二赛段冠军可通过 Ascension 升入 VCT。'}
-        </p>
+        {/* one line for the whole format; a career runs 2021–2034 through formats this sentence does not describe (Ascension ends), so it stays manager-only */}
+        {!game.me && (
+          <p className="tiny muted" style={{ marginBottom: 0, marginTop: 10 }}>
+            {formatOf(game.year) === 'open'
+              ? '这一年没有联赛：每个赛段是各赛区的开放海选和挑战者赛，打进赛区决赛才去得了大师赛。所有赛事按真实日期排。'
+              : '次级联赛的两个赛段与一级联赛并行进行；Challengers 第二赛段冠军可通过 Ascension 升入 VCT。'}
+          </p>
+        )}
       </Panel>
 
       <Panel

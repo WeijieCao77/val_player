@@ -446,7 +446,9 @@ export function weeklyTick(state: GameState, rng: Rng): string[] {
       const grace = p.injuredUntil > 0 && state.day - p.injuredUntil < 14 ? 0.25 : 1
       const risk = (0.001 + load * (0.018 + Math.max(0, p.age - 27) * 0.002)) * grace *
         (isMine ? 2 - skillMod(state.manager, 'medical', 0.008) : 1)
-      if (rng.chance(risk)) {
+      // The career's own player is hurt by me/injury.ts instead, which knows his
+      // 体质 and his week. The roll is still drawn, so nobody else's dice move.
+      if (rng.chance(risk) && p.id !== state.me?.id) {
         const inj = rng.pick(INJURIES)
         const days = rng.int(inj.days[0], inj.days[1])
         p.injuredUntil = state.day + days
@@ -508,7 +510,8 @@ export function applyMatchFatigue(
     const grace = p.injuredUntil > 0 && state.day - p.injuredUntil < 14 ? 0.25 : 1
     const risk = (0.002 + load * 0.026) * (mapsPlayed / 3) * grace *
       (isMine ? 2 - skillMod(state.manager, 'medical', 0.008) : 1)
-    if (!rng.chance(risk)) continue
+    // the career's own player: me/injury.ts (see weeklyTick)
+    if (!rng.chance(risk) || p.id === state.me?.id) continue
     const inj = rng.pick(INJURIES)
     const days = rng.int(inj.days[0], inj.days[1])
     p.injuredUntil = state.day + days

@@ -1,6 +1,7 @@
 import { clamp } from '../rng'
 import type { GameState } from '../types'
 import { traitMul } from './traits'
+import { compClass, isIntlComp } from './compclass'
 
 /** heat leaves a tenth a week; the following only climbs toward what results allow */
 export const HEAT_DECAY = 0.90
@@ -28,9 +29,9 @@ export const fansCn = (fans: number): string => {
 /** What results allow: a ceiling the following creeps toward. */
 export function fanCap(state: GameState): number {
   const me = state.me!
-  const regional = me.titles.filter((t) => !/Masters|Champions/.test(t.title)).length
-  const masters = me.titles.filter((t) => /Masters/.test(t.title)).length
-  const champs = me.titles.filter((t) => /Champions/.test(t.title)).length
+  const regional = me.titles.filter((t) => !isIntlComp(t.title)).length
+  const masters = me.titles.filter((t) => compClass(t.title) === 'masters' || compClass(t.title) === 'lockin').length
+  const champs = me.titles.filter((t) => compClass(t.title) === 'champions').length
   const cups = me.pre.cups.reduce((s, c) => s + (c.won ? 35 : c.reached * 8), 0)
   const starts = me.seasons.reduce((s, x) => s + x.starts, 0) + me.seasonStart.starts
   // titles are the biggest thing here and they keep coming for a decade, so

@@ -6,6 +6,7 @@ import { pop, push } from './pending'
 import { expectOf, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
+import { tryoutNight } from './nights'
 
 export interface TryoutOpt {
   t: string
@@ -114,6 +115,8 @@ export function startTryout(state: GameState, inviteId: string): string | null {
     return null
   }
   me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [] }
+  // the first hour at the base is a night of its own (me/nights.ts), on screen before day one
+  tryoutNight(state)
   push(state, { kind: 'tryout', id: inviteId })
   return null
 }

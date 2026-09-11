@@ -10,11 +10,12 @@ import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
 import { courseMul, gearTrainMul } from './shop'
-import { playRanked } from './prepro'
+import { ladderLabel, playRanked } from './prepro'
 import { streamIncome } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
 import { cerRestMul } from './ceremony'
+import { injuryTrainMul } from './injury'
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -108,7 +109,8 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
   let fatigue = 0
   const rose: (keyof Attrs)[] = []
-  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt) && !rose.includes(k)) rose.push(k) }
+  // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
+  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k)) && !rose.includes(k)) rose.push(k) }
 
   for (const a of ACTIONS) {
     const n = me.plan[a.key] ?? 0
@@ -134,7 +136,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         me.body = clamp(me.body + 0.1 * n, 0, 100)
         let w = 0, l = 0
         for (let i = 0; i < n; i++) { const r = playRanked(state, rng); w += r.wins; l += r.losses }
-        notes.push(`排位 ${w} 胜 ${l} 负，天梯 ${Math.round(me.pre.ladder)}。`)
+        notes.push(`排位 ${w} 胜 ${l} 负，${ladderLabel(me.pre.ladder)}。`)
         questProgress(state, 'ranked', n)
         break
       }
@@ -196,7 +198,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
       aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
       clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
     }
-    const line = `${rose.map((k) => `${cn[k]} ${p.attrs[k]}`).join('、')} —— 练上去了（综合 ${p.overall}）。`
+    const line = `${rose.map((k) => cn[k]).join('、')}练上去了。`
     notes.push(line)
     pushLog(state, 'train', line)
   }

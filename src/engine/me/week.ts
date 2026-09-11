@@ -14,6 +14,7 @@ import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek } fr
 import { weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
+import { hurtBeforeMatch, mateInjuryWeek } from './hurtplay'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
@@ -22,7 +23,7 @@ import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
 import { pushLog } from './log'
 import { push } from './pending'
-import { AP_PRE, cupThisWeek, expireInvites, ladderWeekly, rollInvites } from './prepro'
+import { AP_PRE, cupThisWeek, expireInvites, ladderLabel, ladderWeekly, rollInvites } from './prepro'
 import { offerCup, resumeCup } from './cups'
 import { fanWeek } from './fans'
 import { streamClauseCheck, streamTick } from './stream'
@@ -37,6 +38,7 @@ import { leaveClub } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
+import { compClass } from './compclass'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -61,7 +63,10 @@ export function beginWeek(state: GameState): void {
   if (me.phase === 'pro') {
     // who is on the roster this week — and a word for anyone who is not any more
     const before = [...(state.teams[state.myTeam]?.roster ?? [])]
+    const was = [...(state.teams[state.myTeam]?.starters ?? [])]
     weeklyLineup(state)
+    // a team-mate newly out hurt or back, in one line, and whoever steps in (me/hurtplay.ts)
+    mateInjuryWeek(state, was)
     bondSync(state)
     bondReportDepartures(state, before)
   }
@@ -151,6 +156,8 @@ export const LIVING = 0.3
 function keep(n: string): boolean {
   // the manager's desk: sponsors, gigs, staff, the market board, whom to rest
   if (/董事会|行动力|赞助|商务|联盟|捆绑|报价|问价|教练组|分析师|申请|工作邀请|设施|经理|来谈|轮休|状态正热|状态低迷|新挂牌/.test(n)) return false
+  // a lay-off with a diagnosis and a count of days: the week says it in words instead (me/hurtplay.ts mateInjuryWeek)
+  if (n.includes('⚕')) return false
   return true
 }
 
@@ -343,6 +350,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     const today = r.pendingMine && pro ? r.pendingMine : undefined
     if (today) {
       ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
+      // hurt on a day the coach would start me: play through it or sit it out (me/hurtplay.ts)
+      hurtBeforeMatch(state, today)
     }
     if (me.pending.length) {
       if (today) me.dueFixture = today.id
@@ -419,8 +428,9 @@ function onStageChange(state: GameState, rng: Rng): void {
   bottleneckStage(state)
   if (me.phase !== 'pro') return
   // Champions has just been settled? then whoever lost the final is written down
-  const champs = state.comps['champions']
-  if (champs?.champion && champs.finished?.[1] === state.myTeam && me.startedThisStage > 0) me.flags.champFinalLost = 1
+  // on the timeline Champions is 「2026 全球冠军赛」, not a comp keyed 'champions': the old lookup never found it, so 无冕之王 never came
+  const champs = Object.values(state.comps).find((c) => !!c.champion && compClass(c.name) === 'champions' && c.finished?.[1] === state.myTeam)
+  if (champs && me.startedThisStage > 0) me.flags.champFinalLost = 1
   noteScoutInterest(state, rng)
   // a stage's worth of evidence is enough to say who was carrying whom
   bondCloseStage(state)
@@ -523,7 +533,7 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
     pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1
   } else {
-    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${Math.round(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
+    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
     me.pre.year++
     if (me.phase === 'free') me.freeYears++
   }
@@ -572,7 +582,7 @@ export function clubUpkeep(state: GameState, rng: Rng): void {
     q.contractYears = contractLength(q, rng, team.roster.map((x) => state.players[x]).filter((x): x is Player => !!x))
     q.salary = expectedSalary(q, team.tier)
     q.expiredYear = undefined
-    pushLog(state, 'team', `俱乐部和 ${q.ign}（${q.overall}）续约 ${q.contractYears} 年。`)
+    pushLog(state, 'team', `俱乐部和 ${q.ign} 续约 ${q.contractYears} 年。`)
   }
   let guard = 0
   while (team.roster.length < CLUB_FLOOR && guard++ < 6) {
@@ -590,8 +600,8 @@ export function clubUpkeep(state: GameState, rng: Rng): void {
     target.salary = expectedSalary(target, team.tier)
     target.joinedYear = state.year
     team.roster.push(target.id)
-    const line = `俱乐部签下自由人 ${target.ign}（${target.role} ${target.overall}）补进名单。`
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。` })
+    const line = `俱乐部签下自由人 ${target.ign}（${target.role}）补进名单。`
+    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}。` })
     pushLog(state, 'team', line)
     me.weekNotes.push(line)
   }
@@ -642,7 +652,7 @@ function clubShop(state: GameState, team: Team, rng: Rng): void {
     if (free) {
       const terms = defaultContract(Math.round(expectedSalary(free, team.tier) * rng.range(1.0, 1.15)), contractLength(free, rng, squad))
       if (playerAcceptsTerms(state, free, team, terms, rng).ok && doTransfer(state, free, team.id, 0, terms)) {
-        pushLog(state, 'team', `俱乐部签下自由人 ${free.ign}（${free.role} ${free.overall}）。`)
+        pushLog(state, 'team', `俱乐部签下自由人 ${free.ign}（${free.role}）。`)
         return
       }
     }
@@ -660,7 +670,7 @@ function clubShop(state: GameState, team: Team, rng: Rng): void {
   if (!playerAcceptsTerms(state, target, team, terms, rng).ok) return
   const fromName = state.teams[target.teamId!]?.name ?? '?'
   if (doTransfer(state, target, team.id, fee, terms)) {
-    pushLog(state, 'team', `俱乐部从 ${fromName} 买来 ${target.ign}（${target.role} ${target.overall}），转会费 $${fee.toLocaleString()}。`)
+    pushLog(state, 'team', `俱乐部从 ${fromName} 买来 ${target.ign}（${target.role}），转会费 $${fee.toLocaleString()}。`)
     if ((target.roles ?? [target.role]).includes(state.players[me.id].role)) pushLog(state, 'info', '他打的位置和你一样。')
   }
 }
@@ -674,6 +684,6 @@ export function clubTrim(state: GameState): void {
   const worst = bench.sort((a, b) => a.overall - b.overall)[0]
   if (worst && worst.overall < team.rating - 10) {
     releasePlayer(state, worst)
-    pushLog(state, 'team', `俱乐部放走了 ${worst.ign}（${worst.overall}）。`)
+    pushLog(state, 'team', `俱乐部放走了 ${worst.ign}。`)
   }
 }

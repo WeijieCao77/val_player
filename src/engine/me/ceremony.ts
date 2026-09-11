@@ -5,6 +5,8 @@ import { pushLog } from './log'
 import { push } from './pending'
 import type { CerKind, CerTier, Ceremony } from './types'
 import { compCn } from './compname'
+import { NIGHTS, awardsNight, isNight, nightApply, patchNight, showmatchNight } from './nights'
+import { injuryKey, rehabStory } from './injury'
 
 /**
  * The nights that are not matches.
@@ -34,15 +36,35 @@ import { compCn } from './compname'
 /** How well it went. Skipping, and the autopilot, both land on silver. */
 export const TIER_CN: Record<CerTier, string> = { gold: '金档', silver: '银档', bronze: '铜档' }
 
+/** One option on a night decided by a choice rather than a hand (me/nights.ts). */
+export interface CerPick {
+  key: string
+  label: string
+  sub?: string
+  /** only colours the log line: a choice is not a grade */
+  tier: CerTier
+}
+
 export interface CerDef {
   kind: CerKind
   name: string
   /** which little game it hangs on, if any */
-  game: 'focus' | 'rhythm' | 'react' | 'choice' | 'none'
+  game: 'focus' | 'rhythm' | 'react' | 'choice' | 'none' | 'speech' | 'ace' | 'pick'
   /** the sentence before the game */
   story: (state: GameState, about: string) => string
   /** what it does, by tier */
   blurb: Record<CerTier, string>
+  /** the button into the game, where 「上」 is the wrong word */
+  go?: string
+  /** the button out of the result */
+  done?: string
+  /** the line under 「直接过去」, where 「金档」 is the wrong word */
+  skipNote?: string
+  /** 'pick': the sentence over the options, and the options */
+  ask?: string
+  picks?: (state: GameState, cer: Ceremony) => CerPick[]
+  /** the result's sentence, where three fixed blurbs cannot say it */
+  after?: (state: GameState, cer: Ceremony) => string
 }
 
 export const CEREMONIES: Record<CerKind, CerDef> = {
@@ -87,7 +109,8 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
   },
   rehab: {
     kind: 'rehab', name: '康复训练', game: 'rhythm',
-    story: (_s, about) => `${about}。理疗师给你排了一套节奏训练——不碰鼠标，只做手腕。`,
+    // what the physio has me do depends on what is wrong (me/injury.ts)
+    story: (s, about) => `${about}。${rehabStory(s)}`,
     blurb: {
       gold: '恢复比预期快，少养一周。',
       silver: '按原计划养。',
@@ -99,6 +122,8 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
     story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段开始，每一个赛场都会有人举着你的名字。`,
     blurb: { gold: '', silver: '', bronze: '' },
   },
+  // 年度颁奖夜、表演赛之夜、版本发布会、试训第一天、退役仪式 — me/nights.ts
+  ...NIGHTS,
 }
 
 
@@ -211,6 +236,8 @@ export function cerApply(state: GameState, tier: CerTier, skipped: boolean): voi
   const pop = me.pending.findIndex((x) => x.kind === 'ceremony')
   if (pop >= 0) me.pending.splice(pop, 1)
   if (!kind) return
+  // the last five keep their own books
+  if (isNight(kind)) { nightApply(state, kind, tier, skipped, cer); return }
   const def = CEREMONIES[kind]
   const p = state.players[me.id]
 
@@ -275,9 +302,10 @@ const INTL = new Set(['masters1', 'masters2', 'champions'])
 export function ceremonyTick(state: GameState): void {
   const me = state.me!
   if (me.cer || me.pending.some((x) => x.kind === 'ceremony')) return
-  if (me.phase !== 'pro') return
+  if (me.phase === 'retired') return
   const p = state.players[me.id]
   if (!p) return
+  const pro = me.phase === 'pro'
   me.cerSeen ??= []
   const once = (key: string): boolean => {
     if (me.cerSeen!.includes(key)) return false
@@ -287,7 +315,8 @@ export function ceremonyTick(state: GameState): void {
   }
 
   // 1. hurt, with enough of the lay-off left that a week off it means something
-  if (p.injuredUntil > state.day + 7 && once(`rehab:${p.injuredUntil}`)) {
+  //    keyed on the lay-off, not its last day: rest, 理疗 and playing through all move that day (me/injury.ts)
+  if (pro && p.injuredUntil > state.day + 7 && once(`rehab:${injuryKey(state)}`)) {
     cerStart(state, 'rehab', p.injuryNote ?? '伤病')
     return
   }
@@ -296,12 +325,16 @@ export function ceremonyTick(state: GameState): void {
   //    hang them up if you want」 and stays true from the fifth season on —
   //    reading it as 「this is the last one」 announced a farewell every year.
   //    The engine retires at 33, so 32 is when it is actually true.
-  if (p.age >= 32 && once('farewell')) {
+  if (pro && p.age >= 32 && once('farewell')) {
     cerStart(state, 'farewell', `${state.year} 赛季`)
     return
   }
 
-  // 3. an international my club is in, before its first ball is thrown
+  // 3. the year's first big patch — with a club or without one, everybody plays it
+  if (patchNight(state)) return
+  if (!pro) return
+
+  // 4. an international my club is in, before its first ball is thrown
   for (const comp of Object.values(state.comps)) {
     if (!INTL.has(comp.stage) || comp.champion) continue
     if (!comp.teams.includes(p.teamId ?? '')) continue
@@ -317,10 +350,35 @@ export function ceremonyTick(state: GameState): void {
     }
   }
 
-  // 4. media day, once a stage, and only where there is a stage to talk about
-  if (state.stage !== 'offseason' && once(`media:${state.year}:${state.stage}`)) {
+  // 5. the year's awards night, for a season that put my name on a list; a
+  //    showmatch on the Champions weekend, for a name whose club is not there
+  if (awardsNight(state) || showmatchNight(state)) return
+
+  // 6. media day: a domestic stage my club is about to play in, and not on top
+  //    of the last one. 「Once a stage」 came to six or seven a season — most
+  //    of a year's nights — and the internationals already have 抽签 and 出征.
+  if (mediaDue(state) && once(`media:${state.year}:${state.stage}`)) {
+    me.flags.mediaAt = state.year * 400 + state.day
     cerStart(state, 'media', stageNameIn(state.year, state.stage, onTimeline(state)))
   }
+}
+
+/** the fewest days between two media days — seven weeks */
+export const MEDIA_GAP = 49
+
+function mediaDue(state: GameState): boolean {
+  const me = state.me!
+  const club = state.myTeam
+  // nothing to play yet, or any more
+  if (state.stage === 'preseason' || state.stage === 'offseason') return false
+  // an international my club is in has nights of its own; one it is not in is
+  // only a window on the calendar, and a Challengers club plays straight through it
+  if (INTL.has(state.stage) && Object.values(state.comps).some((c) => c.stage === state.stage && c.teams.includes(club))) return false
+  const soon = state.fixtures.some((f) => !f.played && f.comp !== 'scrim'
+    && (f.teamA === club || f.teamB === club) && f.day >= state.day && f.day <= state.day + 14)
+  if (!soon) return false
+  const last = me.flags.mediaAt
+  return last === undefined || state.year * 400 + state.day - last >= MEDIA_GAP
 }
 
 /** A final I am about to play: worth stopping the clock for. */

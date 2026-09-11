@@ -2,6 +2,7 @@ import { clamp } from '../rng'
 import type { GameState, Role } from '../types'
 import type { NodeDim } from './types'
 import { tiltDrag } from './growth'
+import { injuryHit } from './injury'
 
 /** what a call changes on the round-strength scale (ROUND_SENS is 30) */
 export const NODE_SWING = 4
@@ -122,9 +123,10 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): num
     .map((id) => state.players[id])
     .filter(Boolean)
   let v: number
-  if (opt.dim === 'mental') v = me.mental
+  // hurt: a call made on what the injury gets in the way of is harder (me/injury.ts)
+  if (opt.dim === 'mental') v = me.mental + injuryHit(state, 'mental')
   else {
-    const mine = p.attrs[opt.dim]
+    const mine = p.attrs[opt.dim] + injuryHit(state, opt.dim)
     const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[opt.dim as keyof typeof m.attrs], 0) / mates.length : mine
     v = mine * NODE_MINE + avg * (1 - NODE_MINE)
   }

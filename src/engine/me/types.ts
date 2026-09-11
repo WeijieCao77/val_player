@@ -14,8 +14,9 @@ export type MoneyKind =
   | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
   | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'fee' | 'fine' | 'outother'
 
-/** The nights that are not matches - see me/ceremony.ts. */
+/** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
+  | 'awards' | 'retire' | 'patch' | 'showmatch' | 'tryout'
 export type CerTier = 'gold' | 'silver' | 'bronze'
 
 export interface Ceremony {
@@ -25,7 +26,23 @@ export interface Ceremony {
   tier?: CerTier
   /** the competition, the city, the injury - whatever this night is about */
   about?: string
-  detail?: { tone?: string; score?: number; ms?: number; hits?: number }
+  detail?: { tone?: string; score?: number; ms?: number; hits?: number; pick?: string; stumbles?: number; aces?: number }
+}
+
+/** A category I was read out for at a year's awards night - see me/nights.ts. */
+export interface MeAward {
+  year: number
+  key: 'mvp' | 'rookie' | 'role'
+  name: string
+  /** what it was judged over: a league, or a region's tier in the open era */
+  league: string
+  won: boolean
+  winner: string
+  winnerTeam: string
+  /** everyone read out, me included, best first */
+  nominees: string[]
+  /** my season rating, as it was judged */
+  rating: number
 }
 
 export interface LedgerBook {
@@ -372,8 +389,26 @@ export interface BottleneckState {
   pot: number
 }
 
+/** What can be wrong with me - see me/injury.ts. */
+export type InjuryKind = 'wrist' | 'back' | 'eyes' | 'ill' | 'burnout'
+
+/** The lay-off I am in, as the player layer tracks it; `injuredUntil` on the player stays the engine's clock. */
+export interface MeInjury {
+  kind: InjuryKind
+  /** the day it began, this season: the key a lay-off is said and held under */
+  from: number
+  /** the match I told the coach I would play through */
+  play?: string
+  /** told the coach I sit out until it heals: not asked again */
+  sit?: boolean
+  /** the coach has said he will not play me on it */
+  benched?: boolean
+  /** matches played through it */
+  played: number
+}
+
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding'
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt'
   id?: string
   day: number
 }
@@ -438,6 +473,12 @@ export interface MeState {
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */
   cerMatch?: { fixture: string; nudge: number; node: number; until: number }
+  /** categories I was up for at awards nights; absent in older saves */
+  awards?: MeAward[]
+  /** the lay-off I am in, by kind - see me/injury.ts; absent when healthy and in saves from before it */
+  injury?: MeInjury
+  /** team-mates out hurt when the week last opened, so a lay-off is said when it starts and when it ends */
+  mateHurt?: { club: string; ids: string[] }
   /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
   ledger?: Ledger
   /** competitions whose prize share has already been paid, as `year:compKey` */
@@ -509,6 +550,8 @@ export interface MeState {
   autoNotes: string[]
 
   achievements: string[]
+  /** achievement rewards already paid (by key), how far the unlock card has shown, the 称号 picked — me/achievements.ts; absent in older saves */
+  achState?: { paid: string[]; seen: number; worn?: string }
   titles: { year: number; title: string; started: boolean }[]
   ending?: { key: string; title: string; text: string; year: number }
   retireAsk?: boolean

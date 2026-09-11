@@ -20,10 +20,12 @@ import { retire } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
-import { attrWord, useNumbers } from './words'
+import { useNumbers } from './words'
 import Poster from './Poster'
 import ShareCard from './ShareCard'
 import CeremonyModal from './Ceremony'
+import HurtModal from './HurtModal'
+import { injuryStatus } from '../../engine/me/injury'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
 export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
@@ -40,6 +42,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'folding': return <FoldingModal onDone={onDone} />
     case 'ending': return <EndingModal onDone={onDone} />
     case 'ceremony': return <CeremonyModal onDone={onDone} />
+    case 'hurt': return <HurtModal fixtureId={item.id!} onDone={onDone} />
   }
   return null
 }
@@ -64,7 +67,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
     const r = cup.rounds[run.round]
     return (
       <Modal title={`${cup.name} · ${r.label}`} onClose={() => {}} onBgClose={() => {}}>
-        <p className="small muted" style={{ marginTop: 0 }}>你的车队：{run.mates.map((m) => `${m.ign}（${m.role} ${m.overall}）`).join('、')}，还有你。</p>
+        <p className="small muted" style={{ marginTop: 0 }}>你的车队：{run.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}，还有你。</p>
         {run.results.length > 0 && <p className="small">{run.results.join(' · ')}</p>}
         <p className="small">第 {run.round + 1} 轮，BO{r.bo}。对手一轮比一轮强。</p>
         <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
@@ -80,10 +83,11 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
     <Modal title={cup.name} onClose={() => { skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
       <p className="small" style={{ marginTop: 0 }}>{cup.blurb}</p>
       <p className="small muted">
-        {cup.rounds.length} 轮 · 对手实力 {cup.band[0]}–{cup.band[1]} · 报名费 {cup.fee ? `$${cup.fee}` : '免费'} · 奖金最高 ${cup.prize[cup.prize.length - 1].toLocaleString()}
-        {cup.minFans ? ` · 邀请制（粉丝 ≥ ${cup.minFans}）` : ''}
+        {cup.rounds.length} 轮 · 报名费 {cup.fee ? `$${cup.fee}` : '免费'} · 奖金最高 ${cup.prize[cup.prize.length - 1].toLocaleString()}
+        {cup.minFans ? ` · 邀请制（粉丝过 ${fansCn(cup.minFans)}）` : ''}
       </p>
       <p className="small muted">走得越远，越可能有俱乐部的人记下你的名字。你会抽到四个路人队友。</p>
+      {injuryStatus(game) && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{injuryStatus(game)!.line}。硬打发挥打折扣，伤可能加重。</p>}
       <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
         <button className="primary" onClick={() => {
           const why = enterCup(game, cupKey, cupRng(game, 'enter'))
@@ -113,13 +117,12 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
         <Crest id={team.id} size={40} />
         <div>
           <b>{team.name}</b> <span className="tag">{REGION_CN[team.region]} · {formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : 'Challengers'} · {CLUB_TIER_CN(team)}</span>
-          <div className="tiny muted">实力 {team.rating} · 名单 {team.roster.length} 人 · 他们{via}</div>
+          <div className="tiny muted">他们{via}</div>
         </div>
       </div>
       <p className="small" style={{ margin: '12px 0 4px' }}>
-        他们要的水平：<b>{nums ? Math.round(expect) : attrWord(expect)}</b>。你现在：<b>{nums ? Math.round(skill) : attrWord(skill)}</b>
-        {nums ? `（综合 ${game.players[me.id].overall} + 战术素养 + 天梯）` : '（综合、战术素养和天梯合起来看）'}。
-        {skill >= expect + 8 ? ' 绰绰有余。' : skill >= expect ? ' 够格。' : skill >= expect - 6 ? ' 差一点，四天试训里能补回来。' : ' 差得不少。'}
+        你的水平：<b>{skill >= expect + 8 ? '绰绰有余' : skill >= expect ? '够格' : skill >= expect - 6 ? '差一点，试训里能补回来' : '差得不少'}</b>
+        {nums ? `（他们要 ${Math.round(expect)}，你现在 ${Math.round(skill)}）` : ''}
       </p>
       {/* the most important line on an offer: which game you are signing up for */}
       <p className="small" style={{ margin: '4px 0' }}>接了之后头顶的门：<b>{doorsOf(team.region, game.year)}</b></p>
@@ -130,7 +133,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
           {!hasPlace(game, team) && <span className="warn">（这家俱乐部今年没有联赛席位，签过去可能无赛可打）</span>}
         </p>
       )}
-      <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : '四天：枪法测试、训练赛、复盘会、经理面谈。每天一个选择，成败对称。'} {inv.expires - game.day} 天内答复；回绝的话今年他们不会再来。</p>
+      <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : '四天试训，每天一个选择。'}{inv.expires - game.day} 天内答复；回绝了今年不会再来。</p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>
         <button onClick={() => { declineInvite(game, inv.id); commit(); onDone() }}>回绝</button>
@@ -142,6 +145,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
 // ------------------------------------------------------------------ tryout
 function TryoutModal({ onDone }: { onDone: () => void }) {
   const { game, commit } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
   const t = me.tryout
   const [last, setLast] = useState<string | null>(null)
@@ -160,7 +164,7 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
         </p>
       )}
       {last && <div className="node-line">{last}</div>}
-      <p className="small">目前的评估分：<b>{t.score > 0 ? '+' : ''}{t.score.toFixed(1)}</b>{pen > 0 ? `（第 ${t.step + 1} 天，体质拖累 −${pen.toFixed(1)}）` : ''}</p>
+      <p className="small">目前的印象：<b>{t.score >= 8 ? '不错' : t.score >= 0 ? '还行' : '不太好'}</b>{pen > 0 ? '，连着几天有点累了' : ''}{nums ? `（评估分 ${t.score > 0 ? '+' : ''}${t.score.toFixed(1)}${pen > 0 ? `，体质拖累 −${pen.toFixed(1)}` : ''}）` : ''}</p>
       <div className="node-opt">
         {day.opts.map((o, i) => {
           const v = o.dim === 'mental' ? me.mental : p.attrs[o.dim]
@@ -168,7 +172,7 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
           return (
             <button key={i} onClick={() => {
               const e = tryoutChoose(game, i)
-              setLast(`${e.pick} —— ${e.ok ? '成了' : '没成'}（${e.dim} ${e.p}%）`)
+              setLast(`${e.pick} —— ${e.ok ? '成了' : '没成'}`)
               commit()
               if (!game.me!.tryout) onDone()
             }}>
@@ -176,14 +180,13 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
               {/* the bet, in words — a choice between three attribute names
                   is a dice roll with extra steps */}
               <span className="m">{o.why}</span>
-              <span className="m mech">看{DIM_CN[o.dim]} · 成功率 {chance}% · {o.risk >= 1.1 ? '高风险高回报' : o.risk >= 0.7 ? '中等' : '稳健'}{i === day.rec ? ' · 稳妥的选法' : ''}</span>
+              <span className="m mech">看{DIM_CN[o.dim]}{nums ? ` · 成功率 ${chance}%` : ''} · {o.risk >= 1.1 ? '高风险高回报' : o.risk >= 0.7 ? '中等' : '稳健'}{i === day.rec ? ' · 稳妥的选法' : ''}</span>
             </button>
           )
         })}
       </div>
       <p className="tiny faint" style={{ marginBottom: 0 }}>
-        评级 = 你的水平 + 这几天的分 − 他们的要求：≥16 A+ / ≥8 A / ≥0 B / ≥−9 C / D。C 以下一级俱乐部不签。
-        连着几天下来会累，<b>体质就是在这种时候才看得出来</b>。
+        C 以下一级俱乐部不签。连着几天下来会累，<b>体质就是在这种时候才看得出来</b>。
       </p>
     </Modal>
   )
@@ -197,7 +200,6 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
   const d = me.deals.find((x) => x.id === dealId)
   if (!d) { pop(game, 'deal', dealId); onDone(); return null }
   const team = game.teams[d.teamId]
-  const cur = me.phase === 'pro' ? game.teams[game.myTeam] : null
   const title = d.kind === 'renew' ? `${team.name} 的续约` : d.kind === 'transfer' ? `${team.name} 的转会报价` : `${team.name} 的合同`
   const ask = (key: string) => {
     const r = askDeal(game, dealId, key, new Rng(hashStr(`ask:${game.seed}:${game.day}:${key}:${d.asks.length}`)))
@@ -211,18 +213,18 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
         <Crest id={team.id} size={40} />
         <div>
           <b>{team.name}</b> <span className="tag">{team.tier === 1 ? 'VCT' : 'Challengers'}</span>{d.abroad && <span className="tag warn" style={{ marginLeft: 4 }}>外赛区</span>}
-          <div className="tiny muted">实力 {team.rating}{cur ? ` · 你现在的队 ${cur.tag} ${cur.rating}` : ''} · 评级 {d.grade}</div>
+          <div className="tiny muted">评级 {d.grade}</div>
         </div>
       </div>
       <table style={{ margin: '12px 0' }}>
         <tbody>
           <tr><td className="muted">身份</td><td><b>{ROLE_CN[d.role]}</b></td><td className="muted">年限</td><td><b>{d.years} 年</b></td></tr>
           <tr><td className="muted">年薪</td><td><b>{money(d.salary)}</b></td><td className="muted">签字费</td><td><b>{money(d.signBonus)}</b></td></tr>
-          <tr><td className="muted">违约金</td><td><b>{money(d.buyout)}</b></td><td className="muted">底气</td><td><b>{d.leverage}</b></td></tr>
+          <tr><td className="muted">违约金</td><td><b>{money(d.buyout)}</b></td><td /><td /></tr>
         </tbody>
       </table>
       {last && <div className="node-line">{last}</div>}
-      <p className="tiny faint" style={{ margin: '6px 0' }}>还价：每问一次成功率都更低，被拒可能先降条件，第二次被拒就撤回。底气来自评级、粉丝、天梯、履历、经纪人。</p>
+      <p className="tiny faint" style={{ margin: '6px 0' }}>每还一次价都更难，第二次被拒就撤回。</p>
       <div className="row wrap" style={{ gap: 6 }}>
         {ASKS.filter((a) => a.can(d) && !d.asks.includes(a.key)).map((a) => (
           <button key={a.key} className="sm" onClick={() => ask(a.key)} title={a.blurb}>{a.label}</button>
@@ -246,24 +248,24 @@ function StreamModal({ onDone }: { onDone: () => void }) {
   const pick = (c: 'club' | 'rival' | 'none') => { answerStreamOffer(game, c); commit(); onDone() }
   return (
     <Modal title={`直播独家 · ${o.tier} 级`} onClose={() => pick('none')} onBgClose={() => {}}>
-      <p className="small" style={{ marginTop: 0 }}>{o.platform} 想签你的独家。{pro ? `俱乐部的合作平台是 ${o.clubPlatform}。` : ''}粉丝 {fansCn(me.fans)}。</p>
+      <p className="small" style={{ marginTop: 0 }}>{o.platform} 想签你的独家。{pro ? `俱乐部的合作平台是 ${o.clubPlatform}。` : ''}</p>
       <div className="node-opt">
         {pro && (
           <button onClick={() => pick('club')}>
             <span>签俱乐部的合作平台 {o.clubPlatform}</span>
-            <span className="m">签字费 {money(o.sign * 0.8)} · 每场保底 {money(o.guarantee)} · 俱乐部抽 20% · 经理信任 +6</span>
+            <span className="m">签字费 {money(o.sign * 0.8)} · 每场保底 {money(o.guarantee)} · 俱乐部抽 20% · 经理满意</span>
           </button>
         )}
         <button onClick={() => pick('rival')}>
           <span>签 {o.platform}</span>
-          <span className="m">签字费 {money(o.sign * 1.4)} · 每场保底 {money(o.guarantee * 1.15)}{pro ? ' · 俱乐部抽 40% · 经理信任 −12' : ''}</span>
+          <span className="m">签字费 {money(o.sign * 1.4)} · 每场保底 {money(o.guarantee * 1.15)}{pro ? ' · 俱乐部抽 40% · 经理不满' : ''}</span>
         </button>
         <button onClick={() => pick('none')}>
           <span>不签</span>
-          <span className="m">收入随粉丝 × 热度浮动，上限最高，下限也最低</span>
+          <span className="m">收入随粉丝和热度浮动，上限最高，下限也最低</span>
         </button>
       </div>
-      <p className="tiny faint" style={{ marginBottom: 0 }}>签了独家每个赛段至少播 2 次，做不到扣 $2,000；平台推流让粉丝涨得快 25%。</p>
+      <p className="tiny faint" style={{ marginBottom: 0 }}>签了独家每个赛段至少播 2 次，做不到扣 $2,000；平台推流让粉丝涨得更快。</p>
     </Modal>
   )
 }
@@ -301,7 +303,6 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
               </button>
             ))}
           </div>
-          <p className="tiny faint" style={{ marginBottom: 0 }}>每个选项都靠向一条气质轴（硬 / 暖 / 苦 / 秀），同一条轴选够五次，你就成了那样的人。</p>
         </>
       )}
     </Modal>
@@ -336,7 +337,7 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
     <Modal title={`${year} 赛季结束`} onClose={close} onBgClose={() => {}}>
       {s && (
         <p className="small" style={{ marginTop: 0 }}>
-          {s.team}{s.tier ? `（${s.tier === 1 ? 'VCT' : 'Challengers'}）` : ''} · 出场 {s.starts}/{s.matches} · 首发胜 {s.wins} · ACS {s.acs || '—'} · 综合 {s.overallFrom} → {s.overallTo}
+          {s.team}{s.tier ? `（${s.tier === 1 ? 'VCT' : 'Challengers'}）` : ''} · 出场 {s.starts}/{s.matches} · 综合 {s.overallFrom} → {s.overallTo}
           {s.titles.length ? ` · 冠军：${s.titles.join('、')}` : ''}
         </p>
       )}
