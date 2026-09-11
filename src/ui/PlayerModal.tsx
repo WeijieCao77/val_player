@@ -20,6 +20,7 @@ import { askingPrice } from '../engine/transfer'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../engine/types'
 import { agentCn } from '../engine/content'
 import type { Stats } from '../engine/types'
+import { StarTitleTag } from './me/Rivals'
 
 export default function PlayerModal(
   { playerId, onClose, startRenewing = false }:
@@ -90,6 +91,7 @@ export default function PlayerModal(
           <span>{p.ign}</span>
           <Roles p={p} />
           <OvrBadge value={p.overall} />
+          <StarTitleTag id={p.id} />
           {p.isIgl && (
             <span className="tag" title={p.iglSource === 'inferred' ? '真实指挥尚未确认，由系统临时代行'
               : isMain ? '主指挥：在场上就由他喊话' : isDeputy ? '副指挥：主指挥不在场上时由他喊话' : '已确认的队内指挥'}>
