@@ -11,7 +11,7 @@ import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
 import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek } from './bottleneck'
-import { weekReport } from './press'
+import { deskLine, weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
 import { hurtBeforeMatch, mateInjuryWeek } from './hurtplay'
@@ -154,8 +154,8 @@ export const LIVING = 0.3
 
 /** engine digest lines worth showing a player; the manager's paperwork is not */
 function keep(n: string): boolean {
-  // the manager's desk: sponsors, gigs, staff, the market board, whom to rest
-  if (/董事会|行动力|赞助|商务|联盟|捆绑|报价|问价|教练组|分析师|申请|工作邀请|设施|经理|来谈|轮休|状态正热|状态低迷|新挂牌/.test(n)) return false
+  // the manager's desk: bids, raises, expiries, the board, sponsors, staff, the market board (me/press.ts)
+  if (deskLine(n)) return false
   // a lay-off with a diagnosis and a count of days: the week says it in words instead (me/hurtplay.ts mateInjuryWeek)
   if (n.includes('⚕')) return false
   return true
