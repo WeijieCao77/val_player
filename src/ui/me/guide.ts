@@ -127,10 +127,10 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
     },
     {
       screen: WEEK, at: [{ sel: '.pins-fab' }], title: '文字还是数字',
-      body: '属性默认用文字说：职业级、一流、顶级……右下角「数值」换成具体数字，再点一下换回来。',
+      body: '属性默认用文字说：职业级、一流、顶级……右上角「数值」换成具体数字，再点一下换回来。',
     },
     {
-      screen: WEEK, at: [{ sel: '.nav' }], title: '左边的栏目',
+      screen: WEEK, at: [{ sel: '.nav' }], title: '栏目',
       body: pro
         ? '「队伍」看名单和首发之争，「赛程」看你队的比赛，「转会」看合同和报价。「帮助」里有规则说明，也能重看导览。'
         : '「我的」看属性和瓶颈，「转会」看各档俱乐部要什么水平。「帮助」里有规则说明，也能重看导览。',
