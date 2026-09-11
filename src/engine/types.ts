@@ -280,6 +280,12 @@ export interface Player {
   potential: number
   /** Career count of winter potential re-evaluations; absent in old saves means zero. */
   potentialRevisions?: number
+  /**
+   * A ceiling per attribute. Only the career's own player carries them (see
+   * me/bottleneck.ts); his `potential` is re-derived from them. Absent means
+   * the one number is the only ceiling, as for everybody else in the world.
+   */
+  caps?: Record<keyof Attrs, number>
   /** 0-100, short-term performance swing */
   form: number
   morale: number

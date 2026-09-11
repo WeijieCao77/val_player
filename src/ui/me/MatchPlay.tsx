@@ -11,6 +11,7 @@ import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
+import { sayDim, useNumbers } from './words'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -89,6 +90,7 @@ function RoundFeed({ mm }: { mm: MeMatch }) {
  */
 export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => void }) {
   const { game, commit } = useGame()
+  const [nums] = useNumbers()
   const [phase, setPhase] = useState<Phase>('pre')
   const [, bump] = useState(0)
   const rerender = useCallback(() => bump((x) => x + 1), [])
@@ -325,7 +327,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               {rec.nodes.map((n, i) => (
                 <div key={i} className={`node-line ${n.ok ? 'ok' : 'bad'}`}>
                   <span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · 你选了「{n.pick}」
-                  —— {DIM_CN[n.dim]} <b>{n.mine ?? '?'}</b>{n.theirs != null ? <> 对 <b>{n.theirs}</b></> : null}（成功率 {n.p}%）
+                  —— {DIM_CN[n.dim]} <b>{n.mine != null ? sayDim(nums, n.dim, n.mine) : '?'}</b>{n.theirs != null ? <> 对 <b>{sayDim(nums, n.dim, n.theirs)}</b></> : null}（成功率 {n.p}%）
                   —— <b>{n.ok ? '成了' : '没成'}</b>，赢面 {n.before}% → {n.after}%
                   {n.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{n.hl}</div>}
                 </div>
@@ -417,7 +419,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
                 <button key={i} onClick={() => choose(i)}>
                   <span>{o.t}</span>
                   <span className="m">
-                    看{DIM_CN[o.dim]}：你 {ro.mine}{ro.mates != null ? `（队友均 ${ro.mates}）` : ''}{ro.theirs != null ? ` · 对方 ${ro.theirs}` : ''}
+                    看{DIM_CN[o.dim]}：你 {sayDim(nums, o.dim, ro.mine)}{ro.mates != null ? `（队友均 ${sayDim(nums, o.dim, ro.mates)}）` : ''}{ro.theirs != null ? ` · 对方 ${sayDim(nums, o.dim, ro.theirs)}` : ''}
                     　成功率 {pc}% · {o.risk >= 0.85 ? '高风险，摆动大' : o.risk >= 0.6 ? '中等风险' : '稳健'}{i === pend.node.rec ? ' · 教练会选这个' : ''}
                   </span>
                 </button>
@@ -429,7 +431,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <>
           {last && (
             <div className={`node-line ${last.ok ? 'ok' : 'bad'}`}>
-              你选了「{last.pick}」—— {DIM_CN[last.dim]} <b>{last.mine ?? '?'}</b>{last.theirs != null ? <> 对 <b>{last.theirs}</b></> : null}
+              你选了「{last.pick}」—— {DIM_CN[last.dim]} <b>{last.mine != null ? sayDim(nums, last.dim, last.mine) : '?'}</b>{last.theirs != null ? <> 对 <b>{sayDim(nums, last.dim, last.theirs)}</b></> : null}
               —— <b>{last.ok ? '成了' : '没成'}</b>，赢面 {last.before}% → {last.after}%
               {last.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{last.hl}</div>}
             </div>
