@@ -58,7 +58,9 @@ export default function NewCareer({
 
   return (
     <div className="newcareer">
-      <h1>无畏契约 · 选手生涯 <span className="tag t1">demo</span></h1>
+      {/* the cover carries the title; the heading stays for screen readers */}
+      <img className="nc-cover" src="/cover.svg" alt="" width={1200} height={630} />
+      <h1 className="sr-only">无畏契约 · 选手生涯 demo</h1>
       <p className="muted" style={{ marginTop: 0 }}>
         世界里的每一支队、每一个人都是真实的 VCT 选手。你是一个虚构的新人——从哪一年、哪里开始，由你定。
       </p>

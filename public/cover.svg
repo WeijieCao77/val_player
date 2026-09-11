@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1118"/>
+      <stop offset="1" stop-color="#16202c"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ece8e1" stroke-opacity=".05"/>
+    </pattern>
+    <linearGradient id="slab" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff4655"/>
+      <stop offset="1" stop-color="#c52f3c"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#23405a"/>
+      <stop offset="1" stop-color="#0c1822"/>
+    </linearGradient>
+    <radialGradient id="spill" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7fd4ff" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#7fd4ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- the red slab and its slashes -->
+  <polygon points="860,0 1200,0 1200,630 640,630" fill="url(#slab)"/>
+  <polygon points="826,0 840,0 620,630 606,630" fill="#ece8e1" opacity=".85"/>
+  <polygon points="790,0 796,0 576,630 570,630" fill="#ff4655" opacity=".5"/>
+  <text x="1168" y="58" text-anchor="end" font-family="Consolas,'Courier New',monospace" font-size="16" font-weight="700" letter-spacing="3" fill="#0e1620">// ROUND 24 · MATCH POINT</text>
+
+  <!-- HUD corners -->
+  <path d="M36 36h48M36 36v48" fill="none" stroke="#ff4655" stroke-width="5"/>
+  <path d="M1164 594h-48M1164 594v-48" fill="none" stroke="#0e1620" stroke-width="5"/>
+
+  <!-- monitor -->
+  <path d="M958 176L1184 150V392L958 378Z" fill="#05090d"/>
+  <path d="M970 188L1172 165V380L970 367Z" fill="url(#screen)"/>
+  <circle cx="1071" cy="272" r="120" fill="url(#spill)"/>
+  <text x="1071" y="212" text-anchor="middle" font-family="Consolas,'Courier New',monospace" font-size="20" font-weight="700" fill="#ece8e1">12 : 11</text>
+  <path d="M1040 200h-40M1142 196h-40" stroke="#ece8e1" stroke-opacity=".35" stroke-width="3"/>
+  <g stroke="#ff4655" stroke-width="4">
+    <path d="M1071 242v18M1071 284v18M1041 272h18M1083 272h18"/>
+  </g>
+  <rect x="1068" y="269" width="6" height="6" fill="#ece8e1"/>
+  <!-- minimap with its two sites -->
+  <path d="M984 312l34-4v44l-34 3z" fill="none" stroke="#ece8e1" stroke-opacity=".5" stroke-width="2"/>
+  <text x="992" y="330" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="#ff4655">A</text>
+  <text x="1004" y="348" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="#ece8e1">B</text>
+  <!-- the Spike, planted -->
+  <polygon points="1130,318 1146,327 1146,345 1130,354 1114,345 1114,327" fill="#0c1822" stroke="#ff4655" stroke-width="3"/>
+  <rect x="1126" y="330" width="8" height="12" fill="#ff4655"/>
+  <path d="M1060 384L1088 386L1096 470L1052 472Z" fill="#05090d"/>
+  <path d="M1018 470L1132 465L1138 477L1014 482Z" fill="#05090d"/>
+
+  <!-- desk -->
+  <path d="M560 488L1200 470V630H520Z" fill="#070c12"/>
+  <path d="M560 488L1200 470" stroke="#ece8e1" stroke-opacity=".4" stroke-width="2"/>
+  <path d="M760 480L930 474L940 487L770 493Z" fill="#1b2836"/>
+
+  <!-- chair -->
+  <path d="M664 300Q660 278 682 275L760 268Q784 266 786 292L800 600L676 612Z" fill="#0a1017"/>
+  <path d="M676 300L691 598" stroke="#ece8e1" stroke-opacity=".8" stroke-width="5"/>
+
+  <!-- the player, from behind: jersey, arm to the mouse, headset -->
+  <path d="M712 352Q720 318 760 312L840 306Q880 304 890 340L902 470Q904 520 860 528L760 540Q716 544 712 500Z" fill="#131e2a"/>
+  <path d="M868 312Q886 318 890 340L902 470Q903 500 890 515L872 330Z" fill="#ff4655"/>
+  <text x="800" y="378" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-size="17" font-weight="900" letter-spacing="4" fill="#ece8e1" opacity=".85">ROOKIE</text>
+  <text x="800" y="452" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-size="68" font-weight="900" fill="#ece8e1">00</text>
+  <path d="M872 336Q900 340 912 372L968 452Q976 470 958 478L930 480L884 410Z" fill="#131e2a"/>
+  <path d="M872 336Q900 340 912 372L968 452" fill="none" stroke="#ece8e1" stroke-opacity=".55" stroke-width="3"/>
+  <path d="M944 458L984 452Q996 456 992 472L952 482Z" fill="#0a1017"/>
+  <path d="M982 462Q1000 452 1016 464Q1020 476 1004 482L986 480Z" fill="#ece8e1"/>
+  <path d="M770 300L815 296L818 318L772 322Z" fill="#0a1017"/>
+  <path d="M745 250Q742 196 792 188Q846 184 850 238Q852 282 820 300L780 304Q748 296 745 250Z" fill="#0a1017"/>
+  <path d="M850 238Q852 282 820 300" fill="none" stroke="#ece8e1" stroke-opacity=".55" stroke-width="3"/>
+  <path d="M752 236Q756 176 800 174Q846 174 848 232" fill="none" stroke="#ece8e1" stroke-width="10" stroke-linecap="round"/>
+  <path d="M734 222L766 218L770 272L744 278L732 262Z" fill="#ff4655"/>
+  <path d="M742 232L760 230L762 262L746 266Z" fill="#9e2632"/>
+  <path d="M762 268Q792 318 856 300" fill="none" stroke="#ece8e1" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="860" cy="299" r="7" fill="#ece8e1"/>
+
+  <!-- title -->
+  <g font-family="'PingFang SC','Microsoft YaHei','Noto Sans SC','Source Han Sans SC',sans-serif">
+    <path d="M72 116H336L324 154H72Z" fill="#ff4655"/>
+    <text x="88" y="142" font-size="19" font-weight="700" letter-spacing="2" fill="#0e1620">VCT 真实世界 · DEMO</text>
+    <text x="66" y="262" font-size="104" font-weight="900" letter-spacing="4" fill="#ece8e1">无畏契约</text>
+    <text x="66" y="380" font-size="104" font-weight="900" letter-spacing="4" fill="#ff4655">选手生涯</text>
+    <path d="M72 404H430L416 418H72Z" fill="#ece8e1"/>
+    <text x="72" y="466" font-size="30" fill="#9fb2c6">从天梯路人，打到冠军赛的舞台</text>
+    <path d="M72 492H272L260 532H72Z" fill="none" stroke="#ece8e1" stroke-opacity=".55" stroke-width="2"/>
+    <text x="90" y="519" font-size="21" font-weight="700" fill="#ece8e1">2021 · 改变历史</text>
+    <path d="M292 492H492L480 532H292Z" fill="#ff4655" fill-opacity=".14" stroke="#ff4655" stroke-width="2"/>
+    <text x="310" y="519" font-size="21" font-weight="700" fill="#ece8e1">2026 · 创造未来</text>
+    <text x="72" y="592" font-size="16" fill="#9fb2c6" opacity=".7">无畏契约选手生涯模拟器 · 除了你，所有队伍和选手都是真实的</text>
+  </g>
+</svg>
