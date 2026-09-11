@@ -18,8 +18,9 @@ import type { MeState } from './types'
  * On top of the cards sit a handful of 殿堂成就 that one career cannot finish:
  * each asks for careers that differ — the other entry year, another start,
  * another role, another league, a life with no trophy beside one with the
- * biggest. What they give is a 称号 on the career card, and two origin cards
- * that the new-career page greys out until the hall has the history for them.
+ * biggest. What they give is a 称号 on the career card and nothing else: as in
+ * 破晓, the hall gives no numbers and unlocks nothing for the next career (two
+ * unlockable origin cards were taken out on the author's word, 2026-09-11).
  * No number anywhere in a career reads the hall.
  *
  * One localStorage record under its own key. Every read and write is caught:
@@ -152,22 +153,6 @@ export const MILESTONE_BY_KEY: Record<string, HallMilestone> = Object.fromEntrie
 
 export function milestoneDone(m: HallMilestone, cards: HallCard[]): boolean {
   try { return m.done ? m.done(cards) : m.parts(cards).every((p) => p.ok) } catch { return false }
-}
-
-/* ------------------------------------------------------------------ */
-/*  出身卡                                                              */
-/* ------------------------------------------------------------------ */
-
-/** The two cards in me/origins.ts HALL_ORIGINS, and the history that opens each. */
-export const HALL_ORIGIN_NEEDS: Record<string, { need: string; ok: (cards: HallCard[]) => boolean }> = {
-  vodkid: { need: '殿堂里有一局首发拿过国际赛冠军', ok: (cs) => cs.some((c) => c.titles.some((t) => t.started && isIntlClass(t.cls))) },
-  notebook: { need: '殿堂里有一局打满八个职业赛季', ok: (cs) => cs.some((c) => c.seasons >= 8) },
-}
-
-export function originUnlocked(h: Hall | null, key: string): boolean {
-  const r = HALL_ORIGIN_NEEDS[key]
-  if (!h || !r) return false
-  try { return r.ok(h.cards) } catch { return false }
 }
 
 /* ------------------------------------------------------------------ */

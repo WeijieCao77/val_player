@@ -12,8 +12,8 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { cloutBreakdown } from '../src/engine/me/clout'
 import TeamScreen from '../src/ui/me/TeamScreen'
-import { GameCtx } from '../src/ui/ctx'
-import '../src/styles.css'
+import { GameCtx } from '../src/ui/me/ctx'
+import '../src/ui/me/base.css'
 import '../src/me.css'
 
 const q = new URLSearchParams(location.search)
@@ -44,8 +44,7 @@ function Harness() {
       game: state,
       commit: () => setN((k) => k + 1),
       toast: (t: string) => setToast(t),
-      openPlayer: () => {}, loadSlot: () => {}, openMatch: () => {},
-      playLive: () => {}, go: () => {}, startTutorial: () => {}, openDraw: () => {},
+      openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
     }}>
       <div style={{ padding: 16, maxWidth: 1180, margin: '0 auto' }}>
         <p className="small">

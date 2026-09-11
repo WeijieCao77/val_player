@@ -44,12 +44,13 @@ export const ORIGINS: Origin[] = [
 ]
 
 /**
- * Two more, opened by the 成就殿堂 — me/hall.ts HALL_ORIGIN_NEEDS says by what.
- * Sized like the twelve: a different shape, not a bigger total.
+ * Two cards the 成就殿堂 used to unlock, taken out the same night (author, 2026-09-11,
+ * following 破晓: the hall gives no numbers and unlocks nothing for the next career).
+ * Kept only so a career started on one still reads its own background; nothing offers them.
  */
-export const HALL_ORIGINS: Origin[] = [
+const RETIRED_ORIGINS: Origin[] = [
   { key: 'vodkid', name: '看录像长大的', blurb: '冠军赛决赛的录像看了几百遍，每一轮技能怎么交都背得出来。', attrs: { awareness: 3, utility: 2 }, mental: 3, money: 1500 },
   { key: 'notebook', name: '老将的笔记本', blurb: '一位退役老将把十年的对位笔记留给了你。字很乱，内容很硬。', attrs: { clutch: 2, communication: 2 }, tac: 10, body: -3, money: 1000 },
 ]
 
-export const originOf = (key: string): Origin => ORIGINS.find((o) => o.key === key) ?? HALL_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]
+export const originOf = (key: string): Origin => ORIGINS.find((o) => o.key === key) ?? RETIRED_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]

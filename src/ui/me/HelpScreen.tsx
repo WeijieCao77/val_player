@@ -1,5 +1,5 @@
-import { useGame } from '../ctx'
-import { Panel } from '../common'
+import { useGame } from './ctx'
+import { Panel } from './common'
 import { openTour, setToursOff, useToursOff, weekTourOf } from './guide'
 import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'

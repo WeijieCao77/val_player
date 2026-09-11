@@ -1,6 +1,9 @@
 /* val_player —— 零依赖静态服务器
    游戏是 vite 打出来的纯静态产物（dist/），没有后端。这个文件只做一件事：
-   把 dist/ 里的文件按路径发出去，找不到的路径回 index.html（/manager、/cards 是前端路由）。
+   把 dist/ 里的文件按路径发出去，找不到的路径回 index.html。
+
+   · 经理模式和卡牌模式不再构建：旧的 /manager、/cards 链接（含其下的子路径）302 回 /，
+     打开的就是选手生涯（带斜杠的 /manager/ 若直接回 index.html，相对路径的资源会 404）；
 
    · 只从 dist/ 出，路径规范化后不在 dist/ 下的一律 403；
    · assets/ 下是带 hash 的文件，缓存一年；index.html 每次校验（no-cache）；
@@ -54,6 +57,10 @@ function resolve(pathname) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')
   if (url.pathname === '/healthz') return send(res, 200, 'ok')
+  if (/^\/(manager|cards)(\/|$)/.test(url.pathname)) {
+    res.writeHead(302, { location: '/', 'cache-control': 'no-store' })
+    return res.end()
+  }
 
   const file = resolve(url.pathname)
   if (!file) return send(res, 403, 'forbidden')
