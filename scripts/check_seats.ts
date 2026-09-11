@@ -26,14 +26,20 @@
  *    plays the National Competition's Season 2 — and, finishing where one of
  *    its real top five did, takes that place at the Ascension.
  *
- *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold|china]
+ *  - east: a CIS club that East Surge 2023 did not have, strong from 2023. The
+ *    league's Promotion Cup is its bottom two against two challengers from
+ *    outside; the club plays the weaker challenger for that seat.
+ *
+ *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold|china|east]
  */
-import { eventOf } from '../src/engine/circuit'
+import { eventOf, eventsOf } from '../src/engine/circuit'
+import RAW_2021 from '../src/data/world_2021.json'
 import { autoResolve, autoWeek } from '../src/engine/me/auto'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { declineDeal, joinClub, makeDeal } from '../src/engine/me/contract'
 import { pop } from '../src/engine/me/pending'
 import { declineInvite } from '../src/engine/me/tryout'
+import { retirementTick } from '../src/engine/me/endings'
 import { advanceWeek } from '../src/engine/me/week'
 import { recomputeOverall, refreshValue } from '../src/engine/player'
 import { Rng, hashStr } from '../src/engine/rng'
@@ -251,6 +257,43 @@ function china(): void {
 if (!only || only === 'seat') seat()
 if (!only || only === 'promo') promo()
 if (!only || only === 'fold') fold()
+function east(): void {
+  const t0 = Date.now()
+  const surge = eventsOf(2023).filter((e) => e.scene === 'East')
+  const seeded = new Set(surge.flatMap((e) => e.seeds))
+  const pick = (RAW_2021 as unknown as { teams: { id: string; region: string; roster: string[] }[] }).teams
+    .find((t) => t.region === 'CIS' && t.roster.length >= 5 && !seeded.has(t.id.slice(4)))
+  if (!pick) { fail('东欧：2021 年的世界里找不到一家 2023 年东欧 Surge 没有的独联体俱乐部'); return }
+  const club = pick.id
+  const state = createNewGame(club, 'Probe', seed, undefined, 2021)
+  setupSeason(state)
+  console.log(`\n== 东欧升级杯：执教 ${nameOf(state, club)}（2023 年东欧 Surge 没有它），2023 年起阵容顶满`)
+  if (!runTo(state, '东欧升级杯', 2023, 200, club, 2023)) return
+  const cup = circuitComps(state).find((c) => /Surge Promotion Cup/.test(eventOf(c.circuit!.id)?.name ?? ''))
+  const decider = state.fixtures.find((f) => f.comp === cup?.key && f.label.includes('决胜局') && (f.teamA === club || f.teamB === club))
+  const won = !!decider?.result && (decider.result.mapsWonA > decider.result.mapsWonB ? decider.teamA : decider.teamB) === club
+  const place = cup ? cup.finished.indexOf(club) + 1 : 0
+  console.log(`  2023：你的俱乐部 ${state.teams[club].scene ?? '—'} · 升级杯决胜局${decider ? (won ? '赢了' : '输了') : '没有'}`
+    + `${cup?.teams.includes(club) ? `，升级杯第 ${place || '—'} 名` : ''}`)
+  if (!cup) { fail('东欧升级杯：2023 年的日历上没有 Surge Promotion Cup'); return }
+  if (!decider) fail('东欧升级杯：没有席位的东欧俱乐部应该被安排和外来队伍打一场决胜局')
+  if (won && !cup.teams.includes(club)) fail('东欧升级杯：赢了决胜局，却没有打升级杯')
+  console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
+/** end: the world line stops when the 2034 season is over, whatever the career is doing. */
+function end(): void {
+  const state = createCareer({
+    name: 'Probe', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2021,
+  })
+  state.year = 2035
+  retirementTick(state, new Rng(1))
+  console.log(`\n== 世界线终点：2034 赛季结束后 → ${state.me!.phase === 'retired' ? `生涯结束（${state.gameOver}）` : `还在继续（${state.me!.phase}）`}`)
+  if (state.me!.phase !== 'retired') fail('世界线终点：2034 赛季结束后生涯应该结束')
+}
+
 if (!only || only === 'china') china()
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人。')
+if (!only || only === 'east') east()
+if (!only || only === 'end') end()
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人；中国二线打全国大赛进 Ascension；东欧升级杯给外来队伍的名额可以去争。')
 process.exit(bad ? 1 : 0)

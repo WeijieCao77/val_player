@@ -3,6 +3,7 @@ import type { GameState } from '../types'
 import { pushLog } from './log'
 import { push } from './pending'
 import { leaveClub } from './contract'
+import { WORLD_END } from '../era'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -62,6 +63,8 @@ export function retirementTick(state: GameState, rng: Rng): void {
   const me = state.me!
   const p = state.players[me.id]
   if (me.phase === 'retired') return
+  // the world line itself ends: whatever the career is, it ends with it
+  if (state.year >= WORLD_END) { retire(state, `${WORLD_END - 1} 赛季结束，这条世界线到这里为止`); return }
   if (me.phase === 'pre' && me.pre.year >= 4) { retire(state, '四年没有签到合同，你放弃了'); return }
   if (me.phase === 'free' && me.freeYears >= 2) { retire(state, '两年没有俱乐部来电话，你宣布退役'); return }
   if (p.age >= 33) { retire(state, '33 岁，你宣布退役'); return }

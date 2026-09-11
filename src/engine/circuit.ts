@@ -1059,6 +1059,21 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
     const ui = ev.units.findIndex((u) => isOpen(u) && (u.promotes ?? 0) > 0)
     if (ui >= 0) best = { ui, rank: ev.units[ui].promotes! }
   }
+  if (!best && state.year >= 2023) {
+    // a promotion bracket played between a league's bottom sides and challengers from outside it —
+    // East's 2023 Surge Promotion Cup, MENA's promotion/relegation series: the player's club plays the
+    // weakest of those challengers for its seat, before the bracket starts
+    const seat = outsideSeat(state, ev, c)
+    const rival = seat == null ? null : c.seeds[seat]
+    if (seat != null && rival && rival !== club) {
+      const f = makeFixture(state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:升降级 · 决胜局')
+      f.node = -1
+      state.fixtures.push(f)
+      c.playin = { key: `s:${seat}`, fixture: f.id }
+      notes.push(`📝 ${comp.name} 有给外来队伍的名额，${state.teams[club].name} 报名争取：打赢 ${state.teams[rival].name} 就进升降级赛。`)
+    }
+    return
+  }
   if (!best) return
   const u = ev.units[best.ui]
   const key = `${best.ui}:${best.rank}`
@@ -1069,6 +1084,30 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   state.fixtures.push(f)
   c.playin = { key, fixture: f.id }
   notes.push(`📝 ${comp.name} 开放报名，${state.teams[club].name} 报了海选：打赢 ${state.teams[rival].name} 就进正赛。`)
+}
+
+const PROMO_WORDS = /Promotion|Relegation|Up and Down|Pro\/Rel|Acesso|Repescagem/i
+
+/**
+ * The seat in a promotion bracket held by the weakest side that came from outside
+ * the league: a seed no earlier event of its scene that year had placed.
+ */
+function outsideSeat(state: GameState, ev: CEvent, c: NonNullable<Competition['circuit']>): number | null {
+  const feeders = feedersOf(ev)
+  let pick: number | null = null
+  let weakest = Infinity
+  for (const u of ev.units) {
+    if (isOpen(u) || !(u.side || PROMO_WORDS.test(`${ev.name} ${u.label} ${u.phase ?? ''}`))) continue
+    for (const n of u.nodes ?? []) {
+      for (const s of [n.a, n.b]) {
+        if (s[0] !== 's' || feeders[s[1]]) continue
+        const t = c.seeds[s[1]]
+        const rating = t ? state.teams[t]?.rating ?? 0 : Infinity
+        if (rating < weakest) { weakest = rating; pick = s[1] }
+      }
+    }
+  }
+  return pick
 }
 
 /**
@@ -1170,7 +1209,14 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
   const playIn = c.playin ? state.fixtures.find((f) => f.id === c.playin!.fixture) : undefined
 
   const slot = (ui: number, s: Slot): string | null | undefined => {
-    if (s[0] === 's') return c.seeds[s[1]] ?? null
+    if (s[0] === 's') {
+      // a seat the player's club is contesting: whoever wins the decider sits in it
+      if (c.playin?.key === `s:${s[1]}`) {
+        const g = playIn && gameOf(playIn)
+        return g ? g.w : undefined
+      }
+      return c.seeds[s[1]] ?? null
+    }
     if (s[0] === 'w' || s[0] === 'l') {
       const g = games.get(base[ui] + s[1])
       if (!g) return undefined

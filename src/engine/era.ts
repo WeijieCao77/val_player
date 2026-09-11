@@ -21,6 +21,13 @@ import type { GameState, Region, StageKey } from './types'
 /*  入口                                                               */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Where the world line stops: the 2034 season is its last. Everyone in it is a
+ * real person and nobody new debuts after 2026, so a world run much further is
+ * a world of old men — the author's call, 2026-09-11: 「我们的世界也到2035年前截至」.
+ */
+export const WORLD_END = 2035
+
 /** The two years a career can begin in. Decided 2026-09-10. */
 export const ENTRY_YEARS = [2021, 2026] as const
 export type EntryYear = (typeof ENTRY_YEARS)[number]
