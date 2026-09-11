@@ -36,7 +36,8 @@ import type { RawPlayer } from './world'
  * club that lost a man to him plays short until it signs somebody.
  */
 
-interface TClub { n: string; t: string; r: string; k: 1 | 2; l: string | null; s: string | null; d: number; o: number }
+/** `d` the first day it played that year, `e` the last */
+interface TClub { n: string; t: string; r: string; k: 1 | 2; l: string | null; s: string | null; d: number; e?: number; o: number }
 interface TRating { a: number[]; o: number; p: number; r: string; g: string[]; n: number; v: (number | null)[]; t?: string[]; i?: number }
 interface TDebut { ign: string; nat: string | null; name: string | null; birth: string | null; age: number; est: boolean }
 interface TYear {
@@ -404,7 +405,95 @@ function inherit(state: GameState, mine: string | null, year: number, day: numbe
 }
 
 /** The same moves the timeline makes, for whoever else has to sign or release on history's behalf. */
-export { sign as signForHistory, release as releaseForHistory }
+export { sign as signForHistory, release as releaseForHistory, quiet as quietClub }
+
+/* ------------------------------------------------------------------ */
+/*  clubs history let go, one at a time                                */
+/* ------------------------------------------------------------------ */
+
+export interface Fold {
+  vlr: string
+  /** the last day it played that year */
+  last: number
+  /** the day it is gone: three to five weeks after that */
+  day: number
+  /** its Challengers league, where that league does not go on the next year */
+  merged: string | null
+}
+
+const FOLDS = new Map<number, Fold[]>()
+
+/**
+ * The clubs that played their last Riot event in `year`: in the book that year,
+ * not the next, and not carried on under another name — a rebrand, a merger or
+ * a roster bought whole is not the end of a club. Each goes quiet three to five
+ * weeks after its own last event, through the year, the way they really did —
+ * not on New Year's Day all at once. A year with no book after it has none.
+ */
+export function foldsOf(year: number): Fold[] {
+  const hit = FOLDS.get(year)
+  if (hit) return hit
+  const Y = BOOK.years[String(year)]
+  const N = BOOK.years[String(year + 1)]
+  const out: Fold[] = []
+  if (Y && N) {
+    const goesOn = new Set(Object.values(N.clubs).map((c) => c.s).filter((s): s is string => !!s))
+    for (const [vlr, c] of Object.entries(Y.clubs)) {
+      if (N.clubs[vlr] || LINEAGE.some((e) => e.from === vlr)) continue
+      const last = c.e ?? c.d
+      out.push({
+        vlr, last,
+        day: Math.min(362, last + 21 + (hashStr(`fold:${vlr}:${year}`) % 15)),
+        merged: c.s && !goesOn.has(c.s) ? c.s : null,
+      })
+    }
+  }
+  FOLDS.set(year, out)
+  return out
+}
+
+/** What the club tells its people: nothing history did not say. */
+const foldReason = (f: Fold): string => (f.merged
+  ? `${f.merged} 这个 Challengers 联赛明年不再单独举办，俱乐部没有拿到新联赛的位置，赛季结束后不再保留职业队`
+  : '赛季结束后不再保留职业队（资金、联赛调整等压力，具体原因没有对外公布）')
+
+/**
+ * A day of the clubs history let go. Out of the player's reach each goes quiet
+ * on its day and its people go to the market.
+ *
+ * The player's own club is not spared. He is one player, and whether a club
+ * carries on is not his to decide — the author's rule. It is not closed from
+ * under him either: `state.foldNotice` is set two or three weeks ahead for
+ * engine/me to tell him, and the club closes on that day, after the last event
+ * it is still playing in this world. A manager's club is his to keep: the
+ * manager game has no life after a club.
+ */
+export function historyFolds(state: GameState): string[] {
+  const gone: string[] = []
+  if (!isTimelineWorld(state)) return gone
+  const { club: mine, people } = reachOf(state)
+  for (const f of foldsOf(state.year)) {
+    const id = clubId(f.vlr)
+    const heir = state.heirs?.[id]
+    const t = state.teams[heir && state.teams[heir] ? heir : id]
+    if (!t || t.dormant) continue
+    if (t.id === mine) {
+      if (!state.me || state.foldNotice?.club === t.id) continue
+      const playing = Object.values(state.comps)
+        .filter((c) => !!c.circuit && !c.champion && !c.circuit.done && c.teams.includes(t.id))
+        .map((c) => c.circuit!.end + 7)
+      const day = Math.min(362, Math.max(f.day, ...playing))
+      const lead = 14 + (hashStr(`fold-notice:${f.vlr}:${state.year}`) % 8)
+      if (state.day >= day - lead) state.foldNotice = { club: t.id, day: Math.max(day, state.day + 14), reason: foldReason(f) }
+      continue
+    }
+    if (state.day < f.day) continue
+    for (const pid of [...t.roster]) if (!people.has(pid)) release(state, state.players[pid])
+    quiet(t)
+    gone.push(t.name)
+  }
+  return gone
+}
 
 export interface YearSync {
   moved: number

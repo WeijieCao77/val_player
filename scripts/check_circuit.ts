@@ -226,7 +226,15 @@ function bystander(): void {
     name: 'Watcher', region: 'China', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year: 2021,
   })
   console.log('\n== 旁观者：中国天梯上没人签他，世界自己从 2021 一路走到 2028')
-  const day = () => { advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true }) }
+  // the months in which a club went quiet, per year: history let them go one at a time
+  const foldMonths = new Map<number, Set<number>>()
+  let quietNow = Object.values(state.teams).filter((t) => t.dormant).length
+  const day = () => {
+    advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
+    const q = Object.values(state.teams).filter((t) => t.dormant).length
+    if (q > quietNow && state.day > 3) foldMonths.set(state.year, (foldMonths.get(state.year) ?? new Set<number>()).add(Math.floor(state.day / 30)))
+    quietNow = q
+  }
   let was = snap(state)
   const turns: Turn[] = []
   for (const year of [2021, 2022, 2023, 2024, 2025, 2026, 2027]) {
@@ -259,6 +267,10 @@ function bystander(): void {
       + ` · ${((Date.now() - y0) / 1000).toFixed(1)}s`)
   }
   continuity(turns)
+  console.log('  俱乐部在哪几个月陆续解散：' + [2022, 2023, 2024, 2025].map((y) => `${y} 年 ${foldMonths.get(y)?.size ?? 0} 个月`).join(' · '))
+  for (const y of [2023, 2024]) {
+    if ((foldMonths.get(y)?.size ?? 0) < 4) fail(`连贯：${y} 年真实历史里不再参赛的俱乐部应该分散在一年里陆续解散，实际只在 ${foldMonths.get(y)?.size ?? 0} 个月里有`)
+  }
   const size = JSON.stringify(state).length
   console.log(`  存档体积 ${(size / 1024 / 1024).toFixed(1)} MB（未压缩）· ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   void eventOf

@@ -34,7 +34,7 @@ import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
 import { circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
-import { bookCovers, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
+import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { arrive2026 } from './today'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import { track } from './telemetry'
@@ -1482,6 +1482,15 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   dailyLife(state, notes)
 
+  // a club history let go goes quiet a few weeks after its last event, one at a time (engine/timeline.ts)
+  const gone = historyFolds(state)
+  if (gone.length) {
+    state.news.push({
+      day: state.day, kind: 'club',
+      text: `🕯️ 宣布解散、不再参赛：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 家` : ''}。`,
+    })
+  }
+
   state.stage = stageAtIn(state.year, state.day, onTimeline(state))
   const stageChanged = state.stage !== prevStage
   if (stageChanged) {
@@ -2151,6 +2160,8 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
     v == null ? v : v - shift
 
   if (state.pitchCooldown != null) state.pitchCooldown = Math.max(0, state.pitchCooldown - shift)
+  // a club told us it closes on a day of the old calendar
+  if (state.foldNotice) state.foldNotice.day -= shift
   if (state.drillLock != null) state.drillLock = Math.max(0, state.drillLock - shift)
   // physio bookings live in the past; left unshifted, "day - last" went
   // negative after the new year and locked the whole squad out of the physio

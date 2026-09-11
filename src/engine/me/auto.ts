@@ -139,6 +139,8 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     }
     case 'trait': pop(state, 'trait', item.id); return ''
     case 'released': pop(state, 'released'); return ''
+    // never on autopilot: the clock stops on it (see runAutoPilot's on())
+    case 'folding': pop(state, 'folding'); return ''
     case 'season': {
       pop(state, 'season', item.id)
       if (me.retireAsk && p.age >= 31) retire(state, `${p.age} 岁，你决定退役`)

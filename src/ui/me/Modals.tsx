@@ -34,7 +34,8 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'event': return <EventModal eventId={item.id!} onDone={onDone} />
     case 'trait': return <TraitModal traitKey={item.id!} onDone={onDone} />
     case 'season': return <SeasonModal year={item.id!} onDone={onDone} />
-    case 'released': return <ReleasedModal onDone={onDone} />
+    case 'released': return <ReleasedModal why={item.id} onDone={onDone} />
+    case 'folding': return <FoldingModal onDone={onDone} />
     case 'ending': return <EndingModal onDone={onDone} />
     case 'ceremony': return <CeremonyModal onDone={onDone} />
   }
@@ -346,12 +347,28 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
   )
 }
 
-function ReleasedModal({ onDone }: { onDone: () => void }) {
+/** History is closing my club: two or three weeks' notice. */
+function FoldingModal({ onDone }: { onDone: () => void }) {
+  const { game, commit } = useGame()
+  const n = game.foldNotice
+  const club = n ? game.teams[n.club] : undefined
+  const close = () => { pop(game, 'folding'); commit(); onDone() }
+  return (
+    <Modal title={`${club?.name ?? '俱乐部'} 要解散了`} onClose={close} onBgClose={() => {}}>
+      <p className="small" style={{ marginTop: 0 }}>管理层把全队叫到一起：{n?.reason ?? '赛季结束后不再保留职业队'}。</p>
+      <p className="small">离解散还有 <b>{n ? Math.max(0, n.day - game.day) : 0}</b> 天。之后合同作废，你会成为自由人——从现在起就可以留意别的队了。</p>
+      <p className="tiny faint">真实历史里，这家俱乐部这个赛季之后就没有再参加 Riot 的赛事。这不是一名选手能改变的。</p>
+      <div className="row" style={{ justifyContent: 'center' }}><button className="primary" onClick={close}>知道了</button></div>
+    </Modal>
+  )
+}
+
+function ReleasedModal({ why, onDone }: { why?: string; onDone: () => void }) {
   const { game, commit } = useGame()
   const close = () => { pop(game, 'released'); commit(); onDone() }
   return (
     <Modal title="自由人" onClose={close} onBgClose={close}>
-      <p className="small" style={{ marginTop: 0 }}>俱乐部没有续约。你回到了市场上：天梯、杯赛、跟着别的队打训练赛，等电话。两年没人打来，就是退役。</p>
+      <p className="small" style={{ marginTop: 0 }}>{why === 'fold' ? '俱乐部解散了，合同随之作废。' : '俱乐部没有续约。'}你回到了市场上：天梯、杯赛、跟着别的队打训练赛，等电话。两年没人打来，就是退役。</p>
       <div className="row" style={{ justifyContent: 'center' }}><button className="primary" onClick={close}>知道了</button></div>
     </Modal>
   )

@@ -903,6 +903,12 @@ export interface GameState {
   heirs?: Record<string, string>
   /** the year a world that entered in 2021 was handed over to today's (engine/bridge.ts) */
   bridged?: number
+  /**
+   * The player's club is closing as history closed it: the day it goes and what
+   * the club told its people. Set two or three weeks ahead by engine/timeline.ts
+   * historyFolds; engine/me tells him, and closes it on the day.
+   */
+  foldNotice?: { club: string; day: number; reason: string; told?: boolean }
   /** last season's Champions field, for this year's Kickoff byes */
   lastChampionsTeams?: string[]
   /** day index since career start */

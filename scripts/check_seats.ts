@@ -14,12 +14,24 @@
  *    when it is a French club with no league. It has to win a Revolution
  *    decider and then play the split that decider fed.
  *
- *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo]
+ * And the other way round, the author's rule that the player is one player:
+ *
+ *  - fold: a career put on a club whose last real event was in the spring of
+ *    2023 and that never played again. The club tells him two or three weeks
+ *    ahead, closes after its last event, and he is a free agent.
+ *
+ *   npx tsx scripts/check_seats.ts [seed=11] [only: seat|promo|fold]
  */
 import { eventOf } from '../src/engine/circuit'
+import { autoResolve, autoWeek } from '../src/engine/me/auto'
+import { createCareer, emptyTalents } from '../src/engine/me/career'
+import { declineDeal, joinClub, makeDeal } from '../src/engine/me/contract'
+import { pop } from '../src/engine/me/pending'
+import { declineInvite } from '../src/engine/me/tryout'
+import { advanceWeek } from '../src/engine/me/week'
 import { recomputeOverall, refreshValue } from '../src/engine/player'
 import { Rng, hashStr } from '../src/engine/rng'
-import { signForHistory } from '../src/engine/timeline'
+import { foldsOf, signForHistory } from '../src/engine/timeline'
 import { advanceDay, setupSeason } from '../src/engine/season'
 import { ATTR_KEYS } from '../src/engine/types'
 import type { Competition, Fixture, GameState } from '../src/engine/types'
@@ -159,7 +171,60 @@ function promo(): void {
   console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+function fold(): void {
+  const t0 = Date.now()
+  const state = createCareer({
+    name: 'Probe', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2021,
+  })
+  console.log('\n== 解散：生涯选手签进一家真实历史里 2023 年后没有再参赛的俱乐部')
+  let guard = 0
+  try {
+    while (state.year < 2023 && !state.gameOver && guard++ < 400) autoWeek(state)
+  } catch (e) {
+    fail(`解散：${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+    return
+  }
+  const pick = foldsOf(2023).map((f) => ({ f, t: state.teams[`V21T${f.vlr}`] }))
+    .find(({ f, t }) => !!t && !t.dormant && t.roster.length >= 5 && f.last > 90 && f.last < 220)
+  if (!pick) { fail('解散：2023 年找不到一家年中打完最后一场、开季时还在的俱乐部'); return }
+  const { f, t } = pick
+  const me = state.me!
+  joinClub(state, makeDeal(state, t.id, 'transfer', 'B', new Rng(hashStr('fold-probe'))))
+  console.log(`  2023 第 ${state.day} 天签进 ${t.name}：真实历史里它 2023 年最后一场在第 ${f.last} 天，之后没有再参加 Riot 赛事`)
+  let told: number | null = null
+  let closing: number | null = null
+  let released: number | null = null
+  guard = 0
+  try {
+    while (state.year === 2023 && released == null && !state.gameOver && guard++ < 80) {
+      const stop = advanceWeek(state)
+      if (stop.kind !== 'pending') continue
+      const item = stop.item
+      if (item.kind === 'folding') { told = state.day; closing = state.foldNotice?.day ?? null; pop(state, 'folding'); continue }
+      if (item.kind === 'released') { if (item.id === 'fold') released = state.day; pop(state, 'released'); continue }
+      // the probe says no to every offer: it is here to see the club close under him
+      if (item.kind === 'deal') { declineDeal(state, item.id!); pop(state, 'deal', item.id); continue }
+      if (item.kind === 'invite') { declineInvite(state, item.id!); pop(state, 'invite', item.id); continue }
+      autoResolve(state, item)
+      pop(state, item.kind, item.id)
+    }
+  } catch (e) {
+    fail(`解散：${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+    return
+  }
+  console.log(`  通知：第 ${told ?? '—'} 天（说第 ${closing ?? '—'} 天解散）· 成为自由人：第 ${released ?? '—'} 天 · `
+    + `你现在是${me.phase === 'free' ? '自由人' : me.phase} · ${t.name}${t.dormant ? ' 已解散' : ' 还在'}`)
+  if (told == null) fail('解散：俱乐部没有提前通知')
+  if (released == null) fail('解散：俱乐部没有解散，或者你没有成为自由人')
+  if (told != null && released != null && released - told < 14) fail(`解散：通知到解散只有 ${released - told} 天，应该至少两周`)
+  if (released != null && released <= f.last) fail('解散：俱乐部在它最后一场真实比赛之前就解散了')
+  if (me.phase !== 'free') fail(`解散：俱乐部解散后你应该是自由人，实际是 ${me.phase}`)
+  if (!t.dormant || t.roster.includes(me.id)) fail(`解散：${t.name} 应该已经解散、名单上没有你`)
+  console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
 if (!only || only === 'seat') seat()
 if (!only || only === 'promo') promo()
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛。')
+if (!only || only === 'fold') fold()
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 方案 C 的席位拿到、占住、带进 2026；没有席位的俱乐部赢下决胜局就打进了联赛；真实历史里解散的俱乐部提前通知、按时解散，你成了自由人。')
 process.exit(bad ? 1 : 0)

@@ -348,7 +348,7 @@ export interface EffectSpec {
 export type Axis = 'hard' | 'warm' | 'grind' | 'show'
 
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony'
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding'
   id?: string
   day: number
 }

@@ -335,6 +335,8 @@ def main() -> int:
         league_of: dict[str, str] = {}
         club_roster: dict[str, list[str]] = {}
         club_first: dict[str, int] = {}
+        # the last day it played that year: a club history lets go goes quiet a few weeks after it, not on New Year's Day
+        club_last: dict[str, int] = {}
         club_name: dict[str, str] = {}
         club_regions: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
         club_scene: dict[str, str] = {}
@@ -363,6 +365,8 @@ def main() -> int:
             main = {x for u in cev['units'] if u['type'] != 'open' for nd in u.get('nodes', []) for x in nd['teams']}
             for tid in sorted(sides | set(rosters)):
                 club_name[tid] = cev['names'].get(tid) or club_name.get(tid) or tid
+                end = cev['end'] if cev['end'] is not None else day
+                club_last[tid] = max(club_last.get(tid, end), end)
                 level = tier if tid in main else 'open'
                 if rank[level] > rank[club_best[tid]]:
                     club_best[tid] = level
@@ -419,7 +423,7 @@ def main() -> int:
                 'n': club_name[tid],
                 't': club_tags[tid].most_common(1)[0][0] if club_tags[tid] else bc.norm(club_name[tid])[:4].upper(),
                 'r': region_for(tid), 'k': tier_for(tid), 'l': league_of.get(tid), 's': club_scene.get(tid),
-                'd': club_first[tid], 'o': round(sum(squad) / len(squad)) if squad else 50,
+                'd': club_first[tid], 'e': club_last.get(tid, club_first[tid]), 'o': round(sum(squad) / len(squad)) if squad else 50,
             }
         ratings_out: dict[str, dict] = {}
         for pid in sorted(pool, key=int):

@@ -32,6 +32,8 @@ import { checkAchievements } from './achievements'
 import { noteScoutInterest, rollOffers, seasonContractCheck, windowOpensToday } from './transfer'
 import { retirementTick } from './endings'
 import { compCn } from './compname'
+import { leaveClub } from './contract'
+import { quietClub, releaseForHistory } from '../timeline'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -179,6 +181,7 @@ export function advanceWeek(state: GameState): WeekStop {
     if (r.stageChanged) onStageChange(state, rng)
     if (pro && windowOpensToday(state)) rollOffers(state, rng)
     syncTitles(state)
+    closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng)
     if (state.gameOver && !sacked(state.gameOver)) return { kind: 'game-over' }
     // A final is worth stopping for before the doors open. This has to be
@@ -198,6 +201,32 @@ export function advanceWeek(state: GameState): WeekStop {
   }
   settleWeek(state)
   return { kind: 'week-end' }
+}
+
+/**
+ * History closes my club (engine/timeline.ts historyFolds). The club tells us two
+ * or three weeks ahead; on the day the club is gone, the contract with it, and I
+ * am on the market. It is not mine to stop: I am one player on a club that is ending.
+ */
+function closingClub(state: GameState): void {
+  const me = state.me!
+  const n = state.foldNotice
+  if (!n) return
+  const t = state.teams[n.club]
+  if (!t || state.myTeam !== n.club || me.phase !== 'pro') { state.foldNotice = undefined; return }
+  if (!n.told) {
+    n.told = true
+    pushLog(state, 'bad', `${t.name} 管理层通知全队：${n.reason}。离解散还有 ${Math.max(0, n.day - state.day)} 天。`)
+    push(state, { kind: 'folding' })
+    return
+  }
+  if (state.day < n.day) return
+  leaveClub(state, '解散了')
+  for (const pid of [...t.roster]) releaseForHistory(state, state.players[pid])
+  quietClub(t)
+  state.news.push({ day: state.day, kind: 'club', important: true, text: `🕯️ ${t.name} 宣布解散。` })
+  push(state, { kind: 'released', id: 'fold' })
+  state.foldNotice = undefined
 }
 
 /** The engine credits titles to the champion's roster; a title is mine only if I was on the floor that stage. */
