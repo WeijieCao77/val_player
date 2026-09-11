@@ -197,6 +197,15 @@ export function cupInvite(state: GameState, run: CupRun, rng: Rng): void {
   if (team) offerInvite(state, team, 'cup', rng)
 }
 
+/**
+ * Where the weekly channels open, and where it is a first-tier club that calls.
+ * The week and transfer screens word their hints from these, so the two cannot drift apart.
+ */
+export const INVITE_LADDER = 62
+export const INVITE_LADDER_T1 = 88
+export const INVITE_FANS = 120
+export const INVITE_FANS_T1 = 400
+
 /** The weekly channels: the ladder, the following, and being a known free agent. */
 export function rollInvites(state: GameState, rng: Rng): void {
   const me = state.me!
@@ -207,12 +216,12 @@ export function rollInvites(state: GameState, rng: Rng): void {
   // Both channels open where the screen already tells the player he is somebody: 辐能战魂前 500 on the
   // ladder, 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
   // with 120 fans got no call in a year, in every region — the channels began at ladder 74 and 180 fans.
-  if (l >= 62 && rng.chance(0.02 + (l - 62) * 0.005)) {
-    const team = pickClub(state, rng, l >= 88 ? 1 : 2)
+  if (l >= INVITE_LADDER && rng.chance(0.02 + (l - INVITE_LADDER) * 0.005)) {
+    const team = pickClub(state, rng, l >= INVITE_LADDER_T1 ? 1 : 2)
     if (team) { offerInvite(state, team, 'rank', rng); return }
   }
-  if (me.fans >= 120 && rng.chance(0.03 + (Math.min(me.fans, 900) - 120) / 780 * 0.07)) {
-    const team = pickClub(state, rng, me.fans >= 400 ? 1 : 2)
+  if (me.fans >= INVITE_FANS && rng.chance(0.03 + (Math.min(me.fans, 900) - INVITE_FANS) / 780 * 0.07)) {
+    const team = pickClub(state, rng, me.fans >= INVITE_FANS_T1 ? 1 : 2)
     if (team) { offerInvite(state, team, 'fans', rng); return }
   }
   if (me.pre.wasPro && rng.chance(0.12)) {

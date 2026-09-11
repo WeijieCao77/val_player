@@ -22,7 +22,7 @@ import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
 import { pushLog } from './log'
 import { push } from './pending'
-import { AP_PRE, cupThisWeek, expireInvites, ladderWeekly, rollInvites } from './prepro'
+import { AP_PRE, cupThisWeek, expireInvites, ladderLabel, ladderWeekly, rollInvites } from './prepro'
 import { offerCup, resumeCup } from './cups'
 import { fanWeek } from './fans'
 import { streamClauseCheck, streamTick } from './stream'
@@ -516,7 +516,7 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
     pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1
   } else {
-    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${Math.round(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
+    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
     me.pre.year++
     if (me.phase === 'free') me.freeYears++
   }
@@ -565,7 +565,7 @@ export function clubUpkeep(state: GameState, rng: Rng): void {
     q.contractYears = contractLength(q, rng, team.roster.map((x) => state.players[x]).filter((x): x is Player => !!x))
     q.salary = expectedSalary(q, team.tier)
     q.expiredYear = undefined
-    pushLog(state, 'team', `俱乐部和 ${q.ign}（${q.overall}）续约 ${q.contractYears} 年。`)
+    pushLog(state, 'team', `俱乐部和 ${q.ign} 续约 ${q.contractYears} 年。`)
   }
   let guard = 0
   while (team.roster.length < CLUB_FLOOR && guard++ < 6) {
@@ -583,8 +583,8 @@ export function clubUpkeep(state: GameState, rng: Rng): void {
     target.salary = expectedSalary(target, team.tier)
     target.joinedYear = state.year
     team.roster.push(target.id)
-    const line = `俱乐部签下自由人 ${target.ign}（${target.role} ${target.overall}）补进名单。`
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。` })
+    const line = `俱乐部签下自由人 ${target.ign}（${target.role}）补进名单。`
+    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}。` })
     pushLog(state, 'team', line)
     me.weekNotes.push(line)
   }
@@ -635,7 +635,7 @@ function clubShop(state: GameState, team: Team, rng: Rng): void {
     if (free) {
       const terms = defaultContract(Math.round(expectedSalary(free, team.tier) * rng.range(1.0, 1.15)), contractLength(free, rng, squad))
       if (playerAcceptsTerms(state, free, team, terms, rng).ok && doTransfer(state, free, team.id, 0, terms)) {
-        pushLog(state, 'team', `俱乐部签下自由人 ${free.ign}（${free.role} ${free.overall}）。`)
+        pushLog(state, 'team', `俱乐部签下自由人 ${free.ign}（${free.role}）。`)
         return
       }
     }
@@ -653,7 +653,7 @@ function clubShop(state: GameState, team: Team, rng: Rng): void {
   if (!playerAcceptsTerms(state, target, team, terms, rng).ok) return
   const fromName = state.teams[target.teamId!]?.name ?? '?'
   if (doTransfer(state, target, team.id, fee, terms)) {
-    pushLog(state, 'team', `俱乐部从 ${fromName} 买来 ${target.ign}（${target.role} ${target.overall}），转会费 $${fee.toLocaleString()}。`)
+    pushLog(state, 'team', `俱乐部从 ${fromName} 买来 ${target.ign}（${target.role}），转会费 $${fee.toLocaleString()}。`)
     if ((target.roles ?? [target.role]).includes(state.players[me.id].role)) pushLog(state, 'info', '他打的位置和你一样。')
   }
 }
@@ -667,6 +667,6 @@ export function clubTrim(state: GameState): void {
   const worst = bench.sort((a, b) => a.overall - b.overall)[0]
   if (worst && worst.overall < team.rating - 10) {
     releasePlayer(state, worst)
-    pushLog(state, 'team', `俱乐部放走了 ${worst.ign}（${worst.overall}）。`)
+    pushLog(state, 'team', `俱乐部放走了 ${worst.ign}。`)
   }
 }

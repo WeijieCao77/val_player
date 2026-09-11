@@ -49,7 +49,7 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
           </div>
           {def.game !== 'none' && (
             <p className="tiny faint" style={{ textAlign: 'center', margin: '10px 0 0' }}>
-              「直接过去」按银档算，不扣任何东西——只是拿不到金档。
+              跳过算银档。
             </p>
           )}
         </>

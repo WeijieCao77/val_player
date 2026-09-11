@@ -17,20 +17,24 @@ export default function AutoScreen() {
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)' }}>
       <div>
         <Panel title="托管" actions={<button className={`sm${all ? ' primary' : ''}`} onClick={() => { for (const d of DIALS) me.auto[d.key] = !all; commit() }}>{all ? '全部关掉' : '一键全开'}</button>}>
-          <p className="small" style={{ marginTop: 0 }}>把重复的事交出去。不收费；代价是它永远走稳健路线——精简版能打出不错的结果，完整版才有上限。</p>
+          <p className="small" style={{ marginTop: 0 }}>交出去的事一律走稳健路线。</p>
           {DIALS.map((d) => (
             <div key={d.key} style={{ padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
-              <label className="row" style={{ gap: 10 }}>
+              <label className="row wrap" style={{ gap: 10 }}>
                 <input type="checkbox" checked={me.auto[d.key]} onChange={(e) => { me.auto[d.key] = e.target.checked; commit() }} />
                 <b>{d.name}</b><span className="muted small">{d.what}</span>
                 {d.key === 'career' && <span className="tag warn">这是主线，交出去等于看别人打</span>}
               </label>
-              <ul className="tiny faint" style={{ margin: '4px 0 0 26px', paddingLeft: 14 }}>
-                {d.rules.map((r, i) => <li key={i}>{r}</li>)}
-              </ul>
+              {/* every rule stays written down, one click away */}
+              <details style={{ margin: '4px 0 0 26px' }}>
+                <summary className="tiny faint" style={{ cursor: 'pointer' }}>怎么做</summary>
+                <ul className="tiny faint" style={{ margin: '4px 0 0', paddingLeft: 14 }}>
+                  {d.rules.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </details>
             </div>
           ))}
-          <p className="tiny faint" style={{ marginBottom: 0 }}>它不碰的东西：行动点怎么花、比赛里的决定、对位挑战。「按推荐安排」是另一个按钮，只管本周的行动点。</p>
+          <p className="tiny faint" style={{ marginBottom: 0 }}>不碰：行动点、比赛里的决定、对位挑战。</p>
         </Panel>
       </div>
       <Panel title="托管替你做过的事">

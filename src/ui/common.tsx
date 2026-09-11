@@ -213,17 +213,18 @@ export function Modal({
 }
 
 /** Condition read-out used in squad lists. */
-export function Condition({ p, day }: { p: Player; day: number }) {
+export function Condition({ p, day, hideNumber }: { p: Player; day: number; hideNumber?: boolean }) {
   if (p.injuredUntil > day) {
     return <span className="neg tiny">⚕ 伤停 {p.injuredUntil - day}天</span>
   }
   // fatigue accumulates as a float during weekly ticks, so round for display
   const fit = Math.round(100 - p.fatigue)
   const c = fit >= 75 ? 'var(--win)' : fit >= 50 ? 'var(--warn)' : 'var(--loss)'
+  // the career reads the bar's colour; the manager's squad lists keep the figure
   return (
-    <span className="row" style={{ gap: 6 }}>
+    <span className="row" style={{ gap: 6 }} title={hideNumber ? `体能 ${fit}` : undefined}>
       <Bar value={fit} color={c} />
-      <span className="tiny mono muted">{fit}</span>
+      {!hideNumber && <span className="tiny mono muted">{fit}</span>}
     </span>
   )
 }

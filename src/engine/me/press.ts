@@ -1,5 +1,4 @@
 import type { GameState } from '../types'
-import { nextRealFixtureFor } from '../season'
 
 /**
  * The week's paper, written for a player.
@@ -39,15 +38,6 @@ export function weekReport(state: GameState): string[] {
   // the league itself: a title, a qualification, a relegation
   for (const n of news.filter((n) => n.kind === 'league' && n.important).slice(-2)) out.push(`🏆 ${n.text}`)
 
-  // what is next for me
-  if (myTeam) {
-    const f = nextRealFixtureFor(state, state.myTeam)
-    if (f) {
-      const opp = state.teams[f.teamA === state.myTeam ? f.teamB : f.teamA]
-      const weeks = Math.ceil((f.day - state.day) / 7)
-      const comp = state.comps[f.comp]?.name ?? f.comp
-      out.push(`📅 下一场 · vs ${opp?.name ?? '?'}（${comp}）· ${weeks <= 0 ? '本周' : `${weeks} 周后`}`)
-    }
-  }
+  // what is next for me is the week board's own 下一场 panel, right beside this; not repeated here
   return out
 }

@@ -18,15 +18,16 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
   const out: string[] = []
   const r = rng ?? new Rng((state.seed ^ state.day ^ 0x9e37) >>> 0)
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
-  if (e.money) { addMoney(state, e.money > 0 ? 'inother' : 'outother', e.money); out.push(`存款 ${num(e.money, ' $')}`) }
-  if (e.heat) { me.heat = Math.max(0, me.heat + e.heat); out.push(`热度 ${num(e.heat)}`) }
-  if (e.fans) { me.fans = Math.max(0, me.fans + e.fans); out.push(`粉丝 ${num(e.fans)}`) }
-  if (e.tilt) { me.tilt = clamp(me.tilt + e.tilt, 0, 100); out.push(`气压 ${num(e.tilt)}`) }
+  // the lines read the way the option said it would (events.ts describeEffect)
+  if (e.money) { addMoney(state, e.money > 0 ? 'inother' : 'outother', e.money); out.push(`${e.money > 0 ? '+' : '−'}$${Math.abs(Math.round(e.money)).toLocaleString('en-US')}`) }
+  if (e.heat) { me.heat = Math.max(0, me.heat + e.heat); out.push(e.heat > 0 ? '涨热度' : '热度降') }
+  if (e.fans) { me.fans = Math.max(0, me.fans + e.fans); out.push(e.fans > 0 ? '涨粉' : '掉粉') }
+  if (e.tilt) { me.tilt = clamp(me.tilt + e.tilt, 0, 100); out.push(e.tilt < 0 ? '放松' : '上火') }
   if (e.mental) { me.mental = clamp(me.mental + e.mental, 0, 100); out.push(`心态 ${num(e.mental)}`) }
   if (e.body) { me.body = clamp(me.body + e.body, 0, 100); out.push(`体质 ${num(e.body)}`) }
-  if (e.fatigue && p) { p.fatigue = clamp(p.fatigue + e.fatigue, 0, 100); out.push(`疲劳 ${num(e.fatigue)}`) }
+  if (e.fatigue && p) { p.fatigue = clamp(p.fatigue + e.fatigue, 0, 100); out.push(`体力 ${num(-e.fatigue)}`) }
   if (e.form && p) { p.form = clamp(p.form + e.form, 30, 99); out.push(`状态 ${num(e.form)}`) }
-  if (e.morale && p) { p.morale = clamp(p.morale + e.morale, 10, 100); out.push(`士气 ${num(e.morale)}`) }
+  if (e.morale && p) { p.morale = clamp(p.morale + e.morale, 10, 100); out.push(e.morale > 0 ? '士气涨' : '士气降') }
   if (e.coachTrust) { me.coachTrust = clamp(me.coachTrust + e.coachTrust, 0, 100); out.push(`教练信任 ${num(e.coachTrust)}`) }
   if (e.gmTrust) { me.gmTrust = clamp(me.gmTrust + e.gmTrust, 0, 100); out.push(`经理信任 ${num(e.gmTrust)}`) }
   if (e.bond && me.phase === 'pro') {

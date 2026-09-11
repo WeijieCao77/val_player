@@ -313,9 +313,11 @@ function Performance({
               </tbody>
             </table>
           </div>
-          <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
-            「发挥」= 本场评分与该选手赛季均值之差。点击一行可将他加入雷达对比。
-          </p>
+          {!game.me && (
+            <p className="tiny faint" style={{ marginTop: 8, marginBottom: 0 }}>
+              「发挥」= 本场评分与该选手赛季均值之差。点击一行可将他加入雷达对比。
+            </p>
+          )}
         </div>
       </div>
     </div>

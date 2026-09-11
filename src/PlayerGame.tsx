@@ -31,7 +31,7 @@ import Standings from './ui/Standings'
 import MatchModal from './ui/MatchModal'
 import PlayerModal from './ui/PlayerModal'
 import ThemeToggle from './ui/ThemeToggle'
-import { attrWord, bodyWord, fatigueWord, mentalWord, tiltWord, useNumbers } from './ui/me/words'
+import { attrWord, useNumbers } from './ui/me/words'
 import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
@@ -201,13 +201,12 @@ export default function PlayerGame() {
 
   return (
     <GameCtx.Provider value={ctxValue}>
-      <div className="app">
+      <div className="app career">
         <header className="topbar">
           <button className="brand as-link" onClick={() => setScreen('week')}>
             VAL<span>选手生涯</span><em className="by">demo</em>
           </button>
           <div className="spacer" />
-          <div className="chip" title="行动点"><span aria-hidden="true">⚡</span> <b>{me.ap}/{me.apMax}</b> <span className="muted">行动点</span></div>
         </header>
 
         {/* the corner: what changed in this build, and the numbers switch */}
@@ -228,13 +227,11 @@ export default function PlayerGame() {
             <div className="hero-club">
               {team ? (
                 <>
-                  <span className="muted">效力</span>
                   <Crest id={game.myTeam} size={20} />
                   <b>{team.name}</b>
                   <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
                   <span className="muted">·</span>
                   {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
-                  <span className="muted">· 本季首发 {me.seasonStart.starts}/{me.seasonStart.matches} · 胜 {me.seasonStart.wins}</span>
                 </>
               ) : (
                 <b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b>
@@ -242,17 +239,17 @@ export default function PlayerGame() {
             </div>
           </div>
           <div className="hero-stage">
-            <small>{game.year}</small>
             <b>{stageNameIn(game.year, game.stage, onTimeline(game))}</b>
-            <span className="muted">{dateLabel(game)} · 第 {Math.floor(game.day / 7)} 周</span>
+            <span className="muted">{dateLabel(game)}</span>
           </div>
           <div className="tiles">
             <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
             <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(me.pre?.ladder ?? 0)}</b></div>
-            <div className="tile"><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
+            <div className="tile" title={`${fanTier(me.fans).name} · ${fansCn(me.fans)}`}><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
             <div className="tile"><small>资金</small><b>{money(me.money)}</b></div>
-            <div className={`tile ${p.fatigue >= 60 ? 'dn' : ''}`}><small>体力</small><b>{Math.round(100 - p.fatigue)}<em>/100</em></b></div>
-            <div className={`tile ${p.form >= 78 ? 'up' : p.form <= 60 ? 'dn' : ''}`}><small>状态</small><b>{p.form >= 78 ? '火热' : p.form >= 68 ? '正常' : p.form >= 60 ? '一般' : '低迷'}<em>{Math.round(p.form)}</em></b></div>
+            <div className={`tile ${p.fatigue >= 60 ? 'dn' : ''}`}><small>体力</small><b>{Math.round(100 - p.fatigue)}</b></div>
+            {/* 气压 has no tile of its own: past 55 it is the only state worth saying */}
+            <div className={`tile ${me.tilt >= 55 || p.form <= 60 ? 'dn' : p.form >= 78 ? 'up' : ''}`}><small>状态</small><b>{me.tilt >= 55 ? '心态崩了' : p.form >= 78 ? '火热' : p.form >= 68 ? '正常' : p.form >= 60 ? '一般' : '低迷'}{nums && <em>{Math.round(p.form)}</em>}</b></div>
           </div>
         </section>
 
@@ -262,6 +259,8 @@ export default function PlayerGame() {
           </div>
         )}
 
+        {/* not on 我的, which is the same eight rows at full size; 心态/体质/疲劳/气压 live there and in the 状态 tile */}
+        {screen !== 'me' && (
         <div className="pinbar" role="status" aria-label="属性">
           {ATTR_KEYS.map((k) => {
             // an attribute sitting at its ceiling is marked here too; the 我的 page says how to break it
@@ -274,12 +273,8 @@ export default function PlayerGame() {
           })}
           <span className="sep" />
           <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
-          <span className="pin"><span>心态</span><b>{nums ? Math.round(me.mental) : mentalWord(me.mental)}</b></span>
-          <span className="pin"><span>体质</span><b>{nums ? Math.round(me.body) : bodyWord(me.body)}</b></span>
-          <span className="sep" />
-          <span className={`pin ${p.fatigue >= 60 ? 'dn' : ''}`}><span>疲劳</span><b>{nums ? Math.round(p.fatigue) : fatigueWord(p.fatigue)}</b></span>
-          <span className={`pin ${me.tilt >= 55 ? 'dn' : ''}`}><span>气压</span><b>{nums ? Math.round(me.tilt) : tiltWord(me.tilt)}</b></span>
         </div>
+        )}
 
         <div className="body">
           <nav className="nav">
@@ -309,7 +304,7 @@ export default function PlayerGame() {
         {summary && (
           <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             <p className="small muted" style={{ marginTop: 0 }}>
-              现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage, onTimeline(game))}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : '这几周里没手动安排的都按推荐排了；下面是替你做的决定和打过的比赛。'}
+              现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage, onTimeline(game))}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : ''}
             </p>
             {summary.notes.length === 0
               ? <p className="muted">一路没有需要拿主意的事。</p>
