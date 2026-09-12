@@ -7,8 +7,8 @@ import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine, Player } from '../types'
 import { deskLine } from './press'
 import {
-  AUTO_PENALTY, COACH_READS, HINT_EDGE, KEY_MOMENTUM, NODE_HINTS,
-  eligibleNodes, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout,
+  COACH_READS, HINT_EDGE, KEY_MOMENTUM, NODE_HINTS,
+  autoChance, eligibleNodes, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout,
 } from './nodes'
 import { cerMatchEdge } from './ceremony'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
@@ -311,11 +311,14 @@ export class MeMatch {
     const idx = pend.node.a[i] ? i : pend.coach
     const opt = pend.node.a[idx]
     const hint = pend.fav < 0 ? 0 : idx === pend.fav ? HINT_EDGE : -HINT_EDGE
-    const p = clamp01(
+    const manual = clamp01(
       nodeChance(this.state, opt, this.myTeamId, this.oppTeamId) + cerMatchEdge(this.state).node +
-      rivalNodeEdge(this.state, this.oppTeamId) + hint - (this.auto ? AUTO_PENALTY : 0),
+      rivalNodeEdge(this.state, this.oppTeamId) + hint,
     )
-    const { ok, fail } = keyRoundOdds(this.roundProb(), opt.risk, pend.node.decides)
+    const base = this.roundProb()
+    // nobody in the chair: less than the coach's pick, and never a call that pays on average (me/nodes.ts autoChance)
+    const p = this.auto ? autoChance(manual, base, pend.node.decides) : manual
+    const { ok, fail } = keyRoundOdds(base, opt.risk, pend.node.decides)
     return { p, ok, fail }
   }
 
