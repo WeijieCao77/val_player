@@ -98,7 +98,7 @@ export function expectOf(team: Team): number {
 }
 
 export const CLUB_TIER_CN = (team: Team): string =>
-  team.tier === 2 ? 'Challengers' : team.rating >= 86 ? '豪门' : team.rating >= 79 ? '中游' : '弱队'
+  team.tier === 2 ? 'Challengers' : team.rating >= 86 ? '豪门' : team.rating >= 82 ? '中游' : '弱队'
 
 /**
  * The bar at every level, and how far under it you are.
@@ -120,8 +120,9 @@ export function clubBars(state: GameState): ClubBar[] {
   const skill = tryoutSkill(state)
   const groups: { key: string; name: string; pick: (t: Team) => boolean }[] = [
     { key: 't1top', name: '豪门', pick: (t) => t.tier === 1 && t.rating >= 86 },
-    { key: 't1mid', name: '中游', pick: (t) => t.tier === 1 && t.rating >= 79 && t.rating < 86 },
-    { key: 't1low', name: '弱队', pick: (t) => t.tier === 1 && t.rating < 79 },
+    // on a new world's ruler (engine/ruler.ts) a VCT club's best five sit 80–91: the top third, the middle, the rest
+    { key: 't1mid', name: '中游', pick: (t) => t.tier === 1 && t.rating >= 82 && t.rating < 86 },
+    { key: 't1low', name: '弱队', pick: (t) => t.tier === 1 && t.rating < 82 },
     { key: 't2', name: '挑战者联赛', pick: (t) => t.tier === 2 },
   ]
   const home = Object.values(state.teams).filter((t) => t.region === me.region && !t.id.startsWith('CUP_') && !t.dormant)

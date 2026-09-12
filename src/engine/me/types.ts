@@ -399,6 +399,11 @@ export interface BottleneckState {
   pinned: (keyof Attrs)[]
   /** the potential last derived from the ceilings — anything above it is the winter's re-rating */
   pot: number
+  /** 综合 opened from each pool, by the attribute that broke (me/bottleneck.ts BREAK_VALUE); absent in saves from before breaks were valued */
+  mechV?: Partial<Record<keyof Attrs, number>>
+  mileV?: Partial<Record<keyof Attrs, number>>
+  /** 2 once the book has had the one-time look back for the title breaks an older build missed */
+  rev?: number
 }
 
 /** What can be wrong with me - see me/injury.ts. */
@@ -483,6 +488,8 @@ export interface MeState {
   cer?: Ceremony
   /** ceremonies already held, as keys - each fires once */
   cerSeen?: string[]
+  /** this season's nights so far, against its cap (me/cerbudget.ts); absent in older saves */
+  cerYear?: { year: number; n: number; media: number }
   /** 出征 changed how fast the body comes back, until this day */
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */

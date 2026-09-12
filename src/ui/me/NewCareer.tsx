@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
-import { recomputeOverall } from '../../engine/player'
-import { buildAttrs, candidateClubs, careerRegions, createCareer, emptyTalents, isAcademy, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
+import { candidateClubs, careerRegions, ceilingLines, ceilingPreview, createCareer, emptyTalents, isAcademy, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originOf } from '../../engine/me/origins'
 import { hallAchCount, hallTitle, noteHall, readHall } from '../../engine/me/hall'
@@ -223,8 +222,9 @@ export default function NewCareer({
   // where a club start is placed: the game picks from these once the career starts (career.ts pickClub)
   const pool = useMemo(() => startPool(region, start, year), [region, start, year])
   const academies = useMemo(() => start === 'chal' && pool.some((c) => isAcademy(c, year)), [pool, start, year])
-  const ovr = useMemo(() => recomputeOverall({ role, attrs: buildAttrs(role, talents, originKey), stageBonus: 0 } as never), [role, talents, originKey])
-  const origin = originOf(originKey)
+  // the talent panel's ceiling and the starters beside it, from the engine and the entry year's data (me/career.ts ceilingLines)
+  const [capNums] = useNumbers()
+  const capLine = useMemo(() => ceilingLines(ceilingPreview(role, talents, originKey, year), year, capNums ? undefined : attrWord), [role, talents, originKey, year, capNums])
   const starts = startCnOf(year)
   // where a career grinds from, under the league it feeds; 2021 had no leagues to group by
   const groups = useMemo<{ league: Region | null; list: Region[] }[]>(() => (year >= 2023
@@ -402,12 +402,8 @@ export default function NewCareer({
         </div>
       </Panel>
 
-      <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">起始综合约 {ovr}，上限约 {ovr + (origin.flags?.late ? 12 : 16)}</span>}>
-        <p className="tiny faint" style={{ marginTop: 0 }}>
-          {year <= 2021
-            ? '每点 +3。打进过赛区决赛的俱乐部，首发中位数是 81；只打过海选的俱乐部约 68——差距要在天梯、杯赛、训练赛里补。'
-            : '每点 +3。一级联赛首发大多在 80 上下，Challengers 首发多在六十几——差距要在天梯、杯赛、训练赛里补。'}
-        </p>
+      <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">{capLine.tag}</span>}>
+        <p className="tiny faint" style={{ marginTop: 0 }}>{capLine.hint}</p>
         <div className="talent-grid">
           {ATTR_KEYS.map((k) => (
             <div key={k} className="talent-row">

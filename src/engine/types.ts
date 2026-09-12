@@ -942,6 +942,8 @@ export interface WorldState {
   callerSync?: string
   /** which rulebook this career plays by — see engine/ruleset.ts; absent is vct-2025 */
   rulesetId?: 'vct-2025' | 'vct-2026'
+  /** the ruler the world's real players are measured on — see engine/ruler.ts; absent is the builders' own scale */
+  ruler?: number
   /** every draw held in this career — see engine/draw.ts */
   draws?: import('./draw').DrawEvent[]
   /** a draw the manager has to hold — reveal or skip, or pick — before the clock moves */
