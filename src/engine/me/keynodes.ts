@@ -113,6 +113,34 @@ export const KEY_NODES: NodeDef[] = [
     premise: { buyMine: ['full', 'force'], buyTheirs: ['eco'] }, rec: 0,
     lean: { longLines: 0, theyHot: 0, meHot: 1, meCold: 0, duelUp: 1, duelDown: 0, streakUs: 1 },
     a: [{ t: '退一步，拉开距离用长枪架', dim: 'awareness', risk: 0.45 }, { t: '往前追，一个一个找出来', dim: 'reaction', risk: 0.8 }] },
+
+  // ---------------------------------------------------------------- point: a match point, ours or theirs, on either side
+  { id: 'mp_mine_atk', phase: 'point', q: '赛点，你们进攻，这一回合拿下就收图。', ctx: '指挥说按最熟的那套打，可对面也最熟悉那一套。',
+    premise: { point: 'mine', side: 'atk' }, rec: 0,
+    lean: { streakUs: 1, streakThem: 0, duelUp: 1, duelDown: 0, theirBroke: 1, theirSaved: 0, meHot: 1, meCold: 0 },
+    a: [{ t: '按体系一步一步进', dim: 'teamwork', risk: 0.45 }, { t: '你拿第一个先手', dim: 'reaction', risk: 1.0 }] },
+  { id: 'mp_mine_def', phase: 'point', q: '赛点，你们防守，守住这一回合就收图。', ctx: '对面没有退路，这一波会把所有技能都砸下来。',
+    premise: { point: 'mine', side: 'def' }, rec: 0,
+    lean: { theirSaved: 0, theirBroke: 1, streakUs: 1, streakThem: 0, duelUp: 1, duelDown: 0, theyHot: 0 },
+    a: [{ t: '守住默认站位，等他们先动', dim: 'awareness', risk: 0.5 }, { t: '你前压抢一个，打乱他们的节奏', dim: 'reaction', risk: 0.95 }] },
+  { id: 'mp_theirs_atk', phase: 'point', q: '对面赛点，你们进攻，这一回合必须打进去。', ctx: '输了这一回合这张图就没了，指挥在等你们拿主意。',
+    premise: { point: 'theirs', side: 'atk' }, rec: 1,
+    lean: { threeSites: 1, teleporter: 0, teamUp: 1, teamDown: 0, theirBroke: 0, streakUs: 0, streakThem: 1 },
+    a: [{ t: '五个人一起打最快的一波', dim: 'reaction', risk: 0.85 }, { t: '先做一次假打，把人骗走再进', dim: 'communication', risk: 0.6 }] },
+  { id: 'mp_theirs_def', phase: 'point', q: '对面赛点，他们进攻，这一回合守不住这张图就没了。', ctx: '站位要不要变，就在暂停的这几秒里定。',
+    premise: { point: 'theirs', side: 'def' }, rec: 1,
+    lean: { threeSites: 1, teleporter: 0, streakThem: 0, theirBroke: 0, theirSaved: 1, teamUp: 1, teamDown: 0 },
+    a: [{ t: '赌一个点，多站一个人过去', dim: 'awareness', risk: 0.8 }, { t: '按默认站位，等回防', dim: 'teamwork', risk: 0.45 }] },
+
+  // ---------------------------------------------------------------- ot: the first overtime round
+  { id: 'ot_atk', phase: 'ot', q: '加时第一回合，你们先进攻。', ctx: '加时每回合都换边，一回合也不能送。',
+    premise: { point: 'ot', side: 'atk' }, rec: 0,
+    lean: { streakUs: 1, streakThem: 0, duelUp: 1, duelDown: 0, meHot: 1, meCold: 0 },
+    a: [{ t: '按常规打，先拿信息', dim: 'awareness', risk: 0.5 }, { t: '开局就冲，打他们一个措手不及', dim: 'reaction', risk: 0.9 }] },
+  { id: 'ot_def', phase: 'ot', q: '加时第一回合，你们先防守。', ctx: '加时每回合都换边，守住这一回合，下一回合就轮到你们进攻。',
+    premise: { point: 'ot', side: 'def' }, rec: 0,
+    lean: { streakUs: 1, streakThem: 0, duelUp: 1, duelDown: 0, theyHot: 0, meHot: 1 },
+    a: [{ t: '守住站位，别送', dim: 'teamwork', risk: 0.45 }, { t: '前压抢第一个', dim: 'reaction', risk: 0.9 }] },
 ]
 
 export const KEY_HL: Record<string, HlOpt[]> = {
@@ -385,6 +413,90 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '你追得太深，被躲在角落的手枪打了个措手不及，这回合丢了。',
     },
   ],
+  mp_mine_atk: [
+    {
+      okWin: '你们按最熟的那套一步一步进，谁都没有多做动作，这回合拿下。',
+      okLoss: '你们按体系打得一步不乱，可对面这一回合把那套读得很准，这回合丢了。',
+      failWin: '按体系进的时候节奏被对面卡了一下，好在临场有人补了一步，这回合拿下。',
+      failLoss: '按体系进的时候节奏被对面卡住，赛点没收住，这回合丢了。',
+    },
+    {
+      okWin: { k0: '赛点的第一个先手是你的，你探出去把枪位逼了出来，队友顺着压进点，这回合拿下。', k1: '赛点的第一个先手是你的，你放倒一个，队友顺着压进点，这回合拿下。', k2: '赛点的第一个先手是你的，你连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '你拿到了先手的位置，把枪位逼了出来，可补枪慢了一步，这回合丢了。', k1: '你先手放倒一个，可补枪慢了一步，这回合丢了。' },
+      failWin: '你的先手没打出来，被逼了回去，是队友从另一边把点打开，这回合拿下。',
+      failLoss: '你的先手没打出来，赛点从手里溜走，这回合丢了。',
+    },
+  ],
+  mp_mine_def: [
+    {
+      okWin: '你们守住默认站位，对面把技能砸完也没找到缺口，这回合拿下。',
+      okLoss: '你们的站位没有破绽，可对面这一波的枪实在太准，这回合丢了。',
+      failWin: '你们等得太久，被对面抢到了先手，好在回防打得坚决，这回合拿下。',
+      failLoss: '你们等得太久，被对面抢到了先手，赛点没守住，这回合丢了。',
+    },
+    {
+      okWin: { k0: '你前压了一步，把对面的节奏整个打乱，这回合拿下。', k1: '你前压放倒一个，对面少了人不敢再进，这回合拿下。', k2: '你前压，连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '你前压打乱了对面的节奏，可他们换了个点照样打了进来，这回合丢了。', k1: '你前压放倒一个，可他们换了个点照样打了进来，这回合丢了。' },
+      failWin: '你前压被逼了回来，点里少了一个人，好在队友硬是守住，这回合拿下。',
+      failLoss: '你前压被逼了回来，点里少了一个人，这回合丢了。',
+    },
+  ],
+  mp_theirs_atk: [
+    {
+      okWin: '五个人一起压进最近的点，对面还没来得及转，这回合抢了回来。',
+      okLoss: '五个人冲得够快，可对面早就在点里站好了位置，这回合丢了。',
+      failWin: '冲的时候有人被技能拖慢了一步，好在剩下的人硬是打开了点，这回合抢了回来。',
+      failLoss: '冲的时候有人被技能拖慢了一步，五个人没能一起进点，这回合丢了。',
+    },
+    {
+      okWin: '你在语音里安排的假打骗走了对面的人，真打那边几乎没有阻拦，这回合抢了回来。',
+      okLoss: '假打把人骗走了，可回防的速度比你们想的快，这回合丢了。',
+      failWin: '假打没骗到人，你们只能硬打，好在枪还是更准，这回合抢了回来。',
+      failLoss: '假打没骗到人，时间也耗掉了一截，这回合丢了。',
+    },
+  ],
+  mp_theirs_def: [
+    {
+      okWin: '你们赌对了点，多出来的那个人正好顶在对面进攻的路上，这回合抢了回来。',
+      okLoss: '你们赌对了点，多站的人也到了位置，可对面的技能太多，这回合丢了。',
+      failWin: '你们赌错了点，对面打的是另一边，好在回防的人赶得及，这回合抢了回来。',
+      failLoss: '你们赌错了点，对面打的是另一边，这回合丢了。',
+    },
+    {
+      okWin: '你们按默认站位守，第一时间报点，回防来得又齐又快，这回合抢了回来。',
+      okLoss: '你们的默认站位没出错，回防也来得及时，可这一波就是没守住，这回合丢了。',
+      failWin: '默认站位被对面算得很准，点很快失守，好在回防打得坚决，这回合抢了回来。',
+      failLoss: '默认站位被对面算得很准，点很快失守，这回合丢了。',
+    },
+  ],
+  ot_atk: [
+    {
+      okWin: '加时的第一回合，你们先拿到信息再动，这回合拿下。',
+      okLoss: '加时的第一回合，信息拿到了，可对面的枪更稳，这回合丢了。',
+      failWin: '拿信息的时候被对面反打了一下，好在队友稳住，这回合拿下。',
+      failLoss: '拿信息的时候被对面反打了一下，这回合丢了。',
+    },
+    {
+      okWin: { k0: '加时一开局就冲，对面根本没想到，这回合拿下。', k1: '加时一开局就冲，你放倒一个，这回合拿下。', k2: '加时一开局就冲，你连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '加时开局冲得很突然，可对面没乱，这回合丢了。', k1: '加时开局你放倒一个，可对面没乱，这回合丢了。' },
+      failWin: '加时开局冲得太猛，被架住了一下，好在队友把点打开，这回合拿下。',
+      failLoss: '加时开局冲得太猛，被架住了，这回合丢了。',
+    },
+  ],
+  ot_def: [
+    {
+      okWin: '加时的第一回合，你们守住站位互相照应，这回合拿下。',
+      okLoss: '加时的第一回合，站位守得很稳，可对面的技能一口气砸了下来，这回合丢了。',
+      failWin: '站位守得太死，被对面的技能逼出了位置，好在回防打得干净，这回合拿下。',
+      failLoss: '站位守得太死，被对面的技能逼出了位置，这回合丢了。',
+    },
+    {
+      okWin: { k0: '加时开局你前压一步，对面的进攻节奏被你打乱，这回合拿下。', k1: '加时开局你前压放倒一个，对面不敢再进，这回合拿下。', k2: '加时开局你前压，连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '加时开局你前压打乱了对面，可他们换了个方向进，这回合丢了。', k1: '加时开局你前压放倒一个，可他们换了个方向进，这回合丢了。' },
+      failWin: '加时开局你前压被逼了回来，好在队友守住了，这回合拿下。',
+      failLoss: '加时开局你前压被逼了回来，这回合丢了。',
+    },
+  ],
 }
 
 /** Pool lines, for a call where none of the facts a node reads is true: KEY_HINTS[id][i] favour option i. */
@@ -407,4 +519,10 @@ export const KEY_HINTS: Record<string, string[][]> = {
   eco_ours: [['对面觉得你们会保枪，站位压得很靠前，也很散。'], ['对面进点总是一窝蜂地走，不看角落。']],
   force_ours: [['对面进点喜欢贴着墙走，近处的角落很多。'], ['对面有人喜欢站在远处架枪，不太往前走。']],
   anti_eco: [['对面几个人正往近处的角落里钻。'], ['对面的人手里都是手枪，站得又散又远。']],
+  mp_mine_atk: [['对面暂停之后还是老站位，按体系打过去正合适。'], ['对面守点的人很紧张，上回合有人提前暴露了位置。']],
+  mp_mine_def: [['对面这张图一到关键回合就打得很慢，喜欢等防守先犯错。'], ['对面急着追分，出门的时候站位压得很靠前。']],
+  mp_theirs_atk: [['对面防守的人都缩在点里，出门就是空地。'], ['对面转点很积极，一点风吹草动就有人动。']],
+  mp_theirs_def: [['对面这张图一到赛点就只打一个点。'], ['对面暂停之后换了进攻的点，赌哪边都不稳。']],
+  ot_atk: [['对面加时的防守比常规回合更靠前。'], ['对面加时的第一回合总是缩在点里。']],
+  ot_def: [['对面加时的进攻喜欢等防守先犯错。'], ['对面加时第一回合出门很急，站位很散。']],
 }
