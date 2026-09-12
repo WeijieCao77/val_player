@@ -2,9 +2,9 @@ import timelineRaw from '../data/timeline.json'
 import circuitRaw from '../data/circuit.json'
 import world2021Raw from '../data/world_2021.json'
 import { clamp } from './rng'
-import { recomputeOverall } from './player'
+import { recomputeOverall, refreshValue } from './player'
 import { ATTR_KEYS } from './types'
-import type { Player, WorldState } from './types'
+import type { GameState, Player, WorldState } from './types'
 
 /**
  * The ruler a career's world measures its real players on.
@@ -197,6 +197,63 @@ export function rulerClubRating(year: number, ids: string[]): number | null {
 /** A club of January 2021's world, on this ruler. */
 export function rulerTeamRating2021(teamId: string): number | null {
   return top5(W21.players.filter((p) => p.teamId === teamId).map((p) => p.overall + rulerShift(2021, p.id.replace(/^V/, ''))))
+}
+
+/**
+ * Past the roster book nothing re-rates the world each January, and it ages on
+ * its own: the young grow into the headroom the builders gave them, the old
+ * barely slip, and no season's numbers are read any more. Measured from 2026
+ * with a career that reaches nothing, the VCT starters' median went 84 → 90 and
+ * the Challengers' 69 → 77 by 2031, and the people rated 90 or more 31 → 137
+ * (on the builders' own scale the same climb, 87 → 93).
+ *
+ * So each winter past the book the world is read on the curve the book years
+ * were read on: the best 240 by rank laid over 79–98, the Challengers' decile,
+ * median and upper decile at 61, 69 and 79, and everyone out of the player's
+ * reach moved by what his rank says, his eight together. Who passes whom still
+ * moves — a young man who keeps growing climbs past the ones who do not — and
+ * the scale does not. A free agent moves as the Challengers players did. The
+ * player's reach is left alone, as the book leaves it.
+ */
+export function holdScale(state: GameState, people: Set<string>): number {
+  if (!rulerOn(state)) return 0
+  const lines: Line[] = []
+  const held: Player[] = []
+  for (const t of Object.values(state.teams)) {
+    if (t.dormant) continue
+    for (const id of t.roster) {
+      const p = state.players[id]
+      if (!p || people.has(p.id) || p.id === state.me?.id) continue
+      lines.push({ id: p.id, o: p.overall, n: SOLID, tier: t.tier === 1 ? 1 : 2 })
+      held.push(p)
+    }
+  }
+  if (lines.length < 100) return 0
+  const curve = curveOf(lines)
+  const subShifts: number[] = []
+  let moved = 0
+  lines.forEach((l, i) => {
+    const d = Math.round(curve(l.o) - l.o)
+    if (l.tier === 2) subShifts.push(d)
+    if (!d) return
+    shiftPlayer(held[i], d)
+    refreshValue(held[i])
+    moved++
+  })
+  const sd = subShifts.length ? subShifts.slice().sort((a, b) => a - b)[Math.floor(subShifts.length / 2)] : 0
+  if (sd) {
+    for (const p of Object.values(state.players)) {
+      if (p.teamId || people.has(p.id) || p.id === state.me?.id) continue
+      shiftPlayer(p, sd)
+      refreshValue(p)
+    }
+  }
+  for (const t of Object.values(state.teams)) {
+    if (t.dormant) continue
+    const r = top5(t.roster.map((id) => state.players[id]?.overall ?? 0))
+    if (r != null) t.rating = r
+  }
+  return moved
 }
 
 export interface EntryBands {
