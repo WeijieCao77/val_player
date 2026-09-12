@@ -73,6 +73,33 @@ export const isTimelineWorld = (state: GameState): boolean => onTimeline(state)
 /** Does the book have this year? */
 export const bookCovers = (year: number): boolean => !!BOOK.years[String(year)]
 
+const LAST_DAYS = new Map<number, number>()
+/** The last day of `year` the book has any club playing: the last real roster it holds for that season. */
+export function bookLastDay(year: number): number | null {
+  const Y = BOOK.years[String(year)]
+  if (!Y) return null
+  let day = LAST_DAYS.get(year)
+  if (day == null) {
+    day = 0
+    for (const c of Object.values(Y.clubs)) day = Math.max(day, c.e ?? c.d)
+    LAST_DAYS.set(year, day)
+  }
+  return day
+}
+
+/**
+ * Past the roster book: a season it does not cover, or the end of its last one.
+ *
+ * The book holds 2026 only as far as 2026 has been played — its last club there
+ * plays on day 248 — and no 2027 roster exists anywhere. After that day nothing
+ * real is left to keep that season, and the winter into 2027 has not happened:
+ * it is the world's to play, the way every winter after it is (me/market.ts).
+ * A season the next one's book follows stays history's to its last day: 2025's
+ * winter is whatever 2026's real rosters opened with.
+ */
+export const pastTheBook = (state: GameState): boolean =>
+  !bookCovers(state.year) || (!bookCovers(state.year + 1) && state.day > (bookLastDay(state.year) ?? Infinity))
+
 /** The league a club held a seat in that year, as the book has it. */
 export const bookLeague = (year: number, vlr: string): string | null => BOOK.years[String(year)]?.clubs[vlr]?.l ?? null
 

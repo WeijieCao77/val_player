@@ -3,7 +3,7 @@ import { ROLES } from '../types'
 import type { GameState, Player, Role, Team } from '../types'
 import { regionIn } from '../era'
 import { importBlock } from '../imports'
-import { bookCovers, hasPlace, inVctLeague, isTimelineWorld } from '../timeline'
+import { bookCovers, hasPlace, inVctLeague, isTimelineWorld, pastTheBook } from '../timeline'
 import { clubWindow, feeOf, joinRoster } from './club'
 import { pushLog } from './log'
 
@@ -23,8 +23,12 @@ import { pushLog } from './log'
  * of the player's reach takes the field with the people it really had
  * (engine/timeline.ts) — so only his own club looks for help that year, among
  * the free agents (me/club.ts clubWindow). Past the book there is no history
- * to keep, and the whole world turns over this way. The one number a club can
- * pay with is its budget; a man's attachment to his club is his reason to stay.
+ * to keep, and the whole world turns over this way. The book's last season is
+ * history's only as far as it has been played (timeline.ts pastTheBook): 2026's
+ * winter window opens in November, after the last day the book has anyone
+ * playing, with no 2027 roster anywhere — so that off-season, which has not
+ * happened, turns over on the same rules as every one after it. The one number a
+ * club can pay with is its budget; a man's attachment to his club is his reason to stay.
  *
  * How much turns over past the book is the author's call (2026-09-12), made
  * against the real off-seasons of the partnered leagues: from one season's
@@ -82,8 +86,8 @@ const MINE_EVERY = 2
 /** Moves a window writes into the news, at most. */
 const NEWS_LINES = 12
 
-/** Past the roster book there is no history to keep: the whole world turns over by the market. */
-export const simulatedYear = (state: GameState): boolean => !isTimelineWorld(state) || !bookCovers(state.year)
+/** Past the roster book — its last season's winter included — there is no history to keep: the whole world turns over by the market. */
+export const simulatedYear = (state: GameState): boolean => !isTimelineWorld(state) || pastTheBook(state)
 
 const jobsOf = (p: Player): Role[] => p.roles ?? [p.role]
 /** What a man is worth to a club rebuilding: what he is, and half of what he has still to become. */
@@ -93,6 +97,7 @@ interface Move { p: Player; from: Team; q: Player; to: Team }
 
 /** A player window opens (me/week.ts): the player's club in any year, the world past the book. */
 export function marketWindow(state: GameState, rng: Rng, winter: boolean): void {
+  const mineBefore = new Set(state.teams[state.myTeam]?.roster ?? [])
   clubWindow(state, rng)
   if (!simulatedYear(state)) return
 
@@ -102,8 +107,16 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   const moved = new Set<string>()
   const lines: { text: string; mine: boolean }[] = []
 
+  // A man who changed clubs this season waits for the next one. In the book's last season that is only whoever
+  // his club signed in this very window: every earlier move that year was history's, the market had not opened,
+  // and 86–91% of each league's Challengers players "joined" 2026 when the book set that year's real rosters —
+  // read as the market's own moves, they left China nobody to send up and the other leagues a handful.
+  const lastBookSeason = bookCovers(state.year)
+  const joinedNow = (p: Player): boolean => lastBookSeason
+    ? !!state.myTeam && p.teamId === state.myTeam && !mineBefore.has(p.id)
+    : p.joinedYear === state.year
   const movable = (p: Player | undefined): p is Player =>
-    !!p && p.id !== me?.id && !p.retiring && p.joinedYear !== state.year
+    !!p && p.id !== me?.id && !p.retiring && !joinedNow(p)
   // never my job at my club
   const mineJob = (team: Team, role: Role) => team.id === myClub && role === myRole
   // and my club is in one of these moves every other season at most
