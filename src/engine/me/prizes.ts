@@ -1,5 +1,6 @@
 import raw from '../../data/prizes_me.json'
 import estimates from '../../data/prize_estimates_me.json'
+import { OQ_POOLS } from '../ahead'
 import { eventsOf } from '../circuit'
 import type { Competition, StageKey } from '../types'
 
@@ -27,7 +28,8 @@ import type { Competition, StageKey } from '../types'
  *  - an event nobody has played yet (2027 on) pays what the same event paid in
  *    2026, or its 2026 estimate, and says 「按 2026 年金额暂定」 or
  *    「估算，按 2026 年暂定」. The new format's open qualifiers and Open
- *    Playoffs, which 2026 did not have, pay an estimate of their own
+ *    Playoffs, which 2026 did not have, pay an estimate of their own: under
+ *    every Challengers stage of their league, place by place
  *
  * Nothing here reads or is read by the manager game.
  */
@@ -84,11 +86,14 @@ const editionTable = (id: string | undefined, basis: number | null): PrizeTable 
 const AHEAD_STAGE: Record<string, StageKey> = {
   kickoff: 'kickoff', cup1: 'stage1', cup2: 'stage2', masters1: 'masters1', masters2: 'masters2', champions: 'champions', ascension: 'ascension',
 }
-/** The new format's events 2026 did not have — open qualifiers, the Pacific's qualifier finals, the Open Playoffs: their own estimate. */
-const NEW_FORMAT: Record<string, (league: string | undefined) => string> = {
-  oq: () => 'new:oq',
-  oqFinal: () => 'new:oqFinal',
-  open: (league) => (league === 'China' ? 'new:open:China' : 'new:open'),
+/**
+ * The new format's events 2026 did not have — open qualifiers, the Pacific's qualifier finals, the Open Playoffs:
+ * their league's own estimate, under every Challengers stage of that league. An open qualifier's id names its pool.
+ */
+const NEW_FORMAT: Record<string, (key: string | undefined) => string> = {
+  oq: (pool) => `new:oq:${OQ_POOLS.find((p) => p.key === pool)?.league ?? pool}`,
+  oqFinal: (league) => `new:oqFinal:${league}`,
+  open: (league) => `new:open:${league}`,
 }
 
 function eventTable(id: string): PrizeTable {
