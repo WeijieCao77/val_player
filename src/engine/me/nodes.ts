@@ -55,12 +55,17 @@ export const HINT_EDGE = 0.12
  * rounds, the five's averages, the ground, who is still standing — he gets right
  * COACH_READS_PLAIN of the time. What is between you and the man across from
  * you, and who has the hot hand tonight, he watches from behind the five and
- * gets COACH_READS_SUBTLE. A line from the old pool, which states no fact,
- * stays at COACH_READS. scripts/check_decisions.ts prints what that comes to
- * over a season of calls.
+ * reads no better than a coin: COACH_READS_SUBTLE. A line from the old pool,
+ * which states no fact, stays at COACH_READS.
+ *
+ * The plain rate is set so the season comes out where A3r had it. Over the
+ * check's 600 BO3s on both sides of the draw (scripts/check_decisions.ts 二),
+ * half of all hints are plain facts, and at 0.8 the coach was right 70.4% of
+ * the time; at 0.7 it is back near two in three, and the order holds — plain
+ * above the pool above the subtle.
  */
 export const COACH_READS = 0.65
-export const COACH_READS_PLAIN = 0.8
+export const COACH_READS_PLAIN = 0.7
 export const COACH_READS_SUBTLE = 0.5
 /**
  * 快进 and 托管 take the coach's pick with this much off its chance to land —
