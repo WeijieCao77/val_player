@@ -113,7 +113,7 @@ export interface TourStep {
 
 const WEEK = 'week'
 const panel = (title: string): TourTarget => ({ sel: '.panel', text: title })
-const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛', '推进一个月'] }
+const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛'] }
 
 export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
   if (kind === 'season') return seasonSteps()
@@ -164,7 +164,7 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
       }
       : {
         screen: WEEK, at: [ADVANCE], title: '推进',
-        body: '「推进一周」结算这周，时间往前走。旁边的按钮一次推几周：没排的周按推荐来，途中的事按稳妥的选法替你定。',
+        body: '「推进一周」结算这周，时间往前走。旁边的「快进到…」一次推几周，空窗期可以推一个月：没排的周按推荐来，事件这类小事替你定，合同和试训邀请停下来等你。',
       },
     {
       screen: WEEK, at: [{ sel: '.advance-me .hint' }], title: '停下来等你的事',

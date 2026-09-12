@@ -36,7 +36,7 @@ CACHE = os.path.join(ROOT, '.cache', 'vlr')
 RECORDS = os.path.join(ROOT, 'src', 'data', 'records.json')
 
 UA = ('val_player-dataset/0.1 (personal VALORANT career-sim project; '
-      'contact yankejing711@gmail.com)')
+      'project page https://github.com/WeijieCao77/val_player)')
 DELAY = 1.5
 
 KEEP = re.compile(

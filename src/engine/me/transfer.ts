@@ -205,7 +205,9 @@ export function seasonContractCheck(state: GameState, rng: Rng): void {
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `合同到期，${team.name} 想续约。`)
-    // hold the departure for a season: if the deal is refused, the free agency comes next winter
+    // the contract is held a year only while the answer is pending: signed, the new terms replace it
+    // (me/contract.ts applyTerms); refused, I leave on the spot (me/contract.ts renewalGone). A save
+    // refused under the old rule played the held year out, and is let go below the next winter.
     p.contractYears = 1
     p.expiredYear = undefined
     me.flags.renewPending = 1

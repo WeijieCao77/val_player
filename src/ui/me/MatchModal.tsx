@@ -148,7 +148,7 @@ export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onC
       {map && (
         <Scoreboard
           map={map} teamA={fixture.teamA} teamB={fixture.teamB}
-          onPlayer={openPlayer} lineups={r.lineups} agentsOf={agentsOf}
+          onPlayer={openPlayer} lineups={r.lineups} standIns={r.standIns} agentsOf={agentsOf}
           // the match MVP belongs to the series: on the All Maps sheet, or in
           // a BO1 where the map IS the series. A per-map sheet crowns its own
           // best — vlr's map pages do not carry the series award either.
@@ -321,7 +321,7 @@ function Performance({
 }
 
 function Scoreboard({
-  map, teamA, teamB, onPlayer, mvp, mapBest, lineups, agentsOf,
+  map, teamA, teamB, onPlayer, mvp, mapBest, lineups, standIns, agentsOf,
 }: {
   map: MapScore; teamA: string; teamB: string
   onPlayer: (id: string) => void
@@ -330,6 +330,8 @@ function Scoreboard({
   /** this map's own best, for per-map sheets of a multi-map match */
   mapBest: string | null
   lineups?: { a: string[]; b: string[] }
+  /** who played from outside the side's registered roster (engine/standin.ts) */
+  standIns?: { a: string[]; b: string[] }
   /** every agent this player was seen on — one on a map sheet, several on the
       All Maps sheet, exactly as vlr shows it */
   agentsOf: (pid: string) => string[]
@@ -373,6 +375,9 @@ function Scoreboard({
                   <tr key={p.id} className="clickable" onClick={() => onPlayer(p.id)}>
                     <td>
                       <b>{p.ign}</b>
+                      {(teamId === teamA ? standIns?.a : standIns?.b)?.includes(p.id) && (
+                        <span className="tag" style={{ marginLeft: 6 }} title="不在这支队伍的注册名单上：青训队调来，或自由人临时顶替">临时</span>
+                      )}
                       {mvp === p.id && <span className="tag t1" style={{ marginLeft: 6 }}>MVP</span>}
                       {mapBest === p.id && (
                         <span

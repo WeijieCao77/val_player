@@ -45,17 +45,21 @@ export const NAT_DEFAULT: Record<Region, string> = {
 }
 
 export type StartPoint = 'pre' | 'chal' | 't1'
+/**
+ * A club start is a door, not a club to pick (asked 2026-09-12: 「这个出身选择就应该是直接从二队有俱乐部开始」):
+ * the game assigns the club (pickClub), and the club shows once the career has started.
+ */
 export const START_CN: Record<StartPoint, { name: string; blurb: string }> = {
   pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。排位、杯赛、试训，先拿到第一份合同。最长的路，也是完整的路。' },
-  chal: { name: 'Challengers 青训', blurb: '18 岁，一支二级联赛俱乐部的首发。Ascension 升级，或者被一级俱乐部挖走。' },
-  t1: { name: 'VCT 替补', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。' },
+  chal: { name: 'Challengers 二队', blurb: '18 岁，一支俱乐部二队的首发：一线队的 Academy，赛区里没有就是一支 Challengers 俱乐部。开局分到哪家由游戏决定。' },
+  t1: { name: 'VCT 替补', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。开局分到哪家由游戏决定。' },
 }
 
 /** 2021 had no leagues and no academies to start in: the same three doors, as they were then. */
 export const START_CN_2021: Record<StartPoint, { name: string; blurb: string }> = {
   pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。2021 年没有联赛也没有青训体系：排位、网吧赛、试训——哪家俱乐部看上你，哪家就给你合同。' },
-  chal: { name: '二线队首发', blurb: '18 岁，一支还没打出名堂的俱乐部的首发。开放海选一场场打上去，打进赛区决赛才有人记住你。' },
-  t1: { name: '强队替补', blurb: '18 岁，一支打进过赛区决赛的俱乐部的第六人。名单上有你，首发没有。' },
+  chal: { name: '二线队首发', blurb: '18 岁，一支还没打出名堂的俱乐部的首发，开放海选一场场打上去。开局分到哪家由游戏决定。' },
+  t1: { name: '强队替补', blurb: '18 岁，一支打进过赛区决赛的俱乐部的第六人。名单上有你，首发没有。开局分到哪家由游戏决定。' },
 }
 
 export const startCnOf = (year: number): Record<StartPoint, { name: string; blurb: string }> =>
@@ -81,22 +85,63 @@ export interface ClubChoice { id: string; name: string; tag: string; rating: num
 /** Clubs in a region, by tier. */
 type BookClub = { id: string; name: string; tag: string; region: string; tier: number; rating: number; roster: string[] }
 
-export function candidateClubs(region: Region, tier: 1 | 2, year = 2026): ClubChoice[] {
+/** Every club a career could open beside that year, in every region and tier. */
+function clubsOf(year: number): (ClubChoice & { region: string })[] {
   // 2026 opens on the one timeline: its clubs are the roster book's, as 2026 really opened
   if (year >= 2026) {
-    return bookClubsAt(year).filter((t) => t.region === region && t.tier === tier)
-      .map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster, tier: t.tier }))
-      .sort((a, b) => a.rating - b.rating)
+    return bookClubsAt(year).map((t) => ({ id: t.id, name: t.name, tag: t.tag, rating: t.rating, roster: t.roster, tier: t.tier, region: t.region }))
   }
-  return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[])
+  return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[]).map((t) => {
+    // world_2021.json has vlr's names of today; January 2021 had its own (engine/names.ts)
+    const real = year <= 2021 ? realName(t.id.replace(/^V21T/, ''), 2021, 0) : null
+    // a new career's world is on engine/ruler.ts, and so is the club it is placed at
+    const rating = (year <= 2021 ? rulerTeamRating2021(t.id) : null) ?? t.rating
+    return { id: t.id, name: real?.name ?? t.name, tag: real?.tag ?? t.tag, rating, roster: t.roster.length, tier: t.tier, region: t.region }
+  })
+}
+
+export function candidateClubs(region: Region, tier: 1 | 2, year = 2026): ClubChoice[] {
+  return clubsOf(year)
     .filter((t) => t.region === region && t.tier === tier)
-    .map((t) => {
-      // world_2021.json has vlr's names of today; January 2021 had its own (engine/names.ts)
-      const real = year <= 2021 ? realName(t.id.replace(/^V21T/, ''), 2021, 0) : null
-      // a new career's world is on engine/ruler.ts, and so is the club it is offered
-      return { id: t.id, name: real?.name ?? t.name, tag: real?.tag ?? t.tag, rating: (year <= 2021 ? rulerTeamRating2021(t.id) : null) ?? t.rating, roster: t.roster.length, tier: t.tier }
-    })
+    .map(({ id, name, tag, rating, roster, tier: k }) => ({ id, name, tag, rating, roster, tier: k }))
     .sort((a, b) => a.rating - b.rating)
+}
+
+const ACADEMY = /\s+(?:global\s+)?academy$/i
+/** LEVIATÁN and Leviatan alike: accents dropped (the combining marks U+0300–U+036F after NFD), case and punctuation too */
+const squash = (s: string): string => [...s.normalize('NFD')]
+  .filter((ch) => ch.charCodeAt(0) < 0x300 || ch.charCodeAt(0) > 0x36f).join('')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * A top club's second team, as that year's book has it: a club named after a
+ * first-division club of the same year with 「Academy」 after it — MIBR Academy,
+ * ZETA DIVISION Academy, Gen.G Global Academy, DFM Academy (DetonatioN FocusMe
+ * goes by DFM). 「FUTURE ACADEMY TEAM」 is not one, and neither is an academy
+ * whose first team is not in the top tier that year.
+ */
+export function isAcademy(c: Pick<ClubChoice, 'id' | 'name'>, year: number): boolean {
+  if (!ACADEMY.test(c.name)) return false
+  const base = squash(c.name.replace(ACADEMY, ''))
+  if (!base) return false
+  return clubsOf(year).some((t) => t.tier === 1 && t.id !== c.id
+    && (squash(t.name) === base || squash(t.tag) === base || squash(t.name).startsWith(`${base} `)))
+}
+
+/**
+ * The clubs a club start is assigned from: a VCT 替补 start any first-division
+ * club of the region; a second-team start the region's top-club academies where
+ * that year has any, else its Challengers clubs. Clubs with a place on the roster
+ * first. Empty when the region has no such club on New Year's Day.
+ */
+export function startPool(region: Region, start: StartPoint, year = 2026): ClubChoice[] {
+  if (start === 'pre') return []
+  const tier: 1 | 2 = start === 't1' ? 1 : 2
+  const all = candidateClubs(region, tier, year)
+  const academies = tier === 2 ? all.filter((t) => isAcademy(t, year)) : []
+  const base = academies.length ? academies : all
+  const room = base.filter((t) => t.roster <= 6)
+  return room.length ? room : base
 }
 
 /** The regions a career can open in that year: the ones its world has clubs in, busiest first. */
@@ -147,48 +192,28 @@ function ruleOpening(state: GameState): GameState {
   return state
 }
 
-function pickClub(region: Region, tier: 1 | 2, rng: Rng, year = 2026): string {
-  const pool = candidateClubs(region, tier, year).filter((t) => t.roster <= 6)
-  const list = pool.length ? pool : candidateClubs(region, tier, year)
+/**
+ * The club a club start opens at. A newcomer does not choose his club (asked
+ * 2026-09-11: 「为什么玩家在创号的时候就可以选俱乐部？」), and no list of clubs
+ * comes for him either (2026-09-12): the game assigns one from startPool, off the
+ * career's seed, so the same seed opens at the same club.
+ */
+function pickClub(region: Region, start: 'chal' | 't1', rng: Rng, year = 2026): string {
+  const list = startPool(region, start, year)
   // China's second tier plays its first event of 2026 in the summer: on New Year's Day there is no such club to sign for
-  if (!list.length) throw new Error(`${year} 年开季时 ${region} 没有${tier === 1 ? '一线' : '二线'}俱乐部可以签`)
+  if (!list.length) throw new Error(`${year} 年开季时 ${region} 没有${start === 't1' ? '一线' : '二线'}俱乐部可以签`)
   // the weaker the club, the likelier it takes a chance on an unknown —
   // squared, so a 74 is about five times as likely as an 88
   const w = list.map((t) => Math.max(4, 100 - t.rating) ** 2)
   return rng.weighted(list, w).id
 }
 
-export interface StartOffer extends ClubChoice {
-  /** where the club stands among its tier in the region, in words */
-  standing: '强队' | '中游' | '弱队'
-}
+/** a career's own stream, off its seed; the club draw is the first thing it rolls */
+const CAREER_SALT = 0x3e11
 
-/**
- * Who comes for a new player who starts at a club. The new-career screen used
- * to list every club of the tier and let an 18-year-old pick one — the reigning
- * champions included (asked 2026-09-11: 「为什么玩家在创号的时候就可以选俱乐部？」).
- * A newcomer does not choose his club; the clubs that want him ask. Two or three
- * of the region's clubs at that tier with room on the roster, drawn the way
- * pickClub signs one (the weaker, the likelier to take a chance), and he signs
- * with one of those.
- */
-export function startOffers(region: Region, tier: 1 | 2, year: number, seed: number, n = 3): StartOffer[] {
-  const all = candidateClubs(region, tier, year)
-  const room = all.filter((t) => t.roster <= 6)
-  const left = [...(room.length ? room : all)]
-  const rng = new Rng(seed ^ 0x51a7)
-  const out: StartOffer[] = []
-  // a tier of three clubs does not all come knocking: at least one of them is not interested
-  const want = Math.min(n, Math.max(1, left.length - 1))
-  while (out.length < want && left.length) {
-    const c = rng.weighted(left, left.map((t) => Math.max(4, 100 - t.rating) ** 2))
-    left.splice(left.indexOf(c), 1)
-    // all is weakest first
-    const at = all.length > 1 ? all.findIndex((t) => t.id === c.id) / (all.length - 1) : 0.5
-    out.push({ ...c, standing: at >= 2 / 3 ? '强队' : at >= 1 / 3 ? '中游' : '弱队' })
-  }
-  return out.sort((a, b) => b.rating - a.rating)
-}
+/** The club createCareer opens a club start at for this seed — the same draw, without building the world (scripts/probe_start_clubs.ts). */
+export const assignStartClub = (region: Region, start: 'chal' | 't1', seed: number, year = 2026): string =>
+  pickClub(region, start, new Rng(seed ^ CAREER_SALT), year)
 
 export function emptyTalents(): Record<keyof Attrs, number> {
   return { aim: 3, reaction: 3, awareness: 3, utility: 3, clutch: 2, teamwork: 2, communication: 2, igl: 2 }
@@ -198,12 +223,13 @@ export function emptyTalents(): Record<keyof Attrs, number> {
 export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, originKey: string, rng?: Rng): Attrs {
   const w = weightsFor({ role })
   const top = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 2)
-  const o = originOf(originKey)
+  // no background picked yet (the new-career page previews before one is): none of a background's numbers
+  const o = originKey ? originOf(originKey) : undefined
   const attrs = {} as Attrs
   for (const k of ATTR_KEYS) {
     // 52, not 58: a fresh player starts a clear step under every club's bar
     // and has to climb to it, the way 破晓 opens — see prepro.expectOf
-    attrs[k] = clamp(52 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
+    attrs[k] = clamp(52 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o?.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
   }
   attrs.igl = Math.min(attrs.igl, 62)
   return attrs
@@ -278,7 +304,7 @@ export function ceilingLines(c: CeilingPreview, year: number, word?: (v: number)
 /** A new career: the manager game's world, with me in it. */
 export function createCareer(o: CareerOpts): GameState {
   const seed = o.seed ?? (hashStr(o.name + o.region + o.role + o.originKey + String(Date.now())) >>> 0)
-  const rng = new Rng(seed ^ 0x3e11)
+  const rng = new Rng(seed ^ CAREER_SALT)
   const origin = originOf(o.originKey)
   const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
   const year = o.year ?? 2026
@@ -289,7 +315,7 @@ export function createCareer(o: CareerOpts): GameState {
     : o.region
   const teamId = o.start === 'pre'
     ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // the world is built around a club; I am not at it
-    : (o.teamId ?? pickClub(region, clubTier, rng, year))
+    : (o.teamId ?? pickClub(region, o.start, rng, year))
   const state = year >= 2026 ? createWorldAt(teamId, seed, year) : ruleOpening(createWorld(teamId, seed, year))
   // Nobody's club until I sign for one. The world used to keep a club "watched" for a player on the
   // ladder, and treated it as his: its title raised the world's rivalry, it kept its name when history
@@ -355,7 +381,12 @@ export function createCareer(o: CareerOpts): GameState {
   me.pre.ladder = clamp(45 + (p.overall - 60) * 1.7 - 12 + (origin.ladder ?? 0), 0, 100)
   me.pre.ladderPeak = me.pre.ladder
 
-  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.needsClub && o.start !== 'pre' ? origin.blurb.replace('这家俱乐部', state.teams[state.myTeam]?.name ?? '这家俱乐部') : origin.blurb}`)
+  // a club start's club is the game's pick, so the first line says where it put me — a club background already names it
+  const club = o.start !== 'pre' ? state.teams[state.myTeam] : undefined
+  const placed = club && !origin.needsClub
+    ? ` 开局分到 ${club.name}${isAcademy(club, year) ? '（二队）' : ''}，${o.start === 't1' ? '一线队的第六人' : '首发'}。`
+    : ''
+  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.needsClub && club ? origin.blurb.replace('这家俱乐部', club.name) : origin.blurb}${placed}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
     pushLog(state, 'info', `没有队伍。${ladderLabel(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)

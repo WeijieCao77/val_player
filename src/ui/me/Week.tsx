@@ -10,7 +10,7 @@ import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
-import { autoPlan, quietAhead } from '../../engine/me/auto'
+import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, ladderLabel, ladderTier, skillToLadder } from '../../engine/me/prepro'
@@ -21,22 +21,23 @@ import { chainLine } from '../../engine/me/story'
 import type { GameState } from '../../engine/types'
 
 /**
- * The week's one way forward, as its button says it: a day of a match week, a
- * month when the next four weeks hold nothing of mine, otherwise a week. The
- * button ends the week's panel; on a phone the overview carries a copy of it
- * where the page opens (PlayerGame .hero-go), the way 破晓's HUD mirrors the
- * page's main button. One function, so the two never say different things.
+ * The week's one way forward, as its button says it: a day of a match week,
+ * otherwise a week — never more. A month is 「快进到…」's to offer, and named
+ * there: the button used to turn into 「推进一个月」 when four quiet weeks lay
+ * ahead, and pressed unread it ran into a renewal or a signing (reported
+ * 2026-09-12). The button ends the week's panel; on a phone the overview
+ * carries a copy of it where the page opens (PlayerGame .hero-go), the way
+ * 破晓's HUD mirrors the page's main button. One function, so the two never
+ * say different things.
  */
-export function advanceOf(game: GameState): { label: string; month: boolean; title?: string } {
+export function advanceOf(game: GameState): { label: string; title?: string } {
   if (weekInDays(game)) {
     return {
       label: weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →',
-      month: false,
       title: '过一天；比赛日当天开打，打完回到这里',
     }
   }
-  if (quietAhead(game, 28)) return { label: '推进一个月 →', month: true, title: '四周按推荐安排；中间有你的比赛、赛事开始或要你拿主意的事就停' }
-  return { label: '推进一周 →', month: false }
+  return { label: '推进一周 →' }
 }
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
@@ -211,30 +212,34 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             {/* here, at the end of the week's panel, on a phone too: 破晓 keeps its 进入下一周 in the row under the actions, not pinned over the tab bar */}
             {(() => {
               const go = advanceOf(game)
-              return go.month
-                ? <button className="primary" onClick={() => onAdvanceUntil('month')} aria-label="推进一个月" title={go.title}>{go.label}</button>
-                : <button className="primary" onClick={onAdvance} title={go.title}>{go.label}</button>
+              return <button className="primary" onClick={onAdvance} title={go.title}>{go.label}</button>
             })()}
-            <select
-              className="advance-far"
-              value=""
-              aria-label="快进"
-              title="按推荐安排一路推进，替你处理路上的事；有要你拿主意的事就停"
-              onChange={(e) => {
-                const v = e.target.value
-                if (v === 'week') onAdvance()
-                else if (v === 'match' || v === 'stage' || v === 'season') onAdvanceUntil(v)
-              }}
-            >
-              <option value="">快进到…</option>
-              {quiet && !days && <option value="week">只推进一周</option>}
-              <option value="match">下一场比赛</option>
-              <option value="stage">赛段末</option>
-              <option value="season">赛季末</option>
-            </select>
+            {(() => {
+              // a decision already waiting: no run starts, and the control says what is waiting (engine/me/auto.ts runBlocked)
+              const wait = runBlocked(game)
+              return (
+                <select
+                  className="advance-far"
+                  value=""
+                  aria-label="快进"
+                  disabled={!!wait}
+                  title={wait ? `先处理：${stopLine(game, wait)}` : '按推荐安排一路推进，路上的小事替你处理；合同、邀请这类要你拿主意的事会停下来'}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === 'month' || v === 'match' || v === 'stage' || v === 'season') onAdvanceUntil(v)
+                  }}
+                >
+                  <option value="">{wait ? '先处理等着的事' : '快进到…'}</option>
+                  {quiet && !days && <option value="month">一个月后（四周）</option>}
+                  <option value="match">下一场比赛</option>
+                  <option value="stage">赛段末</option>
+                  <option value="season">赛季末</option>
+                </select>
+              )
+            })()}
             <span className="hint">
               {me.ap > 0 ? `还有 ${me.ap} 点没用，${days ? '这一周过完' : '推进后'}作废。` : ''}
-              {quiet ? '接下来四周没有你的比赛。' : ''}
+              {quiet ? '接下来四周没有你的比赛，可以快进一个月。' : ''}
             </span>
           </div>
         </Panel>

@@ -528,11 +528,43 @@ export function historyFolds(state: GameState): string[] {
       continue
     }
     if (state.day < f.day) continue
+    // Not in the middle of an event this world is still playing it in. History
+    // let the club go a few weeks after its last real event; here it may have
+    // gone further — G2 and M3 Champions into Champions 2022, EXCEL deeper into
+    // a Stage 2 — and releasing everyone on the real day left it seeded in a
+    // bracket with nobody to field, losing every map 0-13 as if it had
+    // forfeited. It goes quiet on the first day after its last match here.
+    if (stillPlaying(state, t.id)) continue
     for (const pid of [...t.roster]) if (!people.has(pid)) release(state, state.players[pid])
     quiet(t)
     gone.push(t.name)
   }
   return gone
+}
+
+/** A match of this club's still to play, or an event this world is playing out with it entered. */
+function stillPlaying(state: GameState, id: string): boolean {
+  if (state.fixtures.some((f) => !f.played && f.comp !== 'scrim' && (f.teamA === id || f.teamB === id))) return true
+  return Object.values(state.comps).some((c) => {
+    const k = c.circuit
+    return !!k && k.mode === 'sim' && !c.champion && !k.done
+      && (c.teams.includes(id) || k.seeds.includes(id) || Object.values(k.fill ?? {}).includes(id))
+  })
+}
+
+/**
+ * History has let this club go and its day has come (it may still be finishing
+ * an event here, see historyFolds): no draw this world plays gives it a new
+ * place (engine/circuit.ts begin). The player's own club closes on its own
+ * notice and is not asked.
+ */
+export function foldDue(state: GameState, teamId: string): boolean {
+  if (!isTimelineWorld(state) || teamId === reachOf(state).club) return false
+  return foldsOf(state.year).some((f) => {
+    const id = clubId(f.vlr)
+    const heir = state.heirs?.[id]
+    return (heir && state.teams[heir] ? heir : id) === teamId && state.day >= f.day
+  })
 }
 
 export interface YearSync {

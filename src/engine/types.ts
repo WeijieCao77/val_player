@@ -716,6 +716,11 @@ export interface MatchResult {
    * afterwards silently disappears from matches they played in.
    */
   lineups?: { a: string[]; b: string[] }
+  /**
+   * Who played from outside a side's registered roster — an academy call-up or
+   * an emergency stand-in (engine/standin.ts). Absent when nobody did.
+   */
+  standIns?: { a: string[]; b: string[] }
   /** short round-by-round narrative from the decisive map */
   highlights: string[]
 }
