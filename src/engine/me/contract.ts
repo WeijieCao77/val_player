@@ -7,6 +7,7 @@ import { pushLog } from './log'
 import { pop } from './pending'
 import { expectOf, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
+import { makeRoom } from './club'
 import { addMoney } from './money'
 import { PLAYER_PRIZE_SHARE } from './prizes'
 import { inVctLeague } from '../timeline'
@@ -176,6 +177,8 @@ export function joinClub(state: GameState, d: Deal): void {
       pushLog(state, 'money', `${to.name} 向 ${from.name} 支付了 $${me.flags.buyout.toLocaleString()} 的违约金。`)
     }
   }
+  // a club already carrying its registered seven lets its weakest man off the five go to register me (me/club.ts)
+  if (!from || from.id !== to.id) makeRoom(state, to)
   p.teamId = to.id
   to.roster.push(me.id)
   applyTerms(state, d)

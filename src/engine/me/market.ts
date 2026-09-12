@@ -1,8 +1,9 @@
 import { Rng, clamp } from '../rng'
+import { ROLES } from '../types'
 import type { GameState, Player, Role, Team } from '../types'
 import { regionIn } from '../era'
 import { importBlock } from '../imports'
-import { bookCovers, hasPlace, isTimelineWorld } from '../timeline'
+import { bookCovers, hasPlace, inVctLeague, isTimelineWorld } from '../timeline'
 import { clubWindow, feeOf, joinRoster } from './club'
 import { pushLog } from './log'
 
@@ -25,6 +26,28 @@ import { pushLog } from './log'
  * to keep, and the whole world turns over this way. The one number a club can
  * pay with is its budget; a man's attachment to his club is his reason to stay.
  *
+ * How much turns over past the book is the author's call (2026-09-12), made
+ * against the real off-seasons of the partnered leagues: from one season's
+ * last event to the next one's first, a partner changed 4.0–4.6 of its people
+ * a winter in 2023–26 — about half of its newcomers from Challengers, the rest
+ * from other partners and free agency — and 36–67 players went up from
+ * Challengers. The world aims at the middle of that: about 2.5–3 changes a VCT
+ * club and about 25 players up a winter. So the winter is where a year's moves
+ * are made, as it really is:
+ *
+ *  - in the winter window a VCT club rebuilding bets on what a Challengers man
+ *    will be as well as what he is — his rating and half the room above it, the
+ *    way a club reads a free agent (me/club.ts) — and takes him when he is worth
+ *    more than its man in his job; a Challengers club can lose two that way
+ *  - a VCT league trades among itself, and there ratings sit close together,
+ *    so less of a standout will do; a club that took a man up can still trade
+ *  - at New Year, with the deals that ran out gone, a VCT club fills back to
+ *    five and a sixth from the free agents, the best clubs choosing first
+ *    (marketTurn) — which is where a good man his club did not renew goes next
+ *
+ * The mid-season break stays a small window, on ratings alone. The player's
+ * own club is in one of these moves every other season at most.
+ *
  * The thresholds are this game's, on its rating scale, not 破晓's.
  */
 
@@ -34,12 +57,28 @@ const STANDOUT = 5
 const YOUNG = 24
 /** How much better than the buyer's man in that job he has to be. */
 const UPGRADE = 3
-/** A Challengers man going up: this far past a VCT club's man in his job. */
-const PROMOTE_GAP = 5
+/** In a VCT league: a standout is anyone at or above his club's rating… */
+const STANDOUT_TOP = 0
+/** …up to this age… */
+const YOUNG_TOP = 30
+/** …and a little better than the buyer's man is enough. */
+const UPGRADE_TOP = 1
 const TRADE_ODDS = 0.3
+const TRADE_ODDS_TOP = 0.8
+/** A Challengers man going up at the mid-season break: this far past a VCT club's man in his job, on ratings. */
+const PROMOTE_GAP = 5
 const PROMOTE_ODDS = 0.6
-/** Promotions a window, per region. */
+/** Promotions at the mid-season break, per region; a Challengers club gives up one man. */
 const PROMOTIONS = 2
+/** Promotions in the winter, per region: worth more than the VCT club's man in his job is enough. */
+const PROMOTIONS_WINTER = 6
+const PROMOTE_ODDS_WINTER = 0.9
+/** How many men a Challengers club can lose upward in the winter. */
+const LOSSES_WINTER = 2
+/** A VCT club after New Year: five and a sixth. */
+const TOP_SQUAD = 6
+/** The player's own club is in a market move once in this many seasons at most. */
+const MINE_EVERY = 2
 /** Moves a window writes into the news, at most. */
 const NEWS_LINES = 12
 
@@ -47,6 +86,8 @@ const NEWS_LINES = 12
 export const simulatedYear = (state: GameState): boolean => !isTimelineWorld(state) || !bookCovers(state.year)
 
 const jobsOf = (p: Player): Role[] => p.roles ?? [p.role]
+/** What a man is worth to a club rebuilding: what he is, and half of what he has still to become. */
+const worth = (p: Player): number => p.overall + Math.max(0, p.potential - p.overall) * 0.5
 
 interface Move { p: Player; from: Team; q: Player; to: Team }
 
@@ -65,6 +106,9 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     !!p && p.id !== me?.id && !p.retiring && p.joinedYear !== state.year
   // never my job at my club
   const mineJob = (team: Team, role: Role) => team.id === myClub && role === myRole
+  // and my club is in one of these moves every other season at most
+  const capped = (team: Team): boolean =>
+    team.id === myClub && !!me && me.flags.marketMoved !== undefined && state.year - me.flags.marketMoved < MINE_EVERY
   // a man who belongs where he is rarely goes
   const willing = (p: Player) => clamp((95 - (p.loyalty ?? 50)) / 45, 0.2, 1)
   const weakestIn = (team: Team, role: Role): Player | undefined =>
@@ -81,6 +125,7 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     moved.add(from.id)
     moved.add(to.id)
     const mine = from.id === myClub || to.id === myClub
+    if (mine && me) me.flags.marketMoved = state.year
     lines.push({ mine, text: `${to.name} 从 ${from.name} 换来 ${p.ign}（${p.overall}），${q.ign} 去了 ${from.name}。` })
     if (to.id === myClub) pushLog(state, 'team', `俱乐部从 ${from.name} 换来 ${p.ign}（${p.role}），${q.ign} 去了那边。`)
     else if (from.id === myClub) pushLog(state, 'team', `${p.ign} 去了 ${to.name}，${q.ign} 从那边过来。`)
@@ -89,6 +134,15 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   const clubs = Object.values(state.teams).filter((t) => !t.dormant && t.roster.length >= 5 && hasPlace(state, t))
 
   // ---- every window: a Challengers man who has outgrown a VCT club's man in his job goes up in his place
+  const cap = winter ? PROMOTIONS_WINTER : PROMOTIONS
+  const odds = winter ? PROMOTE_ODDS_WINTER : PROMOTE_ODDS
+  const losses = winter ? LOSSES_WINTER : 1
+  // mid-season a club goes by what a man is; in the winter, by what he is worth to it
+  const upBy = (p: Player, q: Player): number | null => {
+    if (winter) return worth(p) > worth(q) ? worth(p) - worth(q) : null
+    return p.overall >= q.overall + PROMOTE_GAP ? p.overall - q.overall : null
+  }
+  const lost = new Map<string, number>()
   const regions = new Map<string, Team[]>()
   for (const t of clubs) {
     const r = regionIn(t.region, state.year)
@@ -104,25 +158,29 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
         for (const to of above) {
           if (mineJob(to, p.role)) continue
           const q = weakestIn(to, p.role)
-          if (q && p.overall >= q.overall + PROMOTE_GAP) options.push({ p, from, q, to, gap: p.overall - q.overall })
+          const gap = q ? upBy(p, q) : null
+          if (q && gap != null) options.push({ p, from, q, to, gap })
         }
       }
     }
     let done = 0
     for (const o of options.sort((a, b) => b.gap - a.gap)) {
-      if (done >= PROMOTIONS) break
-      if (moved.has(o.from.id) || moved.has(o.to.id)) continue
+      if (done >= cap) break
+      if ((lost.get(o.from.id) ?? 0) >= losses || moved.has(o.to.id) || capped(o.from) || capped(o.to)) continue
       if (o.p.teamId !== o.from.id || o.q.teamId !== o.to.id) continue
       if (importBlock(state, o.to.id, o.p) || importBlock(state, o.from.id, o.q)) continue
       if (o.to.budget < feeOf(o.p) - feeOf(o.q)) continue
-      if (!rng.chance(PROMOTE_ODDS * willing(o.p))) continue
+      if (!rng.chance(odds * willing(o.p))) continue
       swap(o)
+      lost.set(o.from.id, (lost.get(o.from.id) ?? 0) + 1)
       done++
     }
   }
 
   // ---- the winter: a bottom-half club's young standout to a top-half club with a weaker man in his job
   if (winter) {
+    // a club that took a man up can still trade; a club trades once
+    const traded = new Set<string>()
     const leagues = new Map<string, Team[]>()
     for (const t of clubs) {
       const k = `${regionIn(t.region, state.year)}:${t.tier}:${t.tier === 2 ? t.scene ?? '' : ''}`
@@ -130,26 +188,33 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     }
     for (const league of leagues.values()) {
       if (league.length < 4) continue
+      const top = league[0].tier === 1
+      const standout = top ? STANDOUT_TOP : STANDOUT
+      const young = top ? YOUNG_TOP : YOUNG
+      const upgrade = top ? UPGRADE_TOP : UPGRADE
+      const tradeOdds = top ? TRADE_ODDS_TOP : TRADE_ODDS
       const ranked = league.slice().sort((a, b) => b.rating - a.rating)
       const half = Math.floor(ranked.length / 2)
       const buyers = ranked.slice(0, half)
-      const cap = Math.max(1, Math.round(league.length * 0.25))
+      const leagueCap = Math.max(1, Math.round(league.length * 0.25))
       let done = 0
       for (const from of ranked.slice(half)) {
-        if (done >= cap) break
-        if (moved.has(from.id)) continue
+        if (done >= leagueCap) break
+        if (traded.has(from.id) || capped(from)) continue
         const p = from.roster.map((id) => state.players[id])
-          .filter((x): x is Player => movable(x) && x.age <= YOUNG && x.overall >= from.rating + STANDOUT && !mineJob(from, x.role))
+          .filter((x): x is Player => movable(x) && x.age <= young && x.overall >= from.rating + standout && !mineJob(from, x.role))
           .sort((a, b) => b.overall - a.overall)[0]
         if (!p) continue
         const open = buyers
-          .filter((to) => !moved.has(to.id) && !mineJob(to, p.role))
+          .filter((to) => !traded.has(to.id) && !capped(to) && !mineJob(to, p.role))
           .map((to) => ({ to, q: weakestIn(to, p.role) }))
-          .filter((x): x is { to: Team; q: Player } => !!x.q && p.overall >= x.q.overall + UPGRADE)
+          .filter((x): x is { to: Team; q: Player } => !!x.q && p.overall >= x.q.overall + upgrade)
           .filter(({ to, q }) => !importBlock(state, to.id, p) && !importBlock(state, from.id, q) && to.budget >= feeOf(p) - feeOf(q))
-        if (!open.length || !rng.chance(TRADE_ODDS * willing(p))) continue
+        if (!open.length || !rng.chance(tradeOdds * willing(p))) continue
         const { to, q } = rng.pick(open)
         swap({ p, from, q, to })
+        traded.add(from.id)
+        traded.add(to.id)
         done++
       }
     }
@@ -162,5 +227,44 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   }
   if (lines.length > NEWS_LINES) {
     state.news.push({ day: state.day, kind: 'transfer', text: `转会窗里另有 ${lines.length - NEWS_LINES} 笔一换一的交易。` })
+  }
+}
+
+/**
+ * New Year's free agency past the book (me/week.ts, at the season turn, before
+ * the newcomers come in). The deals that ran out are gone; a VCT club fills
+ * back to five and a sixth from the free agents — the missing job first, then
+ * whoever is worth most — the best clubs choosing first. Never the player's
+ * own club: it fills its own way (me/club.ts).
+ */
+export function marketTurn(state: GameState, rng: Rng): void {
+  const me = state.me
+  if (!me || !isTimelineWorld(state) || bookCovers(state.year) || me.flags.freeAgency === state.year) return
+  me.flags.freeAgency = state.year
+  const myClub = me.phase === 'pro' ? state.myTeam : null
+  const free = Object.values(state.players).filter((p) => !p.teamId && !p.retiring && p.id !== me.id)
+  const clubs = Object.values(state.teams)
+    .filter((t) => !t.dormant && t.id !== myClub && t.roster.length >= 5 && inVctLeague(state, t))
+    .sort((a, b) => b.rating - a.rating)
+  const signed: string[] = []
+  for (const t of clubs) {
+    let guard = 0
+    while (t.roster.length < TOP_SQUAD && guard++ < TOP_SQUAD) {
+      const have = new Set(t.roster.map((id) => state.players[id]).filter((p): p is Player => !!p).flatMap(jobsOf))
+      const missing = ROLES.filter((r) => r !== '自由人' && !have.has(r))
+      const fit = (p: Player) => worth(p) + (jobsOf(p).some((r) => missing.includes(r)) ? 4 : 0) + (p.region === t.region ? 2 : 0)
+      const pick = free
+        .filter((p) => !p.teamId && !importBlock(state, t.id, p))
+        .reduce<Player | undefined>((best, p) => (!best || fit(p) > fit(best) ? p : best), undefined)
+      if (!pick) break
+      joinRoster(state, pick, t, rng)
+      signed.push(`${t.tag || t.name} ${pick.ign}`)
+    }
+  }
+  if (signed.length) {
+    state.news.push({
+      day: state.day, kind: 'transfer',
+      text: `新赛季自由市场：VCT 俱乐部签下 ${signed.slice(0, 8).join('、')}${signed.length > 8 ? ` 等 ${signed.length} 人` : ''}。`,
+    })
   }
 }

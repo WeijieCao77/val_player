@@ -39,6 +39,7 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
           <Roles p={p} />
           <OvrBadge value={p.overall} />
           <StarTitleTag id={p.id} />
+          {p.fictional && <span className="tag" title="2027 年以后进入职业圈的虚构选手，不对应真实的人">虚构新人</span>}
           {p.isIgl && (
             <span className="tag" title={p.iglSource === 'inferred' ? '真实指挥尚未确认，由系统临时代行'
               : isMain ? '主指挥：在场上就由他喊话' : isDeputy ? '副指挥：主指挥不在场上时由他喊话' : '已确认的队内指挥'}>
