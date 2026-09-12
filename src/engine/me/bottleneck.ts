@@ -66,8 +66,14 @@ export const BREAK_VALUE = {
  * at 26), so the 综合 it was sized in never showed.
  */
 export const BREAK_POINTS = 3
-/** 综合 the practice paths can open, per attribute: 破晓's 6 points on a fifth of its overall is 1.2 */
-export const MECH_VALUE_MAX = 2.0
+/**
+ * 综合 the practice paths can open, per attribute: 破晓's 6 points on a fifth of
+ * its overall, 1.2. At 2.0 the steady plan's ten grinds on a low-talent 枪法 and
+ * 反应 bought back everything its talent had not given it, and a career that
+ * chose its talent and worked every path ended within two points of one that did
+ * neither (measured: 88 against 90).
+ */
+export const MECH_VALUE_MAX = 1.2
 /** 综合 milestones can open, per attribute — apart, so the grind cannot eat a trophy's share */
 export const MILE_VALUE_MAX = 3.0
 /** professional seasons that each loosen the experience ceilings by one */

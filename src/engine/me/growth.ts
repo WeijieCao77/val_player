@@ -35,9 +35,26 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
   const age = trainAgeMul(p.age)
   const tired = p.fatigue > 70 ? 0.5 : p.fatigue > 45 ? 0.8 : 1
   const motivated = 0.75 + p.morale / 200
+  // a player with ceilings of his own trains each attribute against its own room (roomMul, where the hours land)
   return rng.range(7, 16) * age * tired * motivated * (1 + coach + facility) *
-    clamp(headroom / 12, 0.25, 1.6)
+    (p.caps ? 1 : clamp(headroom / 12, 0.25, 1.6))
 }
+
+/** room under a ceiling at which an hour is worth a full hour, in points */
+const ROOM_SCALE = 10
+/** and the most an attribute far under its ceiling makes of one */
+const ROOM_TOP = 1.3
+
+/**
+ * 破晓's gain(d): each attribute trains against its own room under its own
+ * ceiling. It was the whole player's weighted room, so once a duelist's 枪法 and
+ * 反应 sat at their ceilings every hour slowed to a quarter — the 沟通 thirty
+ * points under its ceiling as much as the 枪法 at it — and a player who worked
+ * at everything stopped where one who did not stopped (reported 2026-09-12:
+ * 「不管怎么训练综合实力也就到89没法再高了」).
+ */
+export const roomMul = (p: Player, k: keyof Attrs): number =>
+  clamp((ceilingOf(p, k) - p.attrs[k]) / ROOM_SCALE, 0.25, ROOM_TOP)
 
 /**
  * Progress toward a point; a full bar is a point while there is room under the
@@ -87,6 +104,51 @@ const SPLIT: Partial<Record<MeAction, Partial<Record<keyof Attrs, number>>>> = {
 /** my extra hours are worth this much of a club training week, per point */
 const EXTRA = 0.55
 
+/** what ranked puts into each of the role's three heaviest attributes, per game night, of a training week (settleTraining) */
+const RANKED_SHARE = 0.18
+/** and a scrim into 协同 and 沟通 */
+const SCRIM_SHARE = 0.35
+
+export interface HourValue {
+  key: MeAction
+  /** 综合 per action point, in units of a training week: the attributes it trains, by the role's weights, where they still have room */
+  perPoint: number
+  /** the attributes that hour still moves */
+  attrs: (keyof Attrs)[]
+}
+
+/**
+ * What an action point of each practice is worth to 综合 right now — the same
+ * sums settleTraining books, weighted by what the role is judged on, counting
+ * only attributes under their ceilings. The week board says which is worth the
+ * most; the steady plan does not follow it, a player chasing his peak can.
+ */
+export function hourValues(state: GameState): HourValue[] {
+  const me = state.me!
+  const p = state.players[me.id]
+  const pro = me.phase === 'pro'
+  const w = weightsFor(p)
+  const open = (k: keyof Attrs) => p.attrs[k] < ceilingOf(p, k)
+  // what an hour on k is worth: the role's weight, where the hours land (roomMul)
+  const worth = (k: keyof Attrs) => w[k] * (p.caps ? roomMul(p, k) : 1)
+  const out: HourValue[] = []
+  for (const key of ['aim', 'vod', 'util'] as const) {
+    const split = SPLIT[key]!
+    const mul = EXTRA * (pro ? 1 : 1.6) * (key === 'vod' ? courseMul(me.courses, 'review', REVIEW_MUL) : 1)
+    const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
+    let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
+    if (key === 'vod' && p.isIgl && open('igl')) { v += 0.25 * EXTRA * worth('igl'); attrs.push('igl') }
+    out.push({ key, perPoint: v / ACTIONS.find((a) => a.key === key)!.cost, attrs })
+  }
+  const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3).filter(open)
+  out.push({ key: 'ranked', perPoint: RANKED_SHARE * top3.reduce((s, k) => s + worth(k), 0), attrs: top3 })
+  if (pro) {
+    const both = (['teamwork', 'communication'] as const).filter(open)
+    out.push({ key: 'scrim', perPoint: SCRIM_SHARE * both.reduce((s, k) => s + worth(k), 0) / 3, attrs: [...both] })
+  }
+  return out.filter((h) => h.perPoint > 0).sort((a, b) => b.perPoint - a.perPoint)
+}
+
 /**
  * The club's own programme for me this week — the engine's trainPlayer runs it
  * — points at whatever I put the most hours into; with no plan the coach picks
@@ -129,7 +191,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   let fatigue = 0
   const rose: (keyof Attrs)[] = []
   // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
-  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k)) && !rose.includes(k)) rose.push(k) }
+  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k) * (p.caps ? roomMul(p, k) : 1)) && !rose.includes(k)) rose.push(k) }
   // stream and content money share the platform's weekly settlement (me/stream.ts mediaAfterCap)
   let media = 0
   let capped = false

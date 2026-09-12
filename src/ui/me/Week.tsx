@@ -4,6 +4,8 @@ import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
 import { ceilingNote } from '../../engine/me/bottleneck'
+import { hourValues } from '../../engine/me/growth'
+import { ATTR_CN } from '../../engine/types'
 import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
@@ -92,6 +94,16 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         <Panel
           title={`本周行动 · 剩 ${me.ap} 点`}
         >
+          {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan */}
+          {(() => {
+            const best = hourValues(game)[0]
+            const label = best && ACTIONS.find((a) => a.key === best.key)?.label
+            return best && label ? (
+              <p className="tiny muted" style={{ margin: '0 0 10px' }}>
+                现在练<b>{label}</b>对综合涨得最多（{best.attrs.map((k) => ATTR_CN[k]).join('、')}还有空间）。
+              </p>
+            ) : null
+          })()}
           {/* hurt: say what it is and how long, not just fewer action points */}
           {(() => {
             const inj = injuryStatus(game)
