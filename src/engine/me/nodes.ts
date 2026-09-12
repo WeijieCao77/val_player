@@ -15,18 +15,25 @@ export const NODE_MINE = 0.7
  * from that on the spot. Why these numbers — the design draft's prototype
  * (策划稿 §6.5, A3r: the real round engine, 800 BO3s a cell):
  *
- *   KEY_OK / KEY_FAIL, +2.4 / −2.0 per unit of risk: at an even round a
- *   full-risk call that lands is ~92% and one that misses ~12%; a steady one
- *   (risk 0.45) ~74% / ~29%. That made one call worth about ±5 points of a map
- *   and left "every call landed and we still lost" at 29% of even series
- *   (target 20–30%). A miss costs a little less than a landing gains, so a
- *   player who reads the situation comes out ahead.
+ *   KEY_OK / KEY_FAIL, +2.4 / −1.8 per unit of risk: at an even round a
+ *   full-risk call that lands is ~92% and one that misses ~14%; a steady one
+ *   (risk 0.45) ~75% / ~31%. The prototype's +2.4 / −2.0 made one call worth
+ *   about ±5 points of a map and left "every call landed and we still lost" at
+ *   29% of even series (target 20–30%). In the game (scripts/check_decisions.ts,
+ *   1500 BO3s a cell, a VCT rookie): landing +4.5, missing −4.2, all landed and
+ *   still lost 28.0%, the underdog winning with every call landing 44.6%
+ *   (target 40–50) — but the favourite missing every call still won only 57.3%
+ *   (target ≥60). −1.8 took that to 58.3 with a miss still worth −3.9; each
+ *   further step buys about a point and walks a miss toward the −3 floor, and
+ *   what is left is the 1v2, where a miss is the round by definition. So −1.8,
+ *   and that band stays a point or two short. A miss costs a little less than a
+ *   landing gains, so a player who reads the situation comes out ahead.
  *
  *   KEY_MOMENTUM, +2 strength for a call that lands, fading with the existing
  *   0.7 a round: the next rounds lean our way, small next to the round itself.
  */
 export const KEY_OK = 2.4
-export const KEY_FAIL = 2.0
+export const KEY_FAIL = 1.8
 export const KEY_MOMENTUM = 2
 /**
  * 局面提示: the option the hint favours is this much likelier to land, the
