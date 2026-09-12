@@ -901,6 +901,33 @@ export class MapSim {
     return side === 'a' ? this.ecoA.money : this.ecoB.money
   }
 
+  /**
+   * A copy of the map as it stands, to play a round on without touching this
+   * one: its own random stream at the same point, its own economies, calls,
+   * momentum and per-player lines. For the player-career layer only — a key
+   * round's call is asked before its round is played, and a call that says who
+   * is still standing or that the Spike is down may be asked only where the
+   * round really goes that way however the call turns out
+   * (engine/me/keyround.ts). Nothing here is read back into this map, and
+   * nothing but the career ever calls it, so every AI-only match is untouched.
+   */
+  fork(): MapSim {
+    const f = Object.create(MapSim.prototype) as MapSim
+    Object.assign(f, this)
+    f.rng = new Rng(this.rng.state)
+    f.ctx = {
+      lines: Object.fromEntries(Object.entries(this.ctx.lines).map(([id, l]) => [id, { ...l }])),
+      highlights: this.ctx.highlights.slice(),
+      rounds: this.ctx.rounds.slice(),
+    }
+    f.ecoA = Object.assign(new Economy(), this.ecoA)
+    f.ecoB = Object.assign(new Economy(), this.ecoB)
+    f.timeouts = { ...this.timeouts }
+    f.calls = { a: this.calls.a ? { ...this.calls.a } : null, b: this.calls.b ? { ...this.calls.b } : null }
+    f.nudge = { ...this.nudge }
+    return f
+  }
+
   /** Finalise per-player lines and hand back the map result. */
   result(): { score: MapScore; highlights: string[] } {
     if ((this.halfA <= 3 && this.a > this.b) || (this.halfB <= 3 && this.b > this.a)) {

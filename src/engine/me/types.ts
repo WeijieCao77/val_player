@@ -100,9 +100,12 @@ export interface NodeLogEntry {
   /** this round's win chance, percent, had the call landed and had it not — what the button said */
   qok?: number
   qfail?: number
-  /** the option the hint favoured and which of its lines was read out (me/nodes.ts NODE_HINTS) */
+  /** the option the hint favoured, and which pool line was read out when it came from the pool (me/nodes.ts NODE_HINTS) */
   fav?: number
   hk?: number
+  /** the fact the hint stated ('pool' for a pool line, which states none) and the line itself (me/hints.ts); absent before 2026-09-12 */
+  fact?: string
+  hint?: string
   /** taken by 快进 or 托管: the coach's pick, with nobody in the chair */
   auto?: boolean
   /** a call that landed on a round we were favoured to take, and it was lost anyway: the

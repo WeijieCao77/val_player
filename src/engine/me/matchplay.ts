@@ -7,9 +7,13 @@ import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine, Player } from '../types'
 import { deskLine } from './press'
 import {
-  COACH_READS, HINT_EDGE, KEY_MOMENTUM, NODE_HINTS,
-  autoChance, eligibleNodes, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout,
+  HINT_EDGE, KEY_MOMENTUM,
+  autoChance, keyCandidates, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout, nodeText, pickKeyNode,
 } from './nodes'
+import { coachReads, pickHint } from './hints'
+import type { Hint } from './hints'
+import { landCall, roundBranches } from './keyround'
+import type { BranchKey, RoundBranch } from './keyround'
 import { cerMatchEdge } from './ceremony'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
 
@@ -35,6 +39,8 @@ export interface Friendly {
   bo: 1 | 2 | 3 | 5
   comp: string
   label: string
+  /** my five on the second side of the draw, defending first — a cup never asks for it; the checks do, to play both halves */
+  mineSecond?: boolean
 }
 
 /** how many matches back keep the full all-ten table; older ones keep only the words */
@@ -86,9 +92,10 @@ export class MeMatch {
   readonly state: GameState
   /** whether I was in the five when the first map began */
   started = false
-  /** the call waiting on choose(): the node and the moment, the option the hint favours
-      (−1 when there is no hint) and which of its lines is read out, and the coach's pick */
-  pending: { node: NodeDef; ctx: NodeCtx; fav: number; hk: number; coach: number } | null = null
+  /** the call waiting on choose(): the node and the moment, its question and context as they
+      read tonight (with the count of who is standing filled in), the hint (me/hints.ts) and the
+      option it favours (−1 when there is none) and a pool line's index, and the coach's pick */
+  pending: { node: NodeDef; ctx: NodeCtx; q: string; about: string; fav: number; hk: number; hint: Hint | null; coach: number } | null = null
   nodes: NodeLogEntry[] = []
   /** per map: the win estimate at kickoff and how it ended — the ledger that
       lets "90% and still lost" be checked rather than felt */
@@ -115,8 +122,9 @@ export class MeMatch {
     if ('aId' in src) {
       this.friendly = src
       const id = `friendly:${state.year}:${state.day}:${src.label}`
-      this.fixture = { id, day: state.day, stage: state.stage, comp: src.comp, teamA: src.aId, teamB: src.bId, bo: src.bo, label: src.label, played: false }
-      this.sim = new MatchSim(state, src.aId, src.bId, src.bo, new Rng(hashStr(`match:${state.seed}:${id}`)))
+      const [ta, tb] = src.mineSecond ? [src.bId, src.aId] : [src.aId, src.bId]
+      this.fixture = { id, day: state.day, stage: state.stage, comp: src.comp, teamA: ta, teamB: tb, bo: src.bo, label: src.label, played: false }
+      this.sim = new MatchSim(state, ta, tb, src.bo, new Rng(hashStr(`match:${state.seed}:${id}`)))
       this.side = this.sim.sideOf(src.aId)
     } else {
       this.friendly = null
@@ -169,7 +177,7 @@ export class MeMatch {
     return mapWinProb(this.myRounds, this.theirRounds, this.roundProb())
   }
 
-  private ctxOf(slot: KeySlot): NodeCtx {
+  private ctxOf(slot: KeySlot, branches: Record<BranchKey, RoundBranch>): NodeCtx {
     const m = this.map!
     const mine = this.myRounds
     const theirs = this.theirRounds
@@ -177,7 +185,18 @@ export class MeMatch {
     const comp = this.state.comps[this.fixture.comp]
     // who attacks the round about to be played (MapSim.phase): A the first half and every other overtime round
     const aAttack = r <= 12 ? true : r <= 24 ? false : (r - 25) % 2 === 0
+    // the round just played, as the round record shows it — a pistol round's buys say nothing — and the run it ends
+    const rounds = m.rounds
+    const prev = rounds[rounds.length - 1]
+    const ours = (rl: { winner: 'A' | 'B' }) => (rl.winner === 'A') === this.mineIsA
+    const last = prev && prev.n !== 1 && prev.n !== 13
+      ? { mine: this.mineIsA ? prev.buyA : prev.buyB, theirs: this.mineIsA ? prev.buyB : prev.buyA, won: ours(prev) }
+      : null
+    let run = 0
+    if (prev) for (let i = rounds.length - 1; i >= 0 && ours(rounds[i]) === ours(prev); i--) run++
     return {
+      map: m.map, buyMine: branches.okWin.buyMine, buyTheirs: branches.okWin.buyTheirs,
+      last, streak: prev && !ours(prev) ? -run : run, branches,
       round: r, mine, theirs, lead: mine - theirs,
       pistol: r === 1 || r === 13, half: r <= 12 ? 1 : r <= 24 ? 2 : 3, ot: r >= 25,
       mapPoint: mine === 12 && theirs < 12 ? 'mine' : theirs === 12 && mine < 12 ? 'theirs' : null,
@@ -251,16 +270,24 @@ export class MeMatch {
     // one on a round a call is already about
     const slot = this.side && this.playing && !this.unresolved ? this.keySlot(m) : null
     if (slot) {
-      const c = this.ctxOf(slot)
-      const pool = eligibleNodes(c, this.seen)
-      if (pool.length) {
-        const node = pool[this.nodeRng.int(0, pool.length - 1)]
-        const lines = NODE_HINTS[node.id]
-        const fav = lines ? this.nodeRng.int(0, node.a.length - 1) : -1
-        const hk = fav < 0 ? -1 : this.nodeRng.int(0, Math.max(1, lines![fav]?.length ?? 1) - 1)
-        // the coach reads the situation right more often than not (me/nodes.ts COACH_READS)
-        const coach = fav < 0 ? node.rec : this.nodeRng.chance(COACH_READS) ? fav : (fav + 1) % node.a.length
-        this.pending = { node, ctx: c, fav, hk, coach }
+      const side = this.side!
+      // the round this call is about, played out on copies the four ways it can go, before anything is claimed about it (me/keyround.ts)
+      const c = this.ctxOf(slot, roundBranches(m, side, this.state.me!.id, KEY_MOMENTUM))
+      const cands = keyCandidates(c)
+      if (cands.length) {
+        const { node, standing } = pickKeyNode(cands, this.seen, this.nodeRng)
+        const alive: [number, number] | undefined = node.premise?.alive && standing[0] >= 0
+          ? [node.premise.alive.mine, standing[this.nodeRng.int(0, standing.length - 1)]]
+          : undefined
+        const ctx: NodeCtx = alive ? { ...c, alive } : c
+        // one thing to read, and the option it favours follows from it (me/hints.ts)
+        const hint = pickHint(node, ctx, { state: this.state, m, side, myTeamId: this.myTeamId, oppTeamId: this.oppTeamId }, this.nodeRng)
+        // the coach reads it right more often than not, the plain facts more often than the rest (me/nodes.ts COACH_READS)
+        const coach = !hint ? node.rec : this.nodeRng.chance(coachReads(hint)) ? hint.fav : (hint.fav + 1) % node.a.length
+        this.pending = {
+          node, ctx, q: nodeText(node.q, alive), about: nodeText(node.ctx, alive),
+          fav: hint ? hint.fav : -1, hk: hint?.hk ?? -1, hint, coach,
+        }
         this.seen.add(node.id)
         this.slots[slot] = true
         return 'node'
@@ -336,23 +363,22 @@ export class MeMatch {
     const before = this.winProb()
     // the round itself, drawn from its odds now the call is known; a 1v2 with me the last one standing is the call
     const won = pend.node.decides ? ok : this.nodeRng.chance(ok ? odds.ok : odds.fail)
-    if (ok) {
-      m.nudge[side] += KEY_MOMENTUM
-      // playing to what just worked: the next rounds run through me — a bigger share of the kills when we take them
-      if (!m.calls[side]) m.calls[side] = { kind: 'focus', playerId: me.id, roundsLeft: 3 }
-    }
+    // playing to what just worked: a little momentum, and the next rounds run through me — a bigger share of the
+    // kills when we take them. The same landing every copy of this round was played with when its premise was read
+    if (ok) landCall(m, side, me.id, KEY_MOMENTUM)
     // the coach was watching: a call that lands earns a little of his trust, one that
     // misses costs twice that (破晓's +0.3 / −0.6). A cup's temporary five has no coach of mine
     if (!this.friendly) me.coachTrust = clamp(me.coachTrust + (ok ? 0.3 : -0.6), 0, 100)
     const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
     const shown = Math.round(before * 100)
     const entry: NodeLogEntry = {
-      map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
+      map: m.map, round: pend.ctx.round, q: pend.q, pick: opt.t, dim: opt.dim,
       p: Math.round(odds.p * 100), ok, before: shown, after: shown,
       mine: ro.mine, theirs: ro.theirs ?? undefined,
       id: pend.node.id, opt: idx, decided: pend.node.decides || undefined,
       qok: Math.round(odds.ok * 100), qfail: Math.round(odds.fail * 100),
-      fav: pend.fav < 0 ? undefined : pend.fav, hk: pend.fav < 0 ? undefined : pend.hk,
+      fav: pend.fav < 0 ? undefined : pend.fav, hk: pend.hint?.hk,
+      fact: pend.hint?.fact, hint: pend.hint?.text,
       auto: this.auto || undefined,
     }
     this.nodes.push(entry)

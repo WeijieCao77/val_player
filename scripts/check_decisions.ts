@@ -113,7 +113,7 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
       }
     })
     // every node that can be asked reads out a hint, one set of lines per option
-    if (n.id === 'pistol_rush') continue
+    if (n.tier === 'retired') continue
     const h = NODE_HINTS[n.id]
     if (!h || h.length !== n.a.length || h.some((x) => !x.length)) { fail(`${n.id} 会被问到，局面提示没有覆盖每个选项`); continue }
     for (const s of h.flat()) {
