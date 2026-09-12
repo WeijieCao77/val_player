@@ -8,7 +8,7 @@ import { loadRecords, recordsNow } from '../../engine/dossier'
 import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
-import { DIM_CN, SLOT_CN, gapVerdict, hintText, nodeReadout, stakeWords } from '../../engine/me/nodes'
+import { DIM_CN, SLOT_CN, gapVerdict, nodeReadout, stakeWords } from '../../engine/me/nodes'
 import { ledgerNotes } from '../../engine/me/postmatch'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
@@ -347,7 +347,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   // ---- live / node
   const roundNo = Math.max(1, (map?.round ?? 0) + 1)
   const pend = mm.pending
-  const hint = pend ? hintText(pend.node.id, pend.fav, pend.hk) : null
+  // the hint states a fact on the screen; with the 「数值」 switch off, the same fact without the figures
+  const hint = pend?.hint ? (nums ? pend.hint.text : pend.hint.words) : null
   // between two maps: the one just played, and the one after it
   const justPlayed = phase === 'break' ? mm.sim.played[mm.sim.played.length - 1] : undefined
   const upNext = phase === 'break' ? mm.sim.maps[mm.sim.mapIndex + 1] : undefined
@@ -410,8 +411,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <div className="node-box">
           <RivalNode oppId={oppId} />
           <p className="tiny faint" style={{ margin: 0 }}>{pend.ctx.ot ? '加时关键回合' : SLOT_CN[pend.ctx.slot]} · 第 {pend.ctx.round} 回合</p>
-          <p className="q">{pend.node.q}</p>
-          <p className="ctx">{pend.node.ctx}</p>
+          <p className="q">{pend.q}</p>
+          <p className="ctx">{pend.about}</p>
           {/* one thing to read about the other five — the option it favours really is likelier to land */}
           {hint && <p className="ctx">局面：{hint}</p>}
           <div className="node-opt">

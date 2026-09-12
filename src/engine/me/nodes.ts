@@ -1,8 +1,13 @@
 import { clamp } from '../rng'
+import type { Rng } from '../rng'
 import type { GameState, Role } from '../types'
 import type { NodeDim } from './types'
 import { tiltDrag } from './growth'
 import { injuryHit } from './injury'
+import { standingOptions } from './keyround'
+import type { BranchKey, Buy, Premise, RoundBranch } from './keyround'
+import type { FactKey } from './hints'
+import { KEY_HINTS, KEY_HL, KEY_NODES } from './keynodes'
 
 /** what a call changes on the round-strength scale (ROUND_SENS is 30) */
 export const NODE_SWING = 4
@@ -42,8 +47,26 @@ export const KEY_MOMENTUM = 2
  * options still sit inside 35–85%.
  */
 export const HINT_EDGE = 0.12
-/** how often the coach's pick is the option the hint favours: right more often than not, never always (A3r) */
+/**
+ * How often the coach's pick is the option the hint favours: right more often
+ * than not, never always (A3r, 65%). A hint now states something the screen can
+ * back up (me/hints.ts), and the coach is not equally good at every kind of it.
+ * What is on the round record, the buttons and the map — the buys, the run of
+ * rounds, the five's averages, the ground, who is still standing — he gets right
+ * COACH_READS_PLAIN of the time. What is between you and the man across from
+ * you, and who has the hot hand tonight, he watches from behind the five and
+ * reads no better than a coin: COACH_READS_SUBTLE. A line from the old pool,
+ * which states no fact, stays at COACH_READS.
+ *
+ * The plain rate is set so the season comes out where A3r had it. Over the
+ * check's 600 BO3s on both sides of the draw (scripts/check_decisions.ts 二),
+ * half of all hints are plain facts, and at 0.8 the coach was right 70.4% of
+ * the time; at 0.7 it is back near two in three, and the order holds — plain
+ * above the pool above the subtle.
+ */
 export const COACH_READS = 0.65
+export const COACH_READS_PLAIN = 0.7
+export const COACH_READS_SUBTLE = 0.5
 /**
  * 快进 and 托管 take the coach's pick with this much off its chance to land —
  * nobody is in the chair. In the prototype that put a skipped match about 4
@@ -100,6 +123,19 @@ export interface NodeCtx {
   slot: KeySlot
   /** my side goes into this round with too little in the bank for anything but an eco (MapSim.bank) */
   shortBuy: boolean
+  /** the map, by its English key */
+  map: string
+  /** what my side and theirs buy for this round — the same whichever way it goes */
+  buyMine: Buy
+  buyTheirs: Buy
+  /** the round just played on this map as the round record shows it, from my side; null before the first and after a pistol round */
+  last: { mine: Buy; theirs: Buy; won: boolean } | null
+  /** rounds in a row taken by whoever took the last one: positive mine, negative theirs */
+  streak: number
+  /** this round played out on copies of the map, the four ways the call can go (me/keyround.ts) */
+  branches: Record<BranchKey, RoundBranch>
+  /** for a node that says who is standing: me and my side's count, and theirs, as asked */
+  alive?: [number, number]
 }
 
 /** A map's three key rounds: one in each half, and one at match point or the first overtime round. */
@@ -107,16 +143,41 @@ export type KeySlot = 'half1' | 'half2' | 'point'
 
 export interface NodeOpt { t: string; dim: NodeDim; risk: number }
 
-/** Where in a round a call happens. The phases the design draft names; more nodes are to be written for each. */
-export type NodePhase = 'entry' | 'retake' | 'clutch' | 'eco' | 'point' | 'ot'
+/**
+ * Where in a round a call happens: before the plant — the attack's way in or the
+ * defence meeting it — the middle of the round, after the plant, a clutch, a
+ * round decided by the buy, a match point, overtime.
+ */
+export type NodePhase = 'entry' | 'mid' | 'post' | 'clutch' | 'eco' | 'point' | 'ot'
+
+/** Which key rounds a phase belongs in: a half's, the match point's, or either (a clutch can happen in both). */
+export const PHASE_SLOT: Record<NodePhase, 'half' | 'point' | 'any'> = {
+  entry: 'half', mid: 'half', post: 'half', eco: 'half', clutch: 'any', point: 'point', ot: 'point',
+}
 
 export interface NodeDef {
   id: string
+  /** the question and its context; `{M}` is filled in with how many of theirs are standing, for a node that says */
   q: string
   ctx: string
   /** where in the round it happens; a map point and overtime take only the key round that is one */
   phase: NodePhase
-  when: (c: NodeCtx) => boolean
+  /** anything the premise below cannot say (the role I play, the score, my form) */
+  when?: (c: NodeCtx) => boolean
+  /**
+   * What the node claims about its round — side, buys, the Spike, who is
+   * standing, which match point — read at the call against the round played
+   * out four ways (me/keyround.ts) and afterwards against the round record
+   * (scripts/check_decisions.ts).
+   */
+  premise?: Premise
+  /** which option each fact the screen can state favours (me/hints.ts); a fact the node has no entry for is not read out on it */
+  lean?: Partial<Record<FactKey, number>>
+  /**
+   * 'fallback': asked only when no node written for the moment of the round fits.
+   * 'retired': never asked again; kept so the calls in old saves keep their lines.
+   */
+  tier?: 'fallback' | 'retired'
   a: NodeOpt[]
   /** the steady choice — the coach's pick when there is no hint to read */
   rec: number
@@ -145,65 +206,132 @@ const half = (c: NodeCtx) => c.slot !== 'point'
  * is one, a map point or overtime only in the key round that is one. The three
  * key rounds themselves are picked in me/matchplay.ts.
  */
-export const NODES: NodeDef[] = [
+const FIRST_NODES: NodeDef[] = [
   // a pistol round never takes a call now (key rounds skip them); the node stays for its lines
   { id: 'pistol_rush', phase: 'entry', q: '手枪局。指挥问：五个人一起冲 B，还是分散拿信息？', ctx: '手枪局赢了，接下来两回合都是你们的经济。',
-    when: (c) => c.pistol, rec: 1,
+    when: (c) => c.pistol, rec: 1, tier: 'retired',
     a: [{ t: '冲，一波打穿', dim: 'reaction', risk: 0.9 }, { t: '分散拿信息，慢打', dim: 'awareness', risk: 0.4 }] },
   { id: 'entry', phase: 'entry', q: '烟还没起，你已经站在小道口。', ctx: '先手成了全队都能进，被反枪整回合就废了。',
     when: (c) => half(c) && c.attack && (c.role === '决斗者' || c.role === '先锋'), rec: 1,
+    premise: { side: 'atk' }, lean: { duelUp: 0, duelDown: 1, theirBroke: 0, theirSaved: 1 },
     a: [{ t: '先手，不等了', dim: 'reaction', risk: 0.95 }, { t: '等道具到位再进', dim: 'utility', risk: 0.45 }] },
   { id: 'eco_gun', phase: 'eco', q: '经济局，队友把唯一一把大枪递给了你。', ctx: '拿枪就是全队指望你一个人打开局面。',
-    when: (c) => half(c) && c.shortBuy, rec: 0,
+    when: (c) => half(c) && c.shortBuy, rec: 0, lean: { duelUp: 0, duelDown: 1, longLines: 0 },
     a: [{ t: '拿枪，我来打', dim: 'aim', risk: 0.8 }, { t: '别买了，五人轻甲一起冲', dim: 'teamwork', risk: 0.5 }] },
   { id: 'clutch', phase: 'clutch', q: '1v2，辐能芯片已经安装好了，对面两个人在点位两侧。', ctx: '他们拆除之前，你必须先解决一个。',
     when: (c) => half(c) && c.attack, rec: 0, decides: true,
+    premise: { side: 'atk', planted: true, alive: { mine: 1, theirs: [2, 2] } }, lean: { duelUp: 0, duelDown: 1 },
     a: [{ t: '打，先找一个', dim: 'clutch', risk: 1.0 }, { t: '藏起来，等他们来拆', dim: 'awareness', risk: 0.6 }] },
   { id: 'behind_to', phase: 'entry', q: '落后暂停，指挥说完了战术，所有人看着你。', ctx: '这时候语音里最需要有人说话。',
-    when: (c) => half(c) && c.lead <= -4, rec: 0,
+    when: (c) => half(c) && c.lead <= -4, rec: 0, lean: { streakThem: 0, meHot: 1, meCold: 0 },
     a: [{ t: '喊一嗓子，把人拉回来', dim: 'communication', risk: 0.7 }, { t: '不说话，自己先打好', dim: 'aim', risk: 0.6 }] },
-  { id: 'behind_site', phase: 'retake', q: '对面已经连着三回合压你这个点。', ctx: '他们盯上你了。',
+  { id: 'behind_site', phase: 'mid', q: '对面已经连着三回合压你这个点。', ctx: '他们盯上你了。',
     when: (c) => half(c) && !c.attack && c.lead <= -3, rec: 0,
+    premise: { side: 'def' }, lean: { streakThem: 0, duelUp: 1, duelDown: 0 },
     a: [{ t: '换个位置，让他们扑空', dim: 'awareness', risk: 0.5 }, { t: '硬守，正面刚', dim: 'clutch', risk: 0.9 }] },
   { id: 'ahead_rush', phase: 'entry', q: '领先不少，队友想直接一波冲进去收工。', ctx: '稳一点也能赢，但会拖很久。',
     when: (c) => half(c) && c.attack && c.lead >= 4, rec: 1,
+    premise: { side: 'atk' }, lean: { theirBroke: 0, theirSaved: 1, streakUs: 0 },
     a: [{ t: '冲，速战速决', dim: 'reaction', risk: 0.7 }, { t: '按道具慢打，别送', dim: 'utility', risk: 0.35 }] },
   { id: 'map_point_mine', phase: 'point', q: '赛点。指挥把最后一波的先手交给了你。', ctx: '这一回合结束了，这张图就结束了。',
     when: (c) => c.slot === 'point' && c.mapPoint === 'mine', rec: 0,
+    premise: { point: 'mine' }, lean: { meHot: 0, meCold: 1, streakThem: 1 },
     a: [{ t: '给我，我来', dim: 'mental', risk: 1.0 }, { t: '按体系打，别改', dim: 'teamwork', risk: 0.45 }] },
   { id: 'map_point_theirs', phase: 'point', q: '对面赛点，暂停时语音里没人说话。', ctx: '这时候要有人站出来。',
     when: (c) => c.slot === 'point' && c.mapPoint === 'theirs', rec: 1,
+    premise: { point: 'theirs' }, lean: { meHot: 0, meCold: 1 },
     a: [{ t: '这波交给我', dim: 'mental', risk: 1.0 }, { t: '别慌，按流程打一回合', dim: 'teamwork', risk: 0.5 }] },
   { id: 'ot', phase: 'ot', q: '加时。你发现自己的手在抖。', ctx: '这个舞台比训练赛大得多。',
     when: (c) => c.slot === 'point' && c.ot, rec: 0,
+    premise: { point: 'ot' }, lean: { streakUs: 1, streakThem: 0 },
     a: [{ t: '深呼吸，按流程走', dim: 'mental', risk: 0.5 }, { t: '用一波激进的开局逼自己进状态', dim: 'aim', risk: 0.95 }] },
   { id: 'first_map', phase: 'entry', q: '今晚第一个关键回合。你把鼠标垫又擦了一遍，手心还是湿的。', ctx: '这一回合决定你今晚的心态。',
-    when: (c) => c.slot === 'half1' && c.mapIndex === 0, rec: 0,
+    when: (c) => c.slot === 'half1' && c.mapIndex === 0, rec: 0, lean: { duelUp: 1, duelDown: 0 },
     a: [{ t: '按流程，稳住', dim: 'mental', risk: 0.4 }, { t: '这回合一开局就去找人', dim: 'reaction', risk: 0.9 }] },
   { id: 'hot', phase: 'entry', q: '今天手感烫得离谱，什么都能打中。', ctx: '这种手感一年遇不到几次。',
-    when: (c) => half(c) && c.form >= 80, rec: 0,
+    when: (c) => half(c) && c.form >= 80, rec: 0, lean: { duelUp: 0, duelDown: 1, theyHot: 1 },
     a: [{ t: '把资源都要过来', dim: 'aim', risk: 0.9 }, { t: '别飘，按体系打', dim: 'teamwork', risk: 0.4 }] },
   { id: 'cold', phase: 'entry', q: '今天怎么打都不对，简单的枪都在漏。', ctx: '队友已经开始帮你兜了。',
-    when: (c) => half(c) && c.form <= 58, rec: 0,
+    when: (c) => half(c) && c.form <= 58, rec: 0, lean: { meCold: 0, theyHot: 0 },
     a: [{ t: '认了，让队友多拿枪', dim: 'communication', risk: 0.4 }, { t: '硬扛，我能找回来', dim: 'mental', risk: 1.0 }] },
   { id: 'intl', phase: 'entry', q: '国际赛的观众声浪比联赛大一个量级，你能听见自己的心跳。', ctx: '这就是你想来的地方。',
-    when: (c) => c.slot === 'half1' && c.isIntl, rec: 0,
+    when: (c) => c.slot === 'half1' && c.isIntl, rec: 0, lean: { duelUp: 1, duelDown: 0 },
     a: [{ t: '享受它', dim: 'mental', risk: 0.6 }, { t: '戴上降噪，只管枪', dim: 'aim', risk: 0.5 }] },
   { id: 'save', phase: 'clutch', q: '这回合快输了，队友喊 save，你觉得还能赌一把。', ctx: '保住枪下回合是满配，赌成了是回合。',
-    when: (c) => half(c), rec: 1,
+    when: (c) => half(c), rec: 1, lean: { duelUp: 0, duelDown: 1, theyHot: 1 },
     a: [{ t: '赌，冲上去', dim: 'clutch', risk: 0.9 }, { t: '听队友的，保枪', dim: 'awareness', risk: 0.35 }] },
-  { id: 'info', phase: 'retake', q: '对面有人在你这边露了头，队友问要不要跟。', ctx: '跟上去可能二打二，也可能被夹。',
-    when: (c) => half(c), rec: 1,
+  { id: 'info', phase: 'mid', q: '对面有人在你这边露了头，队友问要不要跟。', ctx: '跟上去可能二打二，也可能被夹。',
+    when: (c) => half(c), rec: 1, lean: { duelUp: 0, duelDown: 1, theyHot: 1 },
     a: [{ t: '跟，打这波', dim: 'reaction', risk: 0.85 }, { t: '退，报点就行', dim: 'awareness', risk: 0.4 }] },
 ]
 
-export function eligibleNodes(c: NodeCtx, seen: Set<string>): NodeDef[] {
-  const pool = NODES.filter((n) => {
-    try { return n.when(c) } catch { return false }
-  })
-  const fresh = pool.filter((n) => !seen.has(n.id))
-  return fresh.length ? fresh : pool
+/**
+ * Every node. The sixteen above came first and were written for no moment of
+ * the round in particular; the key-round nodes written by phase (me/keynodes.ts)
+ * are asked first, and these only when none of those fits a key round.
+ */
+export const NODES: NodeDef[] = [
+  ...FIRST_NODES.map((n): NodeDef => (n.tier ? n : { ...n, tier: 'fallback' })),
+  ...KEY_NODES,
+]
+
+/** The parts of a premise the moment itself answers: side, buys, which match point. */
+function premiseMoment(p: Premise | undefined, c: NodeCtx): boolean {
+  if (!p) return true
+  if (p.side && (p.side === 'atk') !== c.attack) return false
+  if (p.buyMine && !p.buyMine.includes(c.buyMine)) return false
+  if (p.buyTheirs && !p.buyTheirs.includes(c.buyTheirs)) return false
+  if (p.point === 'ot' && !(c.slot === 'point' && c.ot)) return false
+  if ((p.point === 'mine' || p.point === 'theirs') && !(c.slot === 'point' && c.mapPoint === p.point)) return false
+  return true
 }
+
+/** A node that fits the key round, with the counts of theirs it may say are standing ([-1] when it says nothing about that). */
+export interface KeyCandidate { node: NodeDef; standing: number[] }
+
+/**
+ * Every node that can be asked in this key round: in its phase's key rounds,
+ * its premise true of the moment, and — for the Spike and who is standing —
+ * true of every way its round can go. The nodes written for a moment of the
+ * round come first; the fallbacks only when none of those fit.
+ */
+export function keyCandidates(c: NodeCtx): KeyCandidate[] {
+  const out: KeyCandidate[] = []
+  for (const n of NODES) {
+    if (n.tier === 'retired') continue
+    const where = PHASE_SLOT[n.phase]
+    if (where !== 'any' && (where === 'point') !== (c.slot === 'point')) continue
+    if (!premiseMoment(n.premise, c)) continue
+    try { if (n.when && !n.when(c)) continue } catch { continue }
+    const standing = n.premise ? standingOptions(n.premise, c.branches, c.attack, n.decides) : [-1]
+    if (standing.length) out.push({ node: n, standing })
+  }
+  const written = out.filter((x) => x.node.tier !== 'fallback')
+  return written.length ? written : out
+}
+
+/**
+ * One of them: a phase first, evenly among the phases that have a node here,
+ * then a node in it — so a moment with five ways in does not crowd out the
+ * clutch or the eco round that also fits. Nodes not yet asked this match come
+ * first.
+ */
+export function pickKeyNode(cands: KeyCandidate[], seen: Set<string>, rng: Rng): KeyCandidate {
+  const fresh = cands.filter((x) => !seen.has(x.node.id))
+  const pool = fresh.length ? fresh : cands
+  const phases: NodePhase[] = []
+  for (const x of pool) if (!phases.includes(x.node.phase)) phases.push(x.node.phase)
+  const ph = phases[rng.int(0, phases.length - 1)]
+  const inPhase = pool.filter((x) => x.node.phase === ph)
+  return inPhase[rng.int(0, inPhase.length - 1)]
+}
+
+/** a count of players in words, as the start of 两打三 and the end of 三打二 read it */
+export const countCn = (n: number, tail = false): string => (n === 2 ? (tail ? '二' : '两') : ['零', '一', '两', '三', '四', '五'][n] ?? String(n))
+
+/** A node's question or context as asked: `{M}` is how many of theirs are standing. */
+export const nodeText = (s: string, alive?: [number, number]): string =>
+  alive ? s.replace(/\{M\}/g, countCn(alive[1])) : s
 
 export const DIM_CN: Record<NodeDim, string> = {
   aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
@@ -344,6 +472,7 @@ export const NODE_HINTS: Record<string, string[][]> = {
     ['露头的那个人是对面枪最慢的一个，身边没人补。', '对面这张图喜欢一个人单独摸过来找信息。'],
     ['对面这张图喜欢拿一个人露头，把人骗出去再夹。', '露头的那一下之后，你听到了第二个人的脚步。'],
   ],
+  ...KEY_HINTS,
 }
 
 /** The hint's line, NODE_HINTS[id][fav][k], or null when the call had none. */
@@ -619,6 +748,7 @@ export const NODE_HL: Record<string, HlOpt[]> = {
       failLoss: '你退了，报了点，没人去接，信息浪费了，这回合丢了。',
     },
   ],
+  ...KEY_HL,
 }
 
 /** How the round a call was about went, read off the engine once it has been played. */

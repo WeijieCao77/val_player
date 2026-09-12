@@ -9,17 +9,25 @@
  * it is on, the line is read off that round, and 快进 makes the coach's calls with
  * nobody in the chair. This check keeps all of it that way.
  *
- *   一、the copy and the hints: four lines per option (two for a node that decides
- *       its round), each saying the result its case is for and nothing about my
- *       kills unless picked by my kill count; hints that never claim a result
- *   二、matches played call by call on fixed seeds, answered five ways: every line
- *       read against the round record it is pinned to; every call asked in a key
- *       round and only where its premise holds (the round record's side and buy);
- *       what the buttons said against what happened (§7.1 #5, hard)
+ *   一、the copy, the premises and the hints: every node a key round can ask has
+ *       its four lines per option (two for a node that decides its round), each
+ *       saying the result its case is for and nothing about my kills unless picked
+ *       by my kill count; a node's facts point at options it has, the attribute
+ *       facts in pairs; pool hints that never claim a result
+ *   二、matches played call by call on fixed seeds, on both sides of the draw,
+ *       answered five ways: every line read against the round record it is pinned
+ *       to; every call asked in a key round and only where its premise holds — side,
+ *       buys, the Spike, who is standing, which match point — read off the round
+ *       record and the scoreboard; the round played out on the copy against the
+ *       round played for real; every hint's fact derived again from the engine
+ *       here, its figures, and the option it favours against the node's lean; what
+ *       the buttons said against what happened (§7.1 #5, hard); how often the coach
+ *       reads each kind of hint; which nodes get asked, by phase
  *   三、the engine: a round given its winner plays out exactly as the same round
- *       left to the roll when they agree, so AI-only matches cannot tell the
- *       parameter is there (§7.1 #14, hard). The before and after of the change
- *       were also hashed in full when it went in: 720 AI matches, e65e672b… both.
+ *       left to the roll when they agree, and a copy of the map played on before
+ *       every round leaves the real match as it was, so AI-only matches cannot tell
+ *       either is there (§7.1 #14, hard). The before and after of `force` were also
+ *       hashed in full when it went in: 720 AI matches, e65e672b… both.
  *   四、the numbers the design set out to hit (策划稿 §7.1): a VCT rookie against a
  *       weaker, an even and a stronger five, six ways of playing on the same seeds.
  *       Hard: following the coach is never worse than 快进 (#7). The rest are bands
@@ -34,14 +42,20 @@ const mem: Record<string, string> = {}
 
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { MeMatch, mapWinProb } from '../src/engine/me/matchplay'
-import { NODES, NODE_HINTS, NODE_HL, nodeLine } from '../src/engine/me/nodes'
-import type { HlCell, HlOpt, NodeCtx, NodeDef } from '../src/engine/me/nodes'
+import { KEY_MOMENTUM, NODES, NODE_HINTS, NODE_HL, keyCandidates, nodeLine } from '../src/engine/me/nodes'
+import type { HlCell, HlOpt, NodeCtx, NodeDef, NodePhase } from '../src/engine/me/nodes'
+import { COLD_GAP, DUEL_GAP, FACT_CLARITY, FACT_KEYS, HOT_KILLS, HOT_RATE, PAIRS, RUN, TEAM_GAP } from '../src/engine/me/hints'
+import type { FactKey, Hint } from '../src/engine/me/hints'
+import { landCall } from '../src/engine/me/keyround'
+import type { BranchKey } from '../src/engine/me/keyround'
 import type { NodeLogEntry } from '../src/engine/me/types'
 import { MatchSim, buildLineup, poolFor, simulateMatch } from '../src/engine/match'
 import type { MapSim } from '../src/engine/match'
+import { AGENT_ROLE } from '../src/engine/content'
 import { Rng, hashStr } from '../src/engine/rng'
 import { recomputeOverall } from '../src/engine/player'
 import { ATTR_KEYS } from '../src/engine/types'
+import type { GameState, RoundLog } from '../src/engine/types'
 
 const PER = Number(process.argv[2] ?? 300)
 const FULL = process.argv.includes('full')
@@ -60,12 +74,9 @@ const TWO = /两个|连着|双杀/
 /** the round, said in words — a line has to say which, and must not say both */
 const WIN = /(?<!没)拿下|收下|抢了回来|赢了下来/
 const LOSS = /丢了|没拿下|没收住|溜走|交了出去|没翻过来|没扛住|没打起来/
-/** words from another game: the official ones are 辐能芯片、安装、拆除 */
-const FOREIGN = /下包|炸包|拆包|包点|包已经/
+/** words from another game: the official ones are 辐能芯片、安装、拆除、残局 */
+const FOREIGN = /下包|炸包|拆包|包点|包已经|残血|团战/
 const CELLS: HlCell[] = ['okWin', 'okLoss', 'failWin', 'failLoss']
-/** the nodes whose premise is which side of the round we are on */
-const ATTACKING = new Set(['entry', 'clutch', 'ahead_rush'])
-const DEFENDING = new Set(['behind_site'])
 
 /** force whether the next call lands, touching only that roll: choose() draws the round from the same stream next */
 function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): NodeLogEntry {
@@ -82,12 +93,14 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
   try { return mm.choose(idx) } finally { nr.chance = orig }
 }
 
-/* ---- 一、the copy and the hints ---- */
+/* ---- 一、the copy, the premises and the hints ---- */
 {
   let lines = 0
   let hints = 0
   const ids = new Set(NODES.map((n) => n.id))
+  if (ids.size !== NODES.length) fail('节点 id 有重复')
   for (const id of Object.keys(NODE_HL)) if (!ids.has(id)) fail(`文案表里有不存在的节点 ${id}`)
+  const byPhase: Partial<Record<NodePhase, string[]>> = {}
   for (const n of NODES) {
     for (const s of [n.q, n.ctx, ...n.a.map((o) => o.t)]) if (FOREIGN.test(s)) fail(`${n.id}：「${s}」用了别的游戏的说法`)
     const rows: HlOpt[] | undefined = NODE_HL[n.id]
@@ -109,11 +122,12 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
           if ((k === 'k1' || k === 'k2') && !KILL.test(s)) fail(`${where}.${k}：按击杀数挑的句子没说击杀：${s}`)
           if (k === 'k1' && TWO.test(s)) fail(`${where}.k1：一杀的句子说了两个：${s}`)
           if (FOREIGN.test(s)) fail(`${where}${k && `.${k}`}：用了别的游戏的说法：${s}`)
+          if (/这张图(拿下了|丢了|打平了)/.test(s)) fail(`${where}${k && `.${k}`}：句子自己说了图的结果：${s}`)
         }
       }
     })
-    // every node that can be asked reads out a hint, one set of lines per option
-    if (n.id === 'pistol_rush') continue
+    // a retired node keeps its lines for old saves and is never asked: nothing below applies to it
+    if (n.tier === 'retired') continue
     const h = NODE_HINTS[n.id]
     if (!h || h.length !== n.a.length || h.some((x) => !x.length)) { fail(`${n.id} 会被问到，局面提示没有覆盖每个选项`); continue }
     for (const s of h.flat()) {
@@ -121,10 +135,28 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
       if (WIN.test(s) || LOSS.test(s) || KILL.test(s)) fail(`${n.id} 的局面提示说了回合结果或击杀：${s}`)
       if (FOREIGN.test(s)) fail(`${n.id} 的局面提示用了别的游戏的说法：${s}`)
     }
+    // the facts a node reads point at options it has; an attribute is compared on one option, so its two facts come together
+    for (const [k, i] of Object.entries(n.lean ?? {})) {
+      if (!FACT_KEYS.includes(k as FactKey)) fail(`${n.id}：读的事实 ${k} 不存在`)
+      if (i == null || !n.a[i]) fail(`${n.id}：事实 ${k} 看好的选项 ${i} 不存在`)
+    }
+    for (const [up, down] of PAIRS) {
+      const has = [up, down].filter((k) => n.lean?.[k] != null).length
+      if (has === 1) fail(`${n.id}：${up} 和 ${down} 要一起写`)
+      if (has === 2 && n.a[n.lean![up]!]?.dim === 'mental') fail(`${n.id}：${up} 比的是心态，心态没有对面的数`)
+    }
+    // who is standing: a count left open is filled into the question, a node that decides its round is me alone
+    const alive = n.premise?.alive
+    const open = !!alive && alive.theirs[0] !== alive.theirs[1]
+    if (/\{M\}/.test(n.q + n.ctx) !== open) fail(`${n.id}：问题里的「{M}」和前提里对面的人数范围对不上`)
+    if (n.decides && alive?.mine !== 1) fail(`${n.id}：定这一回合的节点，前提必须是场上只剩你一个`)
+    if (!n.tier) (byPhase[n.phase] ??= []).push(n.id)
   }
   for (const id of Object.keys(NODE_HINTS)) if (!ids.has(id)) fail(`提示表里有不存在的节点 ${id}`)
   const decides = NODES.filter((n) => n.decides).map((n) => n.id)
-  console.log(`一、${NODES.length} 个节点、${NODES.reduce((s, n) => s + n.a.length, 0)} 个选项，文案 ${lines} 句，局面提示 ${hints} 句；定这一回合的节点：${decides.join('、')}`)
+  const phased = Object.values(byPhase).reduce((s, x) => s + x.length, 0)
+  console.log(`一、${NODES.length} 个节点（按回合阶段写的 ${phased} 个，兜底 ${NODES.filter((n) => n.tier === 'fallback').length} 个，退役 ${NODES.filter((n) => n.tier === 'retired').length} 个）、${NODES.reduce((s, n) => s + n.a.length, 0)} 个选项，文案 ${lines} 句，提示池 ${hints} 句；定这一回合的节点：${decides.join('、')}`)
+  console.log(`  按阶段：${Object.entries(byPhase).map(([p, xs]) => `${p} ${xs.length}（${xs.join('、')}）`).join('；')}`)
 }
 
 /* ---- 二、matches, call by call ---- */
@@ -134,30 +166,256 @@ const SCN: any[] = [
   { name: 'DecA', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 7, year: 2026 },
   { name: 'DecB', region: 'Pacific', role: '哨卫', talents: emptyTalents(), originKey: 'streamer', start: 'chal', seed: 11, year: 2026 },
 ]
-const PER2 = 60
+const PER2 = 30
 const st = {
   calls: 0, series: 0, contra: 0, killZero: 0, killBucket: 0, unpinned: 0, plumbing: 0,
   decided: 0, forced: 0, fallback: 0, mapClaim: 0, noRound: 0, premise: 0, slot: 0, pistol: 0, overQuota: 0,
+  peek: 0, retired: 0, tier: 0, alive: 0, planted: 0,
   cells: { okWin: 0, okLoss: 0, failWin: 0, failLoss: 0 } as Record<HlCell, number>,
   killLines: 0,
   // #5: what the buttons said against what happened (answered naturally, not forced)
   shownP: 0, landed: 0, naturalCalls: 0,
   okShown: 0, okWon: 0, okN: 0, failShown: 0, failWon: 0, failN: 0,
+  // the hints
+  facts: 0, pool: 0, noHint: 0, hintFalse: 0, hintFav: 0, hintFigure: 0, hintDirty: 0,
+  byFact: {} as Record<string, number>,
+  reads: { plain: [0, 0], subtle: [0, 0], pool: [0, 0] } as Record<'plain' | 'subtle' | 'pool', [number, number]>,
+  byPhase: {} as Record<string, number>,
+  byNode: {} as Record<string, number>,
+}
+
+/** every player's line at the moment of a call */
+type Lines = Record<string, { k: number; d: number; c: number }>
+const snapLines = (m: MapSim): Lines => Object.fromEntries(Object.entries(m.lines).map(([id, l]) => [id, { k: l.kills, d: l.deaths, c: l.clutches }]))
+
+interface Call {
+  mm: MeMatch
+  node: NodeDef
+  ctx: NodeCtx
+  idx: number
+  e: NodeLogEntry
+  m: MapSim
+  /** where the round the call is about sits in the map's round record */
+  at: number
+  /** the lines at the call */
+  pre: Lines
+  /** the round was played on its own right after the call (not inside 快进's run to the end), so the lines since `pre` are that round's */
+  alone: boolean
+  natural: boolean
+  hint: Hint | null
+  coach: number
+}
+
+/**
+ * The node's premise against the round record and the scoreboard — worked out
+ * here from the record, not by the code that asked the call.
+ */
+function premiseOnRecord(c: Call, rl: RoundLog, won: boolean): string | null {
+  const mineIsA = c.mm.mineIsA
+  const myAttack = rl.aAttack === mineIsA
+  const myBuy = mineIsA ? rl.buyA : rl.buyB
+  const theirBuy = mineIsA ? rl.buyB : rl.buyA
+  // the one fallback whose premise is only in its `when`
+  if (c.node.id === 'eco_gun' && myBuy !== 'eco') return `经济局的节点，我方买的是 ${myBuy}`
+  const p = c.node.premise
+  if (!p) return null
+  if (p.side && (p.side === 'atk') !== myAttack) return `前提是${p.side === 'atk' ? '进攻' : '防守'}，记录是${myAttack ? '进攻' : '防守'}`
+  if (p.buyMine && !p.buyMine.includes(myBuy)) return `前提是我方 ${p.buyMine.join('/')}，记录是 ${myBuy}`
+  if (p.buyTheirs && !p.buyTheirs.includes(theirBuy)) return `前提是对面 ${p.buyTheirs.join('/')}，记录是 ${theirBuy}`
+  const mine = c.ctx.mine
+  const theirs = c.ctx.theirs
+  if (p.point === 'mine' && !(mine === 12 && theirs < 12)) return `我方赛点，比分 ${mine}:${theirs}`
+  if (p.point === 'theirs' && !(theirs === 12 && mine < 12)) return `对面赛点，比分 ${mine}:${theirs}`
+  if (p.point === 'ot' && rl.n !== 25) return `加时第一回合，记录是第 ${rl.n} 回合`
+  if (p.planted) {
+    st.planted++
+    const attackersWon = won === myAttack
+    if (rl.end === 'time') return '芯片已经安装，回合却以时间到结束'
+    if (attackersWon ? rl.end === 'defuse' : rl.end === 'spike') return `芯片已经安装，${attackersWon ? '进攻' : '防守'}方赢了，回合却以 ${rl.end} 结束`
+  }
+  if (!p.alive) return null
+  const standing = c.ctx.alive
+  if (!standing) return '前提说了场上人数，问的时候却没定几个'
+  const [n, t] = standing
+  if (n !== p.alive.mine || t < p.alive.theirs[0] || t > p.alive.theirs[1]) return `场上 ${n} 对 ${t}，不在前提的范围里`
+  if (!c.alone) return null
+  st.alive++
+  const meId = c.mm.state.me!.id
+  const row = (id: string) => ({ id, k: c.m.lines[id].kills - c.pre[id].k, dead: c.m.lines[id].deaths > c.pre[id].d, cl: c.m.lines[id].clutches - c.pre[id].c })
+  const my = (mineIsA ? c.m.A : c.m.B).players.map((x) => row(x.id))
+  const th = (mineIsA ? c.m.B : c.m.A).players.map((x) => row(x.id))
+  const myDead = my.filter((x) => x.dead).length
+  const thDead = th.filter((x) => x.dead).length
+  const me = my.find((x) => x.id === meId)!
+  if (myDead < 5 - n) return `说你们剩 ${n} 个，这回合我方只倒了 ${myDead} 个`
+  if (thDead < 5 - t) return `说对面剩 ${t} 个，这回合对面只倒了 ${thDead} 个`
+  if (me.dead && myDead < 6 - n) return '说你还站着，可倒下的人数说明你在那之前就倒了'
+  // those who fell after the call were shot by someone still standing at it: the ones up at the end, and the rest of the count from those who fell later
+  const standingKills = (xs: typeof my, k: number, must?: string): number => {
+    const picked = xs.filter((x) => !x.dead)
+    const lead = must ? xs.find((x) => x.id === must) : undefined
+    if (lead?.dead) picked.push(lead)
+    if (picked.length > k) return -1
+    const rest = xs.filter((x) => x.dead && x !== lead).sort((a, b) => b.k - a.k)
+    while (picked.length < k && rest.length) picked.push(rest.shift()!)
+    return picked.reduce((s, x) => s + x.k, 0)
+  }
+  const ours = standingKills(my, n, meId)
+  const their = standingKills(th, t)
+  if (ours < 0 || their < 0) return '倒下的人数和站着的人数对不上'
+  if (thDead - (5 - t) > ours) return `对面后来又倒了 ${thDead - (5 - t)} 个，站着的你们这回合只打了 ${ours} 个`
+  if (myDead - (5 - n) > their) return `你们后来又倒了 ${myDead - (5 - n)} 个，站着的对面这回合只打了 ${their} 个`
+  const cl = [...my, ...th].find((x) => x.cl > 0)
+  if (cl && my.includes(cl) && (cl.dead || (n === 1 && cl.id !== meId))) return '这回合的残局记在了不该记的人头上'
+  return null
+}
+
+/** The round played on the copy when the call was asked, against the round played for real. */
+function peekOnRecord(c: Call, rl: RoundLog, won: boolean): boolean {
+  const key: BranchKey = c.e.ok ? (won ? 'okWin' : 'okLoss') : (won ? 'failWin' : 'failLoss')
+  const b = c.ctx.branches[key]
+  const mineIsA = c.mm.mineIsA
+  if (b.won !== won || b.end !== rl.end || b.buyMine !== (mineIsA ? rl.buyA : rl.buyB) || b.buyTheirs !== (mineIsA ? rl.buyB : rl.buyA)) return false
+  if (!c.alone) return true
+  return [...b.mine, ...b.theirs].every((x) => x.kills === c.m.lines[x.id].kills - c.pre[x.id].k && x.dead === c.m.lines[x.id].deaths > c.pre[x.id].d)
+}
+
+/**
+ * The hint's fact, derived again from the engine at the moment of the call —
+ * the round record before it, the rosters, the map's lineups and scoreboard —
+ * and the option it favours against the node's lean.
+ */
+function hintOnRecord(c: Call): string | null {
+  const h = c.hint!
+  const f = h.fact as FactKey
+  const { node, ctx, m, mm, at, pre } = c
+  const state: GameState = mm.state
+  const meId = state.me!.id
+  const mineIsA = mm.mineIsA
+  if (node.lean?.[f] !== h.fav) return `提示说的是 ${f}，看好选项 ${h.fav}，节点写的是 ${node.lean?.[f]}`
+  const before = m.rounds.slice(0, at)
+  const prev = before[before.length - 1]
+  const ours = (r: RoundLog) => (r.winner === 'A') === mineIsA
+  const says = (v: number) => h.text.includes(String(v))
+  const avg = (ids: string[], dim: string) => {
+    const rows = ids.map((id) => state.players[id]).filter(Boolean)
+    return rows.length ? Math.round(rows.reduce((s, p) => s + (p.attrs as any)[dim], 0) / rows.length) : null
+  }
+  const readout = (dim: string) => {
+    const mine = Math.round((state.players[meId].attrs as any)[dim])
+    const mates = avg((state.teams[mm.myTeamId]?.starters ?? []).filter((id) => id !== meId), dim)
+    const theirs = avg(state.teams[mm.oppTeamId]?.starters ?? [], dim)
+    const edge = theirs == null || Math.abs(mine - theirs) <= 3 ? 0 : mine > theirs ? 1 : -1
+    return { mine, mates, theirs, edge }
+  }
+  const bar = Math.max(HOT_KILLS, Math.ceil(at * HOT_RATE))
+  switch (f) {
+    case 'theirBroke':
+    case 'theirSaved': {
+      if (!prev || prev.n === 1 || prev.n === 13) return '上一回合是手枪局，或者这是第一回合'
+      const tb = mineIsA ? prev.buyB : prev.buyA
+      if (f === 'theirBroke' ? !(ours(prev) && tb !== 'eco') : tb !== 'eco') return `上回合对面买 ${tb}，${ours(prev) ? '我们' : '他们'}赢了`
+      return null
+    }
+    case 'streakUs':
+    case 'streakThem': {
+      if (!prev) return '还没打过回合'
+      let run = 0
+      for (let i = before.length - 1; i >= 0 && ours(before[i]) === ours(prev); i--) run++
+      if (run < RUN || ours(prev) !== (f === 'streakUs')) return `最后一段是${ours(prev) ? '我们' : '对面'}连下 ${run} 回合`
+      return says(run) ? null : `连下 ${run} 回合，提示里没这个数`
+    }
+    case 'teamUp':
+    case 'teamDown': {
+      const opt = node.a[node.lean!.teamUp!]
+      const ro = readout(opt.dim)
+      if (ro.theirs == null) return '对面没有首发'
+      const gap = Math.round((ro.mates != null ? (ro.mine + ro.mates * 4) / 5 : ro.mine) - ro.theirs)
+      if (f === 'teamUp' ? !(gap >= TEAM_GAP && ro.edge <= 0) : !(gap <= -TEAM_GAP && ro.edge >= 0)) return `五人均值差 ${gap}，按钮上是 ${ro.edge}`
+      if (!says(Math.abs(gap)) || /\d/.test(h.words)) return `五人均值差 ${gap}，提示的数字不对，或者文字档里带了数字`
+      return null
+    }
+    case 'duelUp':
+    case 'duelDown': {
+      const opt = node.a[node.lean!.duelUp!]
+      const mineL = mineIsA ? m.A : m.B
+      const theirL = mineIsA ? m.B : m.A
+      const role = AGENT_ROLE[mineL.agents[meId]] ?? state.players[meId].role
+      const byAgent = theirL.players.filter((p) => AGENT_ROLE[theirL.agents[p.id]] === role)
+      const cands = (byAgent.length ? byAgent : theirL.players.filter((p) => p.role === role)).slice()
+      cands.sort((x, y) => y.overall - x.overall || (x.id < y.id ? -1 : 1))
+      const him = cands[0]
+      if (!him) return '对面没有对位的人'
+      const gap = Math.round((state.players[meId].attrs as any)[opt.dim]) - Math.round((him.attrs as any)[opt.dim])
+      const edge = readout(opt.dim).edge
+      if (f === 'duelUp' ? !(gap >= DUEL_GAP && edge <= 0) : !(gap <= -DUEL_GAP && edge >= 0)) return `和对位差 ${gap}，按钮上是 ${edge}`
+      if (!says(Math.abs(gap)) || /\d/.test(h.words)) return `和对位差 ${gap}，提示的数字不对，或者文字档里带了数字`
+      return null
+    }
+    case 'theyHot': {
+      const top = Math.max(...(mineIsA ? m.B : m.A).players.map((p) => pre[p.id]?.k ?? 0))
+      if (top < bar) return `对面这张图最多 ${top} 杀，不到 ${bar}`
+      return says(top) ? null : `对面最多 ${top} 杀，提示里没这个数`
+    }
+    case 'meHot':
+    case 'meCold': {
+      const { k, d } = pre[meId]
+      if (f === 'meHot' ? !(k >= bar && k - d >= 3) : !(d - k >= COLD_GAP)) return `你这张图 ${k} 杀 ${d} 死`
+      return says(k) ? null : `你这张图 ${k} 杀，提示里没这个数`
+    }
+    case 'threeSites': return m.map === 'Haven' || m.map === 'Lotus' ? null : `${m.map} 不是三个点的图`
+    case 'teleporter': return m.map === 'Bind' ? null : `${m.map} 没有传送门`
+    case 'longLines': return m.map === 'Breeze' ? null : `${m.map} 不是长枪线的图`
+    case 'upMen': case 'downMen': case 'evenMen': case 'oneLeft': case 'manyLeft': {
+      const a = ctx.alive
+      if (!a) return '说了人数，这个节点却没定人数'
+      const [n, t] = a
+      const ok = f === 'upMen' ? n > t : f === 'downMen' ? n < t : f === 'evenMen' ? n === t : f === 'oneLeft' ? t === 1 : t >= 2
+      return ok ? null : `${n} 对 ${t}`
+    }
+  }
+  return `不认识的事实 ${f}`
 }
 
 /** the call's line against its round, read straight off the engine — nothing taken from MeMatch's own bookkeeping */
-function verify(node: NodeDef, ctx: NodeCtx, idx: number, e: NodeLogEntry, m: MapSim, at: number, killsBefore: number | null, meId: string, mineIsA: boolean, natural: boolean): void {
+function verify(c: Call): void {
+  const { node, ctx, idx, e, m, at } = c
   st.calls++
+  st.byPhase[node.phase] = (st.byPhase[node.phase] ?? 0) + 1
+  st.byNode[node.id] = (st.byNode[node.id] ?? 0) + 1
+  if (node.tier === 'retired') st.retired++
+  if (node.tier === 'fallback' && keyCandidates(ctx).some((x) => x.node.tier !== 'fallback')) st.tier++
+  // the hint: its fact true of the moment, its favoured option what the node says, its words clean
+  if (!c.hint) st.noHint++
+  else {
+    for (const s of [c.hint.text, c.hint.words]) if (WIN.test(s) || LOSS.test(s) || KILL.test(s) || FOREIGN.test(s)) { st.hintDirty++; fail(`${node.id} 的局面提示说了结果、击杀或别的游戏的词：${s}`) }
+    const kind = c.hint.fact === 'pool' ? 'pool' : FACT_CLARITY[c.hint.fact]
+    st.reads[kind][0]++
+    st.reads[kind][1] += +(c.coach === c.hint.fav)
+    if (c.hint.fact === 'pool') st.pool++
+    else {
+      st.facts++
+      st.byFact[c.hint.fact] = (st.byFact[c.hint.fact] ?? 0) + 1
+      const why = hintOnRecord(c)
+      if (why) {
+        if (why.startsWith('提示说的是')) st.hintFav++
+        else if (why.includes('提示')) st.hintFigure++
+        else st.hintFalse++
+        if (st.hintFav + st.hintFigure + st.hintFalse <= 5) fail(`${node.id} 第 ${ctx.round} 回合的提示「${c.hint.text}」：${why}`)
+      }
+    }
+  }
   const rl = m.rounds[at]
   if (!rl || rl.n !== e.round) { st.noRound++; fail(`${node.id}：决定记在第 ${e.round} 回合，引擎这一格是第 ${rl?.n} 回合`); return }
-  const won = (rl.winner === 'A') === mineIsA
-  const kills = killsBefore == null ? (e.kills ?? 0) : m.lines[meId].kills - killsBefore
+  const won = (rl.winner === 'A') === c.mm.mineIsA
+  const meId = c.mm.state.me!.id
+  const kills = c.alone ? m.lines[meId].kills - c.pre[meId].k : (e.kills ?? 0)
   const line = nodeLine(node.id, idx, e.ok, { won, kills })
   const hl = e.hl ?? ''
   // the tail only a round that closed the map carries, from the score (a scrim can close level)
   const lastRound = at === m.rounds.length - 1 && m.over
-  const mine = mineIsA ? m.a : m.b
-  const theirs = mineIsA ? m.b : m.a
+  const mine = c.mm.mineIsA ? m.a : m.b
+  const theirs = c.mm.mineIsA ? m.b : m.a
   const tail = lastRound ? (mine > theirs ? '这张图拿下了。' : mine < theirs ? '这张图丢了。' : '这张图打平了。') : ''
   if (rl.hl?.[0] !== hl) st.unpinned++
   if (hl !== line.text + tail || e.won !== won || e.kills !== kills) st.plumbing++
@@ -174,23 +432,23 @@ function verify(node: NodeDef, ctx: NodeCtx, idx: number, e: NodeLogEntry, m: Ma
   if (r === 1 || r === 13) st.pistol++
   if ((ctx.slot === 'half1' && !(r >= 5 && r <= 12)) || (ctx.slot === 'half2' && !(r >= 14 && r <= 24)) ||
       (ctx.slot === 'point' && !(ctx.mapPoint || r === 25))) st.slot++
-  // and only where its premise holds, by the round record itself
-  const myAttack = rl.aAttack === mineIsA
-  const myBuy = mineIsA ? rl.buyA : rl.buyB
-  if ((ATTACKING.has(node.id) && !myAttack) || (DEFENDING.has(node.id) && myAttack) ||
-      (node.id === 'eco_gun' && myBuy !== 'eco') ||
-      (node.id === 'map_point_mine' && ctx.mapPoint !== 'mine') || (node.id === 'map_point_theirs' && ctx.mapPoint !== 'theirs') ||
-      (node.id === 'ot' && r !== 25)) {
+  // and only where its premise holds, by the round record and the scoreboard
+  const why = premiseOnRecord(c, rl, won)
+  if (why) {
     st.premise++
-    if (st.premise <= 5) fail(`${node.id} 在第 ${r} 回合被问到，前提不成立（${myAttack ? '进攻' : '防守'}，${myBuy}）`)
+    if (st.premise <= 5) fail(`${node.id} 在第 ${r} 回合被问到，前提不成立：${why}`)
+  }
+  if (!peekOnRecord(c, rl, won)) {
+    st.peek++
+    if (st.peek <= 5) fail(`${node.id} 第 ${r} 回合：问的时候在副本上打的这一回合，和真打出来的不一样`)
   }
   // #5, answered naturally: the chance the button showed against how often it landed, and the round odds against the rounds
-  if (natural) {
+  if (c.natural) {
     st.naturalCalls++
     st.shownP += e.p / 100
     st.landed += +e.ok
   }
-  if (natural && !node.decides && e.qok != null && e.qfail != null) {
+  if (c.natural && !node.decides && e.qok != null && e.qfail != null) {
     if (e.ok) { st.okN++; st.okShown += e.qok / 100; st.okWon += +won } else { st.failN++; st.failShown += e.qfail / 100; st.failWon += +won }
   }
 }
@@ -207,48 +465,62 @@ for (const o of SCN) {
     .map((t) => t.id).sort().slice(0, 6)
   const snapMe = JSON.stringify(state.me)
   const snapP = JSON.stringify(state.players[meId])
-  for (const ans of ANSWERS) {
-    for (let i = 0; i < PER2; i++) {
-      state.me = JSON.parse(snapMe)
-      state.players[meId] = JSON.parse(snapP)
-      const mm = new MeMatch(state, { aId: state.myTeam, bId: opps[i % opps.length], bo: 3, comp, label: `dec:${o.seed}:${ans}:${i}` })
-      const prng = new Rng(hashStr(`decpol:${o.seed}:${i}`))
-      st.series++
-      let guard = 0
-      while (guard++ < 2000) {
-        const k = mm.step()
-        if (k === 'done') break
-        if (k !== 'node') continue
-        const pend = mm.pending!
-        const m = mm.map!
-        const idx = ans === 'random' ? prng.int(0, pend.node.a.length - 1) : pend.coach
-        const at = m.rounds.length
-        if (ans === 'bail') {
-          // walking away with a call on the table: runOut makes it the coach's way, and its round still tells the line
-          mm.runOut()
-          const e = mm.nodes.find((x) => x.map === m.map && x.round === pend.ctx.round)!
-          verify(pend.node, pend.ctx, pend.coach, e, m, at, null, meId, mm.mineIsA, false)
-          if (!e.auto) fail(`${pend.node.id}：快进替你做的决定没记成托管`)
-          break
+  // both sides of the draw: attacking first, and defending first
+  for (const second of [false, true]) {
+    for (const ans of ANSWERS) {
+      for (let i = 0; i < PER2; i++) {
+        state.me = JSON.parse(snapMe)
+        state.players[meId] = JSON.parse(snapP)
+        const mm = new MeMatch(state, { aId: state.myTeam, bId: opps[i % opps.length], bo: 3, comp, label: `dec:${o.seed}:${second ? 'b' : 'a'}:${ans}:${i}`, mineSecond: second })
+        const prng = new Rng(hashStr(`decpol:${o.seed}:${second}:${i}`))
+        st.series++
+        let guard = 0
+        while (guard++ < 2000) {
+          const k = mm.step()
+          if (k === 'done') break
+          if (k !== 'node') continue
+          const pend = mm.pending!
+          const m = mm.map!
+          const idx = ans === 'random' ? prng.int(0, pend.node.a.length - 1) : pend.coach
+          const at = m.rounds.length
+          const pre = snapLines(m)
+          const base = { mm, node: pend.node, ctx: pend.ctx, m, at, pre, hint: pend.hint, coach: pend.coach }
+          if (ans === 'bail') {
+            // walking away with a call on the table: runOut makes it the coach's way, and its round still tells the line
+            mm.runOut()
+            const e = mm.nodes.find((x) => x.map === m.map && x.round === pend.ctx.round)!
+            verify({ ...base, idx: pend.coach, e, alone: false, natural: false })
+            if (!e.auto) fail(`${pend.node.id}：快进替你做的决定没记成托管`)
+            break
+          }
+          const e = chooseForced(mm, idx, ans === 'allok' ? true : ans === 'allfail' ? false : undefined)
+          if (e.hl) fail(`${pend.node.id}：回合还没打，句子已经写好了`)
+          if (mm.step() !== 'round') { fail(`${pend.node.id}：选完之后下一拍不是这一回合`); break }
+          verify({ ...base, idx, e, alone: true, natural: ans === 'coach' || ans === 'random' })
         }
-        const killsBefore = m.lines[meId].kills
-        const e = chooseForced(mm, idx, ans === 'allok' ? true : ans === 'allfail' ? false : undefined)
-        if (e.hl) fail(`${pend.node.id}：回合还没打，句子已经写好了`)
-        if (mm.step() !== 'round') { fail(`${pend.node.id}：选完之后下一拍不是这一回合`); break }
-        verify(pend.node, pend.ctx, idx, e, m, at, killsBefore, meId, mm.mineIsA, ans === 'coach' || ans === 'random')
+        if (!mm.done) fail(`${o.start} ${second ? '第二边' : '第一边'} ${ans} #${i}：比赛没打完`)
+        const perMap = new Map<string, number>()
+        for (const n of mm.nodes) perMap.set(n.map, (perMap.get(n.map) ?? 0) + 1)
+        if ([...perMap.values()].some((v) => v > 3)) st.overQuota++
       }
-      if (!mm.done) fail(`${o.start} ${ans} #${i}：比赛没打完`)
-      const perMap = new Map<string, number>()
-      for (const n of mm.nodes) perMap.set(n.map, (perMap.get(n.map) ?? 0) + 1)
-      if ([...perMap.values()].some((v) => v > 3)) st.overQuota++
     }
   }
 }
-console.log(`\n二、${st.series} 场 BO3（2 个角色 × 5 种答法 × ${PER2}），${st.calls} 次决定，其中定回合的 ${st.decided} 次 · ${secs()}`)
+console.log(`\n二、${st.series} 场 BO3（2 个角色 × 两边 × 5 种答法 × ${PER2}），${st.calls} 次决定，其中定回合的 ${st.decided} 次 · ${secs()}`)
 console.log(`  四格出现：成+赢 ${st.cells.okWin} · 成+输 ${st.cells.okLoss} · 败+赢 ${st.cells.failWin} · 败+输 ${st.cells.failLoss} · 说到你击杀的句子 ${st.killLines}`)
 console.log(`  句子和回合记录矛盾 ${st.contra}（${f1(pct(st.contra, st.calls))}%）· 说你杀了人而你这回合 0 杀 ${st.killZero} · 击杀档不对 ${st.killBucket}`)
 console.log(`  定回合的决定和回合结果不符 ${st.forced} · 没钉在那一回合上 ${st.unpinned} · 引擎读数和记下的不一致 ${st.plumbing} · 说图打完了却没打完（或反过来）${st.mapClaim} · 缺句子 ${st.fallback}`)
-console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise} · 一张图超过 3 次 ${st.overQuota}`)
+console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise}（其中逐个核对了芯片 ${st.planted} 次、场上人数 ${st.alive} 次）· 副本和真打不一样 ${st.peek} · 一张图超过 3 次 ${st.overQuota}`)
+console.log(`  退役节点被问到 ${st.retired} · 兜底节点占了阶段节点的位置 ${st.tier}`)
+const readPct = (k: 'plain' | 'subtle' | 'pool') => `${f1(pct(st.reads[k][1], st.reads[k][0]))}%（${st.reads[k][0]} 次）`
+const readAll = (['plain', 'subtle', 'pool'] as const).reduce((s, k) => [s[0] + st.reads[k][0], s[1] + st.reads[k][1]], [0, 0])
+console.log(`  局面提示：说事实 ${st.facts} 次 · 提示池 ${st.pool} 次 · 没有提示 ${st.noHint} 次；事实不成立 ${st.hintFalse} · 看好的选项和节点写的不一致 ${st.hintFav} · 数字不对 ${st.hintFigure}`)
+console.log(`    说了哪些事实：${Object.entries(st.byFact).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')}`)
+console.log(`    教练看对：明面的事实 ${readPct('plain')} · 对位和手感 ${readPct('subtle')} · 提示池 ${readPct('pool')} · 合计 ${f1(pct(readAll[1], readAll[0]))}%`)
+const phaseRows = Object.entries(st.byPhase).sort((a, b) => b[1] - a[1])
+console.log(`  按阶段：${phaseRows.map(([k, v]) => `${k} ${v}（${f1(pct(v, st.calls))}%）`).join(' · ')}`)
+const nodeRows = Object.entries(st.byNode).sort((a, b) => b[1] - a[1])
+console.log(`  按节点：${nodeRows.map(([k, v]) => `${k} ${f1(pct(v, st.calls))}%`).join(' · ')}`)
 const pShown = st.naturalCalls ? st.shownP / st.naturalCalls : 0
 const pReal = st.naturalCalls ? st.landed / st.naturalCalls : 0
 const okRatio = st.okShown ? st.okWon / st.okShown : 1
@@ -257,7 +529,7 @@ console.log(`  #5 显示对兑现（自己答的 ${st.naturalCalls} 次）：成
 if (st.contra) fail(`#13：${st.contra} 句和回合记录矛盾`)
 if (st.killZero) fail(`#13：${st.killZero} 句说你杀了人，你那回合 0 杀`)
 if (st.killBucket) fail(`${st.killBucket} 句的击杀档和真实击杀数不符`)
-if (st.forced) fail(`${st.forced} 次定回合的决定和回合结果不符`)
+if (st.forced) fail(`${st.forced} 次定回合的决定和回合结果不符（「成+输」「败+赢」出现了）`)
 if (st.unpinned) fail(`${st.unpinned} 句没钉在它说的那一回合上`)
 if (st.plumbing) fail(`${st.plumbing} 次记下的胜负、击杀或句子和引擎读数不一致`)
 if (st.mapClaim) fail(`${st.mapClaim} 句说图打完了却没打完，或反过来`)
@@ -265,9 +537,17 @@ if (st.fallback) fail(`${st.fallback} 次没有对应的句子（定回合节点
 if (st.noRound) fail(`${st.noRound} 次找不到决定对应的回合`)
 if (st.pistol) fail(`${st.pistol} 次决定问在了手枪局`)
 if (st.slot) fail(`${st.slot} 次决定不在它那个关键回合的范围里`)
-if (st.premise) fail(`${st.premise} 次决定的前提（攻防、经济、赛点、加时）和回合记录对不上`)
+if (st.premise) fail(`${st.premise} 次决定的前提（攻防、购买、芯片、场上人数、赛点）和回合记录对不上`)
+if (st.peek) fail(`${st.peek} 次问的时候在副本上打的回合和真打的不一样`)
 if (st.overQuota) fail(`${st.overQuota} 场有一张图问了超过 3 次`)
+if (st.retired) fail(`${st.retired} 次问到了退役的节点`)
+if (st.tier) fail(`${st.tier} 次有阶段节点可问，却问了兜底节点`)
+if (st.hintFalse + st.hintFav + st.hintFigure) fail(`${st.hintFalse + st.hintFav + st.hintFigure} 条局面提示和引擎对不上（事实 ${st.hintFalse}、看好的选项 ${st.hintFav}、数字 ${st.hintFigure}）`)
 if (st.calls < PER2 * 5) fail(`只问了 ${st.calls} 次，样本太少`)
+if (st.facts < st.calls / 3) warn(`说事实的提示只有 ${f1(pct(st.facts, st.calls))}%，太多回到了提示池`)
+const coachAll = pct(readAll[1], readAll[0])
+if (coachAll < 60 || coachAll > 70) warn(`教练看对 ${f1(coachAll)}%，不在 60–70%（策划稿 A3r 是 65%）`)
+if (nodeRows[0] && pct(nodeRows[0][1], st.calls) > 20) warn(`${nodeRows[0][0]} 占了 ${f1(pct(nodeRows[0][1], st.calls))}% 的决定`)
 // #5 is asserted in 四, over thousands of calls: a few hundred here leave ±10% to chance
 
 /* ---- 三、the engine ---- */
@@ -313,7 +593,33 @@ if (st.calls < PER2 * 5) fail(`只问了 ${st.calls} 次，样本太少`)
       else fail(`AI 对 AI #${i}：每回合都指定 B 赢，结果是 ${r2.mapsWonA}-${r2.mapsWonB}，击杀 ${kills}`)
     }
   }
-  console.log(`\n三、#14 ${same} 场 AI 对 AI：不指定胜者两次一样，指定成原本胜者也一模一样；${flipped} 场每回合指定 B 赢，B 全拿且击杀照常分配 · ${secs()}`)
+  // a key round reads its premises off copies of the map played every way the call can go: before every round,
+  // both sides landing a call and taking the round on a copy, and the real match must not notice
+  let forkSame = 0
+  for (let i = 0; i < 40; i++) {
+    const a = teams[(i * 11) % teams.length]
+    const b = teams[(i * 17 + 3) % teams.length]
+    if (a === b) continue
+    const bo = BO[i % BO.length]
+    const seed = hashStr(`decfork:${i}`)
+    const natural = JSON.stringify(simulateMatch(state, a, b, bo, new Rng(seed)))
+    const sim = new MatchSim(state, a, b, bo, new Rng(seed))
+    while (!sim.decided && sim.nextMap()) {
+      const cur = sim.current!
+      while (!cur.over) {
+        for (const side of ['a', 'b'] as const) {
+          const copy = cur.fork()
+          landCall(copy, side, (side === 'a' ? copy.A : copy.B).players[0].id, KEY_MOMENTUM)
+          copy.playRound(side)
+        }
+        cur.playRound()
+      }
+      sim.closeMap()
+    }
+    if (JSON.stringify(sim.finish()) === natural) forkSame++
+    else fail(`三：AI 对 AI #${i} ${a} vs ${b}：每回合先在地图副本上打一遍，真打的比赛就变了`)
+  }
+  console.log(`\n三、#14 ${same} 场 AI 对 AI：不指定胜者两次一样，指定成原本胜者也一模一样；${flipped} 场每回合指定 B 赢，B 全拿且击杀照常分配；${forkSame} 场每回合先在副本上两边各打一遍，真打的比赛一个字节不变 · ${secs()}`)
 }
 
 /* ---- 四、the design's numbers ---- */
@@ -408,7 +714,8 @@ for (const sc of SCN4) {
               if (pend.ctx.round === 1 || pend.ctx.round === 13) pistolCalls++
               if (pend.ctx.slot === 'point') gotPoint.add(mm.sim.mapIndex)
               shownP.push(...odds.map((x) => x.p))
-              if (odds.length >= 2) { gapCalls++; if (Math.abs(odds[0].p - odds[1].p) >= 0.15) gapBig++ }
+              // the spread between the likeliest and the least likely option: for two options, the gap between them
+              if (odds.length >= 2) { gapCalls++; if (Math.max(...odds.map((x) => x.p)) - Math.min(...odds.map((x) => x.p)) >= 0.15) gapBig++ }
             }
             // #4: what a call is worth to the map, from the odds the round was drawn on and what that round is worth
             const base = mm.roundProb()
@@ -463,7 +770,7 @@ for (const sc of SCN4) {
   const bands: [string, string, boolean][] = [
     ['#1 每场 BO3 决定次数', `${perSeries.toFixed(1)}（目标 5–7）；打到赛点或加时的图 ${pointMaps} 张，问了赛点关键回合的 ${pointCalled} 张`, perSeries >= 5 && perSeries <= 7 && pointCalled === pointMaps],
     ['#2 落在手枪局', `${f1(pct(pistolCalls, calls))}%（目标 ≤10%）`, pct(pistolCalls, calls) <= 10],
-    ['#3 成功率区间', `P5 ${f1(q(0.05))}% · P95 ${f1(q(0.95))}%（目标 35–85%）；两个选项差 ≥15 的决定 ${f1(pct(gapBig, gapCalls))}%（目标 ≥50%）`, q(0.05) >= 35 && q(0.95) <= 85 && pct(gapBig, gapCalls) >= 50],
+    ['#3 成功率区间', `P5 ${f1(q(0.05))}% · P95 ${f1(q(0.95))}%（目标 35–85%）；最好和最差的选项差 ≥15 的决定 ${f1(pct(gapBig, gapCalls))}%（目标 ≥50%）`, q(0.05) >= 35 && q(0.95) <= 85 && pct(gapBig, gapCalls) >= 50],
     ['#4 一次决定对图胜率', `成 ${m4ok >= 0 ? '+' : ''}${f1(m4ok)} · 败 ${f1(m4fail)}（目标 成 +4~+7，败 −3~−6）`, m4ok >= 4 && m4ok <= 7 && m4fail <= -3 && m4fail >= -6],
     ['#6 五五开 期望最优 − 快进', `${pd(d6)}（目标 +6~+10）`, d6.mean >= 6 && d6.mean <= 10],
     ['#8 五五开 期望最优 − 随机', `${pd(d8)}（目标 ≥+4）`, d8.mean >= 4],
@@ -492,5 +799,5 @@ for (const sc of SCN4) {
   }
 }
 
-console.log(bad ? `\n✗ ${bad} 项不对。` : `\n✓ 决定的句子和它那一回合对得上，按钮上的数就是兑现的数，AI 对 AI 不受影响，照教练打不比快进差。${warned ? `（${warned} 项在目标区间外，见 ⚠）` : ''} · ${secs()}`)
+console.log(bad ? `\n✗ ${bad} 项不对。` : `\n✓ 决定的句子和它那一回合对得上，前提和提示都和引擎对得上，按钮上的数就是兑现的数，AI 对 AI 不受影响，照教练打不比快进差。${warned ? `（${warned} 项在目标区间外，见 ⚠）` : ''} · ${secs()}`)
 if (bad) process.exit(1)
