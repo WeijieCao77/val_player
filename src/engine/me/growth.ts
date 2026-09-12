@@ -17,6 +17,9 @@ import { addMoney } from './money'
 import { cerRestMul } from './ceremony'
 import { injuryTrainMul } from './injury'
 
+/** How much a week of practice is worth at this age; me/life.ts says the year it drops. */
+export const trainAgeMul = (age: number): number => (age <= 20 ? 1.35 : age <= 23 ? 1.1 : age <= 26 ? 0.8 : 0.45)
+
 /**
  * The same week-of-practice base the club engine uses (training.ts
  * trainPlayer), without the focus: age, condition, mood, coaching, facility
@@ -29,7 +32,7 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
   if (headroom <= 0) return 0
   const coach = ((team.coach?.development ?? 55) - 55) / 100
   const facility = (team.facilities - 55) / 130
-  const age = p.age <= 20 ? 1.35 : p.age <= 23 ? 1.1 : p.age <= 26 ? 0.8 : 0.45
+  const age = trainAgeMul(p.age)
   const tired = p.fatigue > 70 ? 0.5 : p.fatigue > 45 ? 0.8 : 1
   const motivated = 0.75 + p.morale / 200
   return rng.range(7, 16) * age * tired * motivated * (1 + coach + facility) *

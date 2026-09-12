@@ -35,6 +35,7 @@ import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
 import { compClass } from './compclass'
+import { lifeDay, lifeWeek } from './life'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -329,6 +330,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     syncTitles(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng)
+    // a team-mate's birthday, a year at the club, my age at the year's turn (me/life.ts)
+    lifeDay(state, state.year !== yearBefore)
     if (state.gameOver) return { kind: 'game-over' }
     // A final is worth stopping for before the doors open. This has to be
     // queued *before* the generic pending check, not after: anything else
@@ -485,6 +488,8 @@ export function settleWeek(state: GameState): void {
   checkAchievements(state)
   // who took my place, which losses ended a run, and the cooling (me/rivals.ts)
   rivalWeek(state)
+  // milestones, a team-mate's run, my club's streak (me/life.ts)
+  lifeWeek(state, notes)
 
   for (const n of notes) me.weekNotes.push(n)
   // the week's paper: my results, who moved where, who got stronger, what is next

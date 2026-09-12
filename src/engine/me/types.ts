@@ -450,6 +450,8 @@ export interface MeState {
   mates?: Record<string, BondEntry>
   /** 宿敌, read off what happened in this save — see me/rivals.ts; absent until the first pro week */
   rivals?: import('./rivals').RivalBook
+  /** birthdays, milestones and runs already said — see me/life.ts; absent in older saves */
+  life?: import('./life').LifeBook
   /** matches played this stage, so a two-game stage cannot define a role */
   bondStageMatches?: number
   /** a practice duel in progress, scene by scene */
