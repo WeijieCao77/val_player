@@ -46,7 +46,7 @@ HISTORY = os.path.join(ROOT, 'src', 'data', 'history.json')
 API = 'https://liquipedia.net/valorant/api.php'
 
 UA = ('val_player-dataset/0.1 (personal VALORANT career-sim project; '
-      'contact yankejing711@gmail.com)')
+      'project page https://github.com/WeijieCao77/val_player)')
 DELAY = 2.0
 BATCH = 50
 
