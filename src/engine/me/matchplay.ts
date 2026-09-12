@@ -75,8 +75,10 @@ export function mapWinProb(mine: number, theirs: number, p: number): number {
  * decision. The engine's MatchSim does all the playing; this decides when to
  * ask me something and what my answer does to the round it is about.
  *
- * 关键回合 (2026-09-12). At most three calls a map — one in each half, one at
- * match point or the first overtime round — and each settles its own round:
+ * 关键回合 (2026-09-12). Three calls a map — one in each half, one at match
+ * point — and a fourth on the first overtime round when the map goes there
+ * (作者 2026-09-12: a match point always comes before 12:12, so "match point or
+ * overtime" never reached overtime). Each settles its own round:
  * whether it lands moves that round's odds (me/nodes.ts KEY_OK / KEY_FAIL), the
  * round is drawn from them, and the engine plays it out for that winner. The
  * calls used to be scattered over the early rounds and each one moved the next
@@ -110,7 +112,7 @@ export class MeMatch {
   private unresolved: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force: Side } | null = null
   private seen = new Set<string>()
   /** the map's three key rounds, asked or not */
-  private slots: Record<KeySlot, boolean> = { half1: false, half2: false, point: false }
+  private slots: Record<KeySlot, boolean> = { half1: false, half2: false, point: false, ot: false }
   private nodeRng: Rng
   private finished: MeMatchRecord | null = null
   private mapStarted = false
@@ -217,12 +219,12 @@ export class MeMatch {
   }
 
   /**
-   * Which of the map's three key rounds the round about to be played is, if
-   * any. The first half's: the first of rounds 5–12 with the score within
-   * three, else round 10. The second half's: the first from round 14 within
-   * three, else round 20. The third: match point, either side's, or the first
-   * overtime round. A pistol round never takes one, and a scrim's twenty-four
-   * rounds have no match point.
+   * Which of the map's key rounds the round about to be played is, if any. The
+   * first half's: the first of rounds 5–12 with the score within three, else
+   * round 10. The second half's: the first from round 14 within three, else
+   * round 20. The match point's: the first match point, either side's. And on a
+   * map that reaches 12:12, the first overtime round. A pistol round never takes
+   * one, and a scrim's twenty-four rounds have neither a match point nor overtime.
    */
   private keySlot(m: MapSim): KeySlot | null {
     const r = m.round + 1
@@ -230,8 +232,10 @@ export class MeMatch {
     const mine = this.myRounds
     const theirs = this.theirRounds
     const close = Math.abs(mine - theirs) <= 3
-    if (!this.slots.point && m.format !== 'full24' &&
-        ((mine === 12 && theirs < 12) || (theirs === 12 && mine < 12) || r === 25)) return 'point'
+    if (m.format === 'full24') {
+      // a scrim plays both halves out: only the halves' key rounds
+    } else if (!this.slots.ot && r === 25) return 'ot'
+    else if (!this.slots.point && ((mine === 12 && theirs < 12) || (theirs === 12 && mine < 12))) return 'point'
     if (!this.slots.half1 && r >= 5 && r <= 12 && (close || r >= 10)) return 'half1'
     if (!this.slots.half2 && r >= 14 && r <= 24 && (close || r >= 20)) return 'half2'
     return null
@@ -245,7 +249,7 @@ export class MeMatch {
     if (!m) {
       // playing through an injury, or a cup entered hurt: on the five, as I actually am (me/hurtplay.ts)
       if (!hurtMap(this.state, this.fixture.id, !!this.friendly, () => this.sim.nextMap())) { this.finishInternal(); return 'done' }
-      this.slots = { half1: false, half2: false, point: false }
+      this.slots = { half1: false, half2: false, point: false, ot: false }
       if (!this.mapStarted) {
         this.mapStarted = true
         this.started = this.playing

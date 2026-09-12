@@ -431,7 +431,7 @@ function verify(c: Call): void {
   const r = ctx.round
   if (r === 1 || r === 13) st.pistol++
   if ((ctx.slot === 'half1' && !(r >= 5 && r <= 12)) || (ctx.slot === 'half2' && !(r >= 14 && r <= 24)) ||
-      (ctx.slot === 'point' && !(ctx.mapPoint || r === 25))) st.slot++
+      (ctx.slot === 'point' && !ctx.mapPoint) || (ctx.slot === 'ot' && r !== 25)) st.slot++
   // and only where its premise holds, by the round record and the scoreboard
   const why = premiseOnRecord(c, rl, won)
   if (why) {
@@ -499,9 +499,14 @@ for (const o of SCN) {
           verify({ ...base, idx, e, alone: true, natural: ans === 'coach' || ans === 'random' })
         }
         if (!mm.done) fail(`${o.start} ${second ? '第二边' : '第一边'} ${ans} #${i}：比赛没打完`)
-        const perMap = new Map<string, number>()
-        for (const n of mm.nodes) perMap.set(n.map, (perMap.get(n.map) ?? 0) + 1)
-        if ([...perMap.values()].some((v) => v > 3)) st.overQuota++
+        // three a map, and one more on round 25 only on a map that got there
+        const perMap = new Map<string, [number, number]>()
+        for (const n of mm.nodes) {
+          const row = perMap.get(n.map) ?? [0, 0]
+          row[n.round === 25 ? 1 : 0]++
+          perMap.set(n.map, row)
+        }
+        if ([...perMap.values()].some(([reg, ot]) => reg > 3 || ot > 1)) st.overQuota++
       }
     }
   }
@@ -510,7 +515,7 @@ console.log(`\n二、${st.series} 场 BO3（2 个角色 × 两边 × 5 种答法
 console.log(`  四格出现：成+赢 ${st.cells.okWin} · 成+输 ${st.cells.okLoss} · 败+赢 ${st.cells.failWin} · 败+输 ${st.cells.failLoss} · 说到你击杀的句子 ${st.killLines}`)
 console.log(`  句子和回合记录矛盾 ${st.contra}（${f1(pct(st.contra, st.calls))}%）· 说你杀了人而你这回合 0 杀 ${st.killZero} · 击杀档不对 ${st.killBucket}`)
 console.log(`  定回合的决定和回合结果不符 ${st.forced} · 没钉在那一回合上 ${st.unpinned} · 引擎读数和记下的不一致 ${st.plumbing} · 说图打完了却没打完（或反过来）${st.mapClaim} · 缺句子 ${st.fallback}`)
-console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise}（其中逐个核对了芯片 ${st.planted} 次、场上人数 ${st.alive} 次）· 副本和真打不一样 ${st.peek} · 一张图超过 3 次 ${st.overQuota}`)
+console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise}（其中逐个核对了芯片 ${st.planted} 次、场上人数 ${st.alive} 次）· 副本和真打不一样 ${st.peek} · 一张图超过 3 次（加时那一次另算）${st.overQuota}`)
 console.log(`  退役节点被问到 ${st.retired} · 兜底节点占了阶段节点的位置 ${st.tier}`)
 const readPct = (k: 'plain' | 'subtle' | 'pool') => `${f1(pct(st.reads[k][1], st.reads[k][0]))}%（${st.reads[k][0]} 次）`
 const readAll = (['plain', 'subtle', 'pool'] as const).reduce((s, k) => [s[0] + st.reads[k][0], s[1] + st.reads[k][1]], [0, 0])
@@ -539,7 +544,7 @@ if (st.pistol) fail(`${st.pistol} 次决定问在了手枪局`)
 if (st.slot) fail(`${st.slot} 次决定不在它那个关键回合的范围里`)
 if (st.premise) fail(`${st.premise} 次决定的前提（攻防、购买、芯片、场上人数、赛点）和回合记录对不上`)
 if (st.peek) fail(`${st.peek} 次问的时候在副本上打的回合和真打的不一样`)
-if (st.overQuota) fail(`${st.overQuota} 场有一张图问了超过 3 次`)
+if (st.overQuota) fail(`${st.overQuota} 场有一张图问了超过 3 次，或加时问了不止一次`)
 if (st.retired) fail(`${st.retired} 次问到了退役的节点`)
 if (st.tier) fail(`${st.tier} 次有阶段节点可问，却问了兜底节点`)
 if (st.hintFalse + st.hintFav + st.hintFigure) fail(`${st.hintFalse + st.hintFav + st.hintFigure} 条局面提示和引擎对不上（事实 ${st.hintFalse}、看好的选项 ${st.hintFav}、数字 ${st.hintFigure}）`)
@@ -672,7 +677,7 @@ for (const sc of SCN4) {
   const { state, comp } = S
   /** per bucket and way of playing, series by series: [series won, maps won, maps] */
   const res = {} as Record<Bucket, Record<Pol, number[][]>>
-  let calls = 0, series = 0, pistolCalls = 0, pointMaps = 0, pointCalled = 0
+  let calls = 0, series = 0, pistolCalls = 0, pointMaps = 0, pointCalled = 0, otCalls = 0, otMaps = 0, otCalled = 0, maps = 0
   /** #5 over every call answered by a way of playing (not forced): what the button showed against what happened */
   const n5 = { calls: 0, shownP: 0, landed: 0, okN: 0, okShown: 0, okWon: 0, failN: 0, failShown: 0, failWon: 0 }
   const shownP: number[] = []
@@ -692,13 +697,16 @@ for (const sc of SCN4) {
         else {
           const hadPoint = new Set<number>()
           const gotPoint = new Set<number>()
+          const hadOt = new Set<number>()
+          const gotOt = new Set<number>()
           let guard = 0
           while (guard++ < 2000) {
             const m = mm.map
             if (m && !m.over && mm.playing && m.format !== 'full24') {
               const r = m.round + 1
               const my = mm.myRounds, th = mm.theirRounds
-              if (r !== 1 && r !== 13 && ((my === 12 && th < 12) || (th === 12 && my < 12) || r === 25)) hadPoint.add(mm.sim.mapIndex)
+              if (r !== 1 && r !== 13 && ((my === 12 && th < 12) || (th === 12 && my < 12))) hadPoint.add(mm.sim.mapIndex)
+              if (r === 25) hadOt.add(mm.sim.mapIndex)
             }
             const k = mm.step()
             if (k === 'done') break
@@ -710,7 +718,8 @@ for (const sc of SCN4) {
             if (pol === 'random') idx = prng.int(0, odds.length - 1)
             else if (pol === 'oracle' || pol === 'allok') idx = value.indexOf(Math.max(...value))
             if (pol === 'coach') {
-              calls++
+              // the overtime key round is counted apart: it only exists on a map that went there
+              if (pend.ctx.slot === 'ot') { otCalls++; gotOt.add(mm.sim.mapIndex) } else calls++
               if (pend.ctx.round === 1 || pend.ctx.round === 13) pistolCalls++
               if (pend.ctx.slot === 'point') gotPoint.add(mm.sim.mapIndex)
               shownP.push(...odds.map((x) => x.p))
@@ -724,7 +733,13 @@ for (const sc of SCN4) {
             const e = chooseForced(mm, idx, pol === 'allok' ? true : pol === 'allfail' ? false : undefined)
             if (pol === 'coach') (e.ok ? eff.ok : eff.fail).push(((e.ok ? odds[idx].ok : odds[idx].fail) - base) * roundWorth)
           }
-          if (pol === 'coach') { pointMaps += hadPoint.size; pointCalled += [...hadPoint].filter((x) => gotPoint.has(x)).length }
+          if (pol === 'coach') {
+            pointMaps += hadPoint.size
+            pointCalled += [...hadPoint].filter((x) => gotPoint.has(x)).length
+            otMaps += hadOt.size
+            otCalled += [...hadOt].filter((x) => gotOt.has(x)).length
+            maps += mm.mapLog.length
+          }
         }
         const rec = mm.record!
         if (pol === 'coach' || pol === 'random' || pol === 'oracle') {
@@ -768,7 +783,7 @@ for (const sc of SCN4) {
   const w10 = rate('under', 'allok')
   const w11 = rate('fav', 'allfail')
   const bands: [string, string, boolean][] = [
-    ['#1 每场 BO3 决定次数', `${perSeries.toFixed(1)}（目标 5–7）；打到赛点或加时的图 ${pointMaps} 张，问了赛点关键回合的 ${pointCalled} 张`, perSeries >= 5 && perSeries <= 7 && pointCalled === pointMaps],
+    ['#1 每场 BO3 决定次数', `${perSeries.toFixed(1)}（不含加时，目标 5–7）；打到赛点的图 ${pointMaps} 张，问了赛点关键回合的 ${pointCalled} 张；加时关键回合另算：每场 ${(otCalls / Math.max(1, series)).toFixed(2)} 次，打进加时的图 ${otMaps} 张（${f1(pct(otMaps, maps))}% 的图），问了加时关键回合的 ${otCalled} 张`, perSeries >= 5 && perSeries <= 7 && pointCalled === pointMaps && otCalled === otMaps],
     ['#2 落在手枪局', `${f1(pct(pistolCalls, calls))}%（目标 ≤10%）`, pct(pistolCalls, calls) <= 10],
     ['#3 成功率区间', `P5 ${f1(q(0.05))}% · P95 ${f1(q(0.95))}%（目标 35–85%）；最好和最差的选项差 ≥15 的决定 ${f1(pct(gapBig, gapCalls))}%（目标 ≥50%）`, q(0.05) >= 35 && q(0.95) <= 85 && pct(gapBig, gapCalls) >= 50],
     ['#4 一次决定对图胜率', `成 ${m4ok >= 0 ? '+' : ''}${f1(m4ok)} · 败 ${f1(m4fail)}（目标 成 +4~+7，败 −3~−6）`, m4ok >= 4 && m4ok <= 7 && m4fail <= -3 && m4fail >= -6],
