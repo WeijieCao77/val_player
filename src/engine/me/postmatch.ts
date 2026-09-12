@@ -106,7 +106,7 @@ export function nodeNet(rec: MeMatchRecord): { made: number; missed: number } {
  * worst on the floor (narrate wrote it down that night); otherwise the dice.
  * `nums` is the 「数值」 switch — off, no percentages.
  */
-export function ledgerNotes(nodes: MeMatchRecord['nodes'], nums = false): string[] {
+export function ledgerNotes(nodes: MeMatchRecord['nodes'], nums = false, mapName: (key: string) => string = (k) => k): string[] {
   const told = nodes.filter((n) => n.won !== undefined)
   if (!told.length) return []
   const made = told.filter((n) => n.ok)
@@ -119,7 +119,8 @@ export function ledgerNotes(nodes: MeMatchRecord['nodes'], nums = false): string
   const luck: string[] = []
   for (const n of told) {
     if (n.decided || n.qok == null || n.qfail == null) continue
-    const at = `第 ${n.round} 回合「${n.pick}」`
+    // a series has a round 5 on every map: the map is what tells two of them apart
+    const at = `${mapName(n.map)} 第 ${n.round} 回合「${n.pick}」`
     if (!n.won && n.qok >= 70) {
       const odds = nums ? `成了有 ${n.qok}%` : '成了多半是我们的'
       if (!n.ok) luck.push(`${at}：这回合${odds}，是你自己没打成——账本上面记着。`)

@@ -333,7 +333,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
                   {n.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{n.hl}</div>}
                 </div>
               ))}
-              {ledgerNotes(rec.nodes, nums).map((t, i) => <p key={i} className="tiny faint" style={{ margin: '6px 0 0' }}>{t}</p>)}
+              {ledgerNotes(rec.nodes, nums, mapCn).map((t, i) => <p key={i} className="tiny faint" style={{ margin: '6px 0 0' }}>{t}</p>)}
             </div>
           </div>
         )}
