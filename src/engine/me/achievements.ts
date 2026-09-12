@@ -262,12 +262,17 @@ export const ACHIEVEMENTS: AchDef[] = [
     cond: (s) => mates(s).some((e) => bondRoleCount(e, 'carried') >= 2 && (e.gone === 'retired' || (!!e.gone && !s.players[e.id]))) },
 
   // ---- 临场决策（只有亲手打的比赛才有）
-  // measured over two hand-played seasons (~690 calls, random picks): no call is offered under 56%, the
-  // biggest swing a call makes is 12 points, and a match with 5+ calls all landing comes about three times a season
-  { key: 'call_long', route: 'calls', name: '不到六成', desc: '成功率不到 60% 的决策赌赢了', reward: { mental: 1 }, cond: (s) => nodes(s).some((n) => n.ok && n.p < 60) },
-  { key: 'call_swing', route: 'calls', name: '一句话翻盘', desc: '一个决策把地图胜率拉高 12 点', reward: { heat: 20 }, cond: (s) => nodes(s).some((n) => n.after - n.before >= 12) },
-  { key: 'call_clean', route: 'calls', name: '句句算数', desc: '一场做 5 个以上决策，全部成功', reward: { title: '读秒决断' },
-    cond: (s) => M(s).matches.some((m) => (m.nodes?.length ?? 0) >= 5 && m.nodes.every((n) => n.ok)) },
+  // first measured over two hand-played seasons (~690 calls, random picks). Re-measured for 关键回合
+  // (2026-09-12): 6000 BO3s on random picks, the thresholds moved so each stays about as rare as it was.
+  // A call that lands under 40% turns up in 33 matches in 100 (under 60% used to: 38). A landed call that
+  // lifts the map 20 points — counted on the round it really won, not a projection — in 11 in 100 (the old
+  // 12-point projection: 8). 4+ calls all landing in 3 in 100 (5+ used to be 5, but calls land less often
+  // now and no count brings that back). Every call missed and the match won stays at 3+, about 1 in 500.
+  // Keys are unchanged, so an achievement already earned stays earned.
+  { key: 'call_long', route: 'calls', name: '不到四成', desc: '成功率不到 40% 的决策赌赢了', reward: { mental: 1 }, cond: (s) => nodes(s).some((n) => n.ok && n.p < 40) },
+  { key: 'call_swing', route: 'calls', name: '一句话翻盘', desc: '一个做成的决策，把地图胜率拉高 20 点', reward: { heat: 20 }, cond: (s) => nodes(s).some((n) => n.ok && n.after - n.before >= 20) },
+  { key: 'call_clean', route: 'calls', name: '句句算数', desc: '一场做 4 个以上决策，全部成功', reward: { title: '读秒决断' },
+    cond: (s) => M(s).matches.some((m) => (m.nodes?.length ?? 0) >= 4 && m.nodes.every((n) => n.ok)) },
   { key: 'call_all_fail_win', route: 'calls', secret: true, name: '嘴上输了', desc: '决策全砸（至少 3 个），比赛还是赢了', reward: { heat: 15 },
     cond: (s) => M(s).matches.some((m) => m.won && (m.nodes?.length ?? 0) >= 3 && m.nodes.every((n) => !n.ok)) },
 
