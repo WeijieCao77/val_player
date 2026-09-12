@@ -9,16 +9,24 @@
  * Challengers start and counts, per season, my injuries by kind, my weeks out,
  * the matches I played hurt, the lasting hits — and my club's team-mates' lay-offs.
  *
- *   npx tsx scripts/check_injury.ts [seasons=6] [seeds=7] [starts=pre,chal] [steady|through]
+ * And one rule played out on purpose rather than waited for: when my club cannot
+ * put five fit men of its own on the floor, its bench, its academy and a free
+ * agent of its region come on before I am sent on hurt (engine/standin.ts), and
+ * the choice stays mine on a light knock and the coach's on a serious one.
+ *
+ *   npx tsx scripts/check_injury.ts [seasons=6] [seeds=7] [starts=pre,chal|standin] [steady|through]
  *
  * `through` answers every 「带伤上吗」 with 带伤上 instead of the autopilot's
  * answer, which is how often a lasting mark comes from playing through.
+ * `standin` runs only the stand-in cases.
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoPlan, autoResolve, autoWeek } from '../src/engine/me/auto'
 import { advanceWeek } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
-import { answerHurt } from '../src/engine/me/hurtplay'
+import { answerHurt, asFit, hurtBeforeMatch } from '../src/engine/me/hurtplay'
+import { coachStarters } from '../src/engine/me/coach'
+import { academyOf } from '../src/engine/standin'
 import type { GameState } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
@@ -34,7 +42,8 @@ const mem: Record<string, string> = {}
 
 const seasons = Number(process.argv[2] ?? 6)
 const seeds = (process.argv[3] ?? '7').split(',').map(Number)
-const starts = (process.argv[4] ?? 'pre,chal').split(',') as ('pre' | 'chal')[]
+const standinOnly = process.argv[4] === 'standin'
+const starts = (standinOnly ? '' : process.argv[4] ?? 'pre,chal').split(',').filter(Boolean) as ('pre' | 'chal')[]
 const through = process.argv[5] === 'through'
 
 /** autoWeek, or the same week with every light injury played through */
@@ -172,5 +181,81 @@ for (const start of starts) {
   const stuck = sum((t) => t.stuck)
   if (stuck) { bad++; console.log(`✗ 有 ${stuck} 个「带伤上吗」没有关掉，时钟会停在那里。`) }
 }
-console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 跑完了，没有卡住的决定。')
+/**
+ * 替补先于带伤. A Challengers start is walked to its first match day. There the
+ * club is left four fit men beside me, hurt, and the day is played three ways:
+ * a light knock with the region's free agents as they are (my call: I sit it
+ * out, and somebody stands in), a serious one (the coach sits me), and the light
+ * one again with every free agent and the academy out of reach (nobody at all:
+ * I go on). Each case is a copy of the same day.
+ */
+function standInFirst(seed: number): { lines: string[]; bad: string[] } {
+  const lines: string[] = []
+  const bad: string[] = []
+  const base = createCareer({ name: 'Probe', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed })
+  autoPlan(base)
+  let stop = advanceWeek(base)
+  let guard = 0
+  while (stop.kind !== 'match' && stop.kind !== 'game-over' && guard++ < 400) {
+    let g = 0
+    while (base.me!.pending.length && g++ < 20) autoResolve(base, base.me!.pending[0])
+    if (stop.kind === 'week-end') autoPlan(base)
+    stop = advanceWeek(base)
+  }
+  if (stop.kind !== 'match') return { lines, bad: [`种子 ${seed}：没走到自己的比赛日`] }
+  const fixtureId = stop.fixture.id
+  const cases: { label: string; days: number; nobody: boolean; expect: 'ask' | 'bench' | 'forced' }[] = [
+    { label: '轻伤，有人可顶', days: 3, nobody: false, expect: 'ask' },
+    { label: '重伤，有人可顶', days: 14, nobody: false, expect: 'bench' },
+    { label: '轻伤，谁都叫不来', days: 3, nobody: true, expect: 'forced' },
+  ]
+  for (const c of cases) {
+    const s = structuredClone(base) as GameState
+    const me = s.me!
+    const p = s.players[me.id]
+    const f = s.fixtures.find((x) => x.id === fixtureId)!
+    const team = s.teams[s.myTeam]
+    p.injuredUntil = s.day + c.days
+    p.injuryNote = '感冒发烧'
+    me.injury = { kind: 'ill', from: s.day, played: 0 }
+    me.pending = me.pending.filter((x) => x.kind !== 'hurt')
+    // four fit team-mates, no more: nobody on the bench to bring on
+    let fit = 0
+    for (const id of team.roster) {
+      const q = s.players[id]
+      if (!q || id === me.id) continue
+      if (fit < 4 && q.injuredUntil <= s.day) fit++
+      else q.injuredUntil = Math.max(q.injuredUntil, s.day + 20)
+    }
+    if (c.nobody) {
+      for (const q of Object.values(s.players)) if (!q.teamId && q.id !== me.id) q.retiring = true
+      for (const id of academyOf(s, team)?.roster ?? []) if (s.players[id]) s.players[id].injuredUntil = s.day + 20
+    }
+    if (!asFit(s, () => coachStarters(s)).includes(me.id)) { bad.push(`种子 ${seed} ${c.label}：教练本来就不首发我，这一例测不到`); continue }
+    hurtBeforeMatch(s, f)
+    const forced = me.injury?.play === f.id
+    const asked = me.pending.some((x) => x.kind === 'hurt' && x.id === f.id)
+    const got = forced ? 'forced' : asked ? 'ask' : me.injury?.benched ? 'bench' : 'none'
+    if (asked) answerHurt(s, f.id, false)
+    const rec = new MeMatch(s, f).runOut()
+    const done = s.fixtures.find((x) => x.id === fixtureId)
+    const side = done?.teamA === s.myTeam ? 'a' : 'b'
+    const outsiders = (done?.result?.standIns?.[side] ?? []).map((id) => s.players[id]?.ign ?? id)
+    const word = { ask: '问我，我选先养伤', bench: '教练不让上', forced: '凑不齐五人，逼我带伤上', none: '什么都没发生' }[got]
+    lines.push(`  种子 ${seed} · ${c.label}（队里另有 ${fit} 个健康的人）：${word} · 我${rec.started ? '上场了' : '没上场'} · 临时顶替 ${outsiders.join('、') || '无'}`)
+    if (got !== c.expect) bad.push(`种子 ${seed} ${c.label}：应该是「${{ ask: '问我', bench: '教练不让上', forced: '逼我带伤上' }[c.expect]}」，实际「${word}」`)
+    if (c.expect !== 'forced' && rec.started) bad.push(`种子 ${seed} ${c.label}：有人可以临时顶替，我还是带伤上场了`)
+    if (c.expect !== 'forced' && !outsiders.length) bad.push(`种子 ${seed} ${c.label}：我没上，也没有人从名单外顶上来`)
+    if (c.expect === 'forced' && !rec.started) bad.push(`种子 ${seed} ${c.label}：谁都叫不来，我却没上场`)
+  }
+  return { lines, bad }
+}
+
+console.log('\n== 替补先于带伤：俱乐部凑不齐五个健康的人时')
+for (const seed of seeds) {
+  const r = standInFirst(seed)
+  for (const l of r.lines) console.log(l)
+  for (const b of r.bad) { bad++; console.log(`✗ ${b}`) }
+}
+console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 跑完了，没有卡住的决定；有人可以临时顶替时，不会逼你带伤上。')
 if (bad) process.exitCode = 1

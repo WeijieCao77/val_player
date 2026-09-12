@@ -27,8 +27,15 @@
  *  lcq        a VCT Last Chance Qualifier, and China's 2023 Champions qualifier:
  *             the same league's nearest published LCQ; with none, the nearest
  *             LCQ anywhere. ×1.0.
- *  open       from 2027, an open qualifier or the Open Playoffs: no open
- *             qualifier ever published a table, so the nearest LCQ. ×1.0.
+ *  open       from 2027, a league's open qualifiers, the Pacific's open-qualifier
+ *             finals and a league's Open Playoffs: the league's 2026 Challengers
+ *             stage that pays least ×k_open — a stage paid by estimate lends its
+ *             own real table, its k multiplied in — so none of them pays any place
+ *             more than a Challengers stage its sides could be playing instead.
+ *             k_open = k_asc: an open event is a rung below a Challengers stage,
+ *             and a Challengers stage pays about half of the rung above it, its
+ *             region's Ascension. No open event ever published a table; each
+ *             estimate is checked place by place against every stage of its league.
  *
  * Each k is the median of the real pairs where both tables were published,
  * rounded to one decimal; the pairs are printed.
@@ -50,6 +57,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { eventsOf } from '../src/engine/circuit'
 import type { CEvent, CUnit } from '../src/engine/circuit'
+import { OQ_POOLS } from '../src/engine/ahead'
 
 const mem: Record<string, string> = {}
 ;(globalThis as any).localStorage = { getItem: (k: string) => mem[k] ?? null, setItem: (k: string, v: string) => { mem[k] = String(v) }, removeItem: (k: string) => { delete mem[k] }, clear: () => {}, key: () => null, length: 0 }
@@ -241,6 +249,8 @@ for (const region of ['Americas', 'Pacific']) {
   }
 }
 const K_ASC = round1(median(ascRatios))
+/** An open event sits a rung below a Challengers stage, which pays about half of the rung above it: the same step down again. */
+const K_OPEN = K_ASC
 
 /* ------------------------------------------------------------------ */
 /*  estimates                                                          */
@@ -260,7 +270,7 @@ const RULE_TEXT = {
   finals: `挑战者联赛总决赛 = 同一联赛此前最后一个公布的赛段 ×${K_FINALS.toFixed(1)}；k 为挑战者联赛总决赛与同年本联赛上一段奖池比的中位数`,
   ascension: '中国晋级赛 = 同年（没有则最近一年）太平洋晋级赛 ×1.0；中国晋级赛从未公布，k 取 1.0',
   lcq: '最后机会资格赛 = 同一联赛最近公布的 LCQ（最近一张明写 $0 就不估；没有则取任何赛区最近的 LCQ）×1.0；同类赛事照搬，k 取 1.0',
-  open: '新赛制公开资格赛、公开季后赛 = 年份最近的真实 LCQ 奖金表 ×1.0；从来没有公开资格赛公布过奖金表，k 取 1.0',
+  open: `新赛制公开资格赛、太平洋公开资格赛决赛、公开季后赛 = 同一联赛 2026 年奖金最少的挑战者联赛赛段 ×${K_OPEN.toFixed(1)}（那个赛段本身是估算的，就用它的真实底表，两个 k 相乘）；k 取 k_asc：公开赛事比挑战者联赛赛段低一级，而挑战者联赛赛段大约拿上一级（本区晋级赛）的一半，再往下一级照这个比例；每个名次都低于该联赛每个挑战者联赛赛段`,
   ext: '底表没覆盖到的季后赛名次：取底表最后一档的一半，再往外每轮（5–8、9–16…）再减半',
 } as const
 type RuleKey = keyof typeof RULE_TEXT
@@ -353,19 +363,52 @@ for (const t of ALL) {
   }
 }
 
-// from 2027: the new format's open events, which had no 2026 edition. China's Ascension, Kickoff and Cups go by their 2026 edition's
+// from 2027: the new format's open events, which had no 2026 edition — a league's open qualifiers, the Pacific's
+// open-qualifier finals, a league's Open Playoffs. China's Ascension, Kickoff and Cups go by their 2026 edition's
+const BASIS_YEAR = REAL_YEARS[REAL_YEARS.length - 1]
+const LEAGUE_CN: Record<string, string> = { Americas: '美洲', EMEA: 'EMEA ', Pacific: '太平洋', China: '中国' }
+/** A club region's league: a league by its own name, else the league its open-qualifier pool plays into (engine/ahead.ts). */
+const leagueOfRegion = (r: string | null): string | undefined =>
+  !r ? undefined : LEAGUES.includes(r) ? r : OQ_POOLS.find((p) => (p.regions as string[]).includes(r))?.league
+/** What a Challengers stage pays in the game: its published table, or its estimate. */
+const stagePay = (e: Ev): Row[] | undefined => (isPaid(e) ? e.real.pay : estimates[e.id]?.pay)
+const openLines: string[] = []
 {
   const ahead = eventsOf(2027)
-  const lcq = pick(ALL.filter((c) => kindOf(c) === 'lcq' && isPaid(c)), { y: 2027, start: null })
-  const shapes: [string, string, CEvent | undefined][] = [
-    ['new:oq', '新赛制 · 公开资格赛', ahead.find((e) => e.plan?.kind === 'oq')],
-    ['new:oqFinal', '新赛制 · 太平洋公开资格赛决赛', ahead.find((e) => e.plan?.kind === 'oqFinal')],
-    ['new:open', '新赛制 · 公开季后赛', ahead.find((e) => e.plan?.kind === 'open' && e.plan.league !== 'China')],
-    ['new:open:China', '新赛制 · 中国公开季后赛', ahead.find((e) => e.plan?.kind === 'open' && e.plan.league === 'China')],
-  ]
-  for (const [key, name, ev] of shapes) {
-    if (!ev || !lcq || lcq === 'zero') throw new Error(`没法给 ${key} 估算`)
-    estimate(key, { y: 2027, lp: null, name, ev }, 'open', lcq, 1)
+  for (const league of LEAGUES) {
+    const stages = ALL.filter((e) => e.y === BASIS_YEAR && kindOf(e) === 'split' && leagueOfRegion(e.ev.region) === league && !!stagePay(e))
+    const least = stages.filter((e) => !isPaid(e) || usable(e))
+      .sort((a, b) => total(stagePay(a)!) - total(stagePay(b)!) || Number(a.id) - Number(b.id))[0]
+    if (!least) throw new Error(`${league}：${BASIS_YEAR} 年没有可比的挑战者联赛赛段，新赛制公开赛事没法估算`)
+    // a stage paid by estimate: the real table under it, with its own k carried along
+    const est = estimates[least.id]
+    const base = est ? ALL.find((e) => e.id === est.fromId)! : least
+    const k = Math.round((est ? est.k : 1) * K_OPEN * 100) / 100
+    const champs = stages.map((s) => amountAt(stagePay(s)!, 1))
+    const shapes: [string, string, CEvent | undefined][] = [
+      [`new:oq:${league}`, `新赛制 · ${LEAGUE_CN[league]}公开资格赛`, ahead.find((e) => e.plan?.kind === 'oq' && e.plan.league === league)],
+      [`new:oqFinal:${league}`, `新赛制 · ${LEAGUE_CN[league]}公开资格赛决赛`, ahead.find((e) => e.plan?.kind === 'oqFinal' && e.plan.league === league)],
+      [`new:open:${league}`, `新赛制 · ${LEAGUE_CN[league]}公开季后赛`, ahead.find((e) => e.plan?.kind === 'open' && e.plan.league === league)],
+    ]
+    for (const [key, name, ev] of shapes) {
+      if (!ev) continue
+      estimate(key, { y: 2027, lp: null, name, ev }, 'open', base, k)
+      const pay = estimates[key].pay
+      // every place both pay, against every Challengers stage of the league
+      let compared = 0
+      for (const s of stages) {
+        const sp = stagePay(s)!
+        for (let p = 1; p <= lastPaid(pay); p++) {
+          const a = amountAt(pay, p)
+          const b = amountAt(sp, p)
+          if (!(b > 0)) continue
+          compared++
+          if (!(a < b)) failures.push(`${key} ${name}：第 ${p} 名 ${usd(a)}，不低于 ${shortCn(s)} 的 ${usd(b)}`)
+        }
+      }
+      openLines.push(`  ${name} ← ${shortCn(least)}${est ? `（估算，底表 ${shortCn(base)}）` : ''} ×${k} · 冠军 ${usd(amountAt(pay, 1))}`
+        + ` · ${league} ${BASIS_YEAR} 年 ${stages.length} 个挑战者联赛赛段冠军 ${usd(Math.min(...champs))}–${usd(Math.max(...champs))} · 逐名次比了 ${compared} 处`)
+    }
   }
 }
 
@@ -383,6 +426,7 @@ const doc = {
     split: { k: K_SPLIT, median: +median(splitRatios).toFixed(3), pairs: splitRatios.length },
     finals: { k: K_FINALS, median: +median(finalsRatios).toFixed(3), pairs: finalsPairs },
     emea: { k: K_ASC, median: +median(ascRatios).toFixed(3), pairs: ascPairs },
+    open: { k: K_OPEN, as: 'emea' },
   },
   events: sortKeys(estimates),
   unestimated: sortKeys(unestimated),
@@ -433,6 +477,9 @@ console.log(`\n只付前几名、季后赛有队拿 0 的真实表 ${short.lengt
 for (const s of short) console.log(`  ${s}`)
 console.log(`\n冠军没有金额的真实表 ${noChampion.length} 场（不改）：`)
 for (const s of noChampion) console.log(`  ${s}`)
+
+console.log(`\n新赛制公开赛事（k_open = ${K_OPEN}；逐名次低于同一联赛 ${BASIS_YEAR} 年每个挑战者联赛赛段，只比两边都付钱的名次）：`)
+for (const l of openLines) console.log(l)
 
 if (failures.length) {
   console.log(`\n✗ ${failures.length} 张估算表季后赛名次没排好：`)

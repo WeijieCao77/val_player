@@ -112,6 +112,14 @@ function drawQr(g: CanvasRenderingContext2D, x: number, y: number, size: number)
 
 const tierOf = (t: string) => (/Champions/i.test(t) ? 3 : /Masters/i.test(t) ? 2 : 1)
 
+/**
+ * The ending's first sentence: the verdict in words, under its headline. The
+ * whole ending grew the lifestyle and money lines (me/endings.ts) and no longer
+ * fits three lines at this size — cut at three, the card ended mid-sentence in
+ * 「…」. The card says the headline and this; the ending screen keeps the rest.
+ */
+const firstSentence = (text: string): string => /^[^。！？]*[。！？]/.exec(text)?.[0] ?? text
+
 /** Draw the whole thing. Returns null where there is no canvas to draw on. */
 export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
   const me = state.me
@@ -151,7 +159,7 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
   y += 52
   g.font = FONT(400, 28)
   g.fillStyle = CO.ink2
-  y += wrap(g, me.ending?.text ?? '', PAD, y, W - PAD * 2, 44, 3) * 44
+  y += wrap(g, firstSentence(me.ending?.text ?? ''), PAD, y, W - PAD * 2, 44, 3) * 44
 
   // who this was
   y += 30

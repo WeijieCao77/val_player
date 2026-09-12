@@ -140,8 +140,17 @@ const facts: [string, boolean][] = [
     prizeFor(ev('2860'), 7, 2026) === 5000 && prizeFor(ev('2860'), 6, 2026) === 10000 && prizeNote(table('2860', 2026)) === '估算：奖金未公开，按 2026 美洲联赛第二赛段推算'],
   ['2027 美洲揭幕赛按 2026 年的估算暂定，标「估算，按 2026 年暂定」',
     table('F2027:kickoff:Americas', 2027).status === 'est' && prizeFor(ev('F2027:kickoff:Americas'), 1, 2027) === 100000 && prizeNote(table('F2027:kickoff:Americas', 2027)) === '估算，按 2026 年暂定'],
-  ['2027 EMEA 公开季后赛按 2022 南美 LCQ 估算，第 12 名也有钱',
-    table('F2027:open1:EMEA', 2027).status === 'est' && table('F2027:open1:EMEA', 2027).from?.lp === 'VCT/2022/South America/Last Chance Qualifier' && prizeFor(ev('F2027:open1:EMEA'), 12, 2027) > 0],
+  // the new format's open events: under their league's Challengers stages (scripts/build_prize_estimates.ts, rule open)
+  ['2027 EMEA 公开季后赛按 EMEA 2026 年奖金最少的挑战者联赛赛段（德语区第二赛段）×0.5 估算：冠军 $2,064，第 12 名也有钱，标「估算」',
+    table('F2027:open1:EMEA', 2027).status === 'est' && table('F2027:open1:EMEA', 2027).from?.lp === 'VCL/2026/DACH/Stage 2'
+    && prizeFor(ev('F2027:open1:EMEA'), 1, 2027) === 2064 && prizeFor(ev('F2027:open1:EMEA'), 12, 2027) > 0
+    && prizeNote(table('F2027:open1:EMEA', 2027)).startsWith('估算')],
+  ['2027 太平洋公开季后赛每个名次都低于 2026 东南亚挑战者联赛第一赛段（冠军 $12,500）',
+    [1, 2, 3, 4, 5, 6, 7, 8].every((p) => prizeFor(ev('2823'), p, 2026) <= 0 || prizeFor(ev('F2027:open1:Pacific'), p, 2027) < prizeFor(ev('2823'), p, 2026))
+    && prizeFor(ev('2823'), 1, 2026) === 12500],
+  ['2027 东南亚公开资格赛按所在联赛（太平洋）的估算付钱：冠军 $2,473，按 2026 日本第二赛段推算',
+    table('F2027:oq1:sea', 2027).status === 'est' && table('F2027:oq1:sea', 2027).from?.lp === 'VCL/2026/Japan/Split 2'
+    && prizeFor(ev('F2027:oq1:sea'), 1, 2027) === 2473],
   [`估算表 ${Object.keys(EST).length} 张：季后赛每个名次都有钱，冠军 > 亚军 > 四强 > 八强 > 其余${misordered.length ? `（没排好：${misordered.join(', ')}）` : ''}`, misordered.length === 0],
 ]
 console.log('')
