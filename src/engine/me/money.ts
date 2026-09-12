@@ -34,6 +34,7 @@ export const LEDGER_IN: [MoneyKind, string][] = [
   ['prize', '赛事奖金'],
   ['sign', '签字费'],
   ['media', '直播与内容'],
+  ['biz', '网咖分红'],
   ['inother', '其他收入'],
 ]
 /** Where it goes. */
@@ -45,6 +46,9 @@ export const LEDGER_OUT: [MoneyKind, string][] = [
   ['course', '课程'],
   ['relax', '放松'],
   ['life', '家人与生活'],
+  ['family', '给家里'],
+  ['public', '见面会与公益'],
+  ['asset', '置办与投资'],
   ['fee', '报名费'],
   ['fine', '违约金'],
   ['outother', '其他开销'],
@@ -143,7 +147,8 @@ export function prizeShare(state: GameState, comp: Competition, index: number): 
  * A competition is only counted once — the key is year + competition — and
  * only if I was on that roster when it was settled, which is what
  * `finished.includes(my team)` and the club check together mean. An event
- * whose amounts were never published pays nothing.
+ * whose amounts were never published pays its estimate, and the line says
+ * 「（估算）」; one with no estimate pays nothing.
  */
 export function prizeWeek(state: GameState): void {
   const me = state.me!
@@ -161,7 +166,8 @@ export function prizeWeek(state: GameState): void {
     const cut = prizeShare(state, comp, place)
     if (!cut) continue
     addMoney(state, 'prize', cut)
-    pushLog(state, 'money', `${compCn(comp.name)} 第 ${placeAt(comp, place).place} 名，奖金分成到账 $${cut.toLocaleString()}。`)
+    const est = prizeTableOf(comp, state.year).status === 'est' ? '（估算）' : ''
+    pushLog(state, 'money', `${compCn(comp.name)} 第 ${placeAt(comp, place).place} 名，奖金分成到账 $${cut.toLocaleString()}${est}。`)
   }
   if (me.prizePaid.length > 60) me.prizePaid.splice(0, me.prizePaid.length - 60)
 }

@@ -37,7 +37,7 @@ export default function TeamScreen() {
               const bond = isMe ? 0 : bondBetween(game, me.id, p.id)
               return (
                 <tr key={p.id} className={isMe ? 'me' : 'clickable'} onClick={() => !isMe && openPlayer(p.id)}>
-                  <td className="sticky-name at-left"><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className="tag" style={{ marginLeft: 6 }}>IGL</span> : null}</td>
+                  <td className="sticky-name at-left"><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className="tag" style={{ marginLeft: 6 }}>IGL</span> : null}{p.fictional ? <span className="tag" style={{ marginLeft: 6 }} title="虚构选手，不对应真实的人">虚构新人</span> : null}</td>
                   <td><Roles p={p} /></td>
                   <td className="num"><OvrBadge value={p.overall} /></td>
                   <td className="num">{p.age}</td>

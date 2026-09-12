@@ -1,12 +1,14 @@
 import { useGame } from './ctx'
 import { Panel, money, moneyFull } from './common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizeRows } from '../../engine/me/money'
+import { prizeNote } from '../../engine/me/prizes'
 import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
+import OutletPanels from './OutletPanels'
 
 export default function EconomyScreen() {
   const { game, commit, toast } = useGame()
@@ -97,6 +99,7 @@ export default function EconomyScreen() {
           })}
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>不改变任何能力和比赛。办过的事，退役时写进你的结局。</p>
         </Panel>
+        <OutletPanels />
       </div>
     </div>
   )
@@ -107,10 +110,11 @@ const prizeAmount = (x: number): string => (x >= 10_000 ? money(x) : moneyFull(x
 
 /**
  * What the events in front of me pay me, read off each event's own table
- * (engine/me/prizes.ts). An event with no published amounts says so instead of
- * showing a number — next to the event's name, where a phone shows it, not at
- * the far end of a table it would have to scroll; one from 2027 on says whose
- * amounts it is using.
+ * (engine/me/prizes.ts). An estimate for an event that never published its
+ * amounts says it is one, and what it is drawn from; an event with neither
+ * says so instead of showing a number — next to the event's name, where a
+ * phone shows it, not at the far end of a table it would have to scroll; one
+ * from 2027 on says whose amounts it is using.
  */
 function PrizeList({ game }: { game: GameState }) {
   const me = game.me!
@@ -128,11 +132,12 @@ function PrizeList({ game }: { game: GameState }) {
             <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">季军</th></tr></thead>
             <tbody>
               {rows.map((r) => {
-                const note = [r.now ? '进行中' : '', r.table.status === 'paid' && r.table.basis ? `按 ${r.table.basis} 年金额暂定` : ''].filter(Boolean).join(' · ')
+                const note = [r.now ? '进行中' : '', prizeNote(r.table)].filter(Boolean).join(' · ')
                 return (
                   <tr key={r.key}>
-                    <td>{compCn(r.name)}{note && <div className="tiny faint">{note}</div>}</td>
-                    {r.table.status === 'paid'
+                    {/* cells keep to one line; the note under the name wraps, so a phone does not scroll sideways for it */}
+                    <td>{compCn(r.name)}{note && <div className="tiny faint" style={{ whiteSpace: 'normal' }}>{note}</div>}</td>
+                    {r.table.status === 'paid' || r.table.status === 'est'
                       ? r.mine.map((x, i) => <td key={i} className="num">{x ? prizeAmount(x) : '—'}</td>)
                       : <td colSpan={3} className="muted">{r.table.status === 'none' ? '无奖金' : '奖金未公开'}</td>}
                   </tr>
@@ -144,7 +149,7 @@ function PrizeList({ game }: { game: GameState }) {
       ) : (
         <p className="small muted" style={{ margin: 0 }}>眼下没有你的队伍够得着的赛事。</p>
       )}
-      <p className="tiny faint" style={{ margin: '6px 0 0' }}>金额取自各赛事 Liquipedia 奖金表；本地货币按页面给出的美元计。</p>
+      <p className="tiny faint" style={{ margin: '6px 0 0' }}>金额取自各赛事 Liquipedia 奖金表，本地货币按页面给出的美元计；标「估算」的没公布过奖金，按同类真实赛事推算。</p>
     </>
   )
 }
