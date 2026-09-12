@@ -1162,6 +1162,52 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   comp.standings = newStandings(comp.teams)
 }
 
+/**
+ * Could this event still put `teamId` on its floor? For the player's
+ * off-season break (engine/me/outlets.ts), which waits until no event of the
+ * season can take his club. True while the club is in the field; for an event
+ * not yet drawn, while this world's results as they stand would seat it, while
+ * it may still take an open place or a place its own scene fills, and while a
+ * placing or a points table the draw reads is still to be settled by an event
+ * that could yet send it on. A club a draw has ruled out, or that could never
+ * have been in it, is not held.
+ */
+export function mayStillDraw(state: GameState, comp: Competition, teamId: string, depth = 0): boolean {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  const team = state.teams[teamId]
+  if (!c || !ev || !team || comp.champion || c.done) return false
+  if (comp.teams.includes(teamId) || c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId)) return true
+  // drawn and under way without it
+  if (c.start <= state.day) return false
+  if (leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)).includes(teamId)) return true
+  const deeper = (id: string): boolean => {
+    const f = state.comps[`ev:${id}`]
+    return !!f && f !== comp && depth < 3 && mayStillDraw(state, f, teamId, depth + 1)
+  }
+  if (ev.plan) {
+    if (ev.plan.seats.some((s) => s.from === 'pool') && planEligible(state, ev, team, null)) return true
+    return ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event))
+  }
+  // a place the draw fills from the player's own scene (fillGaps, offerPlayIn)
+  if (teamId === playerClub(state) && isHome(state, ev, team, teamId)) return true
+  const book = rulesOf(ev.id)?.routes
+  if (!book) return false
+  for (const r of Object.values(book)) {
+    if (r.kind === 'points' && r.pool) {
+      if (!poolRanking(state, r.pool).includes(teamId)) continue
+      const def = poolOf(state.year, r.pool)
+      const regions = new Set(def?.regions ?? [])
+      const counts = (region: string | undefined): boolean =>
+        !!region && (regions.has(region) || (!!def?.league && regionIn(region as Region, state.year) === def.league))
+      // a table the club is on, while an event that pays into it is still to finish
+      if (Object.values(state.comps).some((x) => x !== comp && !!x.circuit && !x.champion && !x.circuit.done && !!rulesOf(x.circuit.id)?.award
+        && (x.teams.length ? x.teams.some((t) => counts(state.teams[t]?.region)) : (scopeOf(eventOf(x.circuit.id)!) ?? []).some(counts)))) return true
+    } else if (r.event && deeper(ev.projected ? counterpart(r.event, ev) : r.event)) return true
+  }
+  return false
+}
+
 /** The places an open qualifier sends into the rest of its event. */
 function openOutputs(ev: CEvent): { ui: number; rank: number }[] {
   const out: { ui: number; rank: number }[] = []

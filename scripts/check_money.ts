@@ -145,6 +145,9 @@ const facts: [string, boolean][] = [
     table('F2027:open1:EMEA', 2027).status === 'est' && table('F2027:open1:EMEA', 2027).from?.lp === 'VCL/2026/DACH/Stage 2'
     && prizeFor(ev('F2027:open1:EMEA'), 1, 2027) === 2064 && prizeFor(ev('F2027:open1:EMEA'), 12, 2027) > 0
     && prizeNote(table('F2027:open1:EMEA', 2027)).startsWith('估算')],
+  ['2027 美洲公开季后赛按美洲 2026 年奖金最少的挑战者联赛自己的赛段（拉美南区第一赛段）估算，不按 ACE Masters 这类附加赛：冠军 $7,250',
+    table('F2027:open1:Americas', 2027).from?.lp === 'VCL/2026/Latin America/South/Stage 1' && prizeFor(ev('F2027:open1:Americas'), 1, 2027) === 7250
+    && table('F2027:oq1:na', 2027).from?.lp === 'VCL/2026/Latin America/South/Stage 1'],
   ['2027 太平洋公开季后赛每个名次都低于 2026 东南亚挑战者联赛第一赛段（冠军 $12,500）',
     [1, 2, 3, 4, 5, 6, 7, 8].every((p) => prizeFor(ev('2823'), p, 2026) <= 0 || prizeFor(ev('F2027:open1:Pacific'), p, 2027) < prizeFor(ev('2823'), p, 2026))
     && prizeFor(ev('2823'), 1, 2026) === 12500],
