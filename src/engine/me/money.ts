@@ -34,6 +34,7 @@ export const LEDGER_IN: [MoneyKind, string][] = [
   ['prize', '赛事奖金'],
   ['sign', '签字费'],
   ['media', '直播与内容'],
+  ['biz', '网咖分红'],
   ['inother', '其他收入'],
 ]
 /** Where it goes. */
@@ -45,6 +46,9 @@ export const LEDGER_OUT: [MoneyKind, string][] = [
   ['course', '课程'],
   ['relax', '放松'],
   ['life', '家人与生活'],
+  ['family', '往家里寄钱'],
+  ['public', '见面会与公益'],
+  ['asset', '置办与投资'],
   ['fee', '报名费'],
   ['fine', '违约金'],
   ['outother', '其他开销'],

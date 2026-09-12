@@ -17,6 +17,7 @@ import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
 import { buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
+import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
 import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
@@ -270,6 +271,8 @@ export function autoBuy(state: GameState): string[] {
     if (me.tilt >= 40 && me.money - 8000 >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
     if (me.abroad && !me.courses.includes('lang') && me.money - 5000 >= reserve && !buyCourse(state, 'lang')) out.push('报了语言课')
   }
+  // where the rest goes: home, a meetup, a scholarship, the winter's holiday, a studio for a streamer (me/outlets.ts)
+  out.push(...autoOutlets(state))
   return out
 }
 

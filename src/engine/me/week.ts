@@ -34,6 +34,7 @@ import { leaveClub } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
+import { outletSeason, outletWeek } from './outlets'
 import { compClass } from './compclass'
 
 export type WeekStop =
@@ -451,6 +452,8 @@ export function settleWeek(state: GameState): void {
     if (gross - agentFee - net) addMoney(state, 'living', -(gross - agentFee - net))
   }
   if (me.upkeep) addMoney(state, 'upkeep', -me.upkeep)
+  // what I chose to send home every week (me/outlets.ts)
+  outletWeek(state)
   prizeWeek(state)
   if (me.money < 0 && !me.flags.brokeWarned) {
     me.flags.brokeWarned = 1
@@ -532,6 +535,8 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
     seasonContractCheck(state, rng)
     if (me.phase === 'pro') { clubWinter(state); clubWeek(state, new Rng(hashStr(`gm:${state.seed}:${state.year}`))) }
   }
+  // the café's year and a word from home, before the question of whether there is a next one (me/outlets.ts)
+  outletSeason(state, year)
   retirementTick(state, rng)
   if (me.phase !== 'retired') push(state, { kind: 'season', id: String(year) })
 }

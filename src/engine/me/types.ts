@@ -11,8 +11,8 @@ export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | '
 
 /** The rows a dollar can land on — see me/money.ts for what each one means. */
 export type MoneyKind =
-  | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
-  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'fee' | 'fine' | 'outother'
+  | 'salary' | 'prize' | 'sign' | 'media' | 'biz' | 'inother'
+  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'family' | 'public' | 'asset' | 'fee' | 'fine' | 'outother'
 
 /** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
@@ -485,6 +485,8 @@ export interface MeState {
   prizePaid?: string[]
   /** weekly outgoing the background left me with */
   upkeep: number
+  /** 钱的出口：家用、见面会、奖学金、休赛期、直播间、网咖 — see me/outlets.ts; absent in older saves and until the first is used */
+  out?: import('./outlets').OutletBook
   log: MeLog[]
   matches: MeMatchRecord[]
   /** engine digest lines collected during the week, shown on the week screen */
