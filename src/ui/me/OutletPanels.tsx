@@ -82,7 +82,7 @@ export default function OutletPanels() {
         </Outlet>
         <Outlet
           name="休赛期"
-          note={brk ? `今年：${brkName}` : '队里这个赛季的比赛打完了（或者到了休赛期），放一次假。'}
+          note={brk ? `今年：${brkName}` : '队里这个赛季的比赛打完了、也不会再被抽进任何赛事时，放一次假。'}
           lock={lockLine(BREAKS.map((b) => ({ name: b.name, why: breakLocked(game, b) })), ['今年的假已经放过了'])}
         >
           {BREAKS.map((b) => {

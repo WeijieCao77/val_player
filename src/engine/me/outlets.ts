@@ -1,7 +1,6 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { eventOf } from '../circuit'
-import { inVctLeague } from '../timeline'
-import type { Competition, GameState, Team } from '../types'
+import { mayStillDraw } from '../circuit'
+import type { GameState } from '../types'
 import { pushLog } from './log'
 import { addMoney } from './money'
 import { addHeat, fansCn } from './fans'
@@ -192,56 +191,45 @@ export const BREAKS: Break[] = [
 export const breakPrice = (state: GameState, b: Break): number =>
   (b.share ? clamp(round1k(wage(state) * b.share), b.floor, b.cap) : 0)
 
-/** The stages engine/circuit.ts counts as the top tier (its tierOf): a league's events, the regional finals, the internationals. */
-const CIRCUIT_TOP: string[] = ['s1masters', 's2finals', 's3finals', 'masters1', 'masters2', 'lcq', 'champions', 'kickoff', 'stage1', 'stage2']
-
 /**
- * An event not yet opened whose draw could still take my club — the draw's own
- * rules (engine/circuit.ts inScope, fillGaps). Its club regions must include
- * mine; an international takes nobody who has not already qualified into it.
- * Before 2023 any tier might; from 2023 a VCT league club plays only the league's
- * events and a Challengers club only Challengers events — the way into a league
- * event from below is an open qualifier, which is one of those.
+ * What still keeps my club this season, if anything: a match of its own to
+ * play or an event with it in the field (`playing`), or an event not yet drawn
+ * that could still take it (`maybe`) — the November open qualifier it can enter,
+ * a Champions place its placings might still earn (engine/circuit.ts
+ * mayStillDraw). Null once no event of the season can take it. The break used
+ * to wait for the Champions stage, and 2021's Champions opens on day 304: a club
+ * that did not qualify sat out months before its players could go home; and an
+ * off-season that opened it outright let a Challengers club go home and then
+ * play November's qualifier. Read once a day.
  */
-function stillToDraw(state: GameState, c: Competition, team: Team): boolean {
-  const k = c.circuit
-  if (!k || k.start <= state.day) return false
-  const ev = eventOf(k.id)
-  const scope = ev ? ev.layer ?? (ev.region ? [ev.region] : null) : null
-  if (!ev || !scope?.includes(team.region)) return false
-  // an event of open rounds only is not played in this world: its places are handed on, and it takes nobody itself
-  if (ev.units.every((u) => u.type === 'open')) return false
-  if (state.year < 2023) return true
-  const top = (!!ev.stage && CIRCUIT_TOP.includes(ev.stage)) || /FGC/.test(ev.name)
-  return top === inVctLeague(state, team)
-}
-
-/**
- * My club has played its season out: no match of its own left to play, no
- * event under way or to come with it in the field — entered, seeded, or
- * standing in for a place (engine/timeline.ts stillPlaying reads a club the same
- * way) — and no event still to be drawn that could take it. A club between two
- * events is in neither field until the next one's draw, so the last is what
- * tells a gap in the season from its end. The break used to wait for the
- * Champions stage, and 2021's Champions opens on day 304: a club that did not
- * qualify sat out months before its players could go home.
- */
-function seasonOver(state: GameState): boolean {
+const SEASON = new WeakMap<GameState, { key: string; left: 'playing' | 'maybe' | null }>()
+function seasonLeft(state: GameState): 'playing' | 'maybe' | null {
   const club = state.myTeam
-  const team = club ? state.teams[club] : undefined
-  if (!club || !team) return false
-  if (state.fixtures.some((f) => !f.played && f.comp !== 'scrim' && (f.teamA === club || f.teamB === club))) return false
-  return !Object.values(state.comps).some((c) => !c.champion && !c.finished.length && !c.circuit?.done
-    && (c.teams.includes(club) || !!c.circuit?.seeds.includes(club) || Object.values(c.circuit?.fill ?? {}).includes(club)
-      || stillToDraw(state, c, team)))
+  if (!club || !state.teams[club]) return 'playing'
+  const comps = Object.values(state.comps)
+  const key = `${state.year}:${state.day}:${club}:${comps.length}:${comps.filter((c) => c.champion || c.circuit?.done).length}`
+  const hit = SEASON.get(state)
+  if (hit?.key === key) return hit.left
+  let left: 'playing' | 'maybe' | null = null
+  if (state.fixtures.some((f) => !f.played && f.comp !== 'scrim' && (f.teamA === club || f.teamB === club))) left = 'playing'
+  else {
+    for (const c of comps) {
+      if (c.champion || c.finished.length || c.circuit?.done) continue
+      if (c.teams.includes(club) || !!c.circuit?.seeds.includes(club) || Object.values(c.circuit?.fill ?? {}).includes(club)) { left = 'playing'; break }
+      if (!left && mayStillDraw(state, c, club)) left = 'maybe'
+    }
+  }
+  SEASON.set(state, { key, left })
+  return left
 }
 
 export function breakLocked(state: GameState, b: Break): string | null {
   const me = state.me!
   if (me.phase !== 'pro') return '有了职业合同再说'
   if (readOut(me).breaks.some((x) => x.year === state.year)) return '今年的假已经放过了'
-  // once the club's season is over, or in the off-season whatever is left
-  if (state.stage !== 'offseason' && !seasonOver(state)) return '队里这个赛季还有比赛'
+  const left = seasonLeft(state)
+  if (left === 'playing') return '队里这个赛季还有比赛'
+  if (left === 'maybe') return '这个赛季还可能打进比赛，等抽签定下来'
   return short(me, breakPrice(state, b))
 }
 
