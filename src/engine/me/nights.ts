@@ -9,6 +9,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { bondAll, bondCardLines } from './bond'
 import { compCn } from './compname'
+import { outletRecap } from './outlets'
 import { ARRIVALS_UNTIL, arrivalsBetween, arrivedBy } from './releases'
 import type { Arrival } from './releases'
 
@@ -314,6 +315,9 @@ export function retireRecap(state: GameState): string[] {
   if (best) lines.push(`最好的一年是 ${best.year}：${best.team}，首发 ${best.starts} 场${best.acs ? `，ACS ${best.acs}` : ''}。`)
   const won = (me.awards ?? []).filter((a) => a.won)
   if (won.length) lines.push(`年度奖项：${won.map((a) => `${a.year} ${a.name}`).join('、')}。`)
+  // what the career earned, and some of where it went (me/outlets.ts)
+  const earned = outletRecap(state)
+  if (earned) lines.push(earned)
   lines.push(...bondCardLines(state).slice(0, 2))
   return lines
 }
