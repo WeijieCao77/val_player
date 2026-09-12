@@ -306,10 +306,66 @@ export function quietAhead(state: GameState, days = 28): boolean {
 }
 
 /**
+ * The cards a run of several weeks leaves on the table unless the dial that
+ * hands them to 托管 is on (AutoScreen writes down what each dial covers):
+ *
+ *   「生涯」 deal (a first contract, a transfer, a renewal) · invite · tryout ·
+ *           released · folding
+ *   「商务」 stream (an exclusive) · cup (an entry, and its fee)
+ *
+ * and the season card while it asks a veteran of 31 whether he retires, which
+ * autoResolve answers with a retirement. Everything else a run answers the
+ * steady way, as it always has: events and trait notices whatever 「日常」
+ * says, ceremonies, the plain season card, a knock on a match day.
+ *
+ * A run used to answer all of it. The week's button became 「推进一个月」 in a
+ * quiet stretch, and pressed unread it renewed a contract or signed for a
+ * club (reported 2026-09-12). A single week never did: it stops on every card.
+ */
+export const RUN_DIAL: Partial<Record<PendingItem['kind'], 'career' | 'biz'>> = {
+  deal: 'career', invite: 'career', tryout: 'career', released: 'career', folding: 'career',
+  stream: 'biz', cup: 'biz',
+}
+
+/** A card a run stops in front of (see RUN_DIAL). */
+export function leftToMe(state: GameState, item: PendingItem): boolean {
+  const me = state.me!
+  if (item.kind === 'season') return !me.auto.career && !!me.retireAsk && (state.players[me.id]?.age ?? 0) >= 31
+  const dial = RUN_DIAL[item.kind]
+  return !!dial && !me.auto[dial]
+}
+
+/** The first card waiting that a run would stop on: while there is one, a run does not start. */
+export function runBlocked(state: GameState): PendingItem | undefined {
+  return state.me?.pending.find((x) => leftToMe(state, x))
+}
+
+/** Why a run stopped, or would not start, in the card's words: 「Suning Gaming 的续约等你拿主意（托管「生涯」没开）」. */
+export function stopLine(state: GameState, item: PendingItem): string {
+  const me = state.me!
+  const club = (id?: string) => (id && state.teams[id]?.name) || '俱乐部'
+  const dial = item.kind === 'season' ? 'career' : RUN_DIAL[item.kind]
+  let what = '有件事等你拿主意'
+  if (item.kind === 'deal') {
+    const d = me.deals.find((x) => x.id === item.id)
+    what = `${club(d?.teamId)} 的${d?.kind === 'renew' ? '续约' : d?.kind === 'transfer' ? '转会报价' : '合同'}等你拿主意`
+  } else if (item.kind === 'invite') what = `${club(me.pre.invites.find((i) => i.id === item.id)?.teamId)} 的试训邀请等你回复`
+  else if (item.kind === 'tryout') what = `${club(me.tryout?.teamId)} 的试训还没打完`
+  else if (item.kind === 'released') what = '你成了自由人'
+  else if (item.kind === 'folding') what = '俱乐部要解散了'
+  else if (item.kind === 'stream') what = '直播独家等你答复'
+  else if (item.kind === 'cup') what = `${(item.id && cupFor(state, item.id)?.name) || '杯赛'}等你决定报不报名`
+  else if (item.kind === 'season') what = '要不要退役，等你决定'
+  return dial ? `${what}（托管「${dial === 'career' ? '生涯' : '商务'}」没开）` : what
+}
+
+/**
  * Let the clock run: each week is planned the steady way unless I already
- * planned it by hand, whatever the dials cover is answered, and the run stops
- * the moment something is mine to do — my match (I play it), a decision the
- * dials do not cover, the end of the road — or at the boundary asked for.
+ * planned it by hand, whatever the dials cover is answered, the small things
+ * the steady way, and the run stops the moment something is mine to do — my
+ * match (I play it), a decision no dial of mine hands over (leftToMe), the end
+ * of the road — or at the boundary asked for. With such a decision already
+ * waiting it does not start at all.
  */
 export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number; notes: string[] } {
   const me = state.me!
@@ -318,19 +374,23 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
   let weeks = 0
   const notes: string[] = []
   let stop: WeekStop = { kind: 'week-end' }
-  // whatever is waiting is answered the steady way and written down — a run
-  // to the end of the season that stops at every event is not a run
-  const settle = (): boolean => {
+  const waiting = runBlocked(state)
+  if (waiting) return { stop: { kind: 'pending', item: waiting }, weeks, notes }
+  // whatever else is waiting is answered the steady way and written down — a
+  // run to the end of the season that stops at every event is not a run
+  const settle = (): PendingItem | undefined => {
     let g = 0
     while (me.pending.length && g++ < 20) {
+      if (leftToMe(state, me.pending[0])) return me.pending[0]
       const line = autoResolve(state, me.pending[0])
       notes.push(line || '替你处理了一件等着的事。')
     }
-    return me.pending.length === 0
+    return me.pending[0]
   }
   while (weeks < 60) {
     runAutoPilot(state)
-    if (!settle()) return { stop: { kind: 'pending', item: me.pending[0] }, weeks, notes }
+    const wait = settle()
+    if (wait) return { stop: { kind: 'pending', item: wait }, weeks, notes }
     if (me.phase === 'retired' || state.gameOver) return { stop: { kind: 'game-over' }, weeks, notes }
     if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
     stop = advanceWeek(state)
@@ -342,7 +402,11 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
       notes.push(`${compCn(rec.comp)} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)
       continue
     }
-    if (stop.kind === 'pending') { if (!settle()) return { stop, weeks, notes }; continue }
+    if (stop.kind === 'pending') {
+      const held = settle()
+      if (held) return { stop: { kind: 'pending', item: held }, weeks, notes }
+      continue
+    }
     if (stop.kind === 'game-over') return { stop, weeks, notes }
     weeks++
     if (until === 'stage' && state.stage !== stage0) break

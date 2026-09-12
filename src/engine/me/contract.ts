@@ -97,6 +97,7 @@ export function askDeal(state: GameState, dealId: string, askKey: string, rng: R
       pop(state, 'deal', dealId)
       me.declined.push(d.teamId)
       pushLog(state, 'bad', `${state.teams[d.teamId]?.name} 撤回了报价：要得太多了。`)
+      if (d.kind === 'renew') renewalGone(state, d, '不再续约')
       return { ok: false, blown: true, text: '他们收回了报价。谈崩了。' }
     }
     d.salary = salaryFloor(state, d.teamId, Math.round(d.salary * 0.9 / 1000) * 1000)
@@ -112,13 +113,32 @@ export function declineDeal(state: GameState, dealId: string): string {
   me.deals = me.deals.filter((x) => x.id !== dealId)
   pop(state, 'deal', dealId)
   if (d.kind === 'renew') {
-    pushLog(state, 'info', `你拒绝了 ${state.teams[d.teamId]?.name} 的续约。合同到期后你会成为自由人。`)
-    me.flags.refusedRenew = state.year
+    renewalGone(state, d, '的续约，你没有签')
   } else {
     me.declined.push(d.teamId)
     pushLog(state, 'info', `你拒绝了 ${state.teams[d.teamId]?.name} 的报价。今年他们不会再来。`)
   }
   return '已拒绝。'
+}
+
+/**
+ * A renewal refused, or talked into the ground. The contract it was to replace
+ * ran out this winter — that is why it was offered — so I go now, the way any
+ * other club's man out of contract goes (engine/season.ts endSeason), and the
+ * club does not ask again this year.
+ *
+ * It used to keep me a season on the year seasonContractCheck lends while the
+ * answer is pending (me/transfer.ts): the card after a refusal read 「合同还剩
+ * 1 年」, the season was played at the club on it, and the refusal looked like
+ * a renewal — 「已经拒绝续约……推动了一个月后又自动续上了」 (reported 2026-09-12).
+ */
+function renewalGone(state: GameState, d: Deal, why: string): void {
+  const me = state.me!
+  me.flags.renewPending = 0
+  me.flags.refusedRenew = 0
+  if (me.phase === 'pro' && state.myTeam === d.teamId) leaveClub(state, why)
+  else pushLog(state, 'info', `${state.teams[d.teamId]?.name ?? '俱乐部'}${why}。`)
+  me.declined.push(d.teamId)
 }
 
 export function acceptDeal(state: GameState, dealId: string): string {
@@ -200,6 +220,9 @@ export function joinClub(state: GameState, d: Deal): void {
   me.abroad = to.region !== me.region
   me.declined = []
   me.intents = []
+  // a new contract is a new question: a renewal refused at the last club is not this one's answer
+  me.flags.refusedRenew = 0
+  me.flags.renewPending = 0
   me.pre.invites = []
   me.tryout = undefined
   me.benchedStages = 0

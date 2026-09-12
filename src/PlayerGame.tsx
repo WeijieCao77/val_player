@@ -7,7 +7,7 @@ import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceTurn, carriesOn, weekCalendar, weekInDays, weekMatches } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
-import { advanceUntil, runAutoPilot } from './engine/me/auto'
+import { advanceUntil, leftToMe, runAutoPilot, stopLine } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
 import Changelog from './ui/me/Changelog'
@@ -68,7 +68,7 @@ export default function PlayerGame() {
   const [fixture, setFixture] = useState<Fixture | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(null)
   // what a multi-week run did on my behalf, shown once it stops
-  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean } | null>(null)
+  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string } | null>(null)
   // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
   const [nums, setNums] = useNumbers()
   const mainRef = useRef<HTMLElement>(null)
@@ -149,9 +149,10 @@ export default function PlayerGame() {
   }, [advance, answerDials, commit])
 
   /**
-   * Run several weeks. Everything waiting is answered the steady way and
-   * every match on the road is played by the numbers; what was done comes
-   * back as a summary. "到下一场比赛" is the one run that hands me the match.
+   * Run several weeks. The small things waiting are answered the steady way
+   * and every match on the road is played by the numbers; a decision no dial
+   * of mine hands over stops it (engine/me/auto.ts leftToMe); what was done
+   * comes back as a summary. "到下一场比赛" and a month hand me the match.
    */
   const advanceMany = useCallback((until: AdvanceUntil) => {
     const g = gameRef.current
@@ -163,7 +164,11 @@ export default function PlayerGame() {
       setLive(new MeMatch(g, stop.fixture))
       return
     }
-    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over' })
+    // stopped in front of a decision that is mine: the summary says which, and its card comes after it
+    const why = stop.kind === 'pending' && leftToMe(g, stop.item) ? stopLine(g, stop.item) : undefined
+    // it never started: the card is already in front
+    if (why && !weeks && !notes.length) { toast(`没有推进：${why}。`); return }
+    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why })
   }, [commit, toast])
 
   const ctxValue = useMemo(() => ({
@@ -202,7 +207,8 @@ export default function PlayerGame() {
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
-  const pending = !live ? me.pending[0] : undefined
+  // a run's summary first, then the card it stopped on
+  const pending = !live && !summary ? me.pending[0] : undefined
 
   const Screen = screen === 'me' ? MeScreen
     : screen === 'team' && pro ? TeamScreen
@@ -256,7 +262,7 @@ export default function PlayerGame() {
                 real one is a long scroll down at the end of the week's panel; 破晓's HUD carries the same copy */}
             {!Screen && me.phase !== 'retired' && (() => {
               const go = advanceOf(game)
-              return <button className="primary hero-go" onClick={go.month ? () => advanceMany('month') : advance} title={go.title}>{go.label}</button>
+              return <button className="primary hero-go" onClick={advance} title={go.title}>{go.label}</button>
             })()}
           </div>
           <div className="tiles">
@@ -332,15 +338,17 @@ export default function PlayerGame() {
         {playerId && <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}
         {summary && (
-          <Modal title={`推进总结 · ${summary.weeks} 周 · 到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
-            <p className="small muted" style={{ marginTop: 0 }}>
+          <Modal title={`推进总结 · ${summary.weeks} 周 · ${summary.why ? '停在这里' : `到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
+            {/* why the run stopped short: a decision it leaves to me, whose card opens when this closes */}
+            {summary.why && <div className="node-line" style={{ marginTop: 0 }}>没推完就停了：{summary.why}。</div>}
+            <p className="small muted" style={{ marginTop: summary.why ? undefined : 0 }}>
               现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage, onTimeline(game))}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : ''}
             </p>
             {summary.notes.length === 0
-              ? <p className="muted">一路没有需要拿主意的事。</p>
+              ? <p className="muted">{summary.why ? '路上没替你处理什么。' : '一路没有需要拿主意的事。'}</p>
               : <ul className="diary">{summary.notes.map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>}
             <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button className="primary" onClick={() => setSummary(null)}>继续</button>
+              <button className="primary" onClick={() => setSummary(null)}>{summary.why ? '去处理' : '继续'}</button>
             </div>
           </Modal>
         )}
