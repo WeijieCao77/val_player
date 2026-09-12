@@ -86,6 +86,25 @@ const PROMOTIONS_WINTER_BY_LEAGUE: Partial<Record<string, number>> = { China: 2 
 const PROMOTE_ODDS_WINTER = 0.9
 /** How many men a Challengers club can lose upward in the winter. */
 const LOSSES_WINTER = 2
+/**
+ * In the winter window a VCT league club may take up to two men from Challengers
+ * and make up to two trades — one of each at the mid-season break, and a
+ * Challengers club still trades once. Once the rating ruler (engine/ruler.ts) put
+ * everyone on one scale, the league caps held nothing back: reading 2027's winter
+ * pool (China 33, Europe 11), a cap of 99 moved the same people as a cap of 6,
+ * and 12–59 of each league's chances were stopped because the VCT club had
+ * already moved once. The world's top-tier churn had fallen to 2.2–2.35 a club
+ * against the author's 2.5–3 (2026-09-12: relax the two rules together).
+ */
+const TOP_MOVES_WINTER = 2
+/**
+ * How much of a winter promotion's cost a club's budget must cover, in a league
+ * where the budget is what stops most of its chances. EMEA's clubs run budgets
+ * below zero, and the budget stopped 71–87% of its chances in 2027's winter
+ * (177 of 251, 189 of 217); China 32–48%, Pacific 19–40%, Americas 5–33%, where
+ * something else stops most. A move that saves the club money is judged as before.
+ */
+const BUDGET_COVER_WINTER: Partial<Record<string, number>> = { EMEA: 0.7 }
 /** A VCT club after New Year: five and a sixth. */
 const TOP_SQUAD = 6
 /** The player's own club is in a market move once in this many seasons at most. */
@@ -111,7 +130,6 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   const me = state.me
   const myClub = me?.phase === 'pro' ? state.myTeam : null
   const myRole = me ? state.players[me.id]?.role : undefined
-  const moved = new Set<string>()
   const lines: { text: string; mine: boolean }[] = []
 
   // A man who changed clubs this season waits for the next one. In the book's last season that is only whoever
@@ -142,8 +160,6 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     joinRoster(state, q, from, rng)
     to.budget -= fee
     from.budget += fee
-    moved.add(from.id)
-    moved.add(to.id)
     const mine = from.id === myClub || to.id === myClub
     if (mine && me) me.flags.marketMoved = state.year
     lines.push({ mine, text: `${to.name} 从 ${from.name} 换来 ${p.ign}（${p.overall}），${q.ign} 去了 ${from.name}。` })
@@ -184,23 +200,29 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
       }
     }
     let done = 0
+    const intake = new Map<string, number>()
+    const intakeCap = winter ? TOP_MOVES_WINTER : 1
+    const cover = winter ? BUDGET_COVER_WINTER[league] ?? 1 : 1
     for (const o of options.sort((a, b) => b.gap - a.gap)) {
       if (done >= cap) break
-      if ((lost.get(o.from.id) ?? 0) >= losses || moved.has(o.to.id) || capped(o.from) || capped(o.to)) continue
+      if ((lost.get(o.from.id) ?? 0) >= losses || (intake.get(o.to.id) ?? 0) >= intakeCap || capped(o.from) || capped(o.to)) continue
       if (o.p.teamId !== o.from.id || o.q.teamId !== o.to.id) continue
       if (importBlock(state, o.to.id, o.p) || importBlock(state, o.from.id, o.q)) continue
-      if (o.to.budget < feeOf(o.p) - feeOf(o.q)) continue
+      const cost = feeOf(o.p) - feeOf(o.q)
+      if (o.to.budget < (cost > 0 ? cost * cover : cost)) continue
       if (!rng.chance(odds * willing(o.p))) continue
       swap(o)
       lost.set(o.from.id, (lost.get(o.from.id) ?? 0) + 1)
+      intake.set(o.to.id, (intake.get(o.to.id) ?? 0) + 1)
       done++
     }
   }
 
   // ---- the winter: a bottom-half club's young standout to a top-half club with a weaker man in his job
   if (winter) {
-    // a club that took a man up can still trade; a club trades once
-    const traded = new Set<string>()
+    // a club that took a man up can still trade; a VCT league club up to twice, a Challengers club once
+    const traded = new Map<string, number>()
+    const tradedOut = (t: Team): boolean => (traded.get(t.id) ?? 0) >= (t.tier === 1 ? TOP_MOVES_WINTER : 1)
     const leagues = new Map<string, Team[]>()
     for (const t of clubs) {
       const k = `${regionIn(t.region, state.year)}:${t.tier}:${t.tier === 2 ? t.scene ?? '' : ''}`
@@ -220,21 +242,21 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
       let done = 0
       for (const from of ranked.slice(half)) {
         if (done >= leagueCap) break
-        if (traded.has(from.id) || capped(from)) continue
+        if (tradedOut(from) || capped(from)) continue
         const p = from.roster.map((id) => state.players[id])
           .filter((x): x is Player => movable(x) && x.age <= young && x.overall >= from.rating + standout && !mineJob(from, x.role))
           .sort((a, b) => b.overall - a.overall)[0]
         if (!p) continue
         const open = buyers
-          .filter((to) => !traded.has(to.id) && !capped(to) && !mineJob(to, p.role))
+          .filter((to) => !tradedOut(to) && !capped(to) && !mineJob(to, p.role))
           .map((to) => ({ to, q: weakestIn(to, p.role) }))
           .filter((x): x is { to: Team; q: Player } => !!x.q && p.overall >= x.q.overall + upgrade)
           .filter(({ to, q }) => !importBlock(state, to.id, p) && !importBlock(state, from.id, q) && to.budget >= feeOf(p) - feeOf(q))
         if (!open.length || !rng.chance(tradeOdds * willing(p))) continue
         const { to, q } = rng.pick(open)
         swap({ p, from, q, to })
-        traded.add(from.id)
-        traded.add(to.id)
+        traded.set(from.id, (traded.get(from.id) ?? 0) + 1)
+        traded.set(to.id, (traded.get(to.id) ?? 0) + 1)
         done++
       }
     }
