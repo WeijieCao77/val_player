@@ -39,6 +39,13 @@ export interface NodeDef {
   a: NodeOpt[]
   /** the steady choice — what 快进 and 托管 take */
   rec: number
+  /**
+   * The premise is this very round: a 1v2 with me the last one standing, a map
+   * point. Such a call settles the round it is about — landed, the round is
+   * ours; missed, it is theirs — because "I lost the 1v2 and we won the round"
+   * cannot happen (engine/me/matchplay.ts passes it to MapSim.playRound).
+   */
+  decides?: boolean
 }
 
 /**
@@ -57,7 +64,7 @@ export const NODES: NodeDef[] = [
     when: (c) => !c.pistol && c.round >= 3, rec: 0,
     a: [{ t: '拿枪，我来打', dim: 'aim', risk: 0.8 }, { t: '别买了，五人轻甲一起冲', dim: 'teamwork', risk: 0.5 }] },
   { id: 'clutch', q: '1v2，包已经下了，对面在包点两侧。', ctx: '拆包前你必须先解决一个。',
-    when: (c) => !c.pistol && c.round >= 4, rec: 0,
+    when: (c) => !c.pistol && c.round >= 4, rec: 0, decides: true,
     a: [{ t: '打，先找一个', dim: 'clutch', risk: 1.0 }, { t: '藏起来，等他们来拆', dim: 'awareness', risk: 0.6 }] },
   { id: 'behind_to', q: '落后暂停，指挥说完了战术，所有人看着你。', ctx: '这时候语音里最需要有人说话。',
     when: (c) => c.lead <= -4, rec: 0,
@@ -69,10 +76,10 @@ export const NODES: NodeDef[] = [
     when: (c) => c.lead >= 4 && !c.pistol, rec: 1,
     a: [{ t: '冲，速战速决', dim: 'reaction', risk: 0.7 }, { t: '按道具慢打，别送', dim: 'utility', risk: 0.35 }] },
   { id: 'map_point_mine', q: '赛点。指挥把最后一波的先手交给了你。', ctx: '这一回合结束了，这张图就结束了。',
-    when: (c) => c.mapPoint === 'mine', rec: 0,
+    when: (c) => c.mapPoint === 'mine', rec: 0, decides: true,
     a: [{ t: '给我，我来', dim: 'mental', risk: 1.0 }, { t: '按体系打，别改', dim: 'teamwork', risk: 0.45 }] },
   { id: 'map_point_theirs', q: '对面赛点，暂停时语音里没人说话。', ctx: '这时候要有人站出来。',
-    when: (c) => c.mapPoint === 'theirs', rec: 1,
+    when: (c) => c.mapPoint === 'theirs', rec: 1, decides: true,
     a: [{ t: '这波交给我', dim: 'mental', risk: 1.0 }, { t: '别慌，按流程打一回合', dim: 'teamwork', risk: 0.5 }] },
   { id: 'ot', q: '加时。你发现自己的手在抖。', ctx: '这个舞台比训练赛大得多。',
     when: (c) => c.ot, rec: 0,
@@ -234,11 +241,35 @@ const NODE_HL: Record<string, { ok: string; bad: string }[]> = {
   ],
 }
 
-/** The one-line story of a call, by node, option and outcome. */
-export function nodeHighlight(id: string, option: number, ok: boolean): string {
+/** How the round a call was about went, read off the engine once it has been played. */
+export interface RoundFacts {
+  won: boolean
+  /** my kills in that round */
+  kills: number
+}
+
+export type HlCell = 'okWin' | 'okLoss' | 'failWin' | 'failLoss'
+
+export interface NodeLine {
+  text: string
+  /** which of the four the line was written for */
+  cell: HlCell
+  /** what it says about my kills: none, at least one, at least two — null when it says nothing */
+  kills: 0 | 1 | 2 | null
+  /** no line was written for this case and a plain one stood in */
+  fallback: boolean
+}
+
+/** The one-line story of a call, by node, option, outcome and the round it was about. */
+export function nodeLine(id: string, option: number, ok: boolean, f: RoundFacts): NodeLine {
+  const cell: HlCell = ok ? (f.won ? 'okWin' : 'okLoss') : (f.won ? 'failWin' : 'failLoss')
   const t = NODE_HL[id]?.[option] ?? NODE_HL[id]?.[0]
-  if (t) return ok ? t.ok : t.bad
-  return ok ? '这一下做对了。' : '这一下没成。'
+  if (t) return { text: ok ? t.ok : t.bad, cell, kills: null, fallback: false }
+  return { text: ok ? '这一下做对了。' : '这一下没成。', cell, kills: null, fallback: true }
+}
+
+export function nodeHighlight(id: string, option: number, ok: boolean, f: RoundFacts): string {
+  return nodeLine(id, option, ok, f).text
 }
 
 /**
