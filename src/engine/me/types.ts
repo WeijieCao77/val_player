@@ -488,6 +488,8 @@ export interface MeState {
   cer?: Ceremony
   /** ceremonies already held, as keys - each fires once */
   cerSeen?: string[]
+  /** this season's nights so far, against its cap (me/cerbudget.ts); absent in older saves */
+  cerYear?: { year: number; n: number; media: number }
   /** 出征 changed how fast the body comes back, until this day */
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */

@@ -7,6 +7,7 @@ import type { CerKind, CerTier, Ceremony } from './types'
 import { compCn } from './compname'
 import { NIGHTS, awardsNight, isNight, nightApply, patchNight, showmatchNight } from './nights'
 import { injuryKey, rehabStory } from './injury'
+import { cerCounted, cerRoom } from './cerbudget'
 
 /**
  * The nights that are not matches.
@@ -189,6 +190,8 @@ export function cerStart(state: GameState, kind: CerKind, about: string): void {
   const me = state.me!
   me.cer = { kind, step: 0, about }
   push(state, { kind: 'ceremony', id: kind })
+  // it takes its place in the season's count (me/cerbudget.ts)
+  cerCounted(state, kind)
 }
 
 /** Move on to the next screen of the current ceremony. */
@@ -340,11 +343,12 @@ export function ceremonyTick(state: GameState): void {
     if (!comp.teams.includes(p.teamId ?? '')) continue
     const played = state.fixtures.some((f) => f.comp === comp.key && f.played)
     if (played) continue
-    if (comp.city && once(`depart:${state.year}:${comp.key}`)) {
+    // a season that is already full lets these go (me/cerbudget.ts): the key is spent either way, so it is not asked again
+    if (comp.city && once(`depart:${state.year}:${comp.key}`) && cerRoom(state, 'depart', comp.city)) {
       cerStart(state, 'depart', comp.city)
       return
     }
-    if (once(`draw:${state.year}:${comp.key}`)) {
+    if (once(`draw:${state.year}:${comp.key}`) && cerRoom(state, 'draw', compCn(comp.name))) {
       cerStart(state, 'draw', compCn(comp.name))
       return
     }
@@ -359,7 +363,8 @@ export function ceremonyTick(state: GameState): void {
   //    of a year's nights — and the internationals already have 抽签 and 出征.
   if (mediaDue(state) && once(`media:${state.year}:${state.stage}`)) {
     me.flags.mediaAt = state.year * 400 + state.day
-    cerStart(state, 'media', stageNameIn(state.year, state.stage, onTimeline(state)))
+    const about = stageNameIn(state.year, state.stage, onTimeline(state))
+    if (cerRoom(state, 'media', about)) cerStart(state, 'media', about)
   }
 }
 
@@ -396,7 +401,13 @@ export function ceremonyBeforeMatch(state: GameState, label: string, comp: strin
   const key = `final:${state.year}:${comp}:${name}`
   if (me.cerSeen.includes(key)) return
   me.cerSeen.push(key)
-  cerStart(state, 'final', `${compCn(comp)} ${name}`)
+  const about = `${compCn(comp)} ${name}`
+  // a season already full of nights: the final is played, without a walk-out of its own (me/cerbudget.ts)
+  if (!cerRoom(state, 'final', about)) {
+    pushLog(state, 'info', `${about}：这个赛季的大场面已经排满，这场不单独安排入场环节，直接上场。`)
+    return
+  }
+  cerStart(state, 'final', about)
 }
 
 /** The pre-match bonus, if tonight is the night it was won. */

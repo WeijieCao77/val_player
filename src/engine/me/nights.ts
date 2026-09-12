@@ -7,6 +7,7 @@ import type { CerDef, CerPick } from './ceremony'
 import type { CerKind, CerTier, Ceremony, MeAward } from './types'
 import { pushLog } from './log'
 import { push } from './pending'
+import { cerCounted } from './cerbudget'
 import { bondAll, bondCardLines } from './bond'
 import { compCn } from './compname'
 import { outletRecap } from './outlets'
@@ -52,6 +53,8 @@ function seen(state: GameState, key: string): boolean {
 function open(state: GameState, kind: NightKind, about: string): void {
   state.me!.cer = { kind, step: 0, about }
   push(state, { kind: 'ceremony', id: kind })
+  // the season's count of nights (me/cerbudget.ts): these five are never crowded out, but they take their place
+  cerCounted(state, kind)
 }
 
 /** Training progress, without growth.ts (which imports ceremony.ts): rolls over at the next session. */
