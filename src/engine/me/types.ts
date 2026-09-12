@@ -243,6 +243,8 @@ export interface MeSeason {
   overallFrom: number
   overallTo: number
   titles: string[]
+  /** qualifiers won that season — 出线, not titles; absent in older saves */
+  quals?: string[]
 }
 
 /** A generated team-mate for a cup run — five strangers, one of them me. */
@@ -588,6 +590,8 @@ export interface MeState {
   /** achievement rewards already paid (by key), how far the unlock card has shown, the 称号 picked — me/achievements.ts; absent in older saves */
   achState?: { paid: string[]; seen: number; worn?: string }
   titles: { year: number; title: string; started: boolean }[]
+  /** qualifiers won — 出线, not titles (me/compclass.ts isQualifier); absent in older saves */
+  quals?: { year: number; title: string; started: boolean }[]
   ending?: { key: string; title: string; text: string; year: number }
   retireAsk?: boolean
   flags: Record<string, number>

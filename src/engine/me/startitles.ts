@@ -1,5 +1,6 @@
 import { ratingOf } from '../player'
 import type { GameState, Player } from '../types'
+import { isQualifier } from './compclass'
 
 /**
  * 称号 — what this save's numbers say a player is.
@@ -88,7 +89,7 @@ function compute(state: GameState): Map<string, StarTitle> {
 
   // silverware lifted in this save
   for (const p of pool) {
-    const lifted = p.id === me?.id ? me.titles.filter((t) => t.started) : (p.titles ?? [])
+    const lifted = p.id === me?.id ? me.titles.filter((t) => t.started) : (p.titles ?? []).filter((t) => !isQualifier(t.title))
     const won = lifted.filter((t) => titleWeight(t.title) !== 'minor')
     if (!won.length) continue
     const intl = won.filter((t) => intlTitle(t.title))

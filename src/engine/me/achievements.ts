@@ -203,8 +203,9 @@ export const ACHIEVEMENTS: AchDef[] = [
   // ---- 晋级之路（2023–2026 的晋级赛，2027 起的公开资格赛）
   { key: 'asc_title', route: 'promo', name: '从晋级赛出来', desc: '拿下一次晋级赛', reward: { fans: 40 },
     cond: (s) => M(s).titles.some((t) => /晋级赛(（[^）]*）)?$|Ascension/i.test(t.title) && !/资格赛/.test(t.title)) },
-  { key: 'oq_title', route: 'promo', name: '海选打穿', desc: '拿下一次公开资格赛或公开季后赛', reward: { fans: 30 },
-    cond: (s) => M(s).titles.some((t) => /公开资格赛|公开季后赛|Open Qualifier|Open Playoffs/i.test(t.title)) },
+  // a qualifier won is 出线, not a title (me/compclass.ts isQualifier): read off the 出线 list, and off an older save's titles
+  { key: 'oq_title', route: 'promo', name: '海选打穿', desc: '从一次公开资格赛或公开季后赛出线', reward: { fans: 30 },
+    cond: (s) => [...(M(s).quals ?? []), ...M(s).titles].some((t) => /公开资格赛|公开季后赛|Open Qualifier|Open Playoffs/i.test(t.title)) },
   { key: 'promoted', route: 'promo', name: '升上去了', desc: '随队从次级联赛升入一线', reward: { title: '晋级功臣' },
     cond: (s) => pairs(s).some(([a, b]) => a.team === b.team && a.tier === 2 && b.tier === 1) },
   { key: 'yo_yo', route: 'promo', name: '又打回来了', desc: '掉到次级联赛之后，又回到一线', reward: { title: '卷土重来' }, cond: yoYo },

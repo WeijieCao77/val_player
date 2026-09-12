@@ -177,5 +177,55 @@ try {
 }
 check(!threw, `写不进去时一路没有抛出来${threw ? `：${threw}` : ''}`)
 
+// ------------------------------------------------------------------ a qualifier won is 出线, not a title
+// (2026-09-12) Open qualifiers and a league cup's open playoffs send their winner on to another event:
+// winning one must not count as a title anywhere a title counts, nor open a bottleneck break.
+G.localStorage = good
+{
+  const { syncTitles } = await import('../src/engine/me/week')
+  const { endingFor } = await import('../src/engine/me/endings')
+  const { shelfOf } = await import('../src/engine/me/stars')
+  const { isQualifier } = await import('../src/engine/me/compclass')
+  console.log('\n出线不是冠军')
+  const Q = createCareer({ name: 'HallQ', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 21, year: 2026 } as CareerOpts)
+  const me = Q.me!
+  const p = Q.players[me.id]
+  const y = Q.year
+  const quals = ['杯赛 1 公开资格赛 · 欧洲', `${y + 1} 揭幕赛公开资格赛 · 欧洲`, 'EMEA 联赛 · 杯赛 2 公开季后赛']
+  const asc = `中国 · 晋级赛（${y + 1} 访客席位）`
+  // started and won, the way the career reads it: a started match of mine in each event
+  const played = (comp: string) => ({
+    fixtureId: `probe:${comp}`, day: Q.day, year: y, comp, label: '决赛', opp: 'Probe', oppTag: 'PRB', started: true, won: true,
+    score: '2-0', maps: 2, rounds: 26, kills: 20, deaths: 12, assists: 6, firstKills: 3, clutches: 1, acs: 240, rating: 1.2,
+    mvp: false, carried: false, nodes: [], rank: 1,
+  })
+  for (const t of [...quals, asc]) me.matches.push(played(t))
+  const bnBefore = JSON.stringify(me.bottleneck ?? null)
+  const titlesBefore = me.titles.length
+  p.titles = [...(p.titles ?? []), ...quals.map((title) => ({ year: y, title }))]
+  syncTitles(Q)
+  check(quals.every(isQualifier) && !isQualifier(asc) && !isQualifier('挑战者联赛 · 法国 · 第一赛段'), '公开资格赛、公开季后赛是出线；晋级赛、挑战者赛段不是')
+  check(me.titles.length === titlesBefore && (me.quals ?? []).length === quals.length && (me.quals ?? []).every((t) => t.started), '三个出线都记进出线，冠军名单一个没多')
+  check(JSON.stringify(me.bottleneck ?? null) === bnBefore, '出线不开任何瓶颈')
+  check(quals.every((t) => me.log.some((l) => l.text.includes('出线') && l.text.includes(t.split(' · ')[0].replace(/^\d{4} /, '')))), '日志写「出线」')
+  check(!['regional', 'titled', 'ring'].includes(endingFor(Q).key), `三个出线够不上赛区功勋，也不算拿过冠军（结局判成「${endingFor(Q).title}」）`)
+  p.titles = [...p.titles, { year: y, title: asc }]
+  syncTitles(Q)
+  check(me.titles.length === titlesBefore + 1 && me.titles.some((t) => t.title === asc), '晋级赛照样是冠军')
+  // a save from before: a qualifier already on the title list, and what it earned
+  const old = '杯赛 2 公开资格赛 · 欧洲'
+  me.titles.push({ year: y, title: old, started: true })
+  me.achievements = [...me.achievements, 'oq_title']
+  const achBefore = me.achievements.slice()
+  syncTitles(Q)
+  check(!me.titles.some((t) => t.title === old) && (me.quals ?? []).some((t) => t.title === old), '旧存档里记成冠军的出线挪到出线里')
+  check(JSON.stringify(me.achievements) === JSON.stringify(achBefore), '已经拿到的成就不收回')
+  // anyone's shelf: another player with a qualifier and a Challengers stage won in this save
+  const other = Object.values(Q.players).find((x) => x.id !== me.id && !!x.teamId)!
+  other.titles = [{ year: y, title: quals[0] }, { year: y, title: '挑战者联赛 · 法国 · 第一赛段' }]
+  const shelf = shelfOf(Q, null, other.id)
+  check(shelf.length === 1 && !shelf.some((h) => h.label.includes('资格赛')), '别人的奖杯柜：出线不上架，挑战者赛段照上')
+}
+
 console.log(bad ? `\n✗ ${bad} 项没过。` : '\n✓ 殿堂探针全部通过。')
 if (bad) process.exit(1)

@@ -3,7 +3,7 @@ import { REGION_CN } from '../types'
 import type { GameState, Region } from '../types'
 import { regionIn } from '../era'
 import { ACHIEVEMENTS, ACH_BY_KEY } from './achievements'
-import { compClass } from './compclass'
+import { compClass, isQualifier } from './compclass'
 import type { CompClass } from './compclass'
 import type { MeState } from './types'
 
@@ -202,7 +202,8 @@ function cleanCard(x: unknown): HallCard | null {
     titles: list(o.titles).flatMap((t) => {
       const r = obj(t)
       const name = str(r?.name, 60)
-      return r && name ? [{ year: int(r.year), name, cls: compClass(name), started: !!r.started }] : []
+      // a card noted before 2026-09-12 may list a qualifier won: 出线, not a title, so it counts for nothing here
+      return r && name && !isQualifier(name) ? [{ year: int(r.year), name, cls: compClass(name), started: !!r.started }] : []
     }).slice(0, 80),
     best: best ? { year: int(best.year), team: str(best.team, 48), titles: int(best.titles), acs: int(best.acs) } : undefined,
     acs: acs ? { year: int(acs.year), value: int(acs.value) } : undefined,

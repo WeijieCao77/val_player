@@ -28,3 +28,17 @@ export const isIntlComp = (name: string): boolean => {
   const c = compClass(name)
   return c === 'champions' || c === 'masters' || c === 'lockin'
 }
+
+/**
+ * An event whose point is to send its winner on to another one: an open
+ * qualifier (a cup's 公开资格赛, the kickoff's 揭幕赛公开资格赛), a league cup's
+ * 公开季后赛, a Last Chance or any other qualifier. Winning it is 出线, not a
+ * title (2026-09-12): counted as titles, doors made up most of a career's shelf.
+ * Ascension (晋级赛) and Promotion are not qualifiers — winning them is the
+ * league seat itself — and Challengers stages and finals are titles too.
+ */
+export function isQualifier(name: string): boolean {
+  const n = (name ?? '').trim()
+  if (/晋级赛|Ascension|Promotion/i.test(n) && !/资格赛/.test(n)) return false
+  return /资格赛|公开季后赛|Qualifier|Last Chance|Open Playoffs/i.test(n)
+}
