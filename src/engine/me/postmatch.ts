@@ -85,14 +85,38 @@ export function seriesEdgeRows(maps: MapScore[], mineIsA: boolean): EdgeRow[] {
 }
 
 /**
- * What my own calls were worth, net, in the same units as the rows above —
- * so a player can see their decisions next to the squad's shortcomings.
+ * My calls, counted: how many landed and how many did not.
+ *
+ * This used to add up each call's 「赢面 +X」 into a 净赚 figure, but that X
+ * assumed the call's lift would hold to the end of the map, when it fades in
+ * three rounds — it came out four and a half times what the call was worth
+ * (2026-09-12). Counts are what actually happened.
  */
-export function nodeNet(rec: MeMatchRecord): { made: number; missed: number; net: number } {
+export function nodeNet(rec: MeMatchRecord): { made: number; missed: number } {
   const made = rec.nodes.filter((n) => n.ok).length
-  const missed = rec.nodes.length - made
-  const net = rec.nodes.reduce((s, n) => s + (n.after - n.before), 0)
-  return { made, missed, net }
+  return { made, missed: rec.nodes.length - made }
+}
+
+/**
+ * The ledger's closing lines, in the spirit of 破晓's 临场账本: each call
+ * against the round it was about, which really was played — so these are
+ * counts of what happened, never a projection. No percentages: the rows above
+ * carry those behind the 「数值」 switch.
+ */
+export function ledgerNotes(nodes: MeMatchRecord['nodes']): string[] {
+  const told = nodes.filter((n) => n.won !== undefined)
+  if (!told.length) return []
+  const made = told.filter((n) => n.ok)
+  const missed = told.filter((n) => !n.ok)
+  const out = [
+    `成了 ${made.length} 次，那几回合拿下 ${made.filter((n) => n.won).length} 个；没成 ${missed.length} 次，那几回合丢了 ${missed.filter((n) => !n.won).length} 个。`,
+  ]
+  const unlucky = made.filter((n) => !n.won && !n.decided).length
+  const carried = missed.filter((n) => n.won).length
+  if (unlucky) out.push(`有 ${unlucky} 次做成了，那一回合还是丢了：做成只是让那一回合好打一些，打不打得下还看枪。`)
+  if (carried) out.push(`有 ${carried} 次没成，那一回合照样拿下了。`)
+  if (told.some((n) => n.decided)) out.push('残局和赛点的决定直接定那一回合：成了就是拿下，没成就是丢了。')
+  return out
 }
 
 /**
@@ -187,7 +211,7 @@ export function blameLine(rows: BoxRow[], rec: MeMatchRecord): string | null {
     return `你 ${me.rating.toFixed(2)}，是被队友抬赢的（均分 ${mateAvg.toFixed(2)}）。`
   }
   if (!rec.won && n.made > n.missed && me.rating >= mateAvg) {
-    return `你的决定净赚 ${n.net > 0 ? '+' : ''}${n.net} 个百分点，个人数据也在队伍均线之上，还是输了。`
+    return `你的 ${n.made + n.missed} 次决定成了 ${n.made} 次，个人数据也在队伍均线之上，还是输了。`
   }
   return null
 }
