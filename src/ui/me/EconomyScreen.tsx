@@ -8,6 +8,7 @@ import type { GameState } from '../../engine/types'
 import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
+import OutletPanels from './OutletPanels'
 
 export default function EconomyScreen() {
   const { game, commit, toast } = useGame()
@@ -98,6 +99,7 @@ export default function EconomyScreen() {
           })}
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>不改变任何能力和比赛。办过的事，退役时写进你的结局。</p>
         </Panel>
+        <OutletPanels />
       </div>
     </div>
   )

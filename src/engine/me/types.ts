@@ -11,8 +11,8 @@ export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | '
 
 /** The rows a dollar can land on — see me/money.ts for what each one means. */
 export type MoneyKind =
-  | 'salary' | 'prize' | 'sign' | 'media' | 'inother'
-  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'fee' | 'fine' | 'outother'
+  | 'salary' | 'prize' | 'sign' | 'media' | 'biz' | 'inother'
+  | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'family' | 'public' | 'asset' | 'fee' | 'fine' | 'outother'
 
 /** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'
@@ -76,15 +76,27 @@ export interface NodeLogEntry {
   /** success chance at the moment of the call, percent */
   p: number
   ok: boolean
-  /** map win estimate before and after, percent */
+  /** map win estimate, percent: `before` at the moment of the call, `after` once
+      the round it was about had been played — the score that round left, so the
+      two are what happened, not a projection. Equal until that round is played.
+      (Matches saved before 2026-09-12 hold a projection in `after`.) */
   before: number
   after: number
   /** my value on the attribute the call was judged on, and the other side's
       average on the same one — so the line can say 反应 78 对 71 */
   mine?: number
   theirs?: number
-  /** the one-line story of what the call did, written into that round */
+  /** the one-line story of what the call did, written into that round once it
+      had been played */
   hl?: string
+  /** the node and the option, so the line can be looked up again */
+  id?: string
+  opt?: number
+  /** how the round it was about went: taken or not, and my kills in it */
+  won?: boolean
+  kills?: number
+  /** the call was the round itself — a 1v2, a map point — so it settled it */
+  decided?: boolean
 }
 
 /** One player's line on the all-ten table after a series. */
@@ -487,6 +499,8 @@ export interface MeState {
   prizePaid?: string[]
   /** weekly outgoing the background left me with */
   upkeep: number
+  /** 钱的出口：家用、见面会、奖学金、休赛期、直播间、网咖 — see me/outlets.ts; absent in older saves and until the first is used */
+  out?: import('./outlets').OutletBook
   log: MeLog[]
   matches: MeMatchRecord[]
   /** engine digest lines collected during the week, shown on the week screen */

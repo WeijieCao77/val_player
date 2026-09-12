@@ -3,6 +3,7 @@ import type { GameState, Team } from '../types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
 import { addMoney } from './money'
+import { studioCapMul } from './outlets'
 
 /** the platform's share climbs with the following; each step is announced */
 export const STREAM_CUTS: { at: number; cut: number }[] = [
@@ -88,7 +89,8 @@ export const MEDIA_OVER = 0.1
 export function mediaCapWeek(state: GameState): number {
   const me = state.me!
   const wage = me.phase === 'pro' ? (state.players[me.id]?.salary ?? 0) / 52 : 0
-  return Math.max(MEDIA_FLOOR, wage * MEDIA_WAGE_SHARE)
+  // a better studio is settled against a higher cap (me/outlets.ts STUDIO): money only
+  return Math.max(MEDIA_FLOOR, wage * MEDIA_WAGE_SHARE) * studioCapMul(me)
 }
 
 /** What `gross` of side income actually pays, with `before` already earned this week. */

@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "check:me": "npm run typecheck && npx tsx scripts/check_boundary.ts && npx tsx scripts/check_era.ts && npx tsx scripts/check_money.ts 3 7 && npx tsx scripts/check_ceremony.ts 4 7 && npx tsx scripts/check_clout.ts 6 7 && npx tsx scripts/check_tryout.ts 4 && npx tsx scripts/check_bottleneck.ts 6 7 && npx tsx scripts/check_injury.ts 3 7 && npx tsx scripts/check_story.ts 3 && npx tsx scripts/check_hall.ts && npx tsx scripts/check_circuit.ts 11 && npx tsx scripts/check_seats.ts 11",
+    "check:me": "npm run typecheck && npx tsx scripts/check_boundary.ts && npx tsx scripts/check_era.ts && npx tsx scripts/check_money.ts 3 7 && npx tsx scripts/check_ceremony.ts 4 7 && npx tsx scripts/check_clout.ts 6 7 && npx tsx scripts/check_tryout.ts 4 && npx tsx scripts/check_bottleneck.ts 6 7 && npx tsx scripts/check_injury.ts 3 7 && npx tsx scripts/check_story.ts 3 && npx tsx scripts/check_hall.ts && npx tsx scripts/check_circuit.ts 11 && npx tsx scripts/check_seats.ts 11 && npx tsx scripts/check_decisions.ts",
     "check:me:full": "npm run check:me && npx tsx scripts/check_tryout.ts 8 && npx tsx scripts/check_career_end.ts 6 && npx tsx scripts/check_pool.ts 12 7",
     "start": "node server.js"
   },
