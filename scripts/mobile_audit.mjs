@@ -1,10 +1,11 @@
 /**
  * The career on a phone, measured rather than looked at.
  *
- * Opens each save from scripts/mobile_saves.ts as 「继续上次的生涯」, walks
- * every screen, the match in each phase, the cards the clock stops on, the
- * player card and the new-career page, and at each of 320…1440 measures in
- * the page:
+ * Opens each save from scripts/mobile_saves.ts with the home page's 「继续」,
+ * walks every screen, the match in each phase, the cards the clock stops on,
+ * the player card, the new-career page and the home page with a save on it
+ * (its card from a save with no summary and with one, the confirm before a new
+ * career, the form behind it), and at each of 320…1440 measures in the page:
  *
  *   page-overflow  the document is wider than the window
  *   overflow-x     a box's content is wider than the box (not a scroller)
@@ -222,9 +223,10 @@ async function measureAll(page, scenario, state, opts = {}) {
   await settle(page)
 }
 
-async function withSave(name, fn) {
+/** opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than continue */
+async function withSave(name, fn, opts = {}) {
   if (ONLY && !name?.includes(ONLY) && !(name === null && 'newcareer'.includes(ONLY))) return
-  const file = name ? `${ROOT}/saves/${name}.txt` : null
+  const file = name ? `${ROOT}/saves/${opts.save ?? name}.txt` : null
   if (file && !existsSync(file)) { errors.push(`${name}: no save file`); return }
   const text = file ? readFileSync(file, 'utf8') : null
   const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 1 })
@@ -246,13 +248,13 @@ async function withSave(name, fn) {
   try {
     await page.goto(BASE, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.newcareer, .app.career', { timeout: 60000 })
-    if (text) {
-      await page.getByRole('button', { name: '继续上次的生涯' }).click()
+    if (text && !opts.stay) {
+      await page.getByRole('button', { name: '继续', exact: true }).click()
       await page.waitForSelector('.app.career', { timeout: 60000 })
     }
     await settle(page, 300)
     // an achievement card left from the headless run: measured once, then put away
-    const pop = await page.evaluate(() => [...document.querySelectorAll('[role=status][aria-live=polite]')].some((x) => x.textContent.includes('成就解锁')))
+    const pop = !opts.stay && await page.evaluate(() => [...document.querySelectorAll('[role=status][aria-live=polite]')].some((x) => x.textContent.includes('成就解锁')))
     if (pop) {
       await measureAll(page, name, 'ach-pop', { widths: [320, 375, 430, 768] })
       await page.evaluate(() => {
@@ -363,6 +365,31 @@ await withSave(null, async (page) => {
   await settle(page, 200)
   await measureAll(page, 'newcareer', 'new-career:club')
 })
+
+// ---- the home page with a save on it: a save from before the summary, the confirm on 开新生涯, the card once
+//      continuing has written a summary, and the form behind the confirm
+await withSave('home', async (page) => {
+  await page.waitForSelector('.save-card', { timeout: 60000 })
+  await measureAll(page, 'home', 'home:old-save', { shot: 'home-old-save' })
+  await page.getByRole('button', { name: '开新生涯', exact: true }).click()
+  await settle(page, 150)
+  await measureAll(page, 'home', 'home:confirm', { shot: 'home-confirm' })
+  await page.locator('.modal-bg').getByRole('button', { name: '取消', exact: true }).click()
+  await settle(page, 150)
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await page.waitForSelector('.app.career', { timeout: 60000 })
+  await settle(page, 400)
+  // back to the front page, where the first autosave's summary now draws the card
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.save-card .save-tile', { timeout: 60000 })
+  await settle(page, 300)
+  await measureAll(page, 'home', 'home:save', { shot: 'home-save' })
+  await page.getByRole('button', { name: '开新生涯', exact: true }).click()
+  await settle(page, 150)
+  await page.locator('.modal-bg').getByRole('button', { name: '开新生涯', exact: true }).click()
+  await settle(page, 250)
+  await measureAll(page, 'home', 'home:form', { shot: 'home-form' })
+}, { save: 'chal-days', stay: true })
 
 // ---- a ladder start, first week
 await withSave('pre-w0', async (page) => {

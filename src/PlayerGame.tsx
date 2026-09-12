@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, claimAutosave, hasAutosave, loadAutosave } from './engine/me/save'
+import { autosave, autosaveInfo, claimAutosave, loadAutosave } from './engine/me/save'
 import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
@@ -184,13 +184,18 @@ export default function PlayerGame() {
     return (
       <NewCareer
         onStart={start}
-        canContinue={hasAutosave()}
+        // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
+        save={autosaveInfo()}
         onContinue={() => {
           const g = loadAutosave()
+          if (!g?.me) return false
           // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
           // a save from before the eight ceilings gets them now, not at the end of its first week
-          if (g?.me) { resumeTimeline(g); ensureCeilings(g); start(g) }
-          else toast('没有找到可用的存档。')
+          resumeTimeline(g)
+          ensureCeilings(g)
+          // and its first autosave writes the summary a save from before it lacks
+          start(g)
+          return true
         }}
       />
     )
