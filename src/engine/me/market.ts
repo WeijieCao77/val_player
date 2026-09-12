@@ -76,6 +76,13 @@ const PROMOTE_ODDS = 0.6
 const PROMOTIONS = 2
 /** Promotions in the winter, per region: worth more than the VCT club's man in his job is enough. */
 const PROMOTIONS_WINTER = 6
+/**
+ * A league whose real winters sent far fewer up has its own cap. The roster book's off-seasons — on a Challengers
+ * roster at a season's last event, on a VCT one at the next season's first — took 1 Challengers player into
+ * China's league in 2024→25 and 2 in 2025→26 (18 the winter its league opened), while Americas took 8 and 17,
+ * EMEA 19 and 20, Pacific 8 and 13. At six a winter China filled its cap every year.
+ */
+const PROMOTIONS_WINTER_BY_LEAGUE: Partial<Record<string, number>> = { China: 2 }
 const PROMOTE_ODDS_WINTER = 0.9
 /** How many men a Challengers club can lose upward in the winter. */
 const LOSSES_WINTER = 2
@@ -147,7 +154,6 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   const clubs = Object.values(state.teams).filter((t) => !t.dormant && t.roster.length >= 5 && hasPlace(state, t))
 
   // ---- every window: a Challengers man who has outgrown a VCT club's man in his job goes up in his place
-  const cap = winter ? PROMOTIONS_WINTER : PROMOTIONS
   const odds = winter ? PROMOTE_ODDS_WINTER : PROMOTE_ODDS
   const losses = winter ? LOSSES_WINTER : 1
   // mid-season a club goes by what a man is; in the winter, by what he is worth to it
@@ -161,7 +167,8 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     const r = regionIn(t.region, state.year)
     regions.set(r, [...(regions.get(r) ?? []), t])
   }
-  for (const teams of regions.values()) {
+  for (const [league, teams] of regions) {
+    const cap = winter ? PROMOTIONS_WINTER_BY_LEAGUE[league] ?? PROMOTIONS_WINTER : PROMOTIONS
     const above = teams.filter((t) => t.tier === 1)
     const options: (Move & { gap: number })[] = []
     for (const from of teams.filter((t) => t.tier === 2)) {
