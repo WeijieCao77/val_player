@@ -40,16 +40,16 @@ import { compClass, isIntlComp } from './compclass'
  */
 
 export const CAP_HARD = 99
-/** the highest a talent alone puts a ceiling (破晓: talent 10 is 95 before its breaks) */
-export const TALENT_CAP_MAX = 95
+/** the highest a talent alone puts a ceiling — under the hard cap, so a maxed attribute still has a path on the first day (破晓: talent 10 is 95 before its breaks) */
+export const TALENT_CAP_MAX = 97
 /** What each kind of break is worth, in 综合上限. */
 export const BREAK_VALUE = {
   /** a practice path: three weeks of 枪法, twelve ranked, six reviews, four scrims, eight maps calling */
-  grind: 0.8,
+  grind: 0.9,
   /** a situation that pays once: five clutches, a year among veterans and big stages */
   path: 1.0,
-  /** a strong club or a veteran in the room */
-  room: 0.5,
+  /** a strong club or a veteran in the room — it comes to everyone who is there, so it is worth less than what is worked for */
+  room: 0.4,
   /** the first trophy, and the first in a VCT league */
   league: 0.8,
   /** a Masters or LOCK//IN, started in */

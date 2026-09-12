@@ -236,7 +236,7 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
 }
 
 /** Where every talent ceiling starts; each point of talent is +3 on it, as on the start. */
-export const CAP_BASE = 70
+export const CAP_BASE = 68
 
 /**
  * The eight ceilings a talent gives, 破晓's 天赋上限 (cap = 57 + 4.3 × talent) on
@@ -257,8 +257,13 @@ export function talentCeilings(role: Role, talents: Record<keyof Attrs, number>,
   return caps
 }
 
-/** 综合 a career that works at its ceilings opens on top of its talent: practice paths, a strong club, its seasons, a trophy (measured, .cache/probe_career.ts) */
-export const BREAK_REACH = 8
+/**
+ * 综合 a career that works at its ceilings opens on top of its talent: practice
+ * paths, a strong club, its seasons, a trophy. Measured over twelve seasons from
+ * 2026 (three starts, the steady plan and a player who chases every path): the
+ * eight ceilings ended 8 to 11 above where the talent put them.
+ */
+export const BREAK_REACH = 9
 
 export interface CeilingPreview {
   /** the 综合 he starts on */
