@@ -3,7 +3,9 @@
  *
  * Only reads what every version of the prize code writes — the 「奖金分成到账」
  * log line and the ledger — so the same probe runs before and after a change to
- * the prize table and the two outputs can be laid side by side.
+ * the prize table and the two outputs can be laid side by side. A line marked
+ * 「（估算）」 was paid off an estimate for an event that never published its
+ * amounts (engine/me/prizes.ts); it is counted apart from the real tables.
  *
  *   npx tsx scripts/probe_prizes.ts [career=all|0|1|2] [seasons=6]
  */
@@ -33,10 +35,10 @@ function run(label: string, opts: Partial<CareerOpts>): void {
   const me = state.me!
   const year0 = state.year
   const seen = new WeakSet<object>()
-  const byYear = new Map<number, { total: number; lines: string[]; share: string }>()
+  const byYear = new Map<number, { real: number; est: number; lines: string[]; share: string }>()
   const at = (y: number) => {
     let hit = byYear.get(y)
-    if (!hit) { hit = { total: 0, lines: [], share: '' }; byYear.set(y, hit) }
+    if (!hit) { hit = { real: 0, est: 0, lines: [], share: '' }; byYear.set(y, hit) }
     return hit
   }
   const note = () => {
@@ -57,21 +59,24 @@ function run(label: string, opts: Partial<CareerOpts>): void {
       const m = /\$([\d,]+)/.exec(l.text)
       const v = m ? Number(m[1].replace(/,/g, '')) : 0
       const row = at(l.year ?? y)
-      row.total += v
+      if (l.text.includes('（估算）')) row.est += v
+      else row.real += v
       row.lines.push(l.text)
     }
     if (state.year === y) note()
     if (stop.kind === 'game-over') break
   }
   console.log(`\n=== ${label}（seed ${opts.seed}）${year0}–${state.year}`)
-  let sum = 0
+  let real = 0
+  let est = 0
   for (let y = year0; y < year0 + seasons; y++) {
     const r = byYear.get(y)
-    sum += r?.total ?? 0
-    console.log(`  ${y}  $${(r?.total ?? 0).toLocaleString()}  ${r?.share ?? ''}`)
+    real += r?.real ?? 0
+    est += r?.est ?? 0
+    console.log(`  ${y}  $${((r?.real ?? 0) + (r?.est ?? 0)).toLocaleString()}（真实 $${(r?.real ?? 0).toLocaleString()} · 估算 $${(r?.est ?? 0).toLocaleString()}）  ${r?.share ?? ''}`)
     for (const l of r?.lines ?? []) console.log(`        ${l}`)
   }
-  console.log(`  合计 $${sum.toLocaleString()}`)
+  console.log(`  合计 $${(real + est).toLocaleString()}（真实 $${real.toLocaleString()} · 估算 $${est.toLocaleString()}）`)
 }
 
 CAREERS.forEach((c, i) => {
