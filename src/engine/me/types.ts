@@ -95,8 +95,20 @@ export interface NodeLogEntry {
   /** how the round it was about went: taken or not, and my kills in it */
   won?: boolean
   kills?: number
-  /** the call was the round itself — a 1v2, a map point — so it settled it */
+  /** the call was the round itself — a 1v2 with me the last one standing — so it settled it */
   decided?: boolean
+  /** this round's win chance, percent, had the call landed and had it not — what the button said */
+  qok?: number
+  qfail?: number
+  /** the option the hint favoured and which of its lines was read out (me/nodes.ts NODE_HINTS) */
+  fav?: number
+  hk?: number
+  /** taken by 快进 or 托管: the coach's pick, with nobody in the chair */
+  auto?: boolean
+  /** a call that landed on a round we were favoured to take, and it was lost anyway: the
+      team-mate on the floor whose form was worst, when it was poor */
+  mate?: string
+  mateForm?: number
 }
 
 /** One player's line on the all-ten table after a series. */

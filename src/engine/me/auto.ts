@@ -399,7 +399,7 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     stop = advanceWeek(state)
     if (stop.kind === 'match') {
       // the next match is what "到下一场比赛" runs to; a longer run plays it
-      // the skipped way — two rosters' numbers, no decisions of mine
+      // the skipped way — the coach's calls made for me, with nobody in the chair (me/matchplay.ts runOut)
       if (until === 'match' || until === 'month') return { stop, weeks, notes }
       const rec = new MeMatch(state, stop.fixture).runOut()
       notes.push(`${compCn(rec.comp)} vs ${rec.oppTag} ${rec.score} ${rec.won ? '胜' : '负'}${rec.started ? ` · 你 ${rec.kills}/${rec.deaths}/${rec.assists} · ACS ${rec.acs}` : ' · 你没上场'}`)

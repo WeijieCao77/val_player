@@ -9,6 +9,44 @@ export const NODE_SWING = 4
 /** the share of a call that is my own attribute rather than the four around me */
 export const NODE_MINE = 0.7
 
+/**
+ * 关键回合 (2026-09-12). A call settles the round it is on: whether it lands
+ * moves that round's win chance on the logit scale, and the round is drawn
+ * from that on the spot. Why these numbers — the design draft's prototype
+ * (策划稿 §6.5, A3r: the real round engine, 800 BO3s a cell):
+ *
+ *   KEY_OK / KEY_FAIL, +2.4 / −2.0 per unit of risk: at an even round a
+ *   full-risk call that lands is ~92% and one that misses ~12%; a steady one
+ *   (risk 0.45) ~74% / ~29%. That made one call worth about ±5 points of a map
+ *   and left "every call landed and we still lost" at 29% of even series
+ *   (target 20–30%). A miss costs a little less than a landing gains, so a
+ *   player who reads the situation comes out ahead.
+ *
+ *   KEY_MOMENTUM, +2 strength for a call that lands, fading with the existing
+ *   0.7 a round: the next rounds lean our way, small next to the round itself.
+ */
+export const KEY_OK = 2.4
+export const KEY_FAIL = 2.0
+export const KEY_MOMENTUM = 2
+/**
+ * 局面提示: the option the hint favours is this much likelier to land, the
+ * other this much less. ±12 is what made reading the situation worth something
+ * in the prototype (best play − random +5.5; +2.7 without a hint) while both
+ * options still sit inside 35–85%.
+ */
+export const HINT_EDGE = 0.12
+/** how often the coach's pick is the option the hint favours: right more often than not, never always (A3r) */
+export const COACH_READS = 0.65
+/**
+ * 快进 and 托管 take the coach's pick with this much off its chance to land —
+ * nobody is in the chair. In the prototype that put a skipped match about 4
+ * points under following the coach by hand, about 9 under reading the hints
+ * well, and about level with making no calls at all.
+ */
+export const AUTO_PENALTY = 0.10
+/** an opponent's point on the call's attribute counts half what a point of mine does, measured from 50 */
+export const NODE_OPP = 0.5
+
 export interface NodeCtx {
   round: number
   mine: number
@@ -27,80 +65,106 @@ export interface NodeCtx {
   form: number
   /** the agent I am on this map, in Chinese, so the screen can say 你今晚打欧门 */
   agent?: string
+  /** my side attacks this round */
+  attack: boolean
+  /** which of the map's three key rounds this is */
+  slot: KeySlot
+  /** my side goes into this round with too little in the bank for anything but an eco (MapSim.bank) */
+  shortBuy: boolean
 }
 
+/** A map's three key rounds: one in each half, and one at match point or the first overtime round. */
+export type KeySlot = 'half1' | 'half2' | 'point'
+
 export interface NodeOpt { t: string; dim: NodeDim; risk: number }
+
+/** Where in a round a call happens. The phases the design draft names; more nodes are to be written for each. */
+export type NodePhase = 'entry' | 'retake' | 'clutch' | 'eco' | 'point' | 'ot'
 
 export interface NodeDef {
   id: string
   q: string
   ctx: string
+  /** where in the round it happens; a map point and overtime take only the key round that is one */
+  phase: NodePhase
   when: (c: NodeCtx) => boolean
   a: NodeOpt[]
-  /** the steady choice — what 快进 and 托管 take */
+  /** the steady choice — the coach's pick when there is no hint to read */
   rec: number
   /**
-   * The premise is this very round: a 1v2 with me the last one standing, a map
-   * point. Such a call settles the round it is about — landed, the round is
-   * ours; missed, it is theirs — because "I lost the 1v2 and we won the round"
-   * cannot happen (engine/me/matchplay.ts passes it to MapSim.playRound).
+   * The premise is this very round: a 1v2 with me the last one standing. Such
+   * a call settles the round it is about — landed, the round is ours; missed,
+   * it is theirs — because "I lost the 1v2 and we won the round" cannot happen.
+   * A map point is not one: the first contact can land and the round still go
+   * (2026-09-12, 关键回合 — forcing both map points put half of all calls on a
+   * coin that decided the round outright, and the extremes ran past the design).
    */
   decides?: boolean
 }
+
+/** a half's key round, not the one at match point or overtime */
+const half = (c: NodeCtx) => c.slot !== 'point'
 
 /**
  * Things that actually happen in a round, written so the choice is a thing you
  * would do, not an abstract dial. Each option is judged on one attribute; the
  * riskier one swings the round harder both ways.
+ *
+ * Each is asked only where its premise holds (2026-09-12): going in first only
+ * on a round we attack, the 1v2 with the Spike planted only when we planted it,
+ * holding a site only when we defend, 经济局 only when the bank says this round
+ * is one, a map point or overtime only in the key round that is one. The three
+ * key rounds themselves are picked in me/matchplay.ts.
  */
 export const NODES: NodeDef[] = [
-  { id: 'pistol_rush', q: '手枪局。指挥问：五个人一起冲 B，还是分散拿信息？', ctx: '手枪局赢了，接下来两回合都是你们的经济。',
+  // a pistol round never takes a call now (key rounds skip them); the node stays for its lines
+  { id: 'pistol_rush', phase: 'entry', q: '手枪局。指挥问：五个人一起冲 B，还是分散拿信息？', ctx: '手枪局赢了，接下来两回合都是你们的经济。',
     when: (c) => c.pistol, rec: 1,
     a: [{ t: '冲，一波打穿', dim: 'reaction', risk: 0.9 }, { t: '分散拿信息，慢打', dim: 'awareness', risk: 0.4 }] },
-  { id: 'entry', q: '烟还没起，你已经站在小道口。', ctx: '先手成了全队都能进，被反枪整回合就废了。',
-    when: (c) => !c.pistol && (c.role === '决斗者' || c.role === '先锋'), rec: 1,
+  { id: 'entry', phase: 'entry', q: '烟还没起，你已经站在小道口。', ctx: '先手成了全队都能进，被反枪整回合就废了。',
+    when: (c) => half(c) && c.attack && (c.role === '决斗者' || c.role === '先锋'), rec: 1,
     a: [{ t: '先手，不等了', dim: 'reaction', risk: 0.95 }, { t: '等道具到位再进', dim: 'utility', risk: 0.45 }] },
-  { id: 'eco_gun', q: '经济局，队友把唯一一把大枪递给了你。', ctx: '拿枪就是全队指望你一个人打开局面。',
-    when: (c) => !c.pistol && c.round >= 3, rec: 0,
+  { id: 'eco_gun', phase: 'eco', q: '经济局，队友把唯一一把大枪递给了你。', ctx: '拿枪就是全队指望你一个人打开局面。',
+    when: (c) => half(c) && c.shortBuy, rec: 0,
     a: [{ t: '拿枪，我来打', dim: 'aim', risk: 0.8 }, { t: '别买了，五人轻甲一起冲', dim: 'teamwork', risk: 0.5 }] },
-  { id: 'clutch', q: '1v2，辐能芯片已经安装好了，对面两个人在点位两侧。', ctx: '他们拆除之前，你必须先解决一个。',
-    when: (c) => !c.pistol && c.round >= 4, rec: 0, decides: true,
+  { id: 'clutch', phase: 'clutch', q: '1v2，辐能芯片已经安装好了，对面两个人在点位两侧。', ctx: '他们拆除之前，你必须先解决一个。',
+    when: (c) => half(c) && c.attack, rec: 0, decides: true,
     a: [{ t: '打，先找一个', dim: 'clutch', risk: 1.0 }, { t: '藏起来，等他们来拆', dim: 'awareness', risk: 0.6 }] },
-  { id: 'behind_to', q: '落后暂停，指挥说完了战术，所有人看着你。', ctx: '这时候语音里最需要有人说话。',
-    when: (c) => c.lead <= -4, rec: 0,
+  { id: 'behind_to', phase: 'entry', q: '落后暂停，指挥说完了战术，所有人看着你。', ctx: '这时候语音里最需要有人说话。',
+    when: (c) => half(c) && c.lead <= -4, rec: 0,
     a: [{ t: '喊一嗓子，把人拉回来', dim: 'communication', risk: 0.7 }, { t: '不说话，自己先打好', dim: 'aim', risk: 0.6 }] },
-  { id: 'behind_site', q: '对面已经连着三回合压你这个点。', ctx: '他们盯上你了。',
-    when: (c) => c.lead <= -3 && !c.pistol, rec: 0,
+  { id: 'behind_site', phase: 'retake', q: '对面已经连着三回合压你这个点。', ctx: '他们盯上你了。',
+    when: (c) => half(c) && !c.attack && c.lead <= -3, rec: 0,
     a: [{ t: '换个位置，让他们扑空', dim: 'awareness', risk: 0.5 }, { t: '硬守，正面刚', dim: 'clutch', risk: 0.9 }] },
-  { id: 'ahead_rush', q: '领先不少，队友想直接 rush 收工。', ctx: '稳一点也能赢，但会拖很久。',
-    when: (c) => c.lead >= 4 && !c.pistol, rec: 1,
+  { id: 'ahead_rush', phase: 'entry', q: '领先不少，队友想直接一波冲进去收工。', ctx: '稳一点也能赢，但会拖很久。',
+    when: (c) => half(c) && c.attack && c.lead >= 4, rec: 1,
     a: [{ t: '冲，速战速决', dim: 'reaction', risk: 0.7 }, { t: '按道具慢打，别送', dim: 'utility', risk: 0.35 }] },
-  { id: 'map_point_mine', q: '赛点。指挥把最后一波的先手交给了你。', ctx: '这一回合结束了，这张图就结束了。',
-    when: (c) => c.mapPoint === 'mine', rec: 0, decides: true,
+  { id: 'map_point_mine', phase: 'point', q: '赛点。指挥把最后一波的先手交给了你。', ctx: '这一回合结束了，这张图就结束了。',
+    when: (c) => c.slot === 'point' && c.mapPoint === 'mine', rec: 0,
     a: [{ t: '给我，我来', dim: 'mental', risk: 1.0 }, { t: '按体系打，别改', dim: 'teamwork', risk: 0.45 }] },
-  { id: 'map_point_theirs', q: '对面赛点，暂停时语音里没人说话。', ctx: '这时候要有人站出来。',
-    when: (c) => c.mapPoint === 'theirs', rec: 1, decides: true,
+  { id: 'map_point_theirs', phase: 'point', q: '对面赛点，暂停时语音里没人说话。', ctx: '这时候要有人站出来。',
+    when: (c) => c.slot === 'point' && c.mapPoint === 'theirs', rec: 1,
     a: [{ t: '这波交给我', dim: 'mental', risk: 1.0 }, { t: '别慌，按流程打一回合', dim: 'teamwork', risk: 0.5 }] },
-  { id: 'ot', q: '加时。你发现自己的手在抖。', ctx: '这个舞台比训练赛大得多。',
-    when: (c) => c.ot, rec: 0,
+  { id: 'ot', phase: 'ot', q: '加时。你发现自己的手在抖。', ctx: '这个舞台比训练赛大得多。',
+    when: (c) => c.slot === 'point' && c.ot, rec: 0,
     a: [{ t: '深呼吸，按流程走', dim: 'mental', risk: 0.5 }, { t: '用一波激进的开局逼自己进状态', dim: 'aim', risk: 0.95 }] },
-  { id: 'first_map', q: '第一张图开赛前，你在座位上把鼠标垫又擦了一遍。', ctx: '第一回合决定你今晚的心态。',
-    when: (c) => c.mapIndex === 0 && c.round <= 2, rec: 0,
-    a: [{ t: '按流程，稳住', dim: 'mental', risk: 0.4 }, { t: '第一回合就去找人', dim: 'reaction', risk: 0.9 }] },
-  { id: 'hot', q: '今天手感烫得离谱，什么都能打中。', ctx: '这种手感一年遇不到几次。',
-    when: (c) => c.form >= 80 && !c.pistol, rec: 0,
+  { id: 'first_map', phase: 'entry', q: '今晚第一个关键回合。你把鼠标垫又擦了一遍，手心还是湿的。', ctx: '这一回合决定你今晚的心态。',
+    when: (c) => c.slot === 'half1' && c.mapIndex === 0, rec: 0,
+    a: [{ t: '按流程，稳住', dim: 'mental', risk: 0.4 }, { t: '这回合一开局就去找人', dim: 'reaction', risk: 0.9 }] },
+  { id: 'hot', phase: 'entry', q: '今天手感烫得离谱，什么都能打中。', ctx: '这种手感一年遇不到几次。',
+    when: (c) => half(c) && c.form >= 80, rec: 0,
     a: [{ t: '把资源都要过来', dim: 'aim', risk: 0.9 }, { t: '别飘，按体系打', dim: 'teamwork', risk: 0.4 }] },
-  { id: 'cold', q: '今天怎么打都不对，简单的枪都在漏。', ctx: '队友已经开始帮你兜了。',
-    when: (c) => c.form <= 58 && !c.pistol, rec: 0,
+  { id: 'cold', phase: 'entry', q: '今天怎么打都不对，简单的枪都在漏。', ctx: '队友已经开始帮你兜了。',
+    when: (c) => half(c) && c.form <= 58, rec: 0,
     a: [{ t: '认了，让队友多拿枪', dim: 'communication', risk: 0.4 }, { t: '硬扛，我能找回来', dim: 'mental', risk: 1.0 }] },
-  { id: 'intl', q: '国际赛的观众声浪比联赛大一个量级，你能听见自己的心跳。', ctx: '这就是你想来的地方。',
-    when: (c) => c.isIntl && c.round <= 3, rec: 0,
+  { id: 'intl', phase: 'entry', q: '国际赛的观众声浪比联赛大一个量级，你能听见自己的心跳。', ctx: '这就是你想来的地方。',
+    when: (c) => c.slot === 'half1' && c.isIntl, rec: 0,
     a: [{ t: '享受它', dim: 'mental', risk: 0.6 }, { t: '戴上降噪，只管枪', dim: 'aim', risk: 0.5 }] },
-  { id: 'save', q: '这回合快输了，队友喊 save，你觉得还能赌一把。', ctx: '保住枪下回合是满配，赌成了是回合。',
-    when: (c) => !c.pistol && c.round >= 3, rec: 1,
+  { id: 'save', phase: 'clutch', q: '这回合快输了，队友喊 save，你觉得还能赌一把。', ctx: '保住枪下回合是满配，赌成了是回合。',
+    when: (c) => half(c), rec: 1,
     a: [{ t: '赌，冲上去', dim: 'clutch', risk: 0.9 }, { t: '听队友的，保枪', dim: 'awareness', risk: 0.35 }] },
-  { id: 'info', q: '对面有人在你这边露了头，队友问要不要跟。', ctx: '跟上去可能二打二，也可能被夹。',
-    when: (c) => !c.pistol, rec: 1,
+  { id: 'info', phase: 'retake', q: '对面有人在你这边露了头，队友问要不要跟。', ctx: '跟上去可能二打二，也可能被夹。',
+    when: (c) => half(c), rec: 1,
     a: [{ t: '跟，打这波', dim: 'reaction', risk: 0.85 }, { t: '退，报点就行', dim: 'awareness', risk: 0.4 }] },
 ]
 
@@ -121,8 +185,14 @@ export const DIM_CN: Record<NodeDim, string> = {
  * The odds of a call landing. Seven tenths me, three tenths the four around
  * me — one man does not carry four — and the riskier option really is less
  * likely, not just swingier. Nerve helps; tilt hurts.
+ *
+ * The other five count as well (2026-09-12). The button had always shown their
+ * average on the same attribute and the odds never read it. It counts half what
+ * my own number does, measured from 50: against a VCT five on 86 a call is about
+ * ten points harder than it was, against a weak five a little easier. 心态 is
+ * nerve, and that is mine alone.
  */
-export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): number {
+export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string, oppTeamId?: string): number {
   const me = state.me!
   const p = state.players[me.id]
   const mates = (state.teams[teamId ?? state.myTeam]?.starters ?? [])
@@ -130,18 +200,22 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string): num
     .map((id) => state.players[id])
     .filter(Boolean)
   let v: number
+  let opp = 0
   // hurt: a call made on what the injury gets in the way of is harder (me/injury.ts)
   if (opt.dim === 'mental') v = me.mental + injuryHit(state, 'mental')
   else {
-    const mine = p.attrs[opt.dim] + injuryHit(state, opt.dim)
-    const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[opt.dim as keyof typeof m.attrs], 0) / mates.length : mine
+    const dim = opt.dim
+    const mine = p.attrs[dim] + injuryHit(state, dim)
+    const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[dim], 0) / mates.length : mine
     v = mine * NODE_MINE + avg * (1 - NODE_MINE)
+    const five = oppTeamId ? (state.teams[oppTeamId]?.starters ?? []).map((id) => state.players[id]).filter(Boolean) : []
+    if (five.length) opp = ((five.reduce((s, x) => s + x.attrs[dim], 0) / five.length - 50) / 100) * 0.55 * NODE_OPP
   }
   // a cool head adds a little; a trait may add more. Gear used to add 0.4% a tier here — money
   // reaching into the match — until the economy was measured (me/shop.ts, 2026-09-11)
   const edge = me.traits?.includes('edge') && (p.form < 70 || me.tilt > 40) ? 0.03 : 0
   return clamp(
-    0.30 + (v / 100) * 0.55 - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60 + edge,
+    0.30 + (v / 100) * 0.55 - opp - (opt.risk - 0.5) * 0.15 + (me.mental - 50) / 500 - tiltDrag(me) / 60 + edge,
     0.12, 0.92,
   )
 }
@@ -167,6 +241,111 @@ export function nodeReadout(
   const theirs = oppTeamId ? avgOf(state.teams[oppTeamId]?.starters ?? []) : null
   return { mine: Math.round(p.attrs[dim]), mates, theirs }
 }
+
+/**
+ * 局面提示: one thing the screen reads out before a call, and which option it
+ * favours. What it says is how the other five play this map — their habits,
+ * where their utility went, who is looking at your line — so it can be read
+ * and weighed, and it is real in the only way that counts: the favoured option
+ * really is HINT_EDGE likelier to land, the other one HINT_EDGE less. Nothing
+ * here claims what this round's buys, kills or ending will be: the round record
+ * beside it would contradict that.
+ *
+ * NODE_HINTS[id][i] are lines that favour option i. A node with none (the
+ * pistol round, which no longer takes a call) gets no hint and no edge.
+ */
+export const NODE_HINTS: Record<string, string[][]> = {
+  entry: [
+    ['对面这张图守小道的人习惯靠后站，先手的那一枪来得及。', '上回合对面的烟雾和闪光都交在了另一边，这边手里是空的。'],
+    ['对面上两回合都在小道口放了陷阱，冒进去就是送。', '对面这张图喜欢在小道口双人架枪，没有闪光进不去。'],
+  ],
+  eco_gun: [
+    ['对面守这个点喜欢站远点，一把长枪就能把远处的枪线架住。', '对面在这个点只留了一个人看，长枪先手就能打开。'],
+    ['对面这张图喜欢分散守点，五个人一起冲，哪里都是以多打少。', '对面的人习惯躲在近点，手枪贴脸也打得过。'],
+  ],
+  clutch: [
+    ['两个人一左一右，中间隔着一道墙，谁也看不到谁。', '其中一个的脚步声就在你左边，他还不知道你在这。'],
+    ['他们两个人贴在一起走，正面找只会吃交叉火力。', '他们习惯先清角落再拆除，拆的那一下总是背对着角落。'],
+  ],
+  behind_to: [
+    ['语音里已经有两个人在互相埋怨，这时候需要一个声音。', '暂停时大家都低着头，没人愿意先开口。'],
+    ['指挥已经把话说完了，再多一个声音只会乱。', '这几个队友吃「看你打」这一套，一个漂亮的回合比十句话管用。'],
+  ],
+  behind_site: [
+    ['对面三回合打的都是同一个时间点，他们还会再来。', '对面每次都是先交闪光再冲，躲开这一下就是个空点。'],
+    ['对面这三回合冲进来的都是同一个人，他的枪不算快。', '对面每次进点的技能都交得太早，硬守能等到他们手里没东西。'],
+  ],
+  ahead_rush: [
+    ['对面刚刚连着输，站位还没调整过来。', '对面这张图防守时，前半段总是缩在点里。'],
+    ['对面落后之后喜欢前压抢节奏，冲进去正撞枪口。', '对面还有一个终极技能没交，慢慢逼出来再进。'],
+  ],
+  map_point_mine: [
+    ['对面暂停之后换了站位，老套路打过去正好撞上。', '对面这几回合一直在针对你们的默认打法。'],
+    ['对面紧张了，上回合有两个人提前暴露了位置。', '你们这套打法，对面这张图还没接住过一次。'],
+  ],
+  map_point_theirs: [
+    ['对面觉得你们已经散了，站位压得很靠前。', '对面这几回合一直在盯你的队友，没人看你那条线。'],
+    ['对面急着收图，这一回合多半会冒进。', '对面这张图还没打穿过你们完整的一回合。'],
+  ],
+  ot: [
+    ['加时的对面也在紧张，谁先犯错谁输。', '对面加时习惯打得很慢，稳住就能耗到他们出错。'],
+    ['对面加时第一回合总是缩着打，前压能抢到先手。', '对面的人加时手也在抖，枪线上的反应慢了半拍。'],
+  ],
+  first_map: [
+    ['对面开场就在找你的位置，急着出去正好撞枪。', '今晚对面的开局打得很慢，不用急。'],
+    ['对面今晚的开局总是把人压得很散，先找到一个就占住了。', '对面开局喜欢把最弱的一个人放在你这条线上。'],
+  ],
+  hot: [
+    ['对面还没发现你今天手这么热，站位完全没针对你。', '对面这张图只放了一个人看你这条线。'],
+    ['对面已经开始针对你了，两个人在盯你的位置。', '对面这回合的技能多半全冲着你这边来。'],
+  ],
+  cold: [
+    ['队友今天手都很热，枪让出去不亏。', '对面在盯你这条线，你退一步他们就扑空。'],
+    ['对面没把你当回事，你那条线只站了一个人。', '你的状态差是手紧，打开一两枪就好了。'],
+  ],
+  intl: [
+    ['全场的声浪都在给你们加油，像主场一样。', '队友报点的声音够大，声浪盖不住。'],
+    ['场馆的回音很重，语音里的报点有点糊。', '对面的应援声压过了你们，越听越乱。'],
+  ],
+  save: [
+    ['对面剩下的人正分头清角落，谁也顾不上谁。', '对面剩下的人手里都是便宜的枪，赌赢了就是一回合。'],
+    ['对面剩下的人抱在一起，冲上去就是一换二。', '对面还有人没露面，冲上去多半被夹。'],
+  ],
+  info: [
+    ['露头的那个人是对面枪最慢的一个，身边没人补。', '对面这张图喜欢一个人单独摸过来找信息。'],
+    ['对面这张图喜欢拿一个人露头，把人骗出去再夹。', '露头的那一下之后，你听到了第二个人的脚步。'],
+  ],
+}
+
+/** The hint's line, NODE_HINTS[id][fav][k], or null when the call had none. */
+export function hintText(id: string, fav: number | undefined, k: number | undefined): string | null {
+  if (fav == null || k == null || fav < 0 || k < 0) return null
+  return NODE_HINTS[id]?.[fav]?.[k] ?? null
+}
+
+const sig = (x: number) => 1 / (1 + Math.exp(-x))
+const logit = (p: number) => Math.log(p / (1 - p))
+
+/**
+ * This round's win chance for my side once a call has landed or not, from the
+ * chance it had before — the two rosters, the map's own swing, the momentum
+ * in hand (MapSim.roundEstimate). A call whose premise is this very round is
+ * the round: landed, ours; missed, theirs.
+ */
+export function keyRoundOdds(base: number, risk: number, decides?: boolean): { ok: number; fail: number } {
+  if (decides) return { ok: 1, fail: 0 }
+  const l = logit(clamp(base, 0.02, 0.98))
+  return { ok: sig(l + KEY_OK * risk), fail: sig(l - KEY_FAIL * risk) }
+}
+
+/** The stakes of an option in words, for when the 「数值」 switch is off. */
+export function stakeWords(ok: number, fail: number, decides?: boolean): string {
+  if (decides) return '成了就拿下，没成就丢了'
+  return `${ok >= 0.7 ? '成了这回合多半是我们的' : '成了这回合也很悬'}；${fail <= 0.3 ? '没成基本就丢了' : '没成这回合很悬'}`
+}
+
+/** what the screen calls each key round */
+export const SLOT_CN: Record<KeySlot, string> = { half1: '上半场关键回合', half2: '下半场关键回合', point: '赛点关键回合' }
 
 /**
  * What a call looks like from the seat next to you, told once the round it was
@@ -288,20 +467,28 @@ export const NODE_HL: Record<string, HlOpt[]> = {
   map_point_mine: [
     {
       okWin: { k0: '最后一波先手交给你，你第一个探出去把枪位逼了出来，队友顺着把点打开，赛点收下。', k1: '最后一波先手交给你，你放倒一个打开了口子，赛点收下。', k2: '最后一波先手交给你，你连着放倒两个，赛点收下。' },
+      okLoss: { k0: '最后一波先手交给你，你第一个探出去逼出了枪位，可队友没跟上来，赛点没收住。', k1: '最后一波先手交给你，你放倒一个打开了口子，可补枪慢了一步，赛点没收住。' },
+      failWin: '最后一波先手交给你，你没能打开局面，是队友从另一边绕进去，把赛点收下了。',
       failLoss: { k0: '最后一波先手交给你，可你没能打开局面，赛点从手里溜走了。', k1: '最后一波先手交给你，你放倒了一个，可口子没撕开，赛点从手里溜走了。' },
     },
     {
       okWin: '按体系打完最后一回合，谁都没有多做动作，赛点收下。',
+      okLoss: '按体系打，每个人的位置都没错，可对面这回合的枪就是更准，赛点没收住。',
+      failWin: '按体系打，对面早把这套看透了——还好有人临场改了一步，赛点还是收下。',
       failLoss: '按体系打，可对面早把这套看透了，赛点没收住。',
     },
   ],
   map_point_theirs: [
     {
       okWin: { k0: '对面赛点，你站出来要了这一波，队友跟着你的节奏打，把这回合抢了回来。', k1: '对面赛点，你站出来放倒一个，把这回合抢了回来。', k2: '对面赛点，你站出来连着放倒两个，把这回合抢了回来。' },
+      okLoss: { k0: '对面赛点，你站出来要了这一波，节奏也打出来了，最后还是没扛住。', k1: '对面赛点，你站出来放倒一个，可这一波最后还是没扛住。' },
+      failWin: '对面赛点，你要来的这一波没打出来，队友替你把这回合抢了回来。',
       failLoss: { k0: '对面赛点，你站出来要了这一波，没扛住。', k1: '对面赛点，你放倒了一个，这一波还是没扛住。' },
     },
     {
       okWin: '对面赛点，五个人按流程打了一回合，稳住了，把这回合抢了回来。',
+      okLoss: '对面赛点，五个人按流程打得一步不乱，可对面的枪更快，没扛住。',
+      failWin: '对面赛点，按流程走，每一步都被对面算到了——最后一个人硬是把这回合抢了回来。',
       failLoss: '对面赛点，五个人按流程走，每一步都被对面算到了，没扛住。',
     },
   ],
