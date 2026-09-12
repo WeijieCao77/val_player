@@ -32,6 +32,10 @@
  *             stage that pays least ×k_open — a stage paid by estimate lends its
  *             own real table, its k multiplied in — so none of them pays any place
  *             more than a Challengers stage its sides could be playing instead.
+ *             Only a league's own stages count, named as Riot's Challengers
+ *             leagues name them (Kickoff, Stage, Split, Act): a side event its
+ *             operator runs, such as LATAM South ACE Masters, is neither the base
+ *             nor held against.
  *             k_open = k_asc: an open event is a rung below a Challengers stage,
  *             and a Challengers stage pays about half of the rung above it, its
  *             region's Ascension. No open event ever published a table; each
@@ -270,7 +274,7 @@ const RULE_TEXT = {
   finals: `挑战者联赛总决赛 = 同一联赛此前最后一个公布的赛段 ×${K_FINALS.toFixed(1)}；k 为挑战者联赛总决赛与同年本联赛上一段奖池比的中位数`,
   ascension: '中国晋级赛 = 同年（没有则最近一年）太平洋晋级赛 ×1.0；中国晋级赛从未公布，k 取 1.0',
   lcq: '最后机会资格赛 = 同一联赛最近公布的 LCQ（最近一张明写 $0 就不估；没有则取任何赛区最近的 LCQ）×1.0；同类赛事照搬，k 取 1.0',
-  open: `新赛制公开资格赛、太平洋公开资格赛决赛、公开季后赛 = 同一联赛 2026 年奖金最少的挑战者联赛赛段 ×${K_OPEN.toFixed(1)}（那个赛段本身是估算的，就用它的真实底表，两个 k 相乘）；k 取 k_asc：公开赛事比挑战者联赛赛段低一级，而挑战者联赛赛段大约拿上一级（本区晋级赛）的一半，再往下一级照这个比例；每个名次都低于该联赛每个挑战者联赛赛段`,
+  open: `新赛制公开资格赛、太平洋公开资格赛决赛、公开季后赛 = 同一联赛 2026 年奖金最少的挑战者联赛赛段（只算 Riot 挑战者联赛自己的揭幕赛、Stage、Split、Act，不算 LATAM South ACE Masters 这类运营方办的附加赛）×${K_OPEN.toFixed(1)}（那个赛段本身是估算的，就用它的真实底表，两个 k 相乘）；k 取 k_asc：公开赛事比挑战者联赛赛段低一级，而挑战者联赛赛段大约拿上一级（本区晋级赛）的一半，再往下一级照这个比例；每个名次都低于该联赛每个挑战者联赛赛段`,
   ext: '底表没覆盖到的季后赛名次：取底表最后一档的一半，再往外每轮（5–8、9–16…）再减半',
 } as const
 type RuleKey = keyof typeof RULE_TEXT
@@ -372,11 +376,16 @@ const leagueOfRegion = (r: string | null): string | undefined =>
   !r ? undefined : LEAGUES.includes(r) ? r : OQ_POOLS.find((p) => (p.regions as string[]).includes(r))?.league
 /** What a Challengers stage pays in the game: its published table, or its estimate. */
 const stagePay = (e: Ev): Row[] | undefined => (isPaid(e) ? e.real.pay : estimates[e.id]?.pay)
+/** A Challengers league's own stage, named as Riot's leagues name them. 「LATAM South ACE Masters」 is a side event its operator runs. */
+const LEAGUE_STAGE = /\b(Kickoff|Stage \d|Split \d|Act \d)\b/i
 const openLines: string[] = []
 {
   const ahead = eventsOf(2027)
   for (const league of LEAGUES) {
-    const stages = ALL.filter((e) => e.y === BASIS_YEAR && kindOf(e) === 'split' && leagueOfRegion(e.ev.region) === league && !!stagePay(e))
+    const stages = ALL.filter((e) => e.y === BASIS_YEAR && kindOf(e) === 'split' && LEAGUE_STAGE.test(e.ev.name)
+      && leagueOfRegion(e.ev.region) === league && !!stagePay(e))
+    const sideEvents = ALL.filter((e) => e.y === BASIS_YEAR && kindOf(e) === 'split' && !LEAGUE_STAGE.test(e.ev.name) && leagueOfRegion(e.ev.region) === league)
+    if (sideEvents.length) openLines.push(`  ${league} 不算作挑战者联赛赛段：${sideEvents.map((e) => e.ev.name).join('、')}`)
     const least = stages.filter((e) => !isPaid(e) || usable(e))
       .sort((a, b) => total(stagePay(a)!) - total(stagePay(b)!) || Number(a.id) - Number(b.id))[0]
     if (!least) throw new Error(`${league}：${BASIS_YEAR} 年没有可比的挑战者联赛赛段，新赛制公开赛事没法估算`)
