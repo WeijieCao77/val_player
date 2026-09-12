@@ -18,8 +18,13 @@ import type { CerKind } from './types'
  * count on it, and ceremony.ts already imports nights.ts.
  */
 
-/** the most nights a season stops for (the design's four to eight) */
-export const CER_SEASON_CAP = 8
+/**
+ * where the season stops making room for the rest: the design's four to eight
+ * comes out at eight, because a Champions final always walks out, two media
+ * days always happen and the year's patch is never crowded out. At 8 a winning
+ * career still counted nine in a season (check_ceremony seed 7).
+ */
+export const CER_SEASON_CAP = 7
 /** media days a season always has room for: a club's stages are told through them */
 export const MEDIA_FLOOR = 2
 /** nights never crowded out: the year's patch, a lay-off, the last season, the last day, a tryout */
