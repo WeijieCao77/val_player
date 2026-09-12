@@ -230,7 +230,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         )}
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
-            ? '每张图最多三个关键回合要你拿主意，每一个都直接定那一回合。快进也会按教练的选法替你做，只是你不在椅子上，成功率低一截。'
+            ? '每张图三个关键回合要你拿主意，打进加时再加一个；每一个都直接定那一回合。快进也会按教练的选法替你做，只是你不在椅子上，成功率低一截。'
             : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果。' : '你在替补席，这场看结果。'}
         </p>
         <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
@@ -410,7 +410,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       ) : phase === 'node' && pend ? (
         <div className="node-box">
           <RivalNode oppId={oppId} />
-          <p className="tiny faint" style={{ margin: 0 }}>{pend.ctx.ot ? '加时关键回合' : SLOT_CN[pend.ctx.slot]} · 第 {pend.ctx.round} 回合</p>
+          <p className="tiny faint" style={{ margin: 0 }}>{SLOT_CN[pend.ctx.slot]} · 第 {pend.ctx.round} 回合</p>
           <p className="q">{pend.q}</p>
           <p className="ctx">{pend.about}</p>
           {/* one thing to read about the other five — the option it favours really is likelier to land */}

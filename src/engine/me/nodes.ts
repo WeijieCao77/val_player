@@ -45,6 +45,16 @@ export const KEY_MOMENTUM = 2
  * other this much less. ±12 is what made reading the situation worth something
  * in the prototype (best play − random +5.5; +2.7 without a hint) while both
  * options still sit inside 35–85%.
+ *
+ * Tried lower, 2026-09-12, once hints followed facts and overtime took a fourth
+ * call: best play − 快进 (§7.1 #6, target +6~+10) had gone to +13.9. On the
+ * check's seeds (a VCT rookie, 1500 BO3s a cell): ±8 gave #6 +12.7, and the
+ * share of calls whose best and worst options differ by 15 or more (#3, ≥50%)
+ * fell to 48.6%; +12 for the favoured and −4 for the rest gave +12.7 and
+ * 48.5%; ±4 gave +10.1, with #3 at 3.4% and best play − random (#8, ≥+4) at
+ * +4.0. Most of #6 is the favoured option's own odds and the fourth call, not
+ * the hint, so the hint cannot take #6 under +10 before it stops making the
+ * two options different. It stays at ±12 until something else moves #6.
  */
 export const HINT_EDGE = 0.12
 /**
@@ -119,7 +129,7 @@ export interface NodeCtx {
   agent?: string
   /** my side attacks this round */
   attack: boolean
-  /** which of the map's three key rounds this is */
+  /** which of the map's key rounds this is */
   slot: KeySlot
   /** my side goes into this round with too little in the bank for anything but an eco (MapSim.bank) */
   shortBuy: boolean
@@ -138,8 +148,11 @@ export interface NodeCtx {
   alive?: [number, number]
 }
 
-/** A map's three key rounds: one in each half, and one at match point or the first overtime round. */
-export type KeySlot = 'half1' | 'half2' | 'point'
+/**
+ * A map's key rounds: one in each half, one at match point, and — only on a map
+ * that goes to overtime — a fourth on its first overtime round.
+ */
+export type KeySlot = 'half1' | 'half2' | 'point' | 'ot'
 
 export interface NodeOpt { t: string; dim: NodeDim; risk: number }
 
@@ -150,9 +163,13 @@ export interface NodeOpt { t: string; dim: NodeDim; risk: number }
  */
 export type NodePhase = 'entry' | 'mid' | 'post' | 'clutch' | 'eco' | 'point' | 'ot'
 
-/** Which key rounds a phase belongs in: a half's, the match point's, or either (a clutch can happen in both). */
-export const PHASE_SLOT: Record<NodePhase, 'half' | 'point' | 'any'> = {
-  entry: 'half', mid: 'half', post: 'half', eco: 'half', clutch: 'any', point: 'point', ot: 'point',
+/** The kinds of key round: a half's, the match point's, the first overtime round's. */
+export type SlotKind = 'half' | 'point' | 'ot'
+export const slotKind = (s: KeySlot): SlotKind => (s === 'point' || s === 'ot' ? s : 'half')
+
+/** Which key rounds a phase belongs in (a clutch can happen in any of them). */
+export const PHASE_SLOT: Record<NodePhase, readonly SlotKind[]> = {
+  entry: ['half'], mid: ['half'], post: ['half'], eco: ['half'], clutch: ['half', 'point', 'ot'], point: ['point'], ot: ['ot'],
 }
 
 export interface NodeDef {
@@ -193,7 +210,7 @@ export interface NodeDef {
 }
 
 /** a half's key round, not the one at match point or overtime */
-const half = (c: NodeCtx) => c.slot !== 'point'
+const half = (c: NodeCtx) => c.slot === 'half1' || c.slot === 'half2'
 
 /**
  * Things that actually happen in a round, written so the choice is a thing you
@@ -267,11 +284,13 @@ const FIRST_NODES: NodeDef[] = [
 
 /**
  * Every node. The sixteen above came first and were written for no moment of
- * the round in particular; the key-round nodes written by phase (me/keynodes.ts)
- * are asked first, and these only when none of those fits a key round.
+ * the round in particular. Since the key-round nodes written by phase
+ * (me/keynodes.ts) there is one for every key round, so these are retired: never
+ * asked again, their lines kept so the calls in old saves still read
+ * (作者 2026-09-12). The 'fallback' tier stays for a node that should only fill in.
  */
 export const NODES: NodeDef[] = [
-  ...FIRST_NODES.map((n): NodeDef => (n.tier ? n : { ...n, tier: 'fallback' })),
+  ...FIRST_NODES.map((n): NodeDef => ({ ...n, tier: 'retired' })),
   ...KEY_NODES,
 ]
 
@@ -281,7 +300,7 @@ function premiseMoment(p: Premise | undefined, c: NodeCtx): boolean {
   if (p.side && (p.side === 'atk') !== c.attack) return false
   if (p.buyMine && !p.buyMine.includes(c.buyMine)) return false
   if (p.buyTheirs && !p.buyTheirs.includes(c.buyTheirs)) return false
-  if (p.point === 'ot' && !(c.slot === 'point' && c.ot)) return false
+  if (p.point === 'ot' && c.slot !== 'ot') return false
   if ((p.point === 'mine' || p.point === 'theirs') && !(c.slot === 'point' && c.mapPoint === p.point)) return false
   return true
 }
@@ -299,8 +318,7 @@ export function keyCandidates(c: NodeCtx): KeyCandidate[] {
   const out: KeyCandidate[] = []
   for (const n of NODES) {
     if (n.tier === 'retired') continue
-    const where = PHASE_SLOT[n.phase]
-    if (where !== 'any' && (where === 'point') !== (c.slot === 'point')) continue
+    if (!PHASE_SLOT[n.phase].includes(slotKind(c.slot))) continue
     if (!premiseMoment(n.premise, c)) continue
     try { if (n.when && !n.when(c)) continue } catch { continue }
     const standing = n.premise ? standingOptions(n.premise, c.branches, c.attack, n.decides) : [-1]
@@ -503,7 +521,7 @@ export function stakeWords(ok: number, fail: number, decides?: boolean): string 
 }
 
 /** what the screen calls each key round */
-export const SLOT_CN: Record<KeySlot, string> = { half1: '上半场关键回合', half2: '下半场关键回合', point: '赛点关键回合' }
+export const SLOT_CN: Record<KeySlot, string> = { half1: '上半场关键回合', half2: '下半场关键回合', point: '赛点关键回合', ot: '加时关键回合' }
 
 /**
  * What a call looks like from the seat next to you, told once the round it was
