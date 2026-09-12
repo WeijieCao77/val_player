@@ -33,6 +33,7 @@ import { announceLeagues, keepScore, turnLeagues } from './leagues'
 import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { historyNames } from './names'
 import { arrive2026 } from './today'
+import { lineupNews } from './standin'
 import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
 import {
   DOUBLE_8, GROUPS, advanceTemplate, championsGroups, championsSeeds, decided, doubleFor,
@@ -987,6 +988,8 @@ export function commitFixture(
     return
   }
   applyMatchStats(state, result)
+  // a substitute or a stand-in on the floor is news: who was out, who came on (engine/standin.ts)
+  lineupNews(state, f, result, notes)
   applyMatchFatigue(state, f.teamA, result.maps.length, rng, notes, result.lineups?.a)
   applyMatchFatigue(state, f.teamB, result.maps.length, rng, notes, result.lineups?.b)
 

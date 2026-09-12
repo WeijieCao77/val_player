@@ -4,7 +4,7 @@ import partneredRaw from '../data/routes_partnered.json'
 import { aheadEventsOf, oqPoolOf } from './ahead'
 import type { Plan, Seat } from './ahead'
 import { regionIn, stageAtIn } from './era'
-import { bookLeague, inVctLeague, sceneFor, successorsOf, syncEvent } from './timeline'
+import { bookLeague, foldDue, inVctLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import { realName } from './names'
 import type { Competition, Fixture, GameState, Region, StageKey, Team, VctSeason } from './types'
@@ -320,6 +320,15 @@ function playerClub(state: GameState): string | null {
 }
 
 const uniq = <T>(xs: T[]): T[] => [...new Set(xs)]
+
+/**
+ * A club that has stopped playing, or that history lets go today: no draw this
+ * world plays gives it a place. Gambit's five were M3 Champions' by 2022 and
+ * G2 had let its team go, yet a placing from an event played here seated each
+ * of them — Gambit in 2022's EMEA Challengers, G2 at Champions — with nobody
+ * on the roster to field. The place goes to the next side (fillGaps).
+ */
+const gone = (state: GameState, id: string): boolean => !!state.teams[id]?.dormant || foldDue(state, id)
 
 /* ------------------------------------------------------------------ */
 /*  the graph                                                          */
@@ -1143,6 +1152,8 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
       c.done = true
     }
   } else if (c.mode === 'sim') {
+    // a club history has let go takes no place in a draw played here; the next side does
+    c.seeds = c.seeds.map((t) => (t && t !== club && gone(state, t) ? null : t))
     fillGaps(state, comp, ev)
     offerPlayIn(state, comp, ev, club, notes)
   }
@@ -1176,7 +1187,7 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const scope = scopeOf(ev)
   const taken = new Set(c.seeds.filter((x): x is string => !!x))
   const pool = Object.values(state.teams)
-    .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && (!scope || scope.includes(t.region))
+    .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && !gone(state, t.id) && (!scope || scope.includes(t.region))
       // no VCT league club stands in for a Challengers-tier side (leagueOut)
       && !(comp.tier === 2 && inVctLeague(state, t)))
     .sort((x, y) => (ev.projected && ev.scene ? Number(y.scene === ev.scene) - Number(x.scene === ev.scene) : 0)
@@ -1196,7 +1207,8 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   }
   for (const { ui, rank } of openOutputs(ev)) {
     const key = `${ui}:${rank}`
-    if (!teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) && !c.fill?.[key]) {
+    const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if ((!real || gone(state, real)) && !c.fill?.[key]) {
       const t = next()
       if (t) c.fill = { ...(c.fill ?? {}), [key]: t }
     }
@@ -1440,7 +1452,9 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
         const g = playIn && gameOf(playIn)
         return g ? g.w : undefined
       }
-      return teamOf(state, ev, u.ranked?.[rank! - 1]) ?? c.fill?.[key] ?? null
+      const real = teamOf(state, ev, u.ranked?.[rank! - 1])
+      // a side history has let go since: the club that stood in for it at the draw, if one did
+      return (real && gone(state, real) ? c.fill?.[key] ?? real : real ?? c.fill?.[key]) ?? null
     }
     const early = earlyCut(ui, uj)
     if (early) {

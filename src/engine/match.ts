@@ -6,6 +6,7 @@ import type { CompStyle } from './comp'
 import { callerOf, coachOr } from './roster'
 import { NEUTRAL, squadHarmony } from './bonds'
 import { deskOf, managedClub } from './desk'
+import { STANDIN_COST, callupPool } from './standin'
 import type {
   EdgeBreakdown, GameState, MapLine, MapScore, MatchResult, Player, Role, RoundLog, StageKey, Team,
 } from './types'
@@ -67,12 +68,10 @@ export interface Lineup {
  * A player's effective rating right now (form / morale / fatigue applied).
  *
  * `day` is optional so callers that only rank fit players can omit it. Pass it
- * and a man playing through an injury is priced accordingly: selectLineup will
- * field an injured player when a club has nobody else, and 52 of the world's
- * 78 clubs carry exactly five, so without this an injury cost two thirds of
- * the league absolutely nothing. At -0.22 a club with no bench loses more to
- * an injury (-3.45 rating) than a club that can bring a substitute on
- * (-2.98) — which is the whole point of carrying one.
+ * and a man playing through an injury is priced accordingly: the career's own
+ * player when he chooses to (engine/me/hurtplay.ts), or a club's man when it
+ * has nobody fit of its own, in its academy or among its region's free agents
+ * (selectLineup).
  */
 export function effectiveRating(p: Player, day?: number): number {
   const form = (p.form - 70) * 0.0028
@@ -82,8 +81,18 @@ export function effectiveRating(p: Player, day?: number): number {
   return p.overall * (1 + form + morale + fatigue + hurt)
 }
 
-/** Pick the 5 who actually play: honour the chosen starters, fill gaps with the best fit. */
+/**
+ * Pick the 5 who actually play: the named starters who are fit, then the
+ * registered bench, then the academy, then an emergency stand-in from the
+ * region's free agents (engine/standin.ts), and an injured man of the club's
+ * own only when there is nobody else anywhere. No side walks out short.
+ */
 export function selectLineup(state: GameState, teamId: string): Player[] {
+  return fiveFor(state, teamId, true)
+}
+
+/** `lookAcross`: read today's opponent's call-ups first, so a free agent is never on both sides of one match. */
+function fiveFor(state: GameState, teamId: string, lookAcross: boolean): Player[] {
   const team = state.teams[teamId]
   const all = team.roster
     .map((id) => state.players[id])
@@ -94,36 +103,21 @@ export function selectLineup(state: GameState, teamId: string): Player[] {
     const p = all.find((x) => x.id === id)
     if (p && chosen.length < 5) chosen.push(p)
   }
-  if (chosen.length < 5) {
-    // Fill on merit, and let an injured man compete for the place. His rating
-    // already carries the injury (−22%), so a star who can barely walk beats a
-    // reserve who is 30 points worse, and a real backup beats him — which is
-    // what carrying a bench is supposed to buy. Excluding the injured outright
-    // forced a weak substitute on and made depth cost MORE than an injury.
-    const pool = team.roster
-      .map((id) => state.players[id])
-      .filter((p): p is Player => !!p && !chosen.includes(p))
-    // Filled one at a time, and a man who plugs a job the five is missing is
-    // worth more than his rating says — the same judgement compositionScore
-    // makes about the finished lineup. Ranking on rating alone benched an
-    // injured specialist for a fitter reserve of the wrong job and left the
-    // side worse off, which made carrying a bench a liability.
-    // Judged on the same scale the lineup itself is scored on. A composition
-    // gap costs `atk` directly, while one man's rating reaches it through a
-    // weighted mean — roughly a sixth of his number — so comparing the two raw
-    // numbers made a 20-point rating gap look six times more important than a
-    // missing role. It is not: the engine's own compositionScore says what the
-    // hole is worth, so use it.
-    const SLOT = 0.15
-    while (chosen.length < 5 && pool.length) {
-      const value = (p: Player) =>
-        effectiveRating(p, state.day) * SLOT + compositionScore([...chosen, p])
-      const best = pool.reduce((x, y) => (value(y) > value(x) ? y : x))
-      chosen.push(best)
-      pool.splice(pool.indexOf(best), 1)
-    }
+  // The registered bench, fit men only. An injured man used to compete for the
+  // place at −22%, because the alternative for most clubs was nobody: 52 of
+  // the world's 78 clubs carry exactly five, so a sprained wrist put the man
+  // on the server anyway — hundreds of sides a season from 2027, a few at every
+  // Masters. A real team plays its substitute, then an academy player or an
+  // approved stand-in (engine/standin.ts), and the injured man rests.
+  fillOnMerit(state, chosen, all)
+  // the academy, then an emergency stand-in from the region's free agents
+  if (chosen.length < 5 && !teamId.startsWith('CUP_')) {
+    const { academy, again, free } = callupPool(state, teamId, lookAcross ? (id) => fiveFor(state, id, false) : undefined)
+    fillOnMerit(state, chosen, academy)
+    fillOnMerit(state, chosen, again)
+    fillOnMerit(state, chosen, free)
   }
-  // a club with fewer than 5 fit players fields whoever is left, injured included
+  // nobody fit anywhere: whoever of its own is left, injured included
   if (chosen.length < 5) {
     const emergency = team.roster
       .map((id) => state.players[id])
@@ -135,6 +129,32 @@ export function selectLineup(state: GameState, teamId: string): Player[] {
     }
   }
   return chosen
+}
+
+/**
+ * Add the best of `candidates` to the five until it is full.
+ *
+ * Filled one at a time, and a man who plugs a job the five is missing is
+ * worth more than his rating says — the same judgement compositionScore makes
+ * about the finished lineup. Ranking on rating alone benched a specialist for
+ * a reserve of the wrong job and left the side worse off, which made carrying
+ * a bench a liability. Judged on the same scale the lineup itself is scored
+ * on: a composition gap costs `atk` directly, while one man's rating reaches
+ * it through a weighted mean — roughly a sixth of his number — so comparing
+ * the two raw numbers made a 20-point rating gap look six times more important
+ * than a missing role. The engine's own compositionScore says what the hole is
+ * worth, so use it.
+ */
+function fillOnMerit(state: GameState, chosen: Player[], candidates: Player[]): void {
+  const SLOT = 0.15
+  const pool = candidates.filter((p) => !chosen.includes(p))
+  while (chosen.length < 5 && pool.length) {
+    const value = (p: Player) =>
+      effectiveRating(p, state.day) * SLOT + compositionScore([...chosen, p])
+    const best = pool.reduce((x, y) => (value(y) > value(x) ? y : x))
+    chosen.push(best)
+    pool.splice(pool.indexOf(best), 1)
+  }
 }
 
 const CORE_ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫']
@@ -274,7 +294,9 @@ export function buildLineup(
   // side near 35% a round and a two-man side near 23% — losing 13-3, which
   // is what being two men down actually looks like.
   const missing = Math.max(0, 5 - players.length)
-  const shortHanded = -missing * 18
+  // an academy call-up or an emergency stand-in has not drilled this club's calls (engine/standin.ts)
+  const outsiders = players.filter((p) => !team.roster.includes(p.id)).length
+  const shortHanded = -missing * 18 - outsiders * STANDIN_COST
 
   const common = base + iglBonus + chemBonus + coachBonus + comp + mapPref + utilBonus + shortHanded +
     famEdge
@@ -1002,11 +1024,20 @@ export class MatchSim {
         mvp = pid
       }
     }
-    return {
+    const result: MatchResult = {
       mapsWonA: this.wonA, mapsWonB: this.wonB, maps: this.played,
       vetoLog: this.vetoLog, mvp, highlights: this.highlights,
       lineups: { a: [...this.seenA], b: [...this.seenB] },
     }
+    // who came in from outside the registered roster: an academy call-up or a stand-in
+    const outside = (teamId: string, seen: Set<string>) => {
+      const roster = new Set(this.state.teams[teamId]?.roster ?? [])
+      return [...seen].filter((id) => !roster.has(id))
+    }
+    const standA = outside(this.aId, this.seenA)
+    const standB = outside(this.bId, this.seenB)
+    if (standA.length || standB.length) result.standIns = { a: standA, b: standB }
+    return result
   }
 
   /** Play everything that is left without stopping. */
@@ -1084,13 +1115,14 @@ export function pruneMatchDetail(state: GameState): void {
 
     if (f.day >= foreignCutoff) continue
     // already stripped: leave it alone rather than reallocating every day
-    if (!f.result.vetoLog.length && !f.result.highlights.length && !f.result.lineups
+    if (!f.result.vetoLog.length && !f.result.highlights.length && !f.result.lineups && !f.result.standIns
       && !f.result.maps.some((m) => m.agents || m.edge || m.rounds || Object.keys(m.lines).length)) {
       continue
     }
     f.result.vetoLog = []
     f.result.highlights = []
     delete f.result.lineups
+    delete f.result.standIns
     for (const m of f.result.maps) {
       m.lines = {}
       delete m.edge
@@ -1117,6 +1149,7 @@ export function stripToTheBone(state: GameState): void {
     f.result.vetoLog = []
     f.result.highlights = []
     delete f.result.lineups
+    delete f.result.standIns
     // Other clubs' games come down to the series score. The table is built
     // from mapsWon, so the standings are untouched; what goes is the list of
     // map scores in a modal for a match you did not play. Ours keep their map
