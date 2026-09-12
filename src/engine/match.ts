@@ -624,6 +624,9 @@ export class MapSim {
    * lands or fails (see engine/me/nodes.ts); it decays every round so a call
    * is a moment, not a permanent buff. Zero for every AI-only match, so the
    * manager game and the headless audits are bit-for-bit unchanged.
+   *
+   * playRound's `force` is the same contract: only the player-career layer
+   * passes it, and nothing else ever does.
    */
   nudge: Record<Side, number> = { a: 0, b: 0 }
 
@@ -710,7 +713,18 @@ export class MapSim {
     return 0.6 // focus: a small lift from playing to a known strength
   }
 
-  playRound(): void {
+  /**
+   * Play the next round.
+   *
+   * `force` names the side that takes it, for a round the player-career layer
+   * has already settled: a 1v2 the player won or lost is that round, whatever
+   * the roll says (engine/me/matchplay.ts). Only the winner is decided for it —
+   * buys, casualties, kills, the plant and the defuse all play out as usual for
+   * that winner. The roll is still drawn, so the random stream after it is the
+   * same either way, and with `force` absent nothing at all changes: every
+   * AI-only match stays bit-for-bit what it was (scripts/check_decisions.ts).
+   */
+  playRound(force?: Side): void {
     if (this.over) return
     const { aAttack, pistol } = this.phase()
     this.round++
@@ -757,7 +771,8 @@ export class MapSim {
     const diff = strA + swingA - (strB + swingB)
     const sens = pistol ? ROUND_SENS + 5 : ROUND_SENS
     const p = 1 / (1 + Math.exp(-diff / sens))
-    const aWins = rng.chance(p)
+    const roll = rng.chance(p)
+    const aWins = force ? force === 'a' : roll
 
     // how many fell on each side — tuned so total kills land near the real
     // ~7 per round (KPR ≈ 0.7 across ten players)

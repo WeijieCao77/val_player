@@ -9,6 +9,7 @@ import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
+import { ledgerNotes } from '../../engine/me/postmatch'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
 import { sayDim, useNumbers } from './words'
@@ -41,6 +42,7 @@ function roundLine(r: RoundLog, mineIsA: boolean): string {
  * the rest of the screen away. Maps already played stay in it.
  */
 function RoundFeed({ mm }: { mm: MeMatch }) {
+  const [nums] = useNumbers()
   const maps = [
     ...mm.sim.played.map((s) => ({ map: s.map, rounds: s.rounds ?? [], live: false })),
     ...(mm.map ? [{ map: mm.map.map, rounds: mm.map.rounds, live: true }] : []),
@@ -70,7 +72,7 @@ function RoundFeed({ mm }: { mm: MeMatch }) {
                 <span className="round-feed-score">{a} : {b}</span>{roundLine(r, mm.mineIsA)}
                 {mm.nodes.filter((n) => n.map === m.map && n.round === r.n).map((n, i) => (
                   <div key={`call${i}`} className="tiny" style={{ marginTop: 2 }}>
-                    「{n.pick}」—— <b>{n.ok ? '成了' : '没成'}</b>（赢面 {n.after >= n.before ? '+' : '−'}{Math.abs(n.after - n.before)}）
+                    「{n.pick}」—— <b>{n.ok ? '成了' : '没成'}</b>{nums && n.won !== undefined ? `（本图赢面 ${n.before}% → ${n.after}%）` : ''}
                   </div>
                 ))}
                 {r.hl?.map((h, i) => <div key={i} className="tiny muted" style={{ marginTop: 2 }}>{h}</div>)}
@@ -319,16 +321,18 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         )}
         {rec.nodes.length > 0 && (
           <div className="panel" style={{ marginTop: 10 }}>
-            <div className="panel-head"><h2>你的决定 · {rec.nodes.length} 次</h2></div>
+            <div className="panel-head"><h2>临场账本 · 你的 {rec.nodes.length} 次决定</h2></div>
             <div className="panel-body">
+              {/* each call against the round it was about, which was really played: nothing here is a projection */}
               {rec.nodes.map((n, i) => (
                 <div key={i} className={`node-line ${n.ok ? 'ok' : 'bad'}`}>
-                  <span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · 「{n.pick}」（看{DIM_CN[n.dim]}）—— <b>{n.ok ? '成了' : '没成'}</b> · 赢面 {n.after >= n.before ? '+' : '−'}{Math.abs(n.after - n.before)}
-                  {nums && n.mine != null && <span className="tiny muted">（你 {sayDim(true, n.dim, n.mine)}{n.theirs != null ? ` 对 ${sayDim(true, n.dim, n.theirs)}` : ''}，成功率 {n.p}%）</span>}
+                  <span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · 「{n.pick}」（看{DIM_CN[n.dim]}{nums ? ` · 成功率 ${n.p}%` : ''}）—— <b>{n.ok ? '成了' : '没成'}</b>
+                  {n.won !== undefined && <> · 这回合{n.won ? '拿下' : '丢了'}{n.decided ? '（由这一下定）' : ''}{nums ? ` · 本图赢面 ${n.before}% → ${n.after}%` : ''}</>}
+                  {nums && n.mine != null && <span className="tiny muted">（你 {sayDim(true, n.dim, n.mine)}{n.theirs != null ? ` 对 ${sayDim(true, n.dim, n.theirs)}` : ''}）</span>}
                   {n.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{n.hl}</div>}
                 </div>
               ))}
-              <p className="tiny faint" style={{ margin: '6px 0 0' }}>做对了不一定赢，做错了也不一定输。</p>
+              {ledgerNotes(rec.nodes).map((t, i) => <p key={i} className="tiny faint" style={{ margin: '6px 0 0' }}>{t}</p>)}
             </div>
           </div>
         )}
@@ -430,8 +434,14 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <>
           {last && (
             <div className={`node-line ${last.ok ? 'ok' : 'bad'}`}>
-              你选了「{last.pick}」（看{DIM_CN[last.dim]}）—— <b>{last.ok ? '成了' : '没成'}</b>，赢面 {last.after >= last.before ? '+' : '−'}{Math.abs(last.after - last.before)}
+              {/* the intent first; what the round did only once it has been played */}
+              你选了「{last.pick}」（看{DIM_CN[last.dim]}）—— <b>{last.ok ? '成了' : '没成'}</b>
               {nums && last.mine != null && <span className="tiny muted">（你 {Math.round(last.mine)}{last.theirs != null ? ` 对 ${Math.round(last.theirs)}` : ''}）</span>}
+              {last.won !== undefined && (
+                <div className="small" style={{ marginTop: 2 }}>
+                  第 {last.round} 回合{last.won ? '拿下' : '丢了'}{nums ? ` · 本图赢面 ${last.before}% → ${last.after}%` : ''}
+                </div>
+              )}
               {last.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{last.hl}</div>}
             </div>
           )}

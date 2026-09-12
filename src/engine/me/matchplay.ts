@@ -1,5 +1,5 @@
 import { MatchSim } from '../match'
-import type { Side } from '../match'
+import type { MapSim, Side } from '../match'
 import { Rng, clamp, hashStr } from '../rng'
 import { commitFixture, fixtureRng } from '../season'
 import { agentCn } from '../content'
@@ -82,8 +82,14 @@ export class MeMatch {
   /** per map: the win estimate at kickoff and how it ended — the ledger that
       lets "90% and still lost" be checked rather than felt */
   mapLog: { map: string; before: number; won: boolean }[] = []
-  /** the story of the call just made, to be pinned on the round it shapes */
-  private pendingHl: string | null = null
+  /**
+   * The call just made, waiting on the round it is about. Its line is written
+   * only once that round has been played: the win or the loss and my kills in
+   * it are read off the engine, never guessed ahead of it — a line that said I
+   * had taken both of them, pinned on a round we lost, is what players sent in
+   * (「做出正确选择显示我把人都杀完了，结果这个回合却输了」, 2026-09-12).
+   */
+  private unresolved: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force?: Side } | null = null
   private seen = new Set<string>()
   private perMap = 0
   private lastNodeRound = -99
@@ -226,14 +232,28 @@ export class MeMatch {
         return 'node'
       }
     }
-    m.playRound()
-    // the call I just made belongs to the round it shaped, not to the map
-    if (this.pendingHl) {
-      const rl = m.rounds[m.rounds.length - 1]
-      if (rl) rl.hl = [this.pendingHl, ...(rl.hl ?? [])]
-      this.pendingHl = null
-    }
+    const call = this.unresolved
+    m.playRound(call?.force)
+    // the call I just made belongs to the round it was about, and is told once that round is known
+    if (call) this.narrate(m, call)
     return 'round'
+  }
+
+  /** The line for a call, now that its round has been played, pinned on that round. */
+  private narrate(m: MapSim, call: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number }): void {
+    this.unresolved = null
+    const rl = m.rounds[m.rounds.length - 1]
+    if (!rl) return
+    const e = call.entry
+    e.won = (rl.winner === 'A') === this.mineIsA
+    e.kills = Math.max(0, (m.lines[this.state.me!.id]?.kills ?? 0) - call.kills)
+    // the score this round left: what the call and the round actually did to the map
+    e.after = Math.round(this.winProb() * 100)
+    let text = nodeHighlight(call.node.id, call.idx, e.ok, { won: e.won, kills: e.kills })
+    // a round that closed the map says so from the score, never from the copy
+    if (m.over) text += this.myRounds > this.theirRounds ? '这张图拿下了。' : this.myRounds < this.theirRounds ? '这张图丢了。' : '这张图打平了。'
+    e.hl = text
+    rl.hl = [text, ...(rl.hl ?? [])]
   }
 
   /** Answer the waiting decision. */
@@ -252,17 +272,24 @@ export class MeMatch {
     } else {
       m.nudge[side] -= opt.risk * NODE_SWING * 0.8
     }
-    const after = this.winProb()
     const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
-    const idx = pend.node.a.indexOf(opt)
-    const hl = nodeHighlight(pend.node.id, idx < 0 ? pend.node.rec : idx, ok)
+    const found = pend.node.a.indexOf(opt)
+    const idx = found < 0 ? pend.node.rec : found
+    const shown = Math.round(before * 100)
     const entry: NodeLogEntry = {
       map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
-      p: Math.round(p * 100), ok, before: Math.round(before * 100), after: Math.round(after * 100),
-      mine: ro.mine, theirs: ro.theirs ?? undefined, hl,
+      p: Math.round(p * 100), ok, before: shown, after: shown,
+      mine: ro.mine, theirs: ro.theirs ?? undefined,
+      id: pend.node.id, opt: idx, decided: pend.node.decides || undefined,
     }
     this.nodes.push(entry)
-    this.pendingHl = hl
+    // Nothing is said yet: the line waits for the round (narrate). A call that is
+    // the round itself hands its result to the engine as that round's winner.
+    this.unresolved = {
+      entry, node: pend.node, idx,
+      kills: m.lines[this.state.me!.id]?.kills ?? 0,
+      force: pend.node.decides ? (ok ? side : side === 'a' ? 'b' : 'a') : undefined,
+    }
     this.pending = null
     return entry
   }
