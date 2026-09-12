@@ -1,6 +1,6 @@
 import { Rng, clamp, dayStream } from './rng'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling, CEILING_BANK } from './player'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
 import { growLoyalty } from './attachment'
@@ -102,9 +102,9 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng, mods?: C
   p.xp[attr] = (p.xp[attr] ?? 0) + gain
   p.fatigue = clamp(p.fatigue + rng.range(5, 11), 0, 100)
 
-  // a player at his own ceiling (me/bottleneck.ts) fills the bar and waits
+  // a player at his own ceiling (me/bottleneck.ts) banks it and waits
   if (atOwnCeiling(p, attr)) {
-    p.xp[attr] = Math.min(p.xp[attr] ?? 0, 100)
+    p.xp[attr] = Math.min(p.xp[attr] ?? 0, CEILING_BANK)
     return null
   }
   if ((p.xp[attr] ?? 0) >= 100) {
@@ -128,7 +128,7 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   // and waits, and the one number is re-derived from them (me/bottleneck.ts).
   if (p.caps) {
     if (atOwnCeiling(p, k)) {
-      p.xp[k] = Math.min((p.xp[k] ?? 0) + amount, 100)
+      p.xp[k] = Math.min((p.xp[k] ?? 0) + amount, CEILING_BANK)
       return false
     }
   } else if (p.overall >= p.potential) {

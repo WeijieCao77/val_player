@@ -5,6 +5,7 @@ import { onTimeline, regionIn } from './era'
 import { realName } from './names'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
+import { rulerClubRating, rulerOn, rulerShift } from './ruler'
 import type { RawTeam } from './teams'
 import type { Attrs, GameState, Player, Region, Role, Team } from './types'
 import { autoStarters, ensureCaller, playerFromRaw, teamFromRaw } from './world'
@@ -160,17 +161,20 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
   const found = nearest(year, (Y) => Y.debuts[vlr])
   if (!found) return null
   const d = found.value
-  const r = nearest(year, (Y) => Y.ratings[vlr])?.value
+  const rated = nearest(year, (Y) => Y.ratings[vlr])
+  const r = rated?.value
+  // the book's number, read on the ruler this world was built on (engine/ruler.ts)
+  const shift = rated && rulerOn(state) ? rulerShift(rated.year, vlr) : 0
   const rng = new Rng(hashStr(`debut:${vlr}`) ^ state.seed)
   const roles = (r?.r ?? '自由人').split('|') as Role[]
   const attrs = {} as Attrs
-  ATTRS.forEach((k, i) => { attrs[k] = r?.a[i] ?? 55 })
+  ATTRS.forEach((k, i) => { attrs[k] = r ? clamp((r.a[i] ?? 55) + shift, 20, 99) : 55 })
   const rp: RawPlayer = {
     id, ign: d.ign, teamId: null, region, role: roles[0], roles, flex: roles.length > 1,
     agentPool: r?.g ?? [], roleSource: r?.g?.length ? 'agents' : 'vlr-primary', traits: traitsOf(r),
     nat: d.nat ?? undefined, realName: d.name, birth: d.birth, ageEstimated: d.est, joined: null,
     rounds: r?.n ?? 0, vlr: { rating: r?.v[0] ?? null, acs: r?.v[1] ?? null, rounds: r?.n ?? 0 },
-    age: d.age + (year - found.year), isIgl: !!r?.i, attrs, overall: r?.o ?? 55, potential: r?.p ?? 60,
+    age: d.age + (year - found.year), isIgl: !!r?.i, attrs, overall: r ? r.o + shift : 55, potential: r ? Math.min(99, r.p + shift) : 60,
     form: Math.round(clamp(rng.norm(70, 8), 45, 95)), morale: Math.round(clamp(rng.norm(75, 8), 45, 98)),
     fatigue: rng.int(0, 20), salary: 0, value: 0, contractYears: 0,
     loyalty: Math.round(clamp(rng.norm(60, 16), 15, 95)), ambition: Math.round(clamp(rng.norm(62, 15), 15, 98)),
@@ -183,9 +187,9 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
   return p
 }
 
-/** The year's numbers, laid over a man history kept out of the player's reach. */
-function applyRating(p: Player, r: TRating): void {
-  ATTRS.forEach((k, i) => { p.attrs[k] = r.a[i] ?? p.attrs[k] })
+/** The year's numbers, laid over a man history kept out of the player's reach — moved by `shift` onto the world's ruler (engine/ruler.ts). */
+function applyRating(p: Player, r: TRating, shift = 0): void {
+  ATTRS.forEach((k, i) => { p.attrs[k] = r.a[i] != null ? clamp(r.a[i] + shift, 20, 99) : p.attrs[k] })
   const roles = r.r.split('|') as Role[]
   p.role = roles[0]
   p.roles = roles
@@ -196,7 +200,7 @@ function applyRating(p: Player, r: TRating): void {
   p.rounds = (p.rounds ?? 0) + r.n
   p.vlr = { rating: r.v[0] ?? null, acs: r.v[1] ?? null, rounds: r.n }
   recomputeOverall(p)
-  p.potential = Math.max(r.p, p.overall)
+  p.potential = Math.max(Math.min(99, r.p + shift), p.overall)
   refreshValue(p)
 }
 
@@ -553,7 +557,7 @@ export function syncYear(state: GameState, year: number): YearSync {
 
   for (const [vlr, r] of Object.entries(Y.ratings)) {
     const p = state.players[`V${vlr}`]
-    if (p && !people.has(p.id)) applyRating(p, r)
+    if (p && !people.has(p.id)) applyRating(p, r, rulerOn(state) ? rulerShift(year, vlr) : 0)
   }
 
   const active = new Set<string>()
@@ -641,7 +645,8 @@ export function bookClubsAt(year: number): BookClubChoice[] {
   if (!Y) return []
   return Object.entries(Y.clubs)
     .filter(([vlr, c]) => c.d <= LATE_START && (Y.rosters[vlr]?.length ?? 0) >= 5)
-    .map(([vlr, c]) => ({ id: clubId(vlr), name: c.n, tag: c.t, region: c.r as Region, tier: c.k, rating: c.o, roster: Y.rosters[vlr].length }))
+    // a new career's world is on engine/ruler.ts, and so is the club it is offered
+    .map(([vlr, c]) => ({ id: clubId(vlr), name: c.n, tag: c.t, region: c.r as Region, tier: c.k, rating: rulerClubRating(year, Y.rosters[vlr]) ?? c.o, roster: Y.rosters[vlr].length }))
 }
 
 /**

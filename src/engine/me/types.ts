@@ -387,6 +387,11 @@ export interface BottleneckState {
   pinned: (keyof Attrs)[]
   /** the potential last derived from the ceilings — anything above it is the winter's re-rating */
   pot: number
+  /** 综合 opened from each pool, by the attribute that broke (me/bottleneck.ts BREAK_VALUE); absent in saves from before breaks were valued */
+  mechV?: Partial<Record<keyof Attrs, number>>
+  mileV?: Partial<Record<keyof Attrs, number>>
+  /** 2 once the book has had the one-time look back for the title breaks an older build missed */
+  rev?: number
 }
 
 /** What can be wrong with me - see me/injury.ts. */

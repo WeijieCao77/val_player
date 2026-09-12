@@ -2,11 +2,12 @@ import { Rng, clamp, hashStr } from '../rng'
 import { advanceDay } from '../season'
 import { clubWeek, clubWinter } from './club'
 import { marketWindow } from './market'
-import type { Fixture, GameState } from '../types'
+import { ATTR_CN, ATTR_KEYS } from '../types'
+import type { Attrs, Fixture, GameState } from '../types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, settleTraining } from './growth'
-import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek } from './bottleneck'
+import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek, finalMvp, startedIn } from './bottleneck'
 import { deskLine, weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
 import { injuryTick } from './injury'
@@ -316,6 +317,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   let ran = 0
   while (me.weekDay < 7 && ran++ < days) {
     const yearBefore = state.year
+    // the eight before the day: a turn of the year ages them, and a slip is said (onSeasonEnd)
+    const attrsBefore = { ...p.attrs }
     const pro = me.phase === 'pro'
     // one match of mine a day: a second due the same day is mine tomorrow, not the engine's today
     const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true })
@@ -328,7 +331,7 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     if (pro && windowOpensToday(state)) rollOffers(state, rng)
     syncTitles(state)
     closingClub(state)
-    if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng)
+    if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)
     if (state.gameOver) return { kind: 'game-over' }
     // A final is worth stopping for before the doors open. This has to be
     // queued *before* the generic pending check, not after: anything else
@@ -390,19 +393,26 @@ function closingClub(state: GameState): void {
   state.foldNotice = undefined
 }
 
-/** The engine credits titles to the champion's roster; a title is mine only if I was on the floor that stage. */
+/**
+ * The engine credits titles to the champion's roster; a title is mine only if I
+ * started in that event. It used to be the stage's running count — which the
+ * stage change clears the same day a final is played — or four starts that
+ * season, so a man who moved clubs in the summer and started the Champions final
+ * as its MVP was written down as not having played (reproduced 2026-09-12).
+ */
 function syncTitles(state: GameState): void {
   const me = state.me!
   const p = state.players[me.id]
   for (const t of p.titles ?? []) {
     if (me.titles.some((x) => x.year === t.year && x.title === t.title)) continue
-    const started = me.startedThisStage > 0 || me.seasonStart.starts >= 4
+    const started = startedIn(state, t.title, t.year)
+    const fmvp = started && finalMvp(state, t.title, t.year)
     me.titles.push({ year: t.year, title: t.title, started })
     // whoever was in the room shares it
     bondNoteTitle(state, t.title)
-    // and a trophy I was on the floor for loosens a ceiling (me/bottleneck.ts)
-    if (started) bottleneckTitle(state, t.title)
-    pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? '' : '（你没有出场）'}。`)
+    // and a trophy I started in loosens a ceiling, the final's MVP one more (me/bottleneck.ts)
+    if (started) bottleneckTitle(state, t.title, t.year, fmvp)
+    pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }
 }
@@ -500,7 +510,7 @@ export function settleWeek(state: GameState): void {
 }
 
 /** The winter: my season on the record, the contract question, and whether there is a next one. */
-function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
+function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): void {
   const me = state.me!
   const p = state.players[me.id]
   const team = state.teams[state.myTeam]
@@ -513,6 +523,11 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng): void {
     acs: s.starts ? Math.round(s.acsSum / s.starts) : 0,
     overallFrom: s.overall, overallTo: p.overall, titles,
   })
+  // the winter's ageing (engine/training.ts seasonRollover), said when it takes something: from 27 the hands go first
+  const slipped = before ? ATTR_KEYS.filter((k) => p.attrs[k] < before[k]) : []
+  if (before && slipped.length) {
+    pushLog(state, 'bad', `休赛期：${p.age} 岁了，${slipped.map((k) => `${ATTR_CN[k]} ${before[k]} → ${p.attrs[k]}`).join('、')}。年纪上来以后手上的东西先走；意识还会随经验涨。`)
+  }
   if (pro) {
     pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1

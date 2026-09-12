@@ -3,6 +3,7 @@ import { useGame } from './ctx'
 import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
+import { ceilingNote } from '../../engine/me/bottleneck'
 import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
@@ -138,6 +139,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                         {/* the body's cost is the bar above and the lock's reason; its figure rides the switch */}
                         <div className="d">{a.desc}{nums && a.fatigue ? `。体力 ${a.fatigue > 0 ? '−' : '+'}${Math.abs(a.fatigue)}` : ''}</div>
                         {why && <div className="why">{why}</div>}
+                        {/* at the ceiling: what more hours do, and what opens it — never a bare 1/2 (me/bottleneck.ts) */}
+                        {!why && ceilingNote(game, a.key) && <div className="tiny muted" style={{ marginTop: 4 }}>{ceilingNote(game, a.key)}</div>}
                         {a.key === 'duo' && n > 0 && (
                           <select value={me.duoWith ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
                             <option value="">和谁双排…</option>

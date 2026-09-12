@@ -75,21 +75,44 @@ if (JSON.stringify([p, me.bottleneck, me.log]) !== JSON.stringify([b.players[b.m
 }
 
 // a save from before the ceilings, mid-career: the 上限 it had is the 上限 it keeps
+// (its trophies are left out here: what they are owed is paid once, and checked below)
 const old = structuredClone(a)
 const op = old.players[old.me!.id]
 delete op.caps
 delete old.me!.bottleneck
+old.me!.titles = []
 const was = op.potential
 ensureCeilings(old)
 if (op.potential < was || op.potential > was + 1) fail(`老存档的上限从 ${was} 变成了 ${op.potential}`)
 held(old, '老存档读进来')
 for (let i = 0; i < 12; i++) { autoWeek(old); held(old, `老存档第 ${i + 1} 周`) }
 
+// a book from a build that missed a title: a 2026 全球冠军赛 it started, and the final's MVP, paid once on load and not again
+const owed = structuredClone(a)
+const ob = owed.me!.bottleneck!
+delete ob.mechV
+delete ob.mileV
+delete ob.rev
+ob.seen = ob.seen.filter((k) => !k.startsWith('fmvp:'))
+owed.me!.titles.push({ year: owed.year, title: '2026 全球冠军赛', started: false })
+owed.me!.matches.push({ ...owed.me!.matches[owed.me!.matches.length - 1], year: owed.year, comp: '2026 全球冠军赛', label: '总决赛', started: true, won: true, mvp: true, friendly: false })
+const owedPot = owed.players[owed.me!.id].potential
+ensureCeilings(owed)
+const paidPot = owed.players[owed.me!.id].potential
+if (!owed.me!.titles.some((t) => t.title === '2026 全球冠军赛' && t.started)) fail('决赛首发的冠军赛读档后还是记成「没有出场」')
+if (paidPot < owedPot + 1) fail(`漏发的冠军赛 + 决赛 MVP 读档后只把上限从 ${owedPot} 抬到 ${paidPot}`)
+if (!owed.me!.log.some((l) => l.text.includes('补发'))) fail('补发的突破没有写进日志')
+held(owed, '补发之后')
+ensureCeilings(owed)
+if (owed.players[owed.me!.id].potential !== paidPot) fail('补发在第二次读档时又发了一遍')
+console.log(`  补发：漏掉的冠军赛 + 决赛 MVP，上限 ${owedPot} → ${paidPot}`)
+
 // and one already stuck at its one number, with 99 枪法: every row at its ceiling, said once, not as news
 const stuck = structuredClone(a)
 const sp = stuck.players[stuck.me!.id]
 delete sp.caps
 delete stuck.me!.bottleneck
+stuck.me!.titles = []
 sp.attrs.aim = 99
 recomputeOverall(sp)
 sp.potential = sp.overall

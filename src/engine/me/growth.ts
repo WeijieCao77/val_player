@@ -1,7 +1,7 @@
 import { Rng, clamp } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
-import { ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { CEILING_BANK, ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
 import { duoBonded } from '../bonds'
@@ -38,9 +38,8 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
 
 /**
  * Progress toward a point; a full bar is a point while there is room under the
- * ceiling. At his own ceiling (me/bottleneck.ts) the bar fills and waits — one
- * point banked, the rest of the hours go nowhere — and turns into its point the
- * moment the ceiling moves.
+ * ceiling. At his own ceiling (me/bottleneck.ts) the hours bank — up to three
+ * points (CEILING_BANK), the rest go nowhere — and land the moment the ceiling moves.
  */
 export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   if (amount <= 0) return false
@@ -51,12 +50,28 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
     p.attrs[k] += 1
     rose = true
   }
-  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = Math.min(p.xp[k] ?? 0, 100)
+  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = Math.min(p.xp[k] ?? 0, CEILING_BANK)
   if (rose) {
     recomputeOverall(p)
     refreshValue(p)
   }
   return rose
+}
+
+/**
+ * The winter's ageing, for the 我的 page: from 27 the hands go first
+ * (engine/training.ts seasonRollover: |ageDrift| / 2 a year that an attribute
+ * is hit, by 0–2 for 枪法 and 反应, so a real slip two times in three). In words;
+ * the chances only when the 数值 switch is on.
+ */
+export function ageNote(age: number, nums: boolean): string | null {
+  if (age < 25) return null
+  const words = age < 27
+    ? '27 岁起，每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。'
+    : `${age} 岁了：每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。`
+  if (!nums) return words
+  const slip = (a: number) => Math.round(Math.min(1, Math.abs(ageDrift({ age: a } as Player)) * 0.5) * 200 / 3)
+  return `${words}（枪法、反应每个休赛期掉点的机会：27–28 岁约 ${slip(27)}%，29–30 岁约 ${slip(29)}%，31 岁起约 ${slip(31)}%。）`
 }
 
 /** How each extra hour splits across attributes. */
