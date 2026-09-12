@@ -1,5 +1,7 @@
 import { Rng, clamp, hashStr } from '../rng'
-import type { GameState } from '../types'
+import { eventOf } from '../circuit'
+import { inVctLeague } from '../timeline'
+import type { Competition, GameState, Team } from '../types'
 import { pushLog } from './log'
 import { addMoney } from './money'
 import { addHeat, fansCn } from './fans'
@@ -187,26 +189,59 @@ export const BREAKS: Break[] = [
   { key: 'trip', name: '出国走走', blurb: '去一个没人认得你的地方，照片发出来，评论区很热闹。', share: 0.05, floor: 3000, cap: 25000, heat: 10, fans: 4 },
   { key: 'family', name: '带爸妈出去玩', blurb: '他们第一次坐这么久的飞机，一路上拍个不停。', share: 0.1, floor: 6000, cap: 50000, heat: 4, fans: 0 },
 ]
-/** the stages a pro can be away in: from Champions on, when his own club is not playing */
-export const BREAK_STAGES: readonly string[] = ['champions', 'offseason']
-
 export const breakPrice = (state: GameState, b: Break): number =>
   (b.share ? clamp(round1k(wage(state) * b.share), b.floor, b.cap) : 0)
 
-/** my club has a match of its own in the next `days` */
-function clubBusy(state: GameState, days: number): boolean {
+/** The stages engine/circuit.ts counts as the top tier (its tierOf): a league's events, the regional finals, the internationals. */
+const CIRCUIT_TOP: string[] = ['s1masters', 's2finals', 's3finals', 'masters1', 'masters2', 'lcq', 'champions', 'kickoff', 'stage1', 'stage2']
+
+/**
+ * An event not yet opened whose draw could still take my club — the draw's own
+ * rules (engine/circuit.ts inScope, fillGaps). Its club regions must include
+ * mine; an international takes nobody who has not already qualified into it.
+ * Before 2023 any tier might; from 2023 a VCT league club plays only the league's
+ * events and a Challengers club only Challengers events — the way into a league
+ * event from below is an open qualifier, which is one of those.
+ */
+function stillToDraw(state: GameState, c: Competition, team: Team): boolean {
+  const k = c.circuit
+  if (!k || k.start <= state.day) return false
+  const ev = eventOf(k.id)
+  const scope = ev ? ev.layer ?? (ev.region ? [ev.region] : null) : null
+  if (!ev || !scope?.includes(team.region)) return false
+  // an event of open rounds only is not played in this world: its places are handed on, and it takes nobody itself
+  if (ev.units.every((u) => u.type === 'open')) return false
+  if (state.year < 2023) return true
+  const top = (!!ev.stage && CIRCUIT_TOP.includes(ev.stage)) || /FGC/.test(ev.name)
+  return top === inVctLeague(state, team)
+}
+
+/**
+ * My club has played its season out: no match of its own left to play, no
+ * event under way or to come with it in the field — entered, seeded, or
+ * standing in for a place (engine/timeline.ts stillPlaying reads a club the same
+ * way) — and no event still to be drawn that could take it. A club between two
+ * events is in neither field until the next one's draw, so the last is what
+ * tells a gap in the season from its end. The break used to wait for the
+ * Champions stage, and 2021's Champions opens on day 304: a club that did not
+ * qualify sat out months before its players could go home.
+ */
+function seasonOver(state: GameState): boolean {
   const club = state.myTeam
-  if (!club) return false
-  const until = state.day + days
-  return state.fixtures.some((f) => !f.played && f.comp !== 'scrim' && f.day >= state.day && f.day <= until && (f.teamA === club || f.teamB === club))
+  const team = club ? state.teams[club] : undefined
+  if (!club || !team) return false
+  if (state.fixtures.some((f) => !f.played && f.comp !== 'scrim' && (f.teamA === club || f.teamB === club))) return false
+  return !Object.values(state.comps).some((c) => !c.champion && !c.finished.length && !c.circuit?.done
+    && (c.teams.includes(club) || !!c.circuit?.seeds.includes(club) || Object.values(c.circuit?.fill ?? {}).includes(club)
+      || stillToDraw(state, c, team)))
 }
 
 export function breakLocked(state: GameState, b: Break): string | null {
   const me = state.me!
   if (me.phase !== 'pro') return '有了职业合同再说'
   if (readOut(me).breaks.some((x) => x.year === state.year)) return '今年的假已经放过了'
-  if (!BREAK_STAGES.includes(state.stage)) return '冠军赛开打以后才放假'
-  if (clubBusy(state, 14)) return '队里两周内还有比赛'
+  // once the club's season is over, or in the off-season whatever is left
+  if (state.stage !== 'offseason' && !seasonOver(state)) return '队里这个赛季还有比赛'
   return short(me, breakPrice(state, b))
 }
 
