@@ -60,6 +60,8 @@ export const K_TOP = 250
 export const SUB_RATIO = 0.831
 /** and one from below the leagues needs more rounds to say as much */
 export const K_SUB = K_TOP / SUB_RATIO ** 2
+/** the rounds of a full season at a club that plays its league through: what a winter past the book counts as */
+export const FULL_SEASON = 1500
 
 interface TRating { o: number; n: number }
 interface TClub { k: 1 | 2; d: number }
@@ -230,10 +232,17 @@ export function holdScale(state: GameState, people: Set<string>): number {
   }
   if (lines.length < 100) return 0
   const curve = curveOf(lines)
+  // a winter is a full season's evidence: read the way the book reads a full season's line, so the scale's top sits where the book years' did
+  const levelMean = (tier: 1 | 2): number => {
+    const xs = lines.filter((l) => l.tier === tier).map((l) => curve(l.o))
+    return xs.length ? mean(xs) : (tier === 1 ? 84 : 69)
+  }
+  const mu = { 1: levelMean(1), 2: levelMean(2) }
+  const weight = { 1: FULL_SEASON / (FULL_SEASON + K_TOP), 2: FULL_SEASON / (FULL_SEASON + K_SUB) }
   const subShifts: number[] = []
   let moved = 0
   lines.forEach((l, i) => {
-    const d = Math.round(curve(l.o) - l.o)
+    const d = Math.round(mu[l.tier] + (curve(l.o) - mu[l.tier]) * weight[l.tier] - l.o)
     if (l.tier === 2) subShifts.push(d)
     if (!d) return
     shiftPlayer(held[i], d)
