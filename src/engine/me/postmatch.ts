@@ -99,11 +99,14 @@ export function nodeNet(rec: MeMatchRecord): { made: number; missed: number } {
 
 /**
  * The ledger's closing lines, in the spirit of 破晓's 临场账本: each call
- * against the round it was about, which really was played — so these are
- * counts of what happened, never a projection. No percentages: the rows above
- * carry those behind the 「数值」 switch.
+ * against the round it was about, which really was played — counts of what
+ * happened, then the rounds that went against their odds, said plainly (破晓
+ * pmLuckLines, 「90% 也翻车」). The blame only ever lands on something real: a
+ * call of mine that missed; otherwise a team-mate whose form really was the
+ * worst on the floor (narrate wrote it down that night); otherwise the dice.
+ * `nums` is the 「数值」 switch — off, no percentages.
  */
-export function ledgerNotes(nodes: MeMatchRecord['nodes']): string[] {
+export function ledgerNotes(nodes: MeMatchRecord['nodes'], nums = false): string[] {
   const told = nodes.filter((n) => n.won !== undefined)
   if (!told.length) return []
   const made = told.filter((n) => n.ok)
@@ -111,11 +114,23 @@ export function ledgerNotes(nodes: MeMatchRecord['nodes']): string[] {
   const out = [
     `成了 ${made.length} 次，那几回合拿下 ${made.filter((n) => n.won).length} 个；没成 ${missed.length} 次，那几回合丢了 ${missed.filter((n) => !n.won).length} 个。`,
   ]
-  const unlucky = made.filter((n) => !n.won && !n.decided).length
-  const carried = missed.filter((n) => n.won).length
-  if (unlucky) out.push(`有 ${unlucky} 次做成了，那一回合还是丢了：做成只是让那一回合好打一些，打不打得下还看枪。`)
-  if (carried) out.push(`有 ${carried} 次没成，那一回合照样拿下了。`)
-  if (told.some((n) => n.decided)) out.push('残局和赛点的决定直接定那一回合：成了就是拿下，没成就是丢了。')
+  const auto = told.filter((n) => n.auto).length
+  if (auto) out.push(`其中 ${auto} 次是快进替你按教练的选法做的：没人坐在椅子上，成功率少一截。`)
+  const luck: string[] = []
+  for (const n of told) {
+    if (n.decided || n.qok == null || n.qfail == null) continue
+    const at = `第 ${n.round} 回合「${n.pick}」`
+    if (!n.won && n.qok >= 70) {
+      const odds = nums ? `成了有 ${n.qok}%` : '成了多半是我们的'
+      if (!n.ok) luck.push(`${at}：这回合${odds}，是你自己没打成——账本上面记着。`)
+      else if (n.mate) luck.push(`${at}做成了，这回合还是丢了：回放里 ${n.mate} 慢了半拍（${nums ? `状态 ${n.mateForm}，` : ''}全队最差）——不过${nums ? ` ${n.qok}% ` : '高赢面'}本来也保不了底。`)
+      else luck.push(`${at}做成了，这回合还是丢了。没什么可甩的——${nums ? `${n.qok}% 就是十次里还要丢 ${Math.max(1, Math.round((100 - n.qok) / 10))} 次` : '高赢面也保不了底'}，这次骰子背。`)
+    } else if (n.won && !n.ok && n.qfail <= 30) {
+      luck.push(`${at}没成，这回合${nums ? `只剩 ${n.qfail}%` : '基本要丢'}，却拿下了——运气也是实力的一部分，但别指望它常来。`)
+    }
+  }
+  out.push(...luck.slice(0, 3))
+  if (told.some((n) => n.decided)) out.push('残局里你是最后一个人：那个决定就是那一回合，成了就是拿下，没成就是丢了。')
   return out
 }
 
