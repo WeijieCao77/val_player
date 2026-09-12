@@ -41,7 +41,7 @@ import { compClass, isIntlComp } from './compclass'
 
 export const CAP_HARD = 99
 /** the highest a talent alone puts a ceiling — under the hard cap, so a maxed attribute still has a path on the first day (破晓: talent 10 is 95 before its breaks) */
-export const TALENT_CAP_MAX = 97
+export const TALENT_CAP_MAX = 98
 /** What each kind of break is worth, in 综合上限. */
 export const BREAK_VALUE = {
   /** a practice path: three weeks of 枪法, twelve ranked, six reviews, four scrims, eight maps calling */
