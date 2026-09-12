@@ -22,7 +22,7 @@ type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
 
 const BUY_CN = { full: '满配', force: '半配', eco: '经济局' } as const
-const END_CN = { elim: '全歼', spike: '炸包', defuse: '拆包', time: '时间到' } as const
+const END_CN = { elim: '全歼', spike: '芯片引爆', defuse: '芯片拆除', time: '时间到' } as const
 
 /** the round just played, from my side of the table */
 function roundLine(r: RoundLog, mineIsA: boolean): string {

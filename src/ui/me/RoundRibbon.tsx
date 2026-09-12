@@ -182,7 +182,7 @@ export function RibbonLegend() {
       </span>
       <span className="row" style={{ gap: 5, alignItems: 'center' }}>{sample('elim', true)} 团灭</span>
       <span className="row" style={{ gap: 5, alignItems: 'center' }}>{sample('spike', true)} 引爆</span>
-      <span className="row" style={{ gap: 5, alignItems: 'center' }}>{sample('defuse', false)} 拆包</span>
+      <span className="row" style={{ gap: 5, alignItems: 'center' }}>{sample('defuse', false)} 拆除</span>
       <span className="row" style={{ gap: 5, alignItems: 'center' }}>{sample('time', false)} 时间</span>
     </div>
   )
