@@ -4,14 +4,17 @@ import { Rng, clamp, hashStr } from '../rng'
 import { commitFixture, fixtureRng } from '../season'
 import { agentCn } from '../content'
 import { ratingOf } from '../player'
-import type { Fixture, GameState, MapLine } from '../types'
+import type { Fixture, GameState, MapLine, Player } from '../types'
 import { deskLine } from './press'
-import { eligibleNodes, nodeChance, nodeHighlight, nodeReadout, NODE_SWING } from './nodes'
+import {
+  AUTO_PENALTY, COACH_READS, HINT_EDGE, KEY_MOMENTUM, NODE_HINTS,
+  eligibleNodes, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout,
+} from './nodes'
 import { cerMatchEdge } from './ceremony'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
 
 const clamp01 = (v: number) => Math.max(0.03, Math.min(0.97, v))
-import type { NodeCtx, NodeDef } from './nodes'
+import type { KeySlot, NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
 import { bondNoteMatch } from './bond'
@@ -34,12 +37,11 @@ export interface Friendly {
   label: string
 }
 
-/** at most this many calls a map, and never two within this many rounds */
 /** how many matches back keep the full all-ten table; older ones keep only the words */
 const BOX_KEEP = 12
 
-const NODES_PER_MAP = 3
-const NODE_GAP = 4
+/** under this in the bank a side's next buy is an eco for certain (engine/match.ts Economy.decide) */
+const ECO_BANK = 2200
 
 /**
  * Chance of taking a map from a score, given a per-round chance. Overtime is
@@ -64,10 +66,17 @@ export function mapWinProb(mine: number, theirs: number, p: number): number {
 
 /**
  * One of my club's matches, driven a round at a time so the UI can stop on a
- * decision. The engine's MatchSim does all the playing; this only decides when
- * to ask me something and what my answer does to the next few rounds.
+ * decision. The engine's MatchSim does all the playing; this decides when to
+ * ask me something and what my answer does to the round it is about.
  *
- * 快进 and 托管 run the identical path with the steady option chosen for me.
+ * 关键回合 (2026-09-12). At most three calls a map — one in each half, one at
+ * match point or the first overtime round — and each settles its own round:
+ * whether it lands moves that round's odds (me/nodes.ts KEY_OK / KEY_FAIL), the
+ * round is drawn from them, and the engine plays it out for that winner. The
+ * calls used to be scattered over the early rounds and each one moved the next
+ * few by a point or two, so playing them was worth about as much as skipping
+ * them, and players said so (「选择做对了增加的赢面也不大…都直接跳过看结果了」).
+ * 快进 and 托管 still make every call — the coach's pick, with nobody in the chair.
  */
 export class MeMatch {
   readonly sim: MatchSim
@@ -77,7 +86,9 @@ export class MeMatch {
   readonly state: GameState
   /** whether I was in the five when the first map began */
   started = false
-  pending: { node: NodeDef; ctx: NodeCtx } | null = null
+  /** the call waiting on choose(): the node and the moment, the option the hint favours
+      (−1 when there is no hint) and which of its lines is read out, and the coach's pick */
+  pending: { node: NodeDef; ctx: NodeCtx; fav: number; hk: number; coach: number } | null = null
   nodes: NodeLogEntry[] = []
   /** per map: the win estimate at kickoff and how it ended — the ledger that
       lets "90% and still lost" be checked rather than felt */
@@ -89,13 +100,15 @@ export class MeMatch {
    * had taken both of them, pinned on a round we lost, is what players sent in
    * (「做出正确选择显示我把人都杀完了，结果这个回合却输了」, 2026-09-12).
    */
-  private unresolved: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force?: Side } | null = null
+  private unresolved: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force: Side } | null = null
   private seen = new Set<string>()
-  private perMap = 0
-  private lastNodeRound = -99
+  /** the map's three key rounds, asked or not */
+  private slots: Record<KeySlot, boolean> = { half1: false, half2: false, point: false }
   private nodeRng: Rng
   private finished: MeMatchRecord | null = null
   private mapStarted = false
+  /** 快进 or 托管 has taken over: the calls are still made, the coach's way, with nobody in the chair */
+  private auto = false
 
   constructor(state: GameState, src: Fixture | Friendly) {
     this.state = state
@@ -156,12 +169,14 @@ export class MeMatch {
     return mapWinProb(this.myRounds, this.theirRounds, this.roundProb())
   }
 
-  private ctxOf(): NodeCtx {
+  private ctxOf(slot: KeySlot): NodeCtx {
     const m = this.map!
     const mine = this.myRounds
     const theirs = this.theirRounds
     const r = m.round + 1
     const comp = this.state.comps[this.fixture.comp]
+    // who attacks the round about to be played (MapSim.phase): A the first half and every other overtime round
+    const aAttack = r <= 12 ? true : r <= 24 ? false : (r - 25) % 2 === 0
     return {
       round: r, mine, theirs, lead: mine - theirs,
       pistol: r === 1 || r === 13, half: r <= 12 ? 1 : r <= 24 ? 2 : 3, ot: r >= 25,
@@ -170,6 +185,7 @@ export class MeMatch {
       seriesMine: this.myMaps, seriesTheirs: this.theirMaps, need: this.sim.need,
       isIntl: !comp?.region, role: this.me.role, form: this.me.form,
       agent: this.myAgent(),
+      attack: this.mineIsA === aAttack, slot, shortBuy: m.bank(this.side!) < ECO_BANK,
     }
   }
 
@@ -181,6 +197,27 @@ export class MeMatch {
     return en ? agentCn(en) : undefined
   }
 
+  /**
+   * Which of the map's three key rounds the round about to be played is, if
+   * any. The first half's: the first of rounds 5–12 with the score within
+   * three, else round 10. The second half's: the first from round 14 within
+   * three, else round 20. The third: match point, either side's, or the first
+   * overtime round. A pistol round never takes one, and a scrim's twenty-four
+   * rounds have no match point.
+   */
+  private keySlot(m: MapSim): KeySlot | null {
+    const r = m.round + 1
+    if (r === 1 || r === 13) return null
+    const mine = this.myRounds
+    const theirs = this.theirRounds
+    const close = Math.abs(mine - theirs) <= 3
+    if (!this.slots.point && m.format !== 'full24' &&
+        ((mine === 12 && theirs < 12) || (theirs === 12 && mine < 12) || r === 25)) return 'point'
+    if (!this.slots.half1 && r >= 5 && r <= 12 && (close || r >= 10)) return 'half1'
+    if (!this.slots.half2 && r >= 14 && r <= 24 && (close || r >= 20)) return 'half2'
+    return null
+  }
+
   /** Advance one beat. 'node' means a decision is waiting on choose(). */
   step(): StepKind {
     if (this.finished) return 'done'
@@ -189,8 +226,7 @@ export class MeMatch {
     if (!m) {
       // playing through an injury, or a cup entered hurt: on the five, as I actually am (me/hurtplay.ts)
       if (!hurtMap(this.state, this.fixture.id, !!this.friendly, () => this.sim.nextMap())) { this.finishInternal(); return 'done' }
-      this.perMap = 0
-      this.lastNodeRound = -99
+      this.slots = { half1: false, half2: false, point: false }
       if (!this.mapStarted) {
         this.mapStarted = true
         this.started = this.playing
@@ -210,25 +246,23 @@ export class MeMatch {
       if (this.sim.decided) { this.finishInternal(); return 'done' }
       return 'map-end'
     }
-    // a decision only while I am the one playing — a skipped match is the
-    // engine's numbers against theirs, nothing of mine — and, past the first,
-    // only while the map is still in the balance: nobody needs to be asked
-    // anything at 12-2. But every map I play asks me once, by its seventh
-    // round: a lopsided series that asked nothing at all read as a broken
-    // screen (「有时候一整场都打完都不会跳出选项」, 2026-09-11)
-    const open = this.winProb()
-    const owed = this.perMap === 0 && m.round >= 6
-    if (!this.skipNodes && this.playing && this.side && this.perMap < NODES_PER_MAP && m.round - this.lastNodeRound >= NODE_GAP &&
-        (owed || (open > 0.06 && open < 0.94))) {
-      const c = this.ctxOf()
+    // a call only while I am the one playing — a map watched from the bench is
+    // the engine's numbers against theirs, nothing of mine — and never a second
+    // one on a round a call is already about
+    const slot = this.side && this.playing && !this.unresolved ? this.keySlot(m) : null
+    if (slot) {
+      const c = this.ctxOf(slot)
       const pool = eligibleNodes(c, this.seen)
-      const chance = owed ? 1 : c.pistol || c.mapPoint || c.ot ? 0.6 : 0.28
-      if (pool.length && this.nodeRng.chance(chance)) {
+      if (pool.length) {
         const node = pool[this.nodeRng.int(0, pool.length - 1)]
-        this.pending = { node, ctx: c }
+        const lines = NODE_HINTS[node.id]
+        const fav = lines ? this.nodeRng.int(0, node.a.length - 1) : -1
+        const hk = fav < 0 ? -1 : this.nodeRng.int(0, Math.max(1, lines![fav]?.length ?? 1) - 1)
+        // the coach reads the situation right more often than not (me/nodes.ts COACH_READS)
+        const coach = fav < 0 ? node.rec : this.nodeRng.chance(COACH_READS) ? fav : (fav + 1) % node.a.length
+        this.pending = { node, ctx: c, fav, hk, coach }
         this.seen.add(node.id)
-        this.perMap++
-        this.lastNodeRound = m.round
+        this.slots[slot] = true
         return 'node'
       }
     }
@@ -245,8 +279,9 @@ export class MeMatch {
     const rl = m.rounds[m.rounds.length - 1]
     if (!rl) return
     const e = call.entry
+    const meId = this.state.me!.id
     e.won = (rl.winner === 'A') === this.mineIsA
-    e.kills = Math.max(0, (m.lines[this.state.me!.id]?.kills ?? 0) - call.kills)
+    e.kills = Math.max(0, (m.lines[meId]?.kills ?? 0) - call.kills)
     // the score this round left: what the call and the round actually did to the map
     e.after = Math.round(this.winProb() * 100)
     let text = nodeHighlight(call.node.id, call.idx, e.ok, { won: e.won, kills: e.kills })
@@ -254,59 +289,94 @@ export class MeMatch {
     if (m.over) text += this.myRounds > this.theirRounds ? '这张图拿下了。' : this.myRounds < this.theirRounds ? '这张图丢了。' : '这张图打平了。'
     e.hl = text
     rl.hl = [text, ...(rl.hl ?? [])]
+    // landed, favoured to take the round, and lost it anyway: whose night was it on the floor.
+    // Only a form well under the 70 the engine treats as ordinary is named — otherwise it was the dice
+    if (e.ok && !e.won && !e.decided && (e.qok ?? 0) >= 70) {
+      const mates = (this.mineIsA ? m.A : m.B).players.filter((p) => p.id !== meId)
+      const worst = mates.reduce<Player | null>((w, p) => (!w || p.form < w.form ? p : w), null)
+      if (worst && worst.form < 65) { e.mate = worst.ign; e.mateForm = Math.round(worst.form) }
+    }
   }
 
-  /** Answer the waiting decision. */
+  /**
+   * What option i of the waiting call stands on: its chance to land — my
+   * attributes against theirs, the hint, a rival across the floor, a final's
+   * warm-up, and nobody in the chair under 快进 — and this round's win chance
+   * for my side either way. choose() rolls on exactly these numbers, so what
+   * the button says is what happens.
+   */
+  optionOdds(i: number): { p: number; ok: number; fail: number } {
+    const pend = this.pending
+    if (!pend) throw new Error('no decision pending')
+    const idx = pend.node.a[i] ? i : pend.coach
+    const opt = pend.node.a[idx]
+    const hint = pend.fav < 0 ? 0 : idx === pend.fav ? HINT_EDGE : -HINT_EDGE
+    const p = clamp01(
+      nodeChance(this.state, opt, this.myTeamId, this.oppTeamId) + cerMatchEdge(this.state).node +
+      rivalNodeEdge(this.state, this.oppTeamId) + hint - (this.auto ? AUTO_PENALTY : 0),
+    )
+    const { ok, fail } = keyRoundOdds(this.roundProb(), opt.risk, pend.node.decides)
+    return { p, ok, fail }
+  }
+
+  /** Answer the waiting call. The round it is about is drawn here and played on the next step. */
   choose(i: number): NodeLogEntry {
     const pend = this.pending
     if (!pend) throw new Error('no decision pending')
     const m = this.map!
-    const opt = pend.node.a[i] ?? pend.node.a[pend.node.rec]
-    const p = clamp01(nodeChance(this.state, opt, this.myTeamId) + cerMatchEdge(this.state).node + rivalNodeEdge(this.state, this.oppTeamId))
-    const ok = this.nodeRng.chance(p)
-    const before = this.winProb()
+    const me = this.state.me!
     const side = this.side!
+    const idx = pend.node.a[i] ? i : pend.coach
+    const opt = pend.node.a[idx]
+    const odds = this.optionOdds(idx)
+    const ok = this.nodeRng.chance(odds.p)
+    const before = this.winProb()
+    // the round itself, drawn from its odds now the call is known; a 1v2 with me the last one standing is the call
+    const won = pend.node.decides ? ok : this.nodeRng.chance(ok ? odds.ok : odds.fail)
     if (ok) {
-      m.nudge[side] += opt.risk * NODE_SWING
-      if (!m.calls[side]) m.calls[side] = { kind: 'focus', playerId: this.state.me!.id, roundsLeft: 3 }
-    } else {
-      m.nudge[side] -= opt.risk * NODE_SWING * 0.8
+      m.nudge[side] += KEY_MOMENTUM
+      // playing to what just worked: the next rounds run through me — a bigger share of the kills when we take them
+      if (!m.calls[side]) m.calls[side] = { kind: 'focus', playerId: me.id, roundsLeft: 3 }
     }
+    // the coach was watching: a call that lands earns a little of his trust, one that
+    // misses costs twice that (破晓's +0.3 / −0.6). A cup's temporary five has no coach of mine
+    if (!this.friendly) me.coachTrust = clamp(me.coachTrust + (ok ? 0.3 : -0.6), 0, 100)
     const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
-    const found = pend.node.a.indexOf(opt)
-    const idx = found < 0 ? pend.node.rec : found
     const shown = Math.round(before * 100)
     const entry: NodeLogEntry = {
       map: m.map, round: pend.ctx.round, q: pend.node.q, pick: opt.t, dim: opt.dim,
-      p: Math.round(p * 100), ok, before: shown, after: shown,
+      p: Math.round(odds.p * 100), ok, before: shown, after: shown,
       mine: ro.mine, theirs: ro.theirs ?? undefined,
       id: pend.node.id, opt: idx, decided: pend.node.decides || undefined,
+      qok: Math.round(odds.ok * 100), qfail: Math.round(odds.fail * 100),
+      fav: pend.fav < 0 ? undefined : pend.fav, hk: pend.fav < 0 ? undefined : pend.hk,
+      auto: this.auto || undefined,
     }
     this.nodes.push(entry)
-    // Nothing is said yet: the line waits for the round (narrate). A call that is
-    // the round itself hands its result to the engine as that round's winner.
+    // nothing is said yet: the line waits for the round (narrate)
     this.unresolved = {
       entry, node: pend.node, idx,
-      kills: m.lines[this.state.me!.id]?.kills ?? 0,
-      force: pend.node.decides ? (ok ? side : side === 'a' ? 'b' : 'a') : undefined,
+      kills: m.lines[me.id]?.kills ?? 0,
+      force: won ? side : side === 'a' ? 'b' : 'a',
     }
     this.pending = null
     return entry
   }
 
-  /** no more decisions once the player has stepped away from the chair */
-  private skipNodes = false
-
   /**
-   * Everything left, with no decisions in it: 快进, 托管 and the headless bot
-   * all take this road, so a skipped match is the two rosters' numbers and
-   * nothing else. Decisions already made stay in the record.
+   * Everything left, the coach's way: 快进, 托管 and the headless bot all take
+   * this road. The calls are still made — the coach's pick, AUTO_PENALTY off
+   * each because nobody is in the chair — so walking away costs a little and
+   * never pays. It used to skip every call left, which made a skipped match
+   * the two rosters' numbers and nothing else: as good as playing it (2026-09-12).
+   * Calls already made stay in the record.
    */
   runOut(): MeMatchRecord {
-    this.skipNodes = true
-    if (this.pending) this.choose(this.pending.node.rec)
+    this.auto = true
     let guard = 0
-    while (!this.finished && guard++ < 400) this.step()
+    while (!this.finished && guard++ < 1000) {
+      if (this.step() === 'node') this.choose(this.pending!.coach)
+    }
     return this.finished!
   }
 

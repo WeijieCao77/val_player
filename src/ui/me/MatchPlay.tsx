@@ -8,7 +8,7 @@ import { loadRecords, recordsNow } from '../../engine/dossier'
 import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
-import { DIM_CN, gapVerdict, nodeChance, nodeReadout } from '../../engine/me/nodes'
+import { DIM_CN, SLOT_CN, gapVerdict, hintText, nodeReadout, stakeWords } from '../../engine/me/nodes'
 import { ledgerNotes } from '../../engine/me/postmatch'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
@@ -86,9 +86,10 @@ function RoundFeed({ mm }: { mm: MeMatch }) {
 }
 
 /**
- * My club's match, a round at a time. The engine plays it; I am asked
- * something a few times a map, and the answer moves the next rounds. 快进
- * takes the steady option every time — same path, same maps.
+ * My club's match, a round at a time. The engine plays it; I am asked at
+ * most three times a map, in its key rounds, and each answer settles the
+ * round it is about. 快进 makes the coach's calls for me with a little off
+ * each one — same path, same maps.
  *
  * What the screen owes the player: the round that just happened in one line,
  * who did what on both fives, and — when a call lands or fails — which of my
@@ -229,7 +230,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         )}
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
-            ? '比赛里会有几次要你拿主意。'
+            ? '每张图最多三个关键回合要你拿主意，每一个都直接定那一回合。快进也会按教练的选法替你做，只是你不在椅子上，成功率低一截。'
             : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果。' : '你在替补席，这场看结果。'}
         </p>
         <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
@@ -332,7 +333,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
                   {n.hl && <div className="tiny muted" style={{ marginTop: 2 }}>{n.hl}</div>}
                 </div>
               ))}
-              {ledgerNotes(rec.nodes).map((t, i) => <p key={i} className="tiny faint" style={{ margin: '6px 0 0' }}>{t}</p>)}
+              {ledgerNotes(rec.nodes, nums, mapCn).map((t, i) => <p key={i} className="tiny faint" style={{ margin: '6px 0 0' }}>{t}</p>)}
             </div>
           </div>
         )}
@@ -346,6 +347,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   // ---- live / node
   const roundNo = Math.max(1, (map?.round ?? 0) + 1)
   const pend = mm.pending
+  const hint = pend ? hintText(pend.node.id, pend.fav, pend.hk) : null
   // between two maps: the one just played, and the one after it
   const justPlayed = phase === 'break' ? mm.sim.played[mm.sim.played.length - 1] : undefined
   const upNext = phase === 'break' ? mm.sim.maps[mm.sim.mapIndex + 1] : undefined
@@ -407,15 +409,23 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       ) : phase === 'node' && pend ? (
         <div className="node-box">
           <RivalNode oppId={oppId} />
+          <p className="tiny faint" style={{ margin: 0 }}>{pend.ctx.ot ? '加时关键回合' : SLOT_CN[pend.ctx.slot]} · 第 {pend.ctx.round} 回合</p>
           <p className="q">{pend.node.q}</p>
           <p className="ctx">{pend.node.ctx}</p>
+          {/* one thing to read about the other five — the option it favours really is likelier to land */}
+          {hint && <p className="ctx">局面：{hint}</p>}
           <div className="node-opt">
             {pend.node.a.map((o, i) => {
-              const pc = Math.round(nodeChance(game, o, mm.myTeamId) * 100)
+              // the very numbers choose() rolls on: what the button says is what happens
+              const odds = mm.optionOdds(i)
+              const pc = Math.round(odds.p * 100)
               const ro = nodeReadout(game, o, mm.myTeamId, oppId)
               const risk = o.risk >= 0.85 ? '高风险' : o.risk >= 0.6 ? '中等风险' : '稳健'
               // who the bet leans on, in a word — within 3 is even; the figures and the odds ride the switch
               const edge = ro.theirs == null ? `你${sayDim(false, o.dim, ro.mine)}` : Math.abs(ro.mine - ro.theirs) <= 3 ? '差不多' : ro.mine > ro.theirs ? '你占上风' : '对面更强'
+              // what rides on it for this round, in figures or in words
+              const stakes = pend.node.decides ? stakeWords(1, 0, true)
+                : nums ? `成了约 ${Math.round(odds.ok * 100)}%，没成约 ${Math.round(odds.fail * 100)}%` : stakeWords(odds.ok, odds.fail)
               return (
                 <button key={i} onClick={() => choose(i)}>
                   <span>{o.t}</span>
@@ -423,7 +433,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
                     {nums
                       ? <>看{DIM_CN[o.dim]}：你 {ro.mine}{ro.mates != null ? `（队友均 ${ro.mates}）` : ''}{ro.theirs != null ? ` · 对方 ${ro.theirs}` : ''}　成功率 {pc}% · {risk}</>
                       : <>看{DIM_CN[o.dim]} · {edge} · {risk}</>}
-                    {i === pend.node.rec ? ' · 教练会选这个' : ''}
+                    {i === pend.coach ? ' · 教练会选这个' : ''}
+                    <br />这回合：{stakes}
                   </span>
                 </button>
               )

@@ -892,6 +892,15 @@ export class MapSim {
     return 1 / (1 + Math.exp(-(strA + swingA - (strB + swingB)) / sens))
   }
 
+  /**
+   * What a side has in the bank going into the next round. Read-only, for the
+   * player-career layer: under 2200 that side's next buy is an eco for certain,
+   * so a call that says 经济局 can be asked only when it is one.
+   */
+  bank(side: Side): number {
+    return side === 'a' ? this.ecoA.money : this.ecoB.money
+  }
+
   /** Finalise per-player lines and hand back the map result. */
   result(): { score: MapScore; highlights: string[] } {
     if ((this.halfA <= 3 && this.a > this.b) || (this.halfB <= 3 && this.b > this.a)) {
