@@ -7,6 +7,7 @@ import { injuryHit } from './injury'
 import { standingOptions } from './keyround'
 import type { BranchKey, Buy, Premise, RoundBranch } from './keyround'
 import type { FactKey } from './hints'
+import { KEY_HINTS, KEY_HL, KEY_NODES } from './keynodes'
 
 /** what a call changes on the round-strength scale (ROUND_SENS is 30) */
 export const NODE_SWING = 4
@@ -200,7 +201,7 @@ const half = (c: NodeCtx) => c.slot !== 'point'
  * is one, a map point or overtime only in the key round that is one. The three
  * key rounds themselves are picked in me/matchplay.ts.
  */
-export const NODES: NodeDef[] = [
+const FIRST_NODES: NodeDef[] = [
   // a pistol round never takes a call now (key rounds skip them); the node stays for its lines
   { id: 'pistol_rush', phase: 'entry', q: '手枪局。指挥问：五个人一起冲 B，还是分散拿信息？', ctx: '手枪局赢了，接下来两回合都是你们的经济。',
     when: (c) => c.pistol, rec: 1, tier: 'retired',
@@ -257,6 +258,16 @@ export const NODES: NodeDef[] = [
   { id: 'info', phase: 'mid', q: '对面有人在你这边露了头，队友问要不要跟。', ctx: '跟上去可能二打二，也可能被夹。',
     when: (c) => half(c), rec: 1, lean: { duelUp: 0, duelDown: 1, theyHot: 1 },
     a: [{ t: '跟，打这波', dim: 'reaction', risk: 0.85 }, { t: '退，报点就行', dim: 'awareness', risk: 0.4 }] },
+]
+
+/**
+ * Every node. The sixteen above came first and were written for no moment of
+ * the round in particular; the key-round nodes written by phase (me/keynodes.ts)
+ * are asked first, and these only when none of those fits a key round.
+ */
+export const NODES: NodeDef[] = [
+  ...FIRST_NODES.map((n): NodeDef => (n.tier ? n : { ...n, tier: 'fallback' })),
+  ...KEY_NODES,
 ]
 
 /** The parts of a premise the moment itself answers: side, buys, which match point. */
@@ -456,6 +467,7 @@ export const NODE_HINTS: Record<string, string[][]> = {
     ['露头的那个人是对面枪最慢的一个，身边没人补。', '对面这张图喜欢一个人单独摸过来找信息。'],
     ['对面这张图喜欢拿一个人露头，把人骗出去再夹。', '露头的那一下之后，你听到了第二个人的脚步。'],
   ],
+  ...KEY_HINTS,
 }
 
 /** The hint's line, NODE_HINTS[id][fav][k], or null when the call had none. */
@@ -731,6 +743,7 @@ export const NODE_HL: Record<string, HlOpt[]> = {
       failLoss: '你退了，报了点，没人去接，信息浪费了，这回合丢了。',
     },
   ],
+  ...KEY_HL,
 }
 
 /** How the round a call was about went, read off the engine once it has been played. */
