@@ -1,6 +1,7 @@
 import RAW from '../../data/world.json'
 import RAW_2021 from '../../data/world_2021.json'
-import { createWorld } from '../world'
+import { autoStarters, createWorld } from '../world'
+import { RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
 import { bookClubsAt, openWorldAt } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
@@ -8,7 +9,7 @@ import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS, emptyStats } from '../types'
 import type { Attrs, GameState, Player, Region, Role } from '../types'
-import { recomputeOverall, refreshValue, weightsFor } from '../player'
+import { expectedSalary, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { AP_SEASON } from './actions'
 import { AP_PRE, ladderLabel } from './prepro'
 import { fansCn } from './fans'
@@ -20,7 +21,9 @@ import { makeDeal, joinClub } from './contract'
 import { onTimeline, regionIn, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
-import { ensureCeilings } from './bottleneck'
+import { TALENT_CAP_MAX, ceilingPotential, ensureCeilings } from './bottleneck'
+import { entryBands } from '../ruler'
+import type { EntryBands } from '../ruler'
 import { cupFor } from './cups'
 
 export const ME_ID = 'ME'
@@ -91,7 +94,9 @@ function clubsOf(year: number): (ClubChoice & { region: string })[] {
   return ((year <= 2021 ? RAW_2021.teams : RAW.teams) as BookClub[]).map((t) => {
     // world_2021.json has vlr's names of today; January 2021 had its own (engine/names.ts)
     const real = year <= 2021 ? realName(t.id.replace(/^V21T/, ''), 2021, 0) : null
-    return { id: t.id, name: real?.name ?? t.name, tag: real?.tag ?? t.tag, rating: t.rating, roster: t.roster.length, tier: t.tier, region: t.region }
+    // a new career's world is on engine/ruler.ts, and so is the club it is placed at
+    const rating = (year <= 2021 ? rulerTeamRating2021(t.id) : null) ?? t.rating
+    return { id: t.id, name: real?.name ?? t.name, tag: real?.tag ?? t.tag, rating, roster: t.roster.length, tier: t.tier, region: t.region }
   })
 }
 
@@ -153,7 +158,7 @@ export function careerRegions(year: number): Region[] {
  * professionals below the leagues that 2026's own files know of (engine/today.ts).
  */
 function createWorldAt(teamId: string, seed: number, year: number): GameState {
-  const state = createWorld((RAW_2021.teams as BookClub[])[0].id, seed, 2021)
+  const state = ruleOpening(createWorld((RAW_2021.teams as BookClub[])[0].id, seed, 2021))
   // nobody's club yet: history moves every club while the world is brought up
   state.myTeam = ''
   openWorldAt(state, year)
@@ -161,6 +166,29 @@ function createWorldAt(teamId: string, seed: number, year: number): GameState {
   state.news = []
   state.training = {}
   state.myTeam = teamId
+  return state
+}
+
+/**
+ * A new career's world is measured on engine/ruler.ts: January 2021's people
+ * move onto it before anything reads them, and every year of the roster book is
+ * read on it as it opens (engine/timeline.ts). A save from before keeps the
+ * scale it was built on — its world line is under way.
+ */
+function ruleOpening(state: GameState): GameState {
+  state.ruler = RULER
+  for (const p of Object.values(state.players)) {
+    if (!/^V\d+$/.test(p.id)) continue
+    shiftPlayer(p, rulerShift(2021, p.id.slice(1)))
+    const t = p.teamId ? state.teams[p.teamId] : undefined
+    if (t) p.salary = expectedSalary(p, t.tier === 1 ? 1 : 2)
+    refreshValue(p)
+  }
+  for (const t of Object.values(state.teams)) {
+    const top = t.roster.map((id) => state.players[id]?.overall ?? 0).sort((a, b) => b - a).slice(0, 5)
+    if (top.length) t.rating = Math.round(top.reduce((s, v) => s + v, 0) / top.length)
+    if (t.roster.length) t.starters = autoStarters(state, t.id)
+  }
   return state
 }
 
@@ -207,6 +235,77 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
   return attrs
 }
 
+/** Where every talent ceiling starts; each point of talent is +3 on it, as on the start. */
+export const CAP_BASE = 68
+
+/**
+ * The eight ceilings a talent gives, 破晓's 天赋上限 (cap = 57 + 4.3 × talent) on
+ * this game's eight: +3 a point, the role's two heaviest +3, the origin's lean
+ * on top, a late start a little lower. Held under TALENT_CAP_MAX, so a maxed
+ * 枪法 still has a path to break on the first day. The random head a new
+ * career used to roll is gone: the screen that sets the talent can say exactly
+ * where it leads.
+ */
+export function talentCeilings(role: Role, talents: Record<keyof Attrs, number>, originKey: string): Record<keyof Attrs, number> {
+  const w = weightsFor({ role })
+  const top = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 2)
+  const o = originOf(originKey)
+  const caps = {} as Record<keyof Attrs, number>
+  for (const k of ATTR_KEYS) {
+    caps[k] = clamp(CAP_BASE + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o.attrs?.[k] ?? 0) - (o.flags?.late ? 4 : 0), 50, TALENT_CAP_MAX)
+  }
+  return caps
+}
+
+/**
+ * 综合 a career that works at its ceilings opens on top of its talent: practice
+ * paths, a strong club, its seasons, a trophy. Measured over twelve seasons from
+ * 2026 (three starts, the steady plan and a player who chases every path): the
+ * eight ceilings ended 8 to 11 above where the talent put them.
+ */
+export const BREAK_REACH = 9
+
+export interface CeilingPreview {
+  /** the 综合 he starts on */
+  start: number
+  /** what his talent's eight ceilings add up to */
+  talent: number
+  /** and where breaking them takes a career that works at it */
+  reach: number
+  /** where the starters of the entry year stand, on the world's ruler (engine/ruler.ts) */
+  bands: EntryBands
+}
+
+/** The new-career screen's ceiling, computed rather than typed in. */
+export function ceilingPreview(role: Role, talents: Record<keyof Attrs, number>, originKey: string, year: number): CeilingPreview {
+  const attrs = buildAttrs(role, talents, originKey)
+  const start = recomputeOverall({ role, attrs, stageBonus: 0 } as Player)
+  const caps = talentCeilings(role, talents, originKey)
+  const talent = ceilingPotential({ role, attrs, stageBonus: 0 }, caps)
+  return { start, talent, reach: Math.min(99, talent + BREAK_REACH), bands: entryBands(year) }
+}
+
+/**
+ * What the talent panel says about it: in words when `word` is given (the
+ * default screen), in figures under the 数值 switch. The ceiling is never put
+ * beside a starter's number on its own — what breaking it adds is part of it
+ * (reported 2026-09-12: 「上限79但是首发选手中位数为81，这儿明显不合理，那玩家还玩什么」).
+ */
+export function ceilingLines(c: CeilingPreview, year: number, word?: (v: number) => string): { tag: string; hint: string } {
+  const top = year <= 2021 ? '打进过赛区决赛的俱乐部' : '一级联赛'
+  const sub = year <= 2021 ? '只打过海选的俱乐部' : 'Challengers '
+  if (word) {
+    return {
+      tag: `起点${word(c.start)} · 天赋能摸到${word(c.talent)}，破瓶颈能到${word(c.reach)}`,
+      hint: `每点天赋起点 +3、天花板 +3。${top}首发大多${word(c.bands.top)}，${sub}首发大多${word(c.bands.sub)}，世界前十是${word(c.bands.star)}。天花板之上靠破瓶颈：苦练、强队、打满赛季、冠军和决赛 MVP。`,
+    }
+  }
+  return {
+    tag: `起点 ${c.start} · 天赋上限 ${c.talent} · 破瓶颈能到 ${c.reach}`,
+    hint: `每点天赋起点 +3、天花板 +3。${top}首发中位数 ${c.bands.top}，${sub}首发中位数 ${c.bands.sub}，世界前十从 ${c.bands.star} 起（${year <= 2021 ? 2021 : 2026} 年开季的真实数据）。天花板之上靠破瓶颈：苦练、强队、打满赛季、冠军和决赛 MVP。`,
+  }
+}
+
 /** A new career: the manager game's world, with me in it. */
 export function createCareer(o: CareerOpts): GameState {
   const seed = o.seed ?? (hashStr(o.name + o.region + o.role + o.originKey + String(Date.now())) >>> 0)
@@ -222,7 +321,7 @@ export function createCareer(o: CareerOpts): GameState {
   const teamId = o.start === 'pre'
     ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // the world is built around a club; I am not at it
     : (o.teamId ?? pickClub(region, o.start, rng, year))
-  const state = year >= 2026 ? createWorldAt(teamId, seed, year) : createWorld(teamId, seed, year)
+  const state = year >= 2026 ? createWorldAt(teamId, seed, year) : ruleOpening(createWorld(teamId, seed, year))
   // Nobody's club until I sign for one. The world used to keep a club "watched" for a player on the
   // ladder, and treated it as his: its title raised the world's rivalry, it kept its name when history
   // renamed it, its matches were his in the engine's eyes.
@@ -249,8 +348,11 @@ export function createCareer(o: CareerOpts): GameState {
     clubHist: [], titles: [],
   }
   recomputeOverall(p)
-  const head = origin.flags?.late ? 10 : 14
-  p.potential = clamp(p.overall + head + rng.int(0, 6), p.overall + 4, 95)
+  // the ceilings are the talent's, as 破晓's are — never under where he starts
+  const caps = talentCeilings(o.role, o.talents, o.originKey)
+  for (const k of ATTR_KEYS) caps[k] = Math.max(caps[k], p.attrs[k])
+  p.caps = caps
+  p.potential = ceilingPotential(p)
   p.salary = 0
   refreshValue(p)
   state.players[ME_ID] = p
@@ -277,7 +379,7 @@ export function createCareer(o: CareerOpts): GameState {
   else me.flags.startTier = clubTier
   if (origin.flags?.lang) me.courses.push('lang')
   state.me = me
-  // the headroom just rolled, split into the eight ceilings (me/bottleneck.ts)
+  // the book that counts toward breaking the eight ceilings (me/bottleneck.ts)
   ensureCeilings(state)
   initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))
   // the ladder starts where the skill puts it, less a season of not having played the top

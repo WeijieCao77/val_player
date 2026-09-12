@@ -7,7 +7,8 @@ import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
 import { fanTier } from '../../engine/me/fans'
 import { originOf } from '../../engine/me/origins'
 import { cupOf, cupView } from '../../engine/me/cups'
-import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
+import { BANK_POINTS, CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
+import { ageNote } from '../../engine/me/growth'
 import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
 import RivalsPanel from './Rivals'
 import { wornTitle } from '../../engine/me/achievements'
@@ -67,12 +68,13 @@ export default function MeScreen() {
             const near = !atCap && cap - v <= 2
             // 进度 on its own said nothing: say what it is progress toward, and
             // at the ceiling say that instead
-            const note = atCap ? (cap >= CAP_HARD ? '到头了' : '卡在瓶颈')
+            const banked = Math.min(BANK_POINTS, Math.floor((p.xp[k] ?? 0) / 100))
+            const note = atCap ? (cap >= CAP_HARD ? '到头了' : banked ? `卡在瓶颈 · 存了 ${banked} 点` : '卡在瓶颈')
               : nums ? `到 ${v + 1} · ${next}%`
                 : near ? '快到瓶颈'
                   : attrRank(cap) > attrRank(v) ? `够得着${attrWord(cap)}` : '还在长'
             const tip = atCap
-              ? (cap >= CAP_HARD ? '99 是所有人的终点。' : '练到瓶颈就上不去了：再练只会把下面那道细线攒满，等瓶颈松开的那一刻涨 1 点。怎么破写在下面。')
+              ? (cap >= CAP_HARD ? '99 是所有人的终点。' : `练到瓶颈就上不去了：再练的先存着，最多存 ${BANK_POINTS} 点，瓶颈松开的那一刻一起涨上去；不练也不会掉。怎么破写在下面。`)
               : nums
                 ? `练到 ${v + 1} 的进度：训练、训练赛、复盘和一些事件都往里攒，攒满 100% 就涨 1 点。瓶颈在 ${cap}，还能再涨 ${cap - v} 点。`
                 : '条下面的细线是练到下一点的进度：训练、训练赛、复盘和一些事件都往里攒，攒满就涨一点。竖线是瓶颈。'
@@ -99,7 +101,7 @@ export default function MeScreen() {
                 )
               })}
               <p className="bn">
-                照着做就一定破得开，不看运气。冠军这样的时刻另算，会把残局和沟通的瓶颈顶得更开；每打完一个职业赛季，{SEASON_LOOSENS.map((x) => ATTR_CN[x]).join('、')}也会各松 1 点（最多 {CAP_EXP_MAX} 次）。
+                照着做就一定破得开，不看运气。一项破开放不下的，会连带到你位置最看重的几项。冠军、决赛 MVP 这样的时刻另算，会把残局、沟通和主项的瓶颈顶得更开，当场就涨一截；每打完一个职业赛季，{SEASON_LOOSENS.map((x) => ATTR_CN[x]).join('、')}也会各松 1 点（最多 {CAP_EXP_MAX} 次）。
               </p>
             </div>
           )}
@@ -112,6 +114,7 @@ export default function MeScreen() {
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>
             {p.role}最看重：{p.role === '决斗者' ? '枪法、反应、残局' : p.role === '先锋' ? '意识、道具、枪法' : p.role === '控场' ? '道具、意识、协同' : '意识、枪法、残局'}。
           </p>
+          {ageNote(p.age, nums) && <p className="tiny faint" style={{ margin: '6px 0 0' }}>{ageNote(p.age, nums)}</p>}
         </Panel>
         <Panel title="现在">
           {/* the eight figures are the switch's; by default one line, and a warning only when there is something to warn about */}
