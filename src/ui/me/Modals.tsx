@@ -338,7 +338,7 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
       {s && (
         <p className="small" style={{ marginTop: 0 }}>
           {s.team}{s.tier ? `（${s.tier === 1 ? 'VCT' : 'Challengers'}）` : ''} · 出场 {s.starts}/{s.matches} · 综合 {s.overallFrom} → {s.overallTo}
-          {s.titles.length ? ` · 冠军：${s.titles.join('、')}` : ''}
+          {s.titles.length ? ` · 冠军：${s.titles.join('、')}` : ''}{s.quals?.length ? ` · 出线：${s.quals.join('、')}` : ''}
         </p>
       )}
       <p className="small muted">你 {p.age} 岁了。{me.phase === 'pro' ? `合同还剩 ${p.contractYears} 年。` : me.phase === 'free' ? '还是自由身。' : '还没有合同。'}</p>

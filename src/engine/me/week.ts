@@ -39,7 +39,7 @@ import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
-import { compClass } from './compclass'
+import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
 
 export type WeekStop =
@@ -407,10 +407,27 @@ function closingClub(state: GameState): void {
  * season, so a man who moved clubs in the summer and started the Champions final
  * as its MVP was written down as not having played (reproduced 2026-09-12).
  */
-function syncTitles(state: GameState): void {
+export function syncTitles(state: GameState): void {
   const me = state.me!
   const p = state.players[me.id]
+  // A qualifier won is 出线, not a title (me/compclass.ts isQualifier, 2026-09-12). A save
+  // from before kept them among the titles: they move over quietly here, out of every
+  // count that reads the titles, and whatever they already earned stays earned.
+  const quals = (me.quals ??= [])
+  if (me.titles.some((t) => isQualifier(t.title))) {
+    for (const t of me.titles) if (isQualifier(t.title) && !quals.some((x) => x.year === t.year && x.title === t.title)) quals.push(t)
+    me.titles = me.titles.filter((t) => !isQualifier(t.title))
+    for (const s of me.seasons) s.titles = s.titles.filter((n) => !isQualifier(n))
+    for (const e of Object.values(me.mates ?? {})) e.titles = e.titles.filter((n) => !isQualifier(n))
+  }
   for (const t of p.titles ?? []) {
+    if (isQualifier(t.title)) {
+      if (quals.some((x) => x.year === t.year && x.title === t.title)) continue
+      const started = startedIn(state, t.title, t.year)
+      quals.push({ year: t.year, title: t.title, started })
+      pushLog(state, 'good', `${compCn(t.title)} 出线${started ? '' : '（你没有出场）'}。`)
+      continue
+    }
     if (me.titles.some((x) => x.year === t.year && x.title === t.title)) continue
     const started = startedIn(state, t.title, t.year)
     const fmvp = started && finalMvp(state, t.title, t.year)
@@ -529,11 +546,13 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
   const pro = me.phase === 'pro'
   const s = me.seasonStart
   const titles = me.titles.filter((h) => h.year === year).map((h) => h.title)
+  // qualifiers won that year: 出线, said beside the titles and never among them
+  const quals = (me.quals ?? []).filter((h) => h.year === year).map((h) => h.title)
   me.seasons.push({
     year, team: pro ? (team?.name ?? '?') : '自由身', tier: pro ? team.tier : 0,
     matches: s.matches, starts: s.starts, wins: s.wins,
     acs: s.starts ? Math.round(s.acsSum / s.starts) : 0,
-    overallFrom: s.overall, overallTo: p.overall, titles,
+    overallFrom: s.overall, overallTo: p.overall, titles, ...(quals.length ? { quals } : {}),
   })
   // the winter's ageing (engine/training.ts seasonRollover), said when it takes something: from 27 the hands go first
   const slipped = before ? ATTR_KEYS.filter((k) => p.attrs[k] < before[k]) : []
@@ -541,7 +560,7 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
     pushLog(state, 'bad', `休赛期：${p.age} 岁了，${slipped.map((k) => `${ATTR_CN[k]} ${before[k]} → ${p.attrs[k]}`).join('、')}。年纪上来以后手上的东西先走；意识还会随经验涨。`)
   }
   if (pro) {
-    pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}。`)
+    pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}${quals.length ? `，出线：${quals.join('、')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1
   } else {
     pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)

@@ -4,7 +4,7 @@ import type { Attrs, GameState, Player } from '../types'
 import { CEILING_BANK, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
-import { compClass, isIntlComp } from './compclass'
+import { compClass, isIntlComp, isQualifier } from './compclass'
 
 /**
  * 瓶颈: each of the eight has a ceiling, and hours past it go nowhere.
@@ -581,6 +581,8 @@ const isIntlClass = (title: string): boolean => {
 export function bottleneckTitle(state: GameState, title: string, year = state.year, fmvp = false): void {
   const me = state.me
   if (!me) return
+  // a qualifier won is 出线: a door opens, no ceiling does (me/compclass.ts isQualifier)
+  if (isQualifier(title)) return
   const p = state.players[me.id]
   const kind = compClass(title)
   const main = mainOf(p)

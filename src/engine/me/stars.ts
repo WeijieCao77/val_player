@@ -3,6 +3,7 @@ import { honoursOf, recordsNow } from '../dossier'
 import type { GameState, Player, Role } from '../types'
 import type { MeMatchRecord } from './types'
 import { compCn } from './compname'
+import { isQualifier } from './compclass'
 
 /**
  * Who you are actually up against tonight.
@@ -83,11 +84,12 @@ export function shelfOf(state: GameState, r: Records | null, id: string): ShelfI
   const from = savedFrom(state)
   const real = r
     ? honoursOf(r, id)
-      .filter((h) => h.year != null && h.year < from)
+      // a qualifier won is 出线, not a trophy on anyone's shelf (me/compclass.ts isQualifier)
+      .filter((h) => h.year != null && h.year < from && !isQualifier(h.event))
       .map((h) => ({ label: eventLabel(h.event, h.year), major: REAL_TITLE.test(h.event), year: h.year as number }))
     : []
   const here = (state.players[id]?.titles ?? [])
-    .filter((t) => t.year >= from)
+    .filter((t) => t.year >= from && !isQualifier(t.title))
     .map((t) => {
       const cn = compCn(t.title)
       return { label: `${t.year} ${cn}`, major: REAL_TITLE.test(t.title) || /大师赛|冠军赛|联赛/.test(cn), year: t.year }
