@@ -4,7 +4,7 @@ import { clubWeek, clubWinter } from './club'
 import { marketTurn, marketWindow } from './market'
 import { newcomersTurn } from './newcomers'
 import { holdScale } from '../ruler'
-import { bookCovers, reachOf } from '../timeline'
+import { bookCovers } from '../timeline'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, Fixture, GameState } from '../types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
@@ -557,8 +557,8 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
   // past the roster book: New Year's free agency at the VCT clubs, then the new people, made up and marked so (me/market.ts, me/newcomers.ts)
   marketTurn(state, new Rng(hashStr(`free-agency:${state.seed}:${state.year}`)))
   newcomersTurn(state)
-  // and the world out of my reach read on the ruler the book years were read on, so its scale holds (engine/ruler.ts)
-  if (!bookCovers(state.year)) holdScale(state, reachOf(state).people)
+  // and the world, my teammates with it, read on the ruler the book years were read on, so its scale holds; only I am left alone (engine/ruler.ts)
+  if (!bookCovers(state.year)) holdScale(state)
   if (pro) {
     if (me.flags.renewPending) me.flags.renewPending = 0
     seasonContractCheck(state, rng)
