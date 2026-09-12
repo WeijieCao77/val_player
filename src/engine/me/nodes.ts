@@ -51,6 +51,28 @@ export const COACH_READS = 0.65
  * well, and about level with making no calls at all.
  */
 export const AUTO_PENALTY = 0.10
+
+/**
+ * The chance a call made by 快进 or 托管 lands: the coach's pick less
+ * AUTO_PENALTY, and never more than the chance at which the call does nothing
+ * for its round on average. At that chance the logit moves +KEY_OK×risk as
+ * often as −KEY_FAIL×risk balances it (for the 1v2, the round's own odds), so
+ * a skipped match is the two rosters again, whatever the attributes say.
+ *
+ * A flat −10 was not enough (2026-09-12): a player grows into the 80s over a
+ * career, his calls land 70–80% of the time, and a call made with nobody in the
+ * chair still paid. Sixteen careers from the ladder, left entirely on 快进, to
+ * retirement: before the key rounds came in 87.5% won a title (5.6 titles
+ * each, 53.6% of starts won); with a flat −10, 100% (7.4, 58.9%); with this
+ * cap, 87.5% again (6.3, 57.1%), its calls landing 44% of the time. Manual play
+ * is untouched: following the coach by hand, 93.8% (9.1). In the match check
+ * (a VCT rookie, 1500 BO3s a cell) best play − 快进 is +9.8 and following the
+ * coach − 快进 +5.3 to +8.1.
+ */
+export function autoChance(manual: number, base: number, decides?: boolean): number {
+  const neutral = decides ? base : KEY_FAIL / (KEY_OK + KEY_FAIL)
+  return clamp(Math.min(manual - AUTO_PENALTY, neutral), 0.03, 0.97)
+}
 /** an opponent's point on the call's attribute counts half what a point of mine does, measured from 50 */
 export const NODE_OPP = 0.5
 
