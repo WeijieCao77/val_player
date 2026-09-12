@@ -1,6 +1,8 @@
 import { migrateWorld, packState, unpackState } from '../save'
 import { stripToTheBone } from '../match'
 import type { GameState } from '../types'
+import { readSaveMeta, writeSaveMeta } from './saveMeta'
+import type { SaveMeta } from './saveMeta'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -103,6 +105,28 @@ export function hasAutosave(): boolean {
   } catch { return false }
 }
 
+export interface AutosaveInfo {
+  /** the summary written beside the save (me/saveMeta.ts); null for a save from before it, or one that does not match the save */
+  meta: SaveMeta | null
+  /** how far along the save is, off its small owner record: what a save with no summary can still say without being read */
+  year: number | null
+  day: number | null
+}
+
+/**
+ * The career to continue, as the home page draws it — without reading the
+ * career. A summary is trusted only when it is for the same day as the save
+ * beside it: a tab on an older build that saved over the career wrote no
+ * summary, and the one left from before says nothing about what is there now.
+ */
+export function autosaveInfo(): AutosaveInfo | null {
+  if (!hasAutosave()) return null
+  const owner = readOwner()
+  const meta = readSaveMeta()
+  const ok = !!meta && (!owner || (meta.year === owner.year && meta.day === owner.day))
+  return { meta: ok ? meta : null, year: owner?.year ?? null, day: owner?.day ?? null }
+}
+
 /** The career to continue, read and brought forward; null when there is none, or it cannot be read. */
 export function loadAutosave(): GameState | null {
   adoptOldSave()
@@ -143,8 +167,11 @@ export function autosave(state: GameState): AutosaveResult {
     stripToTheBone(state)
     localStorage.setItem(AUTOSAVE, packState(state))
     writeOwner(state)
+    writeSaveMeta(state)
     return 'shrunk'
   }
   writeOwner(state)
+  // the home page's card, so it never has to read 2 MB to say whose career this is
+  writeSaveMeta(state)
   return 'saved'
 }

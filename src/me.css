@@ -203,6 +203,55 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   border-radius: var(--radius); border: 1px solid var(--line); margin: 0 0 12px;
 }
 @media (max-width: 560px) { .nc-cover { aspect-ratio: 1200 / 630; } }
+
+/* ---- the home with a save: 破晓's cover card (its save.ts continueCard, theme.css .savecont) — who and where with
+   the two buttons, the save's numbers beside them. On a phone: the essentials, the buttons, then the rest. ---- */
+.save-card {
+  border: 1px solid var(--accent-line); border-left: 3px solid var(--accent); border-radius: var(--radius);
+  background: var(--panel); padding: 10px 14px 14px; margin: 0 0 10px;
+}
+.save-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+.save-head h2 { margin: 0; font-size: var(--t-tiny); font-weight: 700; letter-spacing: .14em; color: var(--accent); }
+.save-at { margin-left: auto; font-size: var(--t-tiny); color: var(--muted); font-variant-numeric: tabular-nums; }
+.save-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'id' 'key' 'go' 'more'; gap: 10px; }
+.save-id { grid-area: id; display: grid; gap: 4px; min-width: 0; }
+.save-key { grid-area: key; }
+.save-go { grid-area: go; min-width: 0; }
+.save-more { grid-area: more; }
+.save-who { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; min-width: 0; }
+.save-who b { font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+.save-club, .save-when { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
+.save-club b, .save-when b { overflow-wrap: anywhere; }
+.save-club .tag { white-space: normal; overflow-wrap: anywhere; }
+/* flex, not grid, as 破晓 found: the last row's tiles grow to fill it and no empty cell is left over */
+.save-tiles { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+.save-tile {
+  flex: 1 1 110px; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel-2); display: flex; flex-direction: column; gap: 1px;
+}
+.save-tile.wide { flex: 2 1 200px; }
+.save-tile small { font-size: var(--t-tiny); color: var(--muted); }
+.save-tile b { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.save-tile em { font-style: normal; font-size: var(--t-tiny); color: var(--muted); overflow-wrap: anywhere; }
+.save-tile .w { color: var(--win); }
+.save-tile .l { color: var(--loss); }
+.save-go .row { gap: 8px; flex-wrap: wrap; }
+.save-go .row > button { min-width: 96px; }
+.save-go p { margin: 6px 0 0; }
+.save-go .save-bad { margin: 0 0 8px; color: var(--warn); font-size: var(--t-small); }
+@media (min-width: 820px) {
+  /* who | the two numbers that matter; the buttons | the rest */
+  .save-grid { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); grid-template-areas: 'id key' 'go more'; gap: 12px 20px; align-items: center; }
+}
+.nc-tools { gap: 8px; margin: 0 0 12px; }
+.nc-home .nc-intro { margin: 4px 0 0; }
+/* before a new career overwrites the save: one small card in the middle, 破晓's 请确认 */
+.nc-confirm .modal { max-width: 420px; margin-top: 16vh; text-align: center; }
+.nc-confirm .modal-body { padding: 18px 18px 20px; }
+.nc-confirm-eyebrow { font-size: var(--t-tiny); letter-spacing: .16em; color: var(--accent); }
+.nc-confirm h3 { margin: 4px 0 8px; font-size: 20px; }
+.nc-confirm p { margin: 0 0 14px; color: var(--muted); }
+.nc-confirm .row { justify-content: center; gap: 10px; flex-wrap: wrap; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -237,13 +286,6 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .talent-row .pips { display: flex; gap: 3px; min-width: 0; }
 .talent-row .pips i { flex: 0 1 12px; min-width: 0; height: 12px; border-radius: 3px; background: var(--well); display: block; }
 .talent-row .pips i.on { background: var(--accent); }
-.club-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 720px) { .club-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.club-list button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding: 8px 10px; }
-.club-list button.on { border-color: var(--accent); background: var(--accent-wash); }
-.club-list button .r { margin-left: auto; color: var(--muted); font-size: var(--t-tiny); }
-/* nobody at that tier this year: the sentence takes the whole row, not one narrow cell */
-.club-list .empty { grid-column: 1 / -1; }
 
 /* ---- new career: start points and origins ---- */
 .start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -252,9 +294,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .start-card.on, .origin-pick.on { border-color: var(--accent); background: var(--accent-wash); }
 .start-card span, .origin-pick span { font-size: var(--t-small); color: var(--muted); font-weight: 400; }
 .origin-pick em { font-size: var(--t-tiny); color: var(--faint); font-style: normal; }
+/* three cards dealt: a row of three, or one column on a phone — never two and a stray */
 .origin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 900px) { .origin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .origin-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .origin-grid { grid-template-columns: 1fr; } }
 
 /* ---- the career on one card ---- */
 .poster-me { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(160deg, var(--panel), var(--panel-2)); }
