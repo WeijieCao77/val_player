@@ -1,7 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { advanceDay } from '../season'
 import { clubWeek, clubWinter } from './club'
-import { marketWindow } from './market'
+import { marketTurn, marketWindow } from './market'
+import { newcomersTurn } from './newcomers'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, Fixture, GameState } from '../types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
@@ -28,7 +29,7 @@ import { AGENTS } from './shop'
 import { questWeek } from './quests'
 import { fireEvent, tryRandomEvent } from './events'
 import { checkAchievements } from './achievements'
-import { noteScoutInterest, rollOffers, seasonContractCheck, windowOpensToday } from './transfer'
+import { PLAYER_WINDOWS, noteScoutInterest, rollOffers, seasonContractCheck, windowOpensToday } from './transfer'
 import { retirementTick } from './endings'
 import { compCn } from './compname'
 import { leaveClub } from './contract'
@@ -490,7 +491,8 @@ export function settleWeek(state: GameState): void {
     if (me.benchLock && me.benchLock <= state.day) me.benchLock = undefined
     if (p.form >= 84) fireEvent(state, 'hot_week')
     else if (p.form <= 56) fireEvent(state, 'cold_week')
-    clubWeek(state, rng)
+    // once the winter window is open the club renews whoever it still uses, before the deals run out (me/club.ts)
+    clubWeek(state, rng, state.day >= PLAYER_WINDOWS[1][0])
   }
   // a chain's next card, a seed coming back, or a new chain — before the draw, which steps aside for it
   storyWeek(state)
@@ -547,6 +549,9 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
   me.pre.scoutSeen = Math.round(me.pre.scoutSeen * 0.5)
   // scrimmage rounds the coach saw last year are last year's news
   me.scrimRounds = Math.round(me.scrimRounds * 0.5)
+  // past the roster book: New Year's free agency at the VCT clubs, then the new people, made up and marked so (me/market.ts, me/newcomers.ts)
+  marketTurn(state, new Rng(hashStr(`free-agency:${state.seed}:${state.year}`)))
+  newcomersTurn(state)
   if (pro) {
     if (me.flags.renewPending) me.flags.renewPending = 0
     seasonContractCheck(state, rng)

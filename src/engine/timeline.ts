@@ -100,6 +100,27 @@ export function hasPlace(state: GameState, t: Team): boolean {
 const clubId = (vlr: string): string => `V21T${vlr}`
 const vlrOf = (playerId: string): string | null => (/^V\d+$/.test(playerId) ? playerId.slice(1) : null)
 
+/** Every handle the roster book has met, 2021 on: a made-up newcomer never takes one of them (me/newcomers.ts). */
+export const bookHandles = (): string[] =>
+  Object.values(BOOK.years).flatMap((Y) => Object.values(Y.debuts).map((d) => d.ign))
+
+/**
+ * The people the book met for the first time in `years`: how old each was, and
+ * how far his ceiling sat above his rating that year (me/newcomers.ts).
+ */
+export function bookDebutants(years: number[]): { age: number; headroom: number }[] {
+  const out: { age: number; headroom: number }[] = []
+  for (const y of years) {
+    const Y = BOOK.years[String(y)]
+    if (!Y) continue
+    for (const [vlr, d] of Object.entries(Y.debuts)) {
+      const r = Y.ratings[vlr]
+      if (r) out.push({ age: d.age, headroom: Math.max(0, r.p - r.o) })
+    }
+  }
+  return out
+}
+
 /** The last year this person was on any real roster; undefined for anyone the book does not know. */
 export function lastYearOf(p: Pick<Player, 'id'>): number | undefined {
   const v = vlrOf(p.id)

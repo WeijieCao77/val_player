@@ -1,9 +1,11 @@
 import raw from '../../data/prizes_me.json'
+import estimates from '../../data/prize_estimates_me.json'
 import { eventsOf } from '../circuit'
 import type { Competition, StageKey } from '../types'
 
 /**
- * Prize money by event and placement (USD): what each event really paid.
+ * Prize money by event and placement (USD): what each event really paid, and
+ * an estimate labelled as one where the amounts were never published.
  *
  * The author's request, 2026-09-11: 「奖金表按照真实重做」. What this replaces
  * was the manager game's table copied over, one set of numbers per stage for
@@ -14,66 +16,92 @@ import type { Competition, StageKey } from '../types'
  *
  *  - a published table pays each place what it says; one in a local currency
  *    pays the dollars Liquipedia converts it to
- *  - an event whose amounts were never published pays nothing, and the economy
- *    page says 「奖金未公开」 instead of guessing; an event written down as
- *    paying every place nothing says 「无奖金」
+ *  - an event whose amounts were never published pays an estimate — the
+ *    author, 2026-09-12: 「每个赛段都应该有奖金比如打进季后赛，拿下冠军等等」.
+ *    Each is a real table of the same kind of event scaled by a written rule
+ *    (scripts/build_prize_estimates.ts into data/prize_estimates_me.json, which
+ *    names the page it is drawn from), and the economy page says
+ *    「估算：奖金未公开，按 … 推算」. Where no real table of its kind exists it
+ *    still pays nothing and says 「奖金未公开」; an event written down as paying
+ *    every place nothing says 「无奖金」
  *  - an event nobody has played yet (2027 on) pays what the same event paid in
- *    2026, the last season with published amounts, and says 「按 2026 年金额暂定」
+ *    2026, or its 2026 estimate, and says 「按 2026 年金额暂定」 or
+ *    「估算，按 2026 年暂定」. The new format's open qualifiers and Open
+ *    Playoffs, which 2026 did not have, pay an estimate of their own
  *
  * Nothing here reads or is read by the manager game.
  */
 
 export type PrizeRow = [from: number, to: number, usd: number]
 interface Entry { y: number; lp: string; status?: 'none' | 'unpublished'; cur?: string; pay?: PrizeRow[] }
+interface Estimate { y: number; lp: string | null; rule: string; from: string; fromCn: string; k: number; pay: PrizeRow[] }
 const BOOK = (raw as unknown as { events: Record<string, Entry> }).events
+const EST = (estimates as unknown as { events: Record<string, Estimate> }).events
 
 /** The last season whose amounts are on record. A later season is paid at its rates, 暂定. */
 export const PRIZE_BASIS_YEAR = 2026
 
 export interface PrizeTable {
-  /** paid: a published table · none: published as paying nothing · unpublished: no amounts on record */
-  status: 'paid' | 'none' | 'unpublished'
+  /**
+   * paid: a published table · est: never published, estimated from a real one ·
+   * none: published as paying nothing · unpublished: no amounts on record and no estimate
+   */
+  status: 'paid' | 'est' | 'none' | 'unpublished'
   pay: PrizeRow[]
-  /** the Liquipedia page the amounts are read from */
+  /** the Liquipedia page the amounts are read from — for an estimate, the event's own page, if it has one */
   lp: string | null
   /** the local currency the table was published in, when it was not dollars */
   cur?: string
   /** set when another season's amounts stand in — 2026's, for an event from 2027 on */
   basis: number | null
+  /** an estimate: the real table it is drawn from (page, short name), its rule (prize_estimates_me.json `rules`) and scale */
+  from?: { lp: string; cn: string; rule: string; k: number }
 }
 
-const tableOf = (e: Entry | undefined, basis: number | null): PrizeTable =>
-  e ? { status: e.status ?? 'paid', pay: e.pay ?? [], lp: e.lp, cur: e.cur, basis }
-    : { status: 'unpublished', pay: [], lp: null, basis }
+/** An event's table by its id in the books: its published one, else its estimate. */
+function tableOf(id: string | undefined, basis: number | null): PrizeTable {
+  const e = id ? BOOK[id] : undefined
+  if (e && e.status !== 'unpublished') return { status: e.status ?? 'paid', pay: e.pay ?? [], lp: e.lp, cur: e.cur, basis }
+  const x = id ? EST[id] : undefined
+  if (x) return { status: 'est', pay: x.pay, lp: e?.lp ?? x.lp, basis, from: { lp: x.from, cn: x.fromCn, rule: x.rule, k: x.k } }
+  return { status: 'unpublished', pay: [], lp: e?.lp ?? null, basis }
+}
 
-/** The 2026 edition of an event: a league's Kickoff or stage, a Masters, Champions. */
+/** The 2026 edition of an event: a league's Kickoff or stage, a Masters, Champions, China's Ascension. */
 function editionOf(stage: StageKey, league: string | null): string | undefined {
   const evs = eventsOf(PRIZE_BASIS_YEAR)
   if (stage === 'champions') return evs.find((e) => e.stage === 'champions')?.id
   if (stage === 'masters1' || stage === 'masters2') return evs.find((e) => e.stage === stage && !e.region)?.id
+  if (stage === 'ascension') return evs.find((e) => e.stage === 'ascension' && e.region === league && !e.plan)?.id
   return evs.find((e) => e.stage === stage && e.region === league && !e.scene && !e.projected)?.id
 }
 
+/** A 2026 edition's table: its own, or — China's Ascension, drawn from 2025's — the one it is drawn from. */
+const editionTable = (id: string | undefined, basis: number | null): PrizeTable =>
+  tableOf(id && !BOOK[id] && !EST[id] ? (/^F\d{4}:(\d+)$/.exec(id)?.[1] ?? id) : id, basis)
+
 /** 2027's own events, by the part of their id that says what they are (engine/ahead.ts). */
 const AHEAD_STAGE: Record<string, StageKey> = {
-  kickoff: 'kickoff', cup1: 'stage1', cup2: 'stage2', masters1: 'masters1', masters2: 'masters2', champions: 'champions',
+  kickoff: 'kickoff', cup1: 'stage1', cup2: 'stage2', masters1: 'masters1', masters2: 'masters2', champions: 'champions', ascension: 'ascension',
+}
+/** The new format's events 2026 did not have — open qualifiers, the Pacific's qualifier finals, the Open Playoffs: their own estimate. */
+const NEW_FORMAT: Record<string, (league: string | undefined) => string> = {
+  oq: () => 'new:oq',
+  oqFinal: () => 'new:oqFinal',
+  open: (league) => (league === 'China' ? 'new:open:China' : 'new:open'),
 }
 
 function eventTable(id: string): PrizeTable {
-  const own = BOOK[id]
-  if (own) return tableOf(own, null)
+  if (BOOK[id] || EST[id]) return tableOf(id, null)
   const m = /^F\d{4}:(.+)$/.exec(id)
   if (!m) return tableOf(undefined, null)
-  // an event drawn again from a real one: that one's amounts
-  if (/^\d+$/.test(m[1])) {
-    const base = BOOK[m[1]]
-    return tableOf(base, base?.y ?? PRIZE_BASIS_YEAR)
-  }
-  // the new format's: the same event's 2026 edition. An Open Playoffs or open qualifier had none
+  // an event drawn again from a real one: that one's amounts, or its estimate
+  if (/^\d+$/.test(m[1])) return tableOf(m[1], BOOK[m[1]]?.y ?? EST[m[1]]?.y ?? PRIZE_BASIS_YEAR)
+  // the new format's: the same event's 2026 edition. An open qualifier or Open Playoffs had none
   const [kind, league] = m[1].split(':')
   const stage = AHEAD_STAGE[kind]
-  const ed = stage ? editionOf(stage, league ?? null) : undefined
-  return tableOf(ed ? BOOK[ed] : undefined, PRIZE_BASIS_YEAR)
+  if (stage) return editionTable(editionOf(stage, league ?? null), PRIZE_BASIS_YEAR)
+  return tableOf(NEW_FORMAT[kind.replace(/\d$/, '')]?.(league), null)
 }
 
 /**
@@ -83,8 +111,16 @@ function eventTable(id: string): PrizeTable {
  */
 export function prizeTableOf(comp: Competition, year: number): PrizeTable {
   if (comp.circuit) return eventTable(comp.circuit.id)
-  const ed = editionOf(comp.stage, comp.region ?? null)
-  return tableOf(ed ? BOOK[ed] : undefined, year === PRIZE_BASIS_YEAR ? null : PRIZE_BASIS_YEAR)
+  return editionTable(editionOf(comp.stage, comp.region ?? null), year === PRIZE_BASIS_YEAR ? null : PRIZE_BASIS_YEAR)
+}
+
+/**
+ * What the amounts rest on, when they are not the event's own published table —
+ * short enough for the line under an event's name on a phone.
+ */
+export function prizeNote(t: PrizeTable): string {
+  if (t.status === 'est') return t.basis ? `估算，按 ${t.basis} 年暂定` : `估算：奖金未公开，按 ${t.from?.cn ?? '同类赛事'}推算`
+  return t.status === 'paid' && t.basis ? `按 ${t.basis} 年金额暂定` : ''
 }
 
 /**

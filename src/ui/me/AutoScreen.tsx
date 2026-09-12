@@ -17,7 +17,7 @@ export default function AutoScreen() {
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)' }}>
       <div>
         <Panel title="托管" actions={<button className={`sm${all ? ' primary' : ''}`} onClick={() => { for (const d of DIALS) me.auto[d.key] = !all; commit() }}>{all ? '全部关掉' : '一键全开'}</button>}>
-          <p className="small" style={{ marginTop: 0 }}>交出去的事一律走稳健路线。</p>
+          <p className="small" style={{ marginTop: 0 }}>交出去的事一律走稳健路线；没交出去的，快进碰到就停下来等你拿主意。</p>
           {DIALS.map((d) => (
             <div key={d.key} style={{ padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
               <label className="row wrap" style={{ gap: 10 }}>

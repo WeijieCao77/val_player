@@ -1,5 +1,5 @@
 import type { Rng } from '../rng'
-import { expectedSalary, marketValue, refreshValue } from '../player'
+import { contractLength, expectedSalary, marketValue, refreshValue } from '../player'
 import { defaultContract, ROLES } from '../types'
 import type { GameState, Player, Role, Team } from '../types'
 import { squadOf } from '../roster'
@@ -13,10 +13,11 @@ import { pushLog } from './log'
  * The club around a player: who comes in, who goes, and the five on the floor.
  *
  * 破晓's team.ts and the part of its market.ts that touches the player's club,
- * on this world. Nobody in a player's save runs his club, so it does what any
- * club does: it keeps five besides him, replaces whoever leaves from the free
- * agents, reinforces its thinnest job when a window opens — never his — and
- * lets a surplus man go in the winter. A move is a move: nobody bids, lists or
+ * on this world. Nobody in a player's save runs his club, so it does what 破晓's
+ * clubs do: it keeps five besides him, renews the men it still uses before their
+ * deals run out, replaces whoever leaves from the free agents at his job,
+ * reinforces a job that is clearly weak once a season — never his — and lets a
+ * surplus man go in the winter. A move is a move: nobody bids, lists or
  * negotiates, and no ledger or trust is written. What a club can afford is its
  * one budget, the world's (engine/budget.ts).
  *
@@ -28,6 +29,12 @@ import { pushLog } from './log'
 export const CLUB_FLOOR = 6
 /** And how many at most — the registered roster. */
 export const CLUB_CEILING = 7
+/** A man on the bench this far under the club's rating is clearly surplus: nobody renews him, and the winter lets him go. */
+const SURPLUS = 10
+/** A job is clearly weak when its best man in the five is this far under the club's rating… */
+const WEAK = 4
+/** …and the free agent brought in for it is at least this much better than that man. */
+const UPGRADE = 6
 
 const jobsOf = (p: Player): Role[] => p.roles ?? [p.role]
 
@@ -80,6 +87,26 @@ export function leaveRoster(state: GameState, p: Player): void {
   if (from) repick(state, from)
 }
 
+/**
+ * A signing at a club already carrying its registered seven: the weakest man
+ * off the five is let go to make room (me/contract.ts joinClub, when I sign).
+ * A club that renews whoever it still uses sits at seven more often, and a
+ * player who signed on top of that made eight.
+ */
+export function makeRoom(state: GameState, team: Team): void {
+  const me = state.me
+  let guard = 0
+  while (team.roster.length >= CLUB_CEILING && guard++ < 3) {
+    const squad = squadOf(state, team.id).filter((p) => p.id !== me?.id)
+    const bench = squad.filter((p) => !team.starters.includes(p.id))
+    const out = (bench.length ? bench : squad).sort((a, b) => a.overall - b.overall)[0]
+    if (!out) return
+    leaveRoster(state, out)
+    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
+    pushLog(state, 'team', `${team.name} 和 ${out.ign} 解约，给你腾出名单位置。`)
+  }
+}
+
 /** Five besides me: whoever left is replaced from the free agents, the missing job first. */
 function fillSquad(state: GameState, team: Team, rng: Rng): void {
   const me = state.me!
@@ -105,29 +132,65 @@ function fillSquad(state: GameState, team: Team, rng: Rng): void {
 /**
  * The club's week around me: whoever has gone — a contract the club did not
  * renew, a retirement, history — is replaced, so there are five besides me.
- * Renewals and the team-mates' programme are the world's, as at every club
- * nobody manages (engine/season.ts endSeason, engine/training.ts weeklyTick).
+ * Once the winter window is open (`winter`, me/week.ts) the club also renews
+ * the men it still uses before their deals run out (clubRenewals). The
+ * team-mates' programme is the world's, as at every club nobody manages
+ * (engine/training.ts weeklyTick).
  */
-export function clubWeek(state: GameState, rng: Rng): void {
+export function clubWeek(state: GameState, rng: Rng, winter = false): void {
   const me = state.me!
   const team = state.teams[state.myTeam]
   if (!team || me.phase !== 'pro') return
   fillSquad(state, team, rng)
+  if (winter) clubRenewals(state, team, rng)
   if (team.starters.length < 5 || !team.starters.every((id) => team.roster.includes(id))) {
     team.starters = coachStarters(state)
   }
 }
 
 /**
+ * The winter's renewals: 破晓's squad does not come apart at New Year, and
+ * neither does mine.
+ *
+ * The world's rule (engine/season.ts endSeason) renews a man whose deal has run
+ * out seven times in ten if he is within six of his club, and lets everyone
+ * else go. Around a player that was most of the churn: in four careers of four
+ * seasons, eight of the eleven team-mates who left walked at New Year — three
+ * of them starters — and each was replaced from the free agents. So before the
+ * deals run out the club renews whoever it still uses: the five, and anyone on
+ * the bench who is not clearly surplus. A man who has said this season is his
+ * last is let go, and replaced at his job when he goes (fillSquad).
+ */
+function clubRenewals(state: GameState, team: Team, rng: Rng): void {
+  const me = state.me!
+  const squad = squadOf(state, team.id)
+  for (const p of squad) {
+    // a deal with a season still to run after this one is not up yet
+    if (p.id === me.id || p.retiring || p.contractYears > 1) continue
+    if (!team.starters.includes(p.id) && p.overall < team.rating - SURPLUS) continue
+    const years = Math.max(1, contractLength(p, rng, squad))
+    // this season, then the new deal: the world takes a season off every deal when this one ends
+    p.contractYears = years + 1
+    p.contract = defaultContract(p.salary, p.contractYears)
+    p.expiredYear = undefined
+    pushLog(state, 'team', `俱乐部和 ${p.ign} 续约 ${years} 年。`)
+  }
+}
+
+/**
  * A window opens and the club looks for help — 破晓's market as it touches the
- * player's club. The thinnest job in the five gets a better man if the free
- * agents have one the club can pay; a full roster lets the weakest man in that
- * job go to make room. Never my job: whether I play is between me and the coach.
+ * player's club. Only a job that is clearly weak — its best man in the five
+ * WEAK under the club's rating — gets a man clearly better than him, if the
+ * free agents have one the club can pay; a full roster lets the weakest man in
+ * that job go to make room. Once a season: it used to be every window a better
+ * man was free, five signings in four careers of four seasons, each one
+ * pushing somebody out sooner or later. Never my job: whether I play is
+ * between me and the coach.
  */
 export function clubWindow(state: GameState, rng: Rng): void {
   const me = state.me
   const team = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
-  if (!me || !team || !rng.chance(0.5)) return
+  if (!me || !team || !rng.chance(0.5) || me.flags.clubSigned === state.year) return
   const myRole = state.players[me.id]?.role
   const five = team.starters.map((id) => state.players[id]).filter((p): p is Player => !!p && p.id !== me.id)
   let need: { role: Role; strength: number } | null = null
@@ -136,14 +199,14 @@ export function clubWindow(state: GameState, rng: Rng): void {
     const strength = five.filter((p) => jobsOf(p).includes(role)).reduce((m, p) => Math.max(m, p.overall), 0)
     if (!need || strength < need.strength) need = { role, strength }
   }
-  if (!need) return
+  if (!need || need.strength > team.rating - WEAK) return
   const role = need.role
   const wages = squadOf(state, team.id).reduce((s, p) => s + p.salary, 0)
   const room = team.budget - wages * 0.6
   const value = (p: Player) => p.overall + Math.max(0, p.potential - p.overall) * 0.5
   const target = Object.values(state.players)
     .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && p.role === role
-      && p.overall > need!.strength + 3 && expectedSalary(p, team.tier) < Math.max(40000, room * 0.25)
+      && p.overall >= need!.strength + UPGRADE && expectedSalary(p, team.tier) < Math.max(40000, room * 0.25)
       && !importBlock(state, team.id, p))
     .sort((a, b) => value(b) - value(a))[0]
   if (!target) return
@@ -157,6 +220,7 @@ export function clubWindow(state: GameState, rng: Rng): void {
     pushLog(state, 'team', `俱乐部放走了 ${out.ign}，给新人腾出位置。`)
   }
   joinRoster(state, target, team, rng)
+  me.flags.clubSigned = state.year
   state.news.push({ day: state.day, kind: 'transfer', important: true, text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。` })
   pushLog(state, 'team', `俱乐部签下自由人 ${target.ign}（${target.role}）。`)
 }
@@ -171,7 +235,7 @@ export function clubWinter(state: GameState): void {
     .map((id) => state.players[id])
     .filter((p): p is Player => !!p)
   const worst = bench.sort((a, b) => a.overall - b.overall)[0]
-  if (worst && worst.overall < team.rating - 10 && !floorBlock(state, team.id)) {
+  if (worst && worst.overall < team.rating - SURPLUS && !floorBlock(state, team.id)) {
     leaveRoster(state, worst)
     state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 与 ${worst.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `俱乐部放走了 ${worst.ign}。`)

@@ -356,6 +356,15 @@ export interface Player {
   joinedYear?: number
   /** the season his loyalty was last docked for being listed — see loyalty.ts */
   loyaltyHitYear?: number
+  /**
+   * A newcomer this game made up. From 2027, where the roster book ends, the
+   * scene takes in new people every winter at the rate the real one did
+   * (engine/me/newcomers.ts), and they are marked so. Everyone without it is a
+   * real person.
+   */
+  fictional?: boolean
+  /** the season a made-up newcomer came into the scene */
+  fictionalSince?: number
 }
 
 export interface Coach {

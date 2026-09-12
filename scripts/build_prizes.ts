@@ -24,6 +24,8 @@
  *
  * An entry is `paid` (the table), `none` (every place written down as 0) or
  * `unpublished` (no amounts on the page, or only a total with no places).
+ * An unpublished event's estimate is not made here: scripts/build_prize_estimates.ts
+ * draws it from this file's real tables, and is run again after this one.
  *
  *   npx tsx scripts/build_prizes.ts [--fetch] [--render-fetch] [--lp DIR]... [--cache DIR] [--render FILE] [--verbose]
  */
@@ -41,7 +43,8 @@ const LP_DIRS = [...(opts('--lp').length ? opts('--lp') : [join(ROOT, '.cache', 
 const RENDER = opts('--render')[0] ?? join(PRIZE_CACHE, 'render.json')
 
 const API = 'https://liquipedia.net/valorant/api.php'
-const UA = 'val_player-dataset/0.1 (personal VALORANT career-sim project; github.com/WeijieCao77)'
+// a neutral project name: no personal or account details in request headers
+const UA = 'val_player-dataset/0.1 (VALORANT career simulator; prize table build)'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 type Row = [number, number, number]
