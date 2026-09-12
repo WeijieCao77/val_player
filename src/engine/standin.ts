@@ -1,5 +1,6 @@
-import type { Fixture, GameState, MatchResult, Player, Region, Role, Team } from './types'
+import type { Fixture, GameState, MatchResult, Player, Region, Role, StageKey, Team } from './types'
 import { regionIn } from './era'
+import { inVctLeague } from './timeline'
 
 /**
  * Who takes the floor when a club cannot put five fit men of its own on it.
@@ -210,13 +211,39 @@ function changeLine(state: GameState, team: Team, ids: string[], outsiders: stri
   return `${team.name}：${out.length ? `${out.map(ign).join('、')} 伤缺` : '可上场的不足五人'}，${came.join('，')}。`
 }
 
+/** A Masters or a Champions. LOCK//IN 2023 played as its year's kickoff, so an event is also international when its sides come from more than one league. */
+const INTERNATIONAL: StageKey[] = ['masters1', 'masters2', 'champions']
+/** How far ahead a club the player's club is drawn against counts as his next opponent. */
+const OPPONENT_DAYS = 14
+
+/**
+ * Whose line-up changes are news. A stand-in anywhere in the world was: from
+ * 2027 about eighty lines a season, most of them Challengers clubs the player
+ * never meets, in a list that keeps the last 400. What is kept is what a player
+ * follows — the VCT leagues (before 2023, the top tier), the internationals,
+ * and his own corner: his club, the league and the event it plays in, and the
+ * sides it plays in the next two weeks.
+ */
+function newsworthy(state: GameState, f: Fixture, team: Team): boolean {
+  if (inVctLeague(state, team) || (state.year < 2023 && team.tier === 1)) return true
+  const comp = state.comps[f.comp]
+  if (comp && INTERNATIONAL.includes(comp.stage)) return true
+  if (comp && new Set(comp.teams.map((id) => state.teams[id]).filter((t): t is Team => !!t).map((t) => regionIn(t.region, state.year))).size > 1) return true
+  const mine = state.myTeam ? state.teams[state.myTeam] : undefined
+  if (!mine) return false
+  if (team.id === mine.id || (!!mine.league && team.league === mine.league) || !!comp?.teams.includes(mine.id)) return true
+  return state.fixtures.some((x) => !x.played && x.comp !== 'scrim' && x.day >= state.day && x.day - state.day <= OPPONENT_DAYS
+    && plays(x, mine.id) && plays(x, team.id))
+}
+
 /**
  * The news when a match took a man off the bench for an injured starter, or
- * brought one in from outside the roster. Once per club per change: a lay-off
- * that covers a week of matches is one line, not one a match. On the player's
- * own match day the week's digest hears about the other side's changes, and
- * about a stand-in in his own club's five (his team-mates' lay-offs are said
- * when the week opens, me/hurtplay.ts mateInjuryWeek).
+ * brought one in from outside the roster — for the clubs a player follows
+ * (newsworthy). Once per club per change: a lay-off that covers a week of
+ * matches is one line, not one a match. On the player's own match day the
+ * week's digest hears about the other side's changes, and about a stand-in in
+ * his own club's five (his team-mates' lay-offs are said when the week opens,
+ * me/hurtplay.ts mateInjuryWeek).
  */
 export function lineupNews(state: GameState, f: Fixture, result: MatchResult, notes: string[]): void {
   if (f.comp === 'scrim') return
@@ -230,6 +257,7 @@ export function lineupNews(state: GameState, f: Fixture, result: MatchResult, no
     const outsiders = result.standIns?.[side] ?? []
     const text = changeLine(state, team, ids, outsiders)
     if (!text) continue
+    if (!ours && !newsworthy(state, f, team)) continue
     if (state.news.some((n) => n.text === text && n.day <= state.day && state.day - n.day <= STICKY_DAYS)) continue
     state.news.push({ day: state.day, kind: 'club', text, important: ours || undefined })
     if (ours && (teamId !== mine || outsiders.length)) notes.push(text)

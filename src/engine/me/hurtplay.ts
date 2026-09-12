@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { selectLineup } from '../match'
 import { recomputeOverall } from '../player'
 import type { Fixture, GameState } from '../types'
 import type { MeMatchRecord } from './types'
@@ -17,11 +18,14 @@ import { INJURY_KINDS, durationShort, durationWord, ensureInjury, floorHits, inj
  * longer, and a small chance leaves a mark for good (me/injury.ts). Sitting it
  * out is not asked again for that lay-off.
  *
- * The engine picks lineups by `injuredUntil`: it leaves the injured out, and
- * prices one a short club has to field at −22%. Playing through by choice is
- * neither, so the engine calls that pick or book the lineup run with me
- * counted fit, and everything is put back before they return — nothing of it
- * reaches a save.
+ * The engine picks lineups by `injuredUntil`: it leaves the injured out, brings
+ * on the bench, the academy and a free agent of the region before anyone hurt
+ * (engine/standin.ts), and prices one a club with nobody else has to field at
+ * −22%. My club is no different: short of five fit men of its own, somebody
+ * stands in for me, and I am sent on hurt against my will only when there is
+ * nobody at all. Playing through by choice is neither, so the engine calls
+ * that pick or book the lineup run with me counted fit, and everything is put
+ * back before they return — nothing of it reaches a save.
  *
  * Theirs. Team-mates are hurt by the engine's own rolls, and the coach's weekly
  * five already leaves them out (me/coach.ts coachStarters). The week's paper
@@ -79,8 +83,10 @@ export function hurtBook<T>(state: GameState, fixtureId: string, fn: () => T): T
 
 /**
  * My club plays today and I am hurt (me/week.ts, next to 决赛入场). Nothing if
- * the coach would not start me fit anyway. A club that cannot field five
- * without me plays me; a serious one, the coach sits me; a light one, I am asked.
+ * the coach would not start me fit anyway. A club that cannot field five fit
+ * men without me — its own, its academy's, or a stand-in from its region's free
+ * agents, the same call-ups any club makes (engine/match.ts selectLineup) —
+ * plays me; otherwise a serious one, the coach sits me; a light one, I am asked.
  */
 export function hurtBeforeMatch(state: GameState, f: Fixture): void {
   const me = state.me!
@@ -91,7 +97,8 @@ export function hurtBeforeMatch(state: GameState, f: Fixture): void {
   if (!asFit(state, () => coachStarters(state)).includes(me.id)) return
   const team = state.teams[state.myTeam]
   const fit = team.roster.filter((id) => id !== me.id && (state.players[id]?.injuredUntil ?? 0) <= state.day)
-  if (fit.length < 5) {
+  // short of five of its own, the club's five without me — nobody hurt on it means somebody stands in
+  if (fit.length < 5 && !selectLineup(state, team.id).every((p) => p.injuredUntil <= state.day)) {
     inj.play = f.id
     team.starters = asFit(state, () => coachStarters(state))
     pushLog(state, 'bad', `队里凑不齐五个人，你带着${cur.note}上。`)
