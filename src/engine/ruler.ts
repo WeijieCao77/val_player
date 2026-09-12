@@ -211,13 +211,16 @@ export function rulerTeamRating2021(teamId: string): number | null {
  *
  * So each winter past the book the world is read on the curve the book years
  * were read on: the best 240 by rank laid over 79–98, the Challengers' decile,
- * median and upper decile at 61, 69 and 79, and everyone out of the player's
- * reach moved by what his rank says, his eight together. Who passes whom still
+ * median and upper decile at 61, 69 and 79, and everyone but the player himself
+ * moved by what his rank says, his eight together. Who passes whom still
  * moves — a young man who keeps growing climbs past the ones who do not — and
- * the scale does not. A free agent moves as the Challengers players did. The
- * player's reach is left alone, as the book leaves it.
+ * the scale does not. A free agent moves as the Challengers players did.
+ *
+ * His teammates are read too. Left out, his club kept growing the old way while
+ * the world around it was held, and pulled away from the clubs it plays; they
+ * are players of this world like any other. Only the player is left alone.
  */
-export function holdScale(state: GameState, people: Set<string>): number {
+export function holdScale(state: GameState): number {
   if (!rulerOn(state)) return 0
   const lines: Line[] = []
   const held: Player[] = []
@@ -225,7 +228,7 @@ export function holdScale(state: GameState, people: Set<string>): number {
     if (t.dormant) continue
     for (const id of t.roster) {
       const p = state.players[id]
-      if (!p || people.has(p.id) || p.id === state.me?.id) continue
+      if (!p || p.id === state.me?.id) continue
       lines.push({ id: p.id, o: p.overall, n: SOLID, tier: t.tier === 1 ? 1 : 2 })
       held.push(p)
     }
@@ -252,7 +255,7 @@ export function holdScale(state: GameState, people: Set<string>): number {
   const sd = subShifts.length ? subShifts.slice().sort((a, b) => a - b)[Math.floor(subShifts.length / 2)] : 0
   if (sd) {
     for (const p of Object.values(state.players)) {
-      if (p.teamId || people.has(p.id) || p.id === state.me?.id) continue
+      if (p.teamId || p.id === state.me?.id) continue
       shiftPlayer(p, sd)
       refreshValue(p)
     }
