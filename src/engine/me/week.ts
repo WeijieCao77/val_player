@@ -31,7 +31,7 @@ import { AGENTS } from './shop'
 import { questWeek } from './quests'
 import { fireEvent, tryRandomEvent } from './events'
 import { checkAchievements } from './achievements'
-import { PLAYER_WINDOWS, noteScoutInterest, rollOffers, seasonContractCheck, windowOpensToday } from './transfer'
+import { PLAYER_WINDOWS, noteScoutInterest, rollOffers, seasonContractCheck, vctApproach, windowOpensToday } from './transfer'
 import { retirementTick } from './endings'
 import { compCn } from './compname'
 import { leaveClub } from './contract'
@@ -331,9 +331,14 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
     const rng = new Rng(hashStr(`me:day:${state.seed}:${state.year}:${state.day}`))
     if (r.stageChanged) onStageChange(state, rng)
-    // a window opens: the market around me turns over (me/market.ts), then whoever wants me calls
-    if (windowOpensToday(state)) marketWindow(state, new Rng(hashStr(`market:${state.seed}:${state.year}:${state.day}`)), state.day >= 300)
-    if (pro && windowOpensToday(state)) rollOffers(state, rng)
+    // A window opens. The VCT clubs that would start me ask first, and hold that job for me while I answer
+    // (me/transfer.ts vctApproach); then the market around me turns over (me/market.ts); then, if no VCT club
+    // came, whoever else wants me calls. Asked after the market, a club's job was often filled that same morning by
+    // the market's own promotions, which go for exactly the weakest man in a job.
+    const opens = windowOpensToday(state)
+    const asked = pro && opens ? vctApproach(state, new Rng(hashStr(`vct:${state.seed}:${state.year}:${state.day}`))) : 0
+    if (opens) marketWindow(state, new Rng(hashStr(`market:${state.seed}:${state.year}:${state.day}`)), state.day >= 300)
+    if (pro && opens && !asked) rollOffers(state, rng)
     syncTitles(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)

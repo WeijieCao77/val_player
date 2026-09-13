@@ -292,9 +292,11 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
 }
 
 /**
- * A player window opens on a Challengers man (me/week.ts, through rollOffers):
- * the VCT clubs of his league that need him come first, on a draw of their own.
- * Returns how many came.
+ * A player window opens on a Challengers man (me/week.ts): the VCT clubs of his
+ * league that need him come first, on a draw of their own, before the market
+ * turns over, and the market leaves the job alone while he answers (me/market.ts).
+ * Returns how many came; with VCT clubs calling, nobody shops him to the
+ * Challengers clubs that window (me/week.ts does not roll rollOffers).
  */
 export function vctApproach(state: GameState, rng: Rng): number {
   const me = state.me!
@@ -319,6 +321,9 @@ export function vctApproach(state: GameState, rng: Rng): number {
     pool = pool.filter((x) => x !== pick)
     approach(state, read, pick, rng)
   }
+  // whoever wrote my name down this season has been answered, one way or the other (rollOffers)
+  me.flags.dryWindows = 0
+  me.intents = []
   return count
 }
 
@@ -363,16 +368,6 @@ function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): voi
 export function rollOffers(state: GameState, rng: Rng, listed = false): number {
   const me = state.me!
   if (me.phase !== 'pro') return 0
-  // a Challengers man a VCT club would start is theirs to ask for first, on a draw of its own, whenever he signed
-  // (vctApproach); with VCT clubs calling, nobody shops him to the Challengers clubs this window
-  if (!listed) {
-    const up = vctApproach(state, new Rng(hashStr(`vct:${state.seed}:${state.year}:${state.day}`)))
-    if (up) {
-      me.flags.dryWindows = 0
-      me.intents = []
-      return up
-    }
-  }
   const perf = proPerf(state)
   const team = state.teams[state.myTeam]
   const benched = !team.starters.includes(me.id)

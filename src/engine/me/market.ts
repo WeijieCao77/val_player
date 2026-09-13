@@ -142,8 +142,13 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
     : p.joinedYear === state.year
   const movable = (p: Player | undefined): p is Player =>
     !!p && p.id !== me?.id && !p.retiring && !joinedNow(p)
-  // never my job at my club
-  const mineJob = (team: Team, role: Role) => team.id === myClub && role === myRole
+  // never my job at my club — nor my job at a VCT club that came for me as this window opened and holds it while I
+  // answer (me/transfer.ts vctApproach, asked before the market in me/week.ts): the market would fill the very job it came to offer
+  const holding = new Set<string>(me?.phase === 'pro' ? [
+    ...me.deals.filter((d) => d.day === state.day && d.tier === 1 && d.kind === 'transfer').map((d) => d.teamId),
+    ...me.pre.invites.filter((i) => i.day === state.day).map((i) => i.teamId),
+  ] : [])
+  const mineJob = (team: Team, role: Role) => (team.id === myClub || holding.has(team.id)) && role === myRole
   // and my club is in one of these moves every other season at most
   const capped = (team: Team): boolean =>
     team.id === myClub && !!me && me.flags.marketMoved !== undefined && state.year - me.flags.marketMoved < MINE_EVERY
