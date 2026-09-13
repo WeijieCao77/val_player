@@ -28,6 +28,19 @@ export function salaryFloor(state: GameState, teamId: string, salary: number): n
   return Math.max(salary, VCT_MIN_SALARY)
 }
 
+/**
+ * What a buyer pays my club to take me now: the buyout written into my deal —
+ * except in the winter, when a deal that runs out with the season is free to
+ * talk (day 300 on, the winter as me/week.ts reads it).
+ */
+export function buyoutDue(state: GameState): number {
+  const me = state.me!
+  const p = state.players[me.id]
+  if (me.phase !== 'pro' || !p?.teamId) return 0
+  if (state.day >= 300 && p.contractYears <= 1) return 0
+  return me.flags.buyout ?? 0
+}
+
 /** what each standing pays, against a starter's expected wage */
 export const ROLE_PAY: Record<SquadRole, number> = { star: 1.0, starter: 0.8, rotation: 0.55, bench: 0.4 }
 export const ROLE_CN: Record<SquadRole, string> = { star: '核心', starter: '首发', rotation: '轮换', bench: '替补' }
@@ -193,8 +206,12 @@ export function joinClub(state: GameState, d: Deal): void {
     }
     const hist = p.clubHist?.find((h) => h.team === from.id && h.to === state.year)
     if (hist) hist.to = state.year
-    if (d.kind === 'transfer' && me.flags.buyout) {
-      pushLog(state, 'money', `${to.name} 向 ${from.name} 支付了 $${me.flags.buyout.toLocaleString()} 的违约金。`)
+    // the buyout still owed, out of the buyer's budget and into the seller's, as the world's own moves pay (me/market.ts)
+    const fee = d.kind === 'transfer' && from.id !== to.id ? buyoutDue(state) : 0
+    if (fee) {
+      to.budget -= fee
+      from.budget += fee
+      pushLog(state, 'money', `${to.name} 向 ${from.name} 支付了 $${fee.toLocaleString()} 的违约金。`)
     }
   }
   // a club already carrying its registered seven lets its weakest man off the five go to register me (me/club.ts)

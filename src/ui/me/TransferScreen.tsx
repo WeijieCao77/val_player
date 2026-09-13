@@ -1,6 +1,6 @@
 import { useGame } from './ctx'
 import { Crest, Panel, money } from './common'
-import { inWindow, listSelf, nextWindow, perfWord, proPerf } from '../../engine/me/transfer'
+import { VCT_SEEN, inWindow, listSelf, nextWindow, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { clubBars, expectOf, ladderTier, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { ROLE_CN } from '../../engine/me/contract'
 import { fansCn } from '../../engine/me/fans'
@@ -19,6 +19,9 @@ export default function TransferScreen() {
     .sort((a, b) => expectOf(a) - expectOf(b))
   const reach = new Set(reachableClubs(game).map((t) => t.id))
   const perf = pro ? proPerf(game) : 0
+  // a Challengers man against his league's VCT starters: what brings the VCT clubs to the window (engine/me/transfer.ts vctApproach)
+  const vct = pro ? vctRead(game) : null
+  const top = game.year >= 2023 ? 'VCT' : '一线'
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
@@ -34,6 +37,14 @@ export default function TransferScreen() {
           <Panel title="市场怎么看你" actions={nums ? <span className="tag">{perf.toFixed(1)}</span> : undefined}>
             <p className="small" style={{ marginTop: 0 }}><b>{perfWord(perf)}</b>。</p>
             <p className="tiny faint">评价够高，赛段结束时会有别队来看你的比赛；转会窗开了就来报价。</p>
+            {vct && (
+              <p className="small">
+                本联赛 {top} 首发的水平：<b>{nums ? vct.median : attrWord(vct.median)}</b>。
+                {vct.by
+                  ? <>{vct.by === 'rating' ? '你的综合已经够到这条线' : vct.by === 'title' ? '你是 Challengers 冠军队的主力' : '你这个赛季的数据是联赛里最好的'}：转会窗开时，位置上用得着你的 {top} 俱乐部会先来找你{vct.starts < VCT_SEEN ? `（本赛季先打满 ${VCT_SEEN} 场正赛首发）` : ''}。</>
+                  : <>综合够到{nums ? ` ${vct.bar}` : '这条线附近'}、打出联赛里最好的赛季数据，或者作为主力拿下 Challengers 冠军，转会窗开时位置上用得着你的 {top} 俱乐部就会来找你。</>}
+              </p>
+            )}
             {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
             <p className="small">
               {inWindow(game) ? <b>转会窗开着。</b> : <>转会窗关着，下一次：<b>{nextWindow(game).label}</b>（约 {nextWindow(game).weeks} 周后）。</>}

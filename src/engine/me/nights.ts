@@ -73,8 +73,8 @@ export interface AwardsResult { league: string; cats: AwardCat[]; mine: AwardRow
 /** fans a trophy brings on the night — a following that grows with results, not a switch */
 const AWARD_FANS: Record<MeAward['key'], number> = { mvp: 60, role: 35, rookie: 30 }
 
-/** My club's league at my club's tier — a Challengers league by its scene, from 2023. */
-function leaguePool(state: GameState, club: Team): Team[] {
+/** My club's league at my club's tier — a Challengers league by its scene, from 2023. The VCT clubs read a Challengers man's season off the same league (me/transfer.ts). */
+export function leaguePool(state: GameState, club: Team): Team[] {
   return Object.values(state.teams).filter((t) => !t.dormant && t.tier === club.tier
     && (club.scene ? t.scene === club.scene : t.league === club.league))
 }

@@ -108,7 +108,8 @@ export function startTryout(state: GameState, inviteId: string): string | null {
   pop(state, 'invite', inviteId)
   if (inv.direct) {
     me.pre.invites = me.pre.invites.filter((i) => i.id !== inviteId)
-    const deal = makeDeal(state, inv.teamId, 'sign', 'A', tryoutRng(state, 9))
+    // a man under contract is bought, not signed: his club is paid (me/contract.ts joinClub)
+    const deal = makeDeal(state, inv.teamId, me.phase === 'pro' ? 'transfer' : 'sign', 'A', tryoutRng(state, 9))
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `${state.teams[inv.teamId]?.name} 免了试训，直接给了合同。`)
@@ -177,7 +178,8 @@ function finishTryout(state: GameState): void {
     me.tryout = undefined
     return
   }
-  const deal = makeDeal(state, team.id, 'sign', grade, tryoutRng(state, 8))
+  // a professional trialled by a VCT club that came for him (me/transfer.ts vctApproach) is bought from his club
+  const deal = makeDeal(state, team.id, me.phase === 'pro' ? 'transfer' : 'sign', grade, tryoutRng(state, 8))
   me.deals.push(deal)
   push(state, { kind: 'deal', id: deal.id })
   pushLog(state, 'deal', `${team.name} 试训评级 <b>${grade}</b>。${GRADE_TEXT[grade]}他们给了一份合同。`)
