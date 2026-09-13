@@ -10,7 +10,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { makeDeal } from './contract'
 import { gradeOf } from './tryout'
-import { expectOf, tryoutSkill } from './prepro'
+import { declinedNow, expectOf, tryoutSkill } from './prepro'
 import { PLAYER_WINDOWS, nextWindow, proPerf } from './transfer'
 import type { ChainLive } from './story'
 import { CHAIN_CN, chainProgress, chainWeekCount, closeChain, isPro, isStarter, seedLive } from './story'
@@ -127,8 +127,9 @@ function pickForeign(state: GameState, rng: Rng): Team | null {
   const p = state.players[me.id]
   if (!mine || !p) return null
   const home = regionIn(mine.region, 2099)
+  const no = declinedNow(state)
   const pool = Object.values(state.teams).filter((t) => t.id !== mine.id && (t.tier === 1 || mine.tier === 2) && !t.dormant && hasPlace(state, t)
-    && regionIn(t.region, 2099) !== home && t.roster.length <= 7 && !me.declined.includes(t.id)
+    && regionIn(t.region, 2099) !== home && t.roster.length <= 7 && !no.has(t.id)
     // a bar around my own level, read the way a tryout reads it — not my club's: a weak
     // player on a strong second-tier club is scouted as the player he is
     && expectOf(t) <= tryoutSkill(state) + 6 && expectOf(t) >= tryoutSkill(state) - 10)
@@ -221,7 +222,7 @@ function windowTick(state: GameState, c: ChainLive, rng: Rng): boolean {
   }
   const t = c.club ? state.teams[c.club] : undefined
   const keen = c.score >= 1 || rng.chance(0.45)
-  if (t && keen && !t.dormant && hasPlace(state, t) && !me.declined.includes(t.id) && t.id !== state.myTeam) {
+  if (t && keen && !t.dormant && hasPlace(state, t) && !declinedNow(state).has(t.id) && t.id !== state.myTeam) {
     const deal = makeDeal(state, t.id, 'transfer', gradeOf(tryoutSkill(state) - expectOf(t) + 4 + c.score * 3), rng)
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })

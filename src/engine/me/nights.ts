@@ -79,6 +79,31 @@ export function leaguePool(state: GameState, club: Team): Team[] {
     && (club.scene ? t.scene === club.scene : t.league === club.league))
 }
 
+/** A season line is judged against its league once it has this share of the league's median starter's maps. */
+export const SEASON_SHARE = 0.6
+
+/**
+ * The maps a season line needs before it is judged against its league: 60% of
+ * what the league's median starter played, never under six. Null when fewer
+ * than six of the league's starters have played at all: there is no table.
+ *
+ * The awards night used to ask 40% of the busiest man's maps, and the busiest
+ * man is whoever also played every qualifier and cup that year. Read at the
+ * off-season over three careers (2026 seeds 5 and 7, 2021 seed 7), he had
+ * 131–265 maps in Challengers EMEA and NORTH//EAST from 2027, where the median
+ * starter had 25–59; 25–45% of the starters were judged at all, and in 118 of
+ * 231 league-seasons fewer than half of a league's. A Challengers EMEA man
+ * third in his league on 74 maps was asked for 98 and heard 「名单上没有你」.
+ * On this bar 34–64% are judged — the rest barely played — and 40% of the
+ * median would have handed 4–23 top-three places a career to lines with 40–60%
+ * of a starter's maps. The VCT clubs read 「联赛里最好的赛季数据」 off it too (me/transfer.ts).
+ */
+export function seasonBar(state: GameState, pool: Team[]): number | null {
+  const maps = pool.flatMap((t) => t.starters).map((id) => state.players[id]?.season.maps ?? 0).filter((m) => m > 0).sort((a, b) => a - b)
+  if (maps.length < 6) return null
+  return Math.max(6, Math.round(maps[Math.floor(maps.length / 2)] * SEASON_SHARE))
+}
+
 /**
  * Rounds behind a man before this season: what vlr had on him before this
  * year's line was laid in, and what this save has played before this season.
@@ -90,16 +115,18 @@ function priorRounds(p: Player): number {
 
 /**
  * The year's honours, from the season lines as they stand in the off-season —
- * before the winter wipes them. Rating first, ACS to break a tie; a line needs
- * 40% of the busiest man's maps to be judged at all. Three names a category.
+ * before the winter wipes them. Rating first, ACS to break a tie; a line is
+ * judged once it has 60% of the league's median starter's maps (seasonBar).
+ * Three names a category.
  */
 export function computeAwards(state: GameState): AwardsResult | null {
   const me = state.me!
   const club = state.teams[state.myTeam]
   const mine = state.players[me.id]
   if (me.phase !== 'pro' || !club || !mine) return null
+  const pool = leaguePool(state, club)
   const ids = new Set<string>([me.id])
-  for (const t of leaguePool(state, club)) for (const id of t.roster) ids.add(id)
+  for (const t of pool) for (const id of t.roster) ids.add(id)
   const firstPro = !me.seasons.some((s) => s.tier > 0)
   const rows: AwardRow[] = []
   for (const id of ids) {
@@ -111,8 +138,8 @@ export function computeAwards(state: GameState): AwardsResult | null {
       rookie: id === me.id ? firstPro : p.age <= 21 && priorRounds(p) < 600,
     })
   }
-  if (rows.length < 6) return null
-  const need = Math.max(6, Math.round(Math.max(...rows.map((r) => r.maps)) * 0.4))
+  const need = seasonBar(state, pool)
+  if (rows.length < 6 || need === null) return null
   const field = rows.filter((r) => r.maps >= need).sort((a, b) => b.rating - a.rating || b.acs - a.acs)
   if (field.length < 3) return null
   const cats: AwardCat[] = [{ key: 'mvp', name: '年度最佳选手', top: field.slice(0, 3) }]
