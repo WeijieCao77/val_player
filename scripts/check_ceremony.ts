@@ -17,7 +17,7 @@
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { CEREMONIES, cerClose, cerFinish, cerSkip } from '../src/engine/me/ceremony'
-import { SHOWMATCH_FANS, awardsNight, computeAwards, showmatchNight } from '../src/engine/me/nights'
+import { SHOWMATCH_FANS, awardsNight, computeAwards, leaguePool, seasonBar, showmatchNight } from '../src/engine/me/nights'
 import { ARRIVALS, ARRIVALS_UNTIL, arrivedBy } from '../src/engine/me/releases'
 import { AGENT_CN, MAP_CN, agentCn } from '../src/engine/content'
 import { retire } from '../src/engine/me/endings'
@@ -162,21 +162,23 @@ else {
   m.cerSeen = (m.cerSeen ?? []).filter((k) => !k.startsWith('awards:'))
   m.awards = (m.awards ?? []).filter((a) => a.year !== s.year)
   const p = s.players[m.id]
-  // the best line in the league by a distance, on as many maps as the busiest man in it —
-  // more than that would push everyone else under the 40% bar and leave nobody to beat
-  const club = s.teams[s.myTeam]
-  const field = Object.values(s.teams)
-    .filter((t) => t.tier === club.tier && (club.scene ? t.scene === club.scene : t.league === club.league))
-    .flatMap((t) => t.roster).map((id) => s.players[id]).filter(Boolean)
-  const maps = Math.max(p.season.maps, ...field.map((q) => q.season.maps))
+  // the best line in the league by a distance, on an ordinary starter's maps: the league's median starter's.
+  // The bar is a share of that (me/nights.ts seasonBar). It used to be 40% of the busiest man's, who had
+  // played every qualifier and cup too, and a Challengers EMEA starter on a normal season was never judged.
+  const pool = leaguePool(s, s.teams[s.myTeam])
+  const others = pool.flatMap((t) => t.starters).filter((id) => id !== m.id)
+    .map((id) => s.players[id]?.season.maps ?? 0).filter((x) => x > 0).sort((a, b) => a - b)
+  const maps = Math.max(6, others[Math.floor(others.length / 2)] ?? 0)
+  const busiest = Math.max(0, ...pool.flatMap((t) => t.roster).map((id) => s.players[id]?.season.maps ?? 0))
   const rounds = maps * 24
   p.season = { ...p.season, maps, rounds, kills: rounds, deaths: Math.round(rounds * 0.45), assists: Math.round(rounds * 0.3), damage: rounds * 180 }
+  const bar = seasonBar(s, pool)
   const aw = computeAwards(s)
-  if (!aw) fail('算不出颁奖名单。')
+  if (!aw) fail(`首发中位数的出场（${maps} 张图）、全联赛最好的数据，却算不出颁奖名单（门槛 ${bar ?? '—'}，联赛出场最多 ${busiest} 张）。`)
   else if (aw.cats.some((c) => c.top.length !== 3)) fail('有奖项不是三个人入围。')
   m.mental = 50
   const opened = awardsNight(s)
-  if (!opened || m.cer?.kind !== 'awards') fail('数据全联赛第一，却没开颁奖夜。')
+  if (!opened || m.cer?.kind !== 'awards') fail(`数据全联赛第一、出场是首发中位数（${maps} 张图），却没开颁奖夜（门槛 ${bar ?? '—'}，联赛出场最多 ${busiest} 张）。`)
   if (!(m.awards ?? []).some((a) => a.year === s.year && a.key === 'mvp' && a.won)) fail('年度最佳选手没记进存档。')
   const heat = m.heat
   cerFinish(s, 'gold', { ms: 4200, stumbles: 0 })
@@ -184,7 +186,7 @@ else {
   if (open(s)) fail('颁奖夜没关掉。')
   // heat is a float that has been through a career: +12 is +12 to within rounding
   if (Math.abs(m.heat - heat - 12) > 1e-9 || m.mental !== 52) fail(`颁奖夜金档应热度 +12、心态 +2，实际热度 +${m.heat - heat}、心态 ${m.mental}。`)
-  results.push(`颁奖夜 ${aw?.league}：${aw?.cats.map((c) => c.name).join('、')}`)
+  results.push(`颁奖夜 ${aw?.league}：${aw?.cats.map((c) => c.name).join('、')}（${maps} 张图参评，门槛 ${bar}，联赛出场最多 ${busiest} 张）`)
 }
 
 // 表演赛之夜: Champions weekend, enough of a name, a club that is not there; walked past is 银档

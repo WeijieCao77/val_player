@@ -11,7 +11,7 @@ import { INVITE_DAYS, declinedNow, expectOf, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
 import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
-import { leaguePool } from './nights'
+import { leaguePool, seasonBar } from './nights'
 import type { Invite } from './types'
 
 /**
@@ -200,9 +200,8 @@ export function vctStarterMedian(state: GameState, league: string): number {
 
 /**
  * The best season line in his Challengers league, by rating or by ACS, among the league's players (me/nights.ts
- * leaguePool). A line counts once it has 60% of the median starter's maps. The awards night's bar, 40% of the
- * busiest man's, is set by whoever also played every qualifier and cup that year: read at the windows of four
- * European careers it asked 65–116 maps of a starter who had played 22–45, and no season of his was ever judged.
+ * leaguePool). A line counts once it has 60% of the median starter's maps — the awards night's bar, the one
+ * table both read (me/nights.ts seasonBar).
  */
 function bestInLeague(state: GameState, club: Team): boolean {
   const me = state.me!
@@ -210,9 +209,8 @@ function bestInLeague(state: GameState, club: Team): boolean {
   const ids = new Set<string>([me.id])
   for (const t of pool) for (const id of t.roster) ids.add(id)
   const rows = [...ids].map((id) => state.players[id]).filter((q): q is Player => !!q && q.season.rounds > 0)
-  const starterMaps = pool.flatMap((t) => t.starters).map((id) => state.players[id]?.season.maps ?? 0).filter((m) => m > 0).sort((a, b) => a - b)
-  if (rows.length < 6 || starterMaps.length < 6) return false
-  const need = Math.max(6, Math.round(starterMaps[Math.floor(starterMaps.length / 2)] * 0.6))
+  const need = seasonBar(state, pool)
+  if (rows.length < 6 || need === null) return false
   const field = rows.filter((q) => q.season.maps >= need)
   const mine = field.find((q) => q.id === me.id)
   if (!mine || field.length < 6) return false
