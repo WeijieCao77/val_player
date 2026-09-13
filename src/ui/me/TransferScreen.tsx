@@ -1,7 +1,7 @@
 import { useGame } from './ctx'
 import { Crest, Panel, money } from './common'
 import { VCT_SEEN, inWindow, listSelf, nextWindow, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
-import { clubBars, expectOf, ladderTier, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
+import { clubBars, declinedNow, expectOf, ladderTier, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { ROLE_CN } from '../../engine/me/contract'
 import { fansCn } from '../../engine/me/fans'
 import { attrWord, gapWord, useNumbers } from './words'
@@ -18,6 +18,7 @@ export default function TransferScreen() {
     .filter((t) => t.id !== game.myTeam && (t.region === me.region || me.flags.lang))
     .sort((a, b) => expectOf(a) - expectOf(b))
   const reach = new Set(reachableClubs(game).map((t) => t.id))
+  const declined = [...declinedNow(game)]
   const perf = pro ? proPerf(game) : 0
   // a Challengers man against his league's VCT starters: what brings the VCT clubs to the window (engine/me/transfer.ts vctApproach)
   const vct = pro ? vctRead(game) : null
@@ -63,7 +64,7 @@ export default function TransferScreen() {
           <Panel title="邀请">
             {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯进{ladderTier(INVITE_LADDER).name}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你。</p>
               : me.pre.invites.map((i) => <p key={i.id} className="small">{game.teams[i.teamId]?.name} · {i.expires - game.day} 天内答复</p>)}
-            {me.declined.length > 0 && <p className="tiny faint">今年回绝过：{me.declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
+            {declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
           </Panel>
         )}
       </div>

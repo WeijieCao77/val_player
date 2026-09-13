@@ -5,13 +5,20 @@
  * actually be able to end badly — a tryout you always pass and a negotiation
  * that never blows up are decoration.
  *
+ * And the answer 「不」: a club turned down, a renewal refused, stays away for
+ * the rest of that year — and only that year, as the screen says.
+ *
  *   npx tsx scripts/check_tryout.ts [seeds=8]
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { clubBars, tryoutSkill } from '../src/engine/me/prepro'
+import { clubBars, reachableClubs, tryoutSkill } from '../src/engine/me/prepro'
 import { GRADE_TEXT, gradeOf, tryoutDays } from '../src/engine/me/tryout'
-import { ASKS, askDeal, makeDeal } from '../src/engine/me/contract'
+import { ASKS, askDeal, declineDeal, makeDeal } from '../src/engine/me/contract'
+import { vctNeeds } from '../src/engine/me/transfer'
+import { regionIn } from '../src/engine/era'
+import { recomputeOverall } from '../src/engine/player'
+import { ATTR_KEYS } from '../src/engine/types'
 import { Rng, hashStr } from '../src/engine/rng'
 
 const mem: Record<string, string> = {}
@@ -103,5 +110,59 @@ const bars = clubBars(probe)
 console.log(`门槛阶梯（你 ${Math.round(tryoutSkill(probe))}）：` + bars.map((b) => `${b.name} ${b.expect}${b.ok ? '（够了）' : `（差 ${b.gap}）`}`).join(' · '))
 if (!bars.length) { bad++; console.log('✗ 门槛阶梯是空的。') }
 
-console.log(bad ? '\n✗ 有问题。' : '\n✓ 四段都走得通，评级有分布、谈判会崩、门槛看得见。')
+// 「今年不再来」: turned down in year Y, a club stays away for the rest of Y and may come again in Y+1.
+// The year is moved by hand around pure reads (vctNeeds, reachableClubs), and put back.
+{
+  const s = createCareer({
+    name: 'Probe', region: 'Europe', role: '决斗者',
+    talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 7,
+  })
+  const m = s.me!
+  const p = s.players[m.id]
+  const y = s.year
+  const inYear = <T>(year: number, read: () => T): T => { s.year = year; try { return read() } finally { s.year = y } }
+  // a Challengers man every VCT club of his league would start
+  for (const k of ATTR_KEYS) p.attrs[k] = 95
+  recomputeOverall(p)
+  const league = regionIn(s.teams[s.myTeam].region, y)
+  const asks = (id: string) => vctNeeds(s, league).some((n) => n.team.id === id)
+  const vct = vctNeeds(s, league)[0]?.team.id
+  const parts: string[] = []
+  if (!vct) { bad++; console.log('✗ 探针设置不对：综合 95 的 Challengers 选手，本联赛却没有一家 VCT 俱乐部用得着他。') } else {
+    const offer = makeDeal(s, vct, 'transfer', 'B', new Rng(hashStr('probe:declined')))
+    m.deals.push(offer)
+    declineDeal(s, offer.id)
+    const same = asks(vct)
+    const next = inYear(y + 1, () => asks(vct))
+    parts.push(`拒绝报价：${y} 年${same ? '又来了' : '不再来'}，${y + 1} 年${next ? '可以再来' : '还是不来'}`)
+    if (same) { bad++; console.log(`✗ ${y} 年拒绝了 ${s.teams[vct].name} 的报价，同一年它又出现在来找你的 VCT 俱乐部里。`) }
+    if (!next) { bad++; console.log(`✗ ${y} 年拒绝了 ${s.teams[vct].name}，${y + 1} 年它还是不来——「今年不再来」应该只管这一年。`) }
+    // a save from before kept the club with no year: that has lapsed
+    const keep = m.declined
+    m.declined = [vct] as unknown as typeof m.declined
+    const old = asks(vct)
+    m.declined = keep
+    parts.push(`老存档里没有年份的记录：${old ? '已失效' : '还在挡'}`)
+    if (!old) { bad++; console.log('✗ 老存档里没有年份的回绝记录应该当作已过期，现在还在挡着这家俱乐部。') }
+  }
+  // the renewal refused: he goes on the spot, and the club does not come back for him that year
+  const club = s.myTeam
+  const renew = makeDeal(s, club, 'renew', 'B', new Rng(hashStr('probe:renew')))
+  m.deals.push(renew)
+  declineDeal(s, renew.id)
+  const reach = () => reachableClubs(s, 99).some((t) => t.id === club)
+  const same = reach()
+  const next = inYear(y + 1, reach)
+  const keep = m.declined
+  m.declined = []
+  const control = inYear(y + 1, reach)
+  m.declined = keep
+  parts.push(`拒绝续约：${m.phase === 'free' ? '当场成了自由人' : `还是 ${m.phase}`}，${y} 年${same ? '又来了' : '不再来'}，${y + 1} 年${next ? '可以再来' : control ? '还是不来' : '（这家俱乐部那年本来就不招人，没测到）'}`)
+  if (m.phase !== 'free') { bad++; console.log('✗ 拒绝续约应该当场成为自由人。') }
+  if (same) { bad++; console.log(`✗ ${y} 年拒绝了 ${s.teams[club].name} 的续约，同一年它又出现在能去试训的俱乐部里。`) }
+  if (control && !next) { bad++; console.log(`✗ ${y} 年拒绝了 ${s.teams[club].name} 的续约，${y + 1} 年它还是不来。`) }
+  console.log(`\n今年不再来：${parts.join(' · ')}`)
+}
+
+console.log(bad ? '\n✗ 有问题。' : '\n✓ 四段都走得通，评级有分布、谈判会崩、门槛看得见；回绝过的俱乐部当年不再来，第二年可以再来。')
 if (bad) process.exit(1)

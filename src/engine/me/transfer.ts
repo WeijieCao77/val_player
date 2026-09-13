@@ -7,7 +7,7 @@ import { pushLog } from './log'
 import { push } from './pending'
 import { ROLE_PAY, buyoutDue, makeDeal, leaveClub, salaryFloor } from './contract'
 import { gradeOf } from './tryout'
-import { INVITE_DAYS, expectOf, tryoutSkill } from './prepro'
+import { INVITE_DAYS, declinedNow, expectOf, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
 import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
@@ -108,7 +108,8 @@ function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
   const p = state.players[me.id]
   const mine = state.teams[state.myTeam]
   // a club with nowhere to play this year is not hiring
-  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !me.declined.includes(t.id)
+  const no = declinedNow(state)
+  const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !no.has(t.id)
     && !t.dormant && hasPlace(state, t))
   const fit = rut
     ? pool.filter((t) => t.tier === 2 || t.rating <= mine.rating - 4)
@@ -170,7 +171,7 @@ function foreignLeague(state: GameState, t: Team): boolean {
  * for his wage. An offer when he clears the club's bar by a margin, a tryout
  * when he is near it. A buyout still owed is paid out of a budget that has it,
  * however recently he signed; a deal that runs out with the season is free in
- * the winter window. A club he turned down does not come back (me.declined).
+ * the winter window. A club he turned down does not come back that year (me/prepro.ts declinedNow).
  */
 
 /** How far under his league's median VCT starter a Challengers man's 综合 can sit and still read as one. */
@@ -273,9 +274,10 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
   const p = state.players[me.id]
   const fee = buyoutDue(state)
   const skill = tryoutSkill(state)
+  const no = declinedNow(state)
   const out: VctNeed[] = []
   for (const team of vctClubsOf(state, league)) {
-    if (team.id === state.myTeam || me.declined.includes(team.id) || importBlock(state, team.id, p)) continue
+    if (team.id === state.myTeam || no.has(team.id) || importBlock(state, team.id, p)) continue
     // a man this far under the club's bar is not asked (me/auto.ts turns such a tryout down)
     if (skill < expectOf(team) - 6) continue
     // a buyout still owed comes out of the buyer's budget; nothing is owed on a deal that runs out this winter

@@ -5,7 +5,7 @@ import { expectedSalary } from '../player'
 import type { Deal } from './types'
 import { pushLog } from './log'
 import { pop } from './pending'
-import { expectOf, tryoutSkill } from './prepro'
+import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
 import { makeRoom } from './club'
 import { addMoney } from './money'
@@ -109,7 +109,7 @@ export function askDeal(state: GameState, dealId: string, askKey: string, rng: R
     if (d.blown >= 2) {
       me.deals = me.deals.filter((x) => x.id !== dealId)
       pop(state, 'deal', dealId)
-      me.declined.push(d.teamId)
+      markDeclined(state, d.teamId)
       pushLog(state, 'bad', `${state.teams[d.teamId]?.name} 撤回了报价：要得太多了。`)
       if (d.kind === 'renew') renewalGone(state, d, '不再续约')
       return { ok: false, blown: true, text: '他们收回了报价。谈崩了。' }
@@ -129,7 +129,7 @@ export function declineDeal(state: GameState, dealId: string): string {
   if (d.kind === 'renew') {
     renewalGone(state, d, '的续约，你没有签')
   } else {
-    me.declined.push(d.teamId)
+    markDeclined(state, d.teamId)
     pushLog(state, 'info', `你拒绝了 ${state.teams[d.teamId]?.name} 的报价。今年他们不会再来。`)
   }
   return '已拒绝。'
@@ -152,7 +152,8 @@ function renewalGone(state: GameState, d: Deal, why: string): void {
   me.flags.refusedRenew = 0
   if (me.phase === 'pro' && state.myTeam === d.teamId) leaveClub(state, why)
   else pushLog(state, 'info', `${state.teams[d.teamId]?.name ?? '俱乐部'}${why}。`)
-  me.declined.push(d.teamId)
+  // offered at the turn of the year (me/week.ts onSeasonEnd), so 「今年」 is the whole season ahead
+  markDeclined(state, d.teamId)
 }
 
 export function acceptDeal(state: GameState, dealId: string): string {
@@ -238,7 +239,7 @@ export function joinClub(state: GameState, d: Deal): void {
   me.tenure = 0
   me.freeYears = 0
   me.abroad = to.region !== me.region
-  me.declined = []
+  // a club I turned down this year stays away this year, at this club too (me/prepro.ts declinedNow)
   me.intents = []
   // a new contract is a new question: a renewal refused at the last club is not this one's answer
   me.flags.refusedRenew = 0
@@ -272,7 +273,6 @@ export function leaveClub(state: GameState, why: string): void {
   me.pre.year = 1
   me.pre.ladder = Math.max(me.pre.ladder, clamp(45 + (p.overall - 60) * 1.7 - 6, 0, 100))
   me.pre.invites = []
-  me.declined = []
   me.tenure = 0
   me.trial = undefined
   me.benchLock = undefined

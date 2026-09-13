@@ -548,8 +548,8 @@ export interface MeState {
   deals: Deal[]
   /** clubs that wrote me down at a stage's end */
   intents: { teamId: string; day: number }[]
-  /** clubs that offered this year and were turned down */
-  declined: string[]
+  /** clubs turned down this year, or that turned me down, each with its year: it stays away until the year turns (me/prepro.ts declinedNow) */
+  declined: { team: string; year: number }[]
   /** the year I asked to be listed */
   listedYear?: number
   /** seasons at the current club */

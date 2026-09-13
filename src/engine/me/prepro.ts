@@ -139,13 +139,37 @@ export function clubBars(state: GameState): ClubBar[] {
   return out
 }
 
+/**
+ * The clubs that stay away this year: an offer or an invitation I turned down,
+ * a renewal I refused, a tryout that ended 「以后再联系」. The screen says
+ * 「今年不再来」, and that is what this holds to: an entry keeps the year it
+ * was written in and lapses when the year turns, whatever club I am at.
+ *
+ * It used to be a bare list of clubs, cleared only when I changed clubs: a man
+ * who stayed where he was never heard again from a club he had once said no
+ * to (the author, 2026-09-13), and one who moved in the summer could be called
+ * in the winter by the club he had turned down that summer. A save from before
+ * kept no year, and its entries have lapsed (me/save.ts).
+ */
+export function declinedNow(state: GameState): Set<string> {
+  return new Set((state.me!.declined ?? []).filter((d) => d?.year === state.year).map((d) => d.team))
+}
+
+/** Turned down today, one way or the other: the club stays away for the rest of this year. */
+export function markDeclined(state: GameState, teamId: string): void {
+  const me = state.me!
+  me.declined = (me.declined ?? []).filter((d) => d?.year === state.year && d.team !== teamId)
+  me.declined.push({ team: teamId, year: state.year })
+}
+
 /** Clubs whose bar I am within reach of, my own region first. */
 export function reachableClubs(state: GameState, slack = 6): Team[] {
   const me = state.me!
   const skill = tryoutSkill(state)
+  const no = declinedNow(state)
   return Object.values(state.teams)
     // a club with nowhere to play this year is not holding tryouts
-    .filter((t) => t.roster.length <= 7 && !me.declined.includes(t.id) && !t.dormant && hasPlace(state, t))
+    .filter((t) => t.roster.length <= 7 && !no.has(t.id) && !t.dormant && hasPlace(state, t))
     .filter((t) => expectOf(t) <= skill + slack)
     .sort((a, b) => (Number(b.region === me.region) - Number(a.region === me.region)) || b.rating - a.rating)
 }

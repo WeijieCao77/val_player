@@ -3,7 +3,7 @@ import type { GameState } from '../types'
 import type { NodeDim, TryoutDayLog } from './types'
 import { pushLog } from './log'
 import { pop, push } from './pending'
-import { expectOf, tryoutSkill } from './prepro'
+import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
 import { tryoutNight } from './nights'
@@ -128,7 +128,7 @@ export function declineInvite(state: GameState, inviteId: string): void {
   me.pre.invites = me.pre.invites.filter((i) => i.id !== inviteId)
   pop(state, 'invite', inviteId)
   if (inv) {
-    me.declined.push(inv.teamId)
+    markDeclined(state, inv.teamId)
     pushLog(state, 'info', `你回绝了 ${state.teams[inv.teamId]?.name} 的邀请。今年他们不会再来。`)
   }
 }
@@ -174,7 +174,7 @@ function finishTryout(state: GameState): void {
   me.pre.scoutSeen += 1
   if (grade === 'D' || (grade === 'C' && team.tier === 1 && !me.pre.wasPro)) {
     pushLog(state, 'bad', `${team.name} 试训评级 ${grade}：他们说以后再联系。（差距 ${Math.round(-d)} 分）`)
-    me.declined.push(team.id)
+    markDeclined(state, team.id)
     me.tryout = undefined
     return
   }
