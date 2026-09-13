@@ -133,7 +133,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
           {!hasPlace(game, team) && <span className="warn">（这家俱乐部今年没有联赛席位，签过去可能无赛可打）</span>}
         </p>
       )}
-      <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : '四天试训，每天一个选择。'}{inv.expires - game.day} 天内答复；回绝了今年不会再来。</p>
+      <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : `${tryoutDays(game).length === 3 ? '三' : '四'}天试训，每天一个选择。`}{inv.expires - game.day} 天内答复；回绝了今年不会再来。</p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>
         <button onClick={() => { declineInvite(game, inv.id); commit(); onDone() }}>回绝</button>

@@ -1,12 +1,18 @@
 import { Rng, clamp, hashStr } from '../rng'
-import type { GameState, Team } from '../types'
+import type { GameState, Player, Team } from '../types'
+import { expectedSalary, ratingOf } from '../player'
+import { regionIn } from '../era'
+import { importBlock } from '../imports'
 import { pushLog } from './log'
 import { push } from './pending'
-import { makeDeal, leaveClub } from './contract'
+import { ROLE_PAY, buyoutDue, makeDeal, leaveClub, salaryFloor } from './contract'
 import { gradeOf } from './tryout'
-import { expectOf, tryoutSkill } from './prepro'
-import { hasPlace } from '../timeline'
-import { isIntlComp } from './compclass'
+import { INVITE_DAYS, expectOf, tryoutSkill } from './prepro'
+import { hasPlace, inVctLeague } from '../timeline'
+import { compClass, isIntlComp } from './compclass'
+import { compCn } from './compname'
+import { leaguePool } from './nights'
+import type { Invite } from './types'
 
 /**
  * How the market reads a professional: 破晓's proPerf, on this game's scale.
@@ -110,12 +116,236 @@ function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
   if (!fit.length) return null
   const w = fit.map((t) => {
     let v = 10 + Math.max(0, t.rating - mine.rating) * (rut ? 0 : 3) + (t.tier === 1 ? 6 : 0)
-    if (t.region !== me.region) v *= me.flags.lang || me.agentTier >= 2 ? 0.12 : 0.015
+    if (foreignLeague(state, t)) v *= me.flags.lang || me.agentTier >= 2 ? 0.12 : 0.015
     else v *= 1.5
     if (me.intents.some((i) => i.teamId === t.id)) v *= 4
     return v
   })
   return rng.weighted(fit, w)
+}
+
+/**
+ * A club in another league from mine: not my club's league and not my home
+ * region's. A 赛区 is a league — VCT EMEA is Europe, Türkiye, CIS and MENA
+ * alike, VCT Americas North America, Brazil and LATAM — so a club in the league
+ * I play in is never foreign to me, nor one in the league I come from. It used
+ * to be read off the club's home country (the author, 2026-09-13: a bug): a
+ * Turkish club in a French player's own league weighed 0.015 of a French one,
+ * and a man playing outside his home league had every club of it weighed so —
+ * 53 of 185 windows at a Challengers club, in sixteen careers, found every VCT
+ * club of his league 「foreign」.
+ */
+function foreignLeague(state: GameState, t: Team): boolean {
+  const me = state.me!
+  const league = regionIn(t.region, state.year)
+  const mine = state.teams[state.myTeam]
+  if (mine && regionIn(mine.region, state.year) === league) return false
+  return regionIn(me.region, state.year) !== league
+}
+
+/* ------------------------------------------------------------------ */
+/*  A Challengers man the VCT clubs would start                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A Challengers man who is clearly a VCT starter is signed by a VCT club, not
+ * left to win Challengers year after year (the author, 2026-09-13).
+ *
+ * It used to be pickBuyer's alone, and there a Challengers man is shopped to
+ * every Challengers club in the world whose bar he clears as much as to the VCT
+ * clubs, and nobody asks whether a VCT club has a place for him. Read over
+ * sixteen careers played to the end (seeds 101–116, from the ladder): of 185
+ * windows at a Challengers club 22 brought a VCT offer and 92 only Challengers
+ * clubs; of 53 in which the market rated him highly and a VCT club of his league
+ * had a starter in his job he out-rated, 10 brought one.
+ *
+ * 破晓's rule for a second-team man is the model (tryout.ts rollProOffers): his
+ * way out is the first tier, it comes when a window opens, and a club that has
+ * seen enough skips the tryout. Here the window opens on a Challengers man who
+ * reads as a VCT starter — his 综合 at his league's median VCT starter less
+ * VCT_MARGIN, a Challengers title this year he started as one of his side's
+ * best two, or the best season line in his Challengers league — and the VCT
+ * clubs of his league that need him come first: one with a starter in his job
+ * he out-rates or nobody in it, or one under its five and a sixth with the money
+ * for his wage. An offer when he clears the club's bar by a margin, a tryout
+ * when he is near it. A buyout still owed is paid out of a budget that has it,
+ * however recently he signed; a deal that runs out with the season is free in
+ * the winter window. A club he turned down does not come back (me.declined).
+ */
+
+/** How far under his league's median VCT starter a Challengers man's 综合 can sit and still read as one. */
+export const VCT_MARGIN = 2
+/** Official starts this season before the VCT clubs read him at all. */
+export const VCT_SEEN = 4
+/** A VCT club's squad after New Year: a five and a sixth (me/market.ts TOP_SQUAD). Under it a place is open. */
+const VCT_SQUAD = 6
+
+/** The VCT clubs of a league: its partners and visitors from 2023, its first tier before. */
+function vctClubsOf(state: GameState, league: string): Team[] {
+  return Object.values(state.teams).filter((t) => t.tier === 1 && !t.dormant && t.roster.length >= 5 && hasPlace(state, t)
+    && (state.year < 2023 || inVctLeague(state, t)) && regionIn(t.region, state.year) === league)
+}
+
+/** The median starter at a league's VCT clubs, as the season stands. */
+export function vctStarterMedian(state: GameState, league: string): number {
+  const os = vctClubsOf(state, league)
+    .flatMap((t) => t.starters.map((id) => state.players[id]?.overall ?? 0))
+    .filter((o) => o > 0)
+    .sort((a, b) => a - b)
+  if (!os.length) return 0
+  const m = Math.floor(os.length / 2)
+  return os.length % 2 ? os[m] : (os[m - 1] + os[m]) / 2
+}
+
+/** The best season line in his Challengers league, by rating or by ACS, on the awards night's field (me/nights.ts). */
+function bestInLeague(state: GameState, club: Team): boolean {
+  const me = state.me!
+  const ids = new Set<string>([me.id])
+  for (const t of leaguePool(state, club)) for (const id of t.roster) ids.add(id)
+  const rows = [...ids].map((id) => state.players[id]).filter((q): q is Player => !!q && q.season.rounds > 0)
+  if (rows.length < 6) return false
+  const need = Math.max(6, Math.round(Math.max(...rows.map((q) => q.season.maps)) * 0.4))
+  const field = rows.filter((q) => q.season.maps >= need)
+  const mine = field.find((q) => q.id === me.id)
+  if (!mine || field.length < 6) return false
+  const acs = (q: Player) => q.season.damage / q.season.rounds
+  return field.every((q) => ratingOf(q.season) <= ratingOf(mine.season)) || field.every((q) => acs(q) <= acs(mine))
+}
+
+/** A title he started as one of his side's best two, by where his ACS ranked over the event's matches. */
+function keyStarter(state: GameState, title: string, year: number): boolean {
+  const ms = state.me!.matches.filter((m) => !m.friendly && m.year === year && m.comp === title && m.started && m.rank > 0)
+  return ms.length > 0 && ms.reduce((s, m) => s + m.rank, 0) / ms.length <= 2
+}
+
+export interface VctRead {
+  /** his club's league */
+  league: string
+  /** the median VCT starter in it, and the 综合 that reads as one */
+  median: number
+  bar: number
+  /** why a VCT club would call, if one would */
+  by: 'rating' | 'title' | 'results' | null
+  title?: string
+  /** official starts this season, against VCT_SEEN */
+  starts: number
+}
+
+/** Where a Challengers man stands against his league's VCT starters: for the window, and the transfer screen. */
+export function vctRead(state: GameState): VctRead | null {
+  const me = state.me!
+  const p = state.players[me.id]
+  const club = me.phase === 'pro' ? state.teams[state.myTeam] : undefined
+  if (!p || !club || club.tier !== 2) return null
+  const league = regionIn(club.region, state.year)
+  const median = vctStarterMedian(state, league)
+  if (!median) return null
+  const bar = Math.ceil(median - VCT_MARGIN)
+  const read: VctRead = { league, median: Math.round(median), bar, by: null, starts: me.seasonStart.starts }
+  if (p.overall >= bar) read.by = 'rating'
+  else {
+    const t = me.titles.find((x) => x.year === state.year && x.started && compClass(x.title) === 'chal' && keyStarter(state, x.title, x.year))
+    if (t) { read.by = 'title'; read.title = t.title }
+    else if (bestInLeague(state, club)) read.by = 'results'
+  }
+  return read
+}
+
+export interface VctNeed {
+  team: Team
+  /** a starter in his job he out-rates, nobody in it, or a place under the club's five and a sixth */
+  kind: 'beat' | 'hole' | 'place'
+  mate?: Player
+  /** the buyout the club would pay (me/contract.ts buyoutDue) */
+  fee: number
+}
+
+/** The VCT clubs of his league that need him and can pay for him. */
+export function vctNeeds(state: GameState, league: string): VctNeed[] {
+  const me = state.me!
+  const p = state.players[me.id]
+  const fee = buyoutDue(state)
+  const skill = tryoutSkill(state)
+  const out: VctNeed[] = []
+  for (const team of vctClubsOf(state, league)) {
+    if (team.id === state.myTeam || me.declined.includes(team.id) || importBlock(state, team.id, p)) continue
+    // a man this far under the club's bar is not asked (me/auto.ts turns such a tryout down)
+    if (skill < expectOf(team) - 6) continue
+    // a buyout still owed comes out of the buyer's budget; nothing is owed on a deal that runs out this winter
+    if (fee > 0 && team.budget < fee) continue
+    const mate = team.starters.map((id) => state.players[id])
+      .filter((q): q is Player => !!q && q.id !== me.id && (q.roles ?? [q.role]).includes(p.role))
+      .sort((a, b) => a.overall - b.overall)[0]
+    if (!mate) { out.push({ team, kind: 'hole', fee }); continue }
+    if (p.overall > mate.overall) { out.push({ team, kind: 'beat', mate, fee }); continue }
+    const wage = salaryFloor(state, team.id, Math.round(expectedSalary(p, 1) * ROLE_PAY.rotation / 1000) * 1000)
+    if (team.roster.length < VCT_SQUAD && team.budget >= fee + wage) out.push({ team, kind: 'place', fee })
+  }
+  return out
+}
+
+/**
+ * A player window opens on a Challengers man (me/week.ts, through rollOffers):
+ * the VCT clubs of his league that need him come first, on a draw of their own.
+ * Returns how many came.
+ */
+export function vctApproach(state: GameState, rng: Rng): number {
+  const me = state.me!
+  const read = vctRead(state)
+  if (!read?.by || read.starts < VCT_SEEN) return 0
+  const needs = vctNeeds(state, read.league)
+  if (!needs.length) return 0
+  // not every window: a club has its own plans, and results alone convince fewer of them than a rating or a trophy
+  const odds = read.by === 'results' ? Math.min(0.85, 0.7 + 0.05 * (needs.length - 1)) : 0.9
+  if (!rng.chance(odds)) return 0
+  const p = state.players[me.id]
+  const count = needs.length > 1 && rng.chance(0.25 + me.agentTier * 0.2) ? 2 : 1
+  let pool = needs
+  for (let i = 0; i < count; i++) {
+    const w = pool.map((x) => {
+      let v = 10 + Math.max(0, x.team.rating - 75) + (x.mate ? (p.overall - x.mate.overall) * 4 : x.kind === 'hole' ? 12 : 0)
+      if (x.kind === 'place') v *= 0.5
+      if (me.intents.some((it) => it.teamId === x.team.id)) v *= 2
+      return v
+    })
+    const pick = rng.weighted(pool, w)
+    pool = pool.filter((x) => x !== pick)
+    approach(state, read, pick, rng)
+  }
+  return count
+}
+
+/** One VCT club comes: terms on the table when he clears its bar by a margin, a tryout when he is near it. */
+function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): void {
+  const me = state.me!
+  const p = state.players[me.id]
+  const t = need.team
+  const top = state.year >= 2023 ? 'VCT ' : '一线队'
+  const why = read.by === 'rating' ? `你的水平已经是${top}首发的样子`
+    : read.by === 'title' ? `你是${compCn(read.title ?? '')}冠军队的主力`
+    : '你这个赛季的数据是联赛里最好的'
+  const room = need.kind === 'beat' ? `他们${p.role}位置上的首发 ${need.mate?.ign} 不如你`
+    : need.kind === 'hole' ? `他们缺一个${p.role}`
+    : '他们名单上还空着一个位置'
+  const pay = need.fee ? `$${need.fee.toLocaleString()} 的违约金他们来付` : '你的合同今年到期，不用付违约金'
+  const where = `${t.name}（${leagueWord(t)}）`
+  const skill = tryoutSkill(state)
+  if (skill >= expectOf(t) + 4 || read.by === 'title') {
+    const deal = makeDeal(state, t.id, 'transfer', gradeOf(skill - expectOf(t) + 4), rng)
+    // a club that came for a starter says so in the contract (the 承诺首发 ask's terms, me/contract.ts ASKS)
+    if (need.kind !== 'place' && deal.role === 'rotation') {
+      deal.role = 'starter'
+      deal.salary = salaryFloor(state, t.id, Math.round(deal.salary * ROLE_PAY.starter / ROLE_PAY.rotation / 1000) * 1000)
+    }
+    me.deals.push(deal)
+    push(state, { kind: 'deal', id: deal.id })
+    pushLog(state, 'deal', `转会窗：${where} 来找你——${why}，${room}。${pay}，直接开了报价。`)
+    return
+  }
+  const inv: Invite = { id: `inv:${state.year}:${state.day}:${t.id}`, teamId: t.id, via: 'scout', day: state.day, expires: state.day + INVITE_DAYS, direct: false }
+  me.pre.invites.push(inv)
+  push(state, { kind: 'invite', id: inv.id })
+  pushLog(state, 'deal', `转会窗：${where} 的教练组看过你这个赛季的比赛，想请你去试训——${why}，${room}。签下来的话${pay}。${INVITE_DAYS} 天内答复。`)
 }
 
 /**
@@ -126,6 +356,16 @@ function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
 export function rollOffers(state: GameState, rng: Rng, listed = false): number {
   const me = state.me!
   if (me.phase !== 'pro') return 0
+  // a Challengers man a VCT club would start is theirs to ask for first, on a draw of its own, whenever he signed
+  // (vctApproach); with VCT clubs calling, nobody shops him to the Challengers clubs this window
+  if (!listed) {
+    const up = vctApproach(state, new Rng(hashStr(`vct:${state.seed}:${state.year}:${state.day}`)))
+    if (up) {
+      me.flags.dryWindows = 0
+      me.intents = []
+      return up
+    }
+  }
   const perf = proPerf(state)
   const team = state.teams[state.myTeam]
   const benched = !team.starters.includes(me.id)
@@ -149,7 +389,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
     const deal = makeDeal(state, t.id, 'transfer', gradeOf(d + 4), rng)
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
-    pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${t.region !== me.region ? '（外赛区）' : ''} 开价了。`)
+    pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${foreignLeague(state, t) ? '（外赛区）' : ''} 开价了。`)
     n++
   }
   if (!n && rut && rng.chance(0.26)) {
