@@ -19,6 +19,8 @@ import { AXIS_CN, traitOf } from '../../engine/me/traits'
 import { pop } from '../../engine/me/pending'
 import { retire } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
+import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
+import { attrWord } from './words'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
 import { useNumbers } from './words'
@@ -48,6 +50,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'ending': return <EndingModal onDone={onDone} />
     case 'ceremony': return <CeremonyModal onDone={onDone} />
     case 'hurt': return <HurtModal fixtureId={item.id!} onDone={onDone} />
+    case 'igl': return <IglModal onDone={onDone} />
   }
   return null
 }
@@ -374,6 +377,42 @@ function EventResult({ title, scene, q, pick, lines, onClose }: {
           : <div className="small" style={{ marginTop: 4 }}>没有立刻的变化。</div>}
       </div>
       <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onClose}>继续</button></div>
+    </Modal>
+  )
+}
+
+// ------------------------------------------------------------------ igl
+/** The coach offers me the calls (engine/me/igl.ts): where I stand, what changes, and a yes or a no. */
+function IglModal({ onDone }: { onDone: () => void }) {
+  const { game, commit, toast } = useGame()
+  const [nums] = useNumbers()
+  // the attributes in words on the default screen, in figures under 数值
+  const offer = iglOffer(game, nums ? undefined : attrWord)
+  if (!offer) { pop(game, 'igl'); onDone(); return null }
+  const answer = (take: boolean) => {
+    const lines = take ? takeIgl(game) : declineIgl(game)
+    commit()
+    if (lines.length) toast(lines.join('，'))
+    onDone()
+  }
+  return (
+    <Modal title="教练找你谈指挥" onClose={() => {}} onBgClose={() => {}}>
+      <p className="q ev-q">{offer.q}</p>
+      <p className="muted small" style={{ margin: '0 0 8px' }}>{offer.ctx}</p>
+      <p className="tiny muted" style={{ margin: '0 0 4px' }}>接下来会变的：</p>
+      <ul className="small" style={{ margin: '0 0 12px', paddingLeft: 18 }}>
+        {offer.changes.map((l) => <li key={l} style={{ marginBottom: 3 }}>{l}</li>)}
+      </ul>
+      <div className="node-opt">
+        <button onClick={() => answer(true)}>
+          <span>接下指挥</span>
+          <span className="m">{offer.take} · 按推荐</span>
+        </button>
+        <button onClick={() => answer(false)}>
+          <span>{offer.decline}</span>
+          <span className="m">{offer.declineNote}</span>
+        </button>
+      </div>
     </Modal>
   )
 }

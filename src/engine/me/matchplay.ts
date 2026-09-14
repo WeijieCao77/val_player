@@ -21,6 +21,7 @@ const clamp01 = (v: number) => Math.max(0.03, Math.min(0.97, v))
 import type { KeySlot, NodeCtx, NodeDef } from './nodes'
 import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
+import { iglAfterMatch } from './igl'
 import { bondNoteMatch } from './bond'
 import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
 import { starBeat, starBeatLine } from './stars'
@@ -557,6 +558,8 @@ export class MeMatch {
         : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— 你在替补席看完了这场。`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)
+      // a map called is a lesson in calling (me/igl.ts)
+      iglAfterMatch(state, rec)
       // played through an injury, or stepped in for an injured team-mate (me/hurtplay.ts)
       injuryAfterMatch(state, rec)
     }

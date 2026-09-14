@@ -445,9 +445,10 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
                 <button key={i} onClick={() => choose(i)}>
                   <span>{o.t}</span>
                   <span className="m">
+                    {/* the man who calls: a team-play option adds his 指挥 (engine/me/nodes.ts NODE_CALL) */}
                     {nums
-                      ? <>看{DIM_CN[o.dim]}：你 {ro.mine}{ro.mates != null ? `（队友均 ${ro.mates}）` : ''}{ro.theirs != null ? ` · 对方 ${ro.theirs}` : ''}　成功率 {pc}% · {risk}</>
-                      : <>看{DIM_CN[o.dim]} · {edge} · {risk}</>}
+                      ? <>看{DIM_CN[o.dim]}：你 {ro.mine}{ro.call ? `＋指挥 ${ro.call}` : ''}{ro.mates != null ? `（队友均 ${ro.mates}）` : ''}{ro.theirs != null ? ` · 对方 ${ro.theirs}` : ''}　成功率 {pc}% · {risk}</>
+                      : <>看{DIM_CN[o.dim]}{ro.call ? ' · 你来喊' : ''} · {edge} · {risk}</>}
                     {i === pend.coach ? ' · 教练会选这个' : ''}
                     <br />这回合：{stakes}
                   </span>

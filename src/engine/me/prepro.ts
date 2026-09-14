@@ -9,6 +9,7 @@ import { formatOf } from '../era'
 import { hasPlace } from '../timeline'
 import { clubOpen } from './window'
 import { noteRankPeak } from './moments'
+import { callerRead } from './igl'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -62,11 +63,14 @@ export function ladderWeekly(state: GameState, played: boolean): void {
   if (!played) me.pre.ladder = clamp(me.pre.ladder + (target - me.pre.ladder) * 0.06 - 0.4, 0, 100)
 }
 
-/** What a club's people see when they look at me: the eight, plus what a five taught me, plus the ladder. */
+/**
+ * What a club's people see when they look at me: the eight, plus what a five taught me, plus the ladder —
+ * and, for a man who calls or has lately, his 指挥 (me/igl.ts callerRead, 2026-09-14): clubs sign callers for the calls.
+ */
 export function tryoutSkill(state: GameState): number {
   const me = state.me!
   const p = state.players[me.id]
-  return p.overall + me.pre.tac * 0.15 + me.pre.ladder * 0.05
+  return p.overall + me.pre.tac * 0.15 + me.pre.ladder * 0.05 + callerRead(state)
 }
 
 /** What this club expects of a signing: a bench place at a VCT side, a starter at a Challengers one. */

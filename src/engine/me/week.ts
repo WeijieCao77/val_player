@@ -44,6 +44,8 @@ import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
 import { pushMoment } from './moments'
+import { iglWeek } from './igl'
+import { roomWeek } from './room'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -536,6 +538,10 @@ export function settleWeek(state: GameState): void {
     else if (p.form <= 56) fireEvent(state, 'cold_week')
     // from the winter market on, the club renews whoever it still uses, before the deals run out (me/club.ts)
     clubWeek(state, rng, state.day >= WINTER_RENEWALS)
+    // the calls: the clock at the club, the coach's offer, the calls taken back (me/igl.ts)
+    iglWeek(state, notes)
+    // the room at my club: where it sets everyone's form (me/room.ts)
+    roomWeek(state)
     // a week's end is a moment a club can call while my window is open: a small share of the period's round (me/window.ts rollWeight)
     windowRoll(state, new Rng(hashStr(`offer:week:${state.seed}:${state.year}:${state.day}`)), 'week')
   }

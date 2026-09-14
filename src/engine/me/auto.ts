@@ -16,6 +16,7 @@ import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
+import { takeIgl } from './igl'
 import { COURSES, FLAT_RELIEF, GEAR_PRICE, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
 import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
@@ -232,6 +233,8 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     case 'released': pop(state, 'released'); return ''
     // never on autopilot: the clock stops on it (see runAutoPilot's on())
     case 'folding': pop(state, 'folding'); return ''
+    // the coach's offer to call: the steady answer is yes — he only asks a player who can (me/igl.ts)
+    case 'igl': takeIgl(state); return '接下了队内指挥'
     case 'season': {
       pop(state, 'season', item.id)
       if (me.retireAsk && p.age >= 31) retire(state, `${p.age} 岁，你决定退役`)
@@ -249,6 +252,8 @@ export function runAutoPilot(state: GameState): string[] {
   const me = state.me!
   const done: string[] = []
   const on = (item: PendingItem): boolean => {
+    // the coach's offer to call is a career decision (me/igl.ts)
+    if (item.kind === 'igl') return me.auto.career
     if (item.kind === 'event' || item.kind === 'trait') return me.auto.daily
     if (item.kind === 'stream') return me.auto.biz
     // a cup's entry is the dial's; its rounds are matches, and a press hands them to me as it does my club's
@@ -352,7 +357,7 @@ export function quietAhead(state: GameState, days = 28): boolean {
  * club (reported 2026-09-12). A single week never did: it stops on every card.
  */
 export const RUN_DIAL: Partial<Record<PendingItem['kind'], 'career' | 'biz'>> = {
-  deal: 'career', invite: 'career', tryout: 'career', released: 'career', folding: 'career',
+  deal: 'career', invite: 'career', tryout: 'career', released: 'career', folding: 'career', igl: 'career',
   stream: 'biz', cup: 'biz',
 }
 
@@ -389,6 +394,7 @@ export function stopLine(state: GameState, item: PendingItem): string {
   else if (item.kind === 'tryout') what = `${club(me.tryout?.teamId)} 的试训还没打完`
   else if (item.kind === 'released') what = '你成了自由人'
   else if (item.kind === 'folding') what = '俱乐部要解散了'
+  else if (item.kind === 'igl') what = '教练想让你来当指挥'
   else if (item.kind === 'stream') what = '直播独家等你答复'
   else if (item.kind === 'cup') what = `${(item.id && cupFor(state, item.id)?.name) || '杯赛'}等你决定报不报名`
   else if (item.kind === 'season') what = '要不要退役，等你决定'

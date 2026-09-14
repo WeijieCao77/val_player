@@ -283,24 +283,35 @@ export const TALENT_PRESETS: { key: string; name: string; blurb: string; t: Reco
  * What a spread of talent means, in the screen's words (破晓's 「当前加点路线」):
  * judged by the share of the points spent that sit in the two biggest. Only
  * what the engine does is said: 综合 is the role's weighted sum with no penalty
- * for a short board, a key round and a practice duel score the option's own
- * attribute against the other side's (me/nodes.ts, me/duel.ts), and 协同 and 沟通
- * are what teammates get along on (engine/bonds.ts).
+ * for a short board, and a key round and a practice duel score the option's own
+ * attribute against the other side's (me/nodes.ts, me/duel.ts). 指挥 and 沟通
+ * are what the coach names his caller on, and the caller's 指挥 is what the
+ * whole five plays on (me/igl.ts); 协同 and 沟通 are how the room takes a player
+ * — how his bonds hold, whether a loss turns into an argument, his form, and a
+ * close call for a place (engine/bonds.ts ease, me/room.ts). Rewritten
+ * 2026-09-14 with both; the role weights are a separate task.
  */
 export function talentShape(talents: Record<keyof Attrs, number>): { label: string; line: string } | null {
   const spent = ATTR_KEYS.reduce((s, k) => s + (talents[k] ?? 0), 0)
   if (!spent) return null
   const share = ATTR_KEYS.map((k) => talents[k] ?? 0).sort((a, b) => b - a).slice(0, 2).reduce((s, v) => s + v, 0) / spent
-  const lowSocial = (talents.teamwork ?? 0) + (talents.communication ?? 0) <= 1
-  if (share >= 0.7) {
-    return {
-      label: '高度专精',
-      line: `综合冲得最快；但关键回合和对位练习赛里，用到短板那一项的选项很难成功${lowSocial ? '；协同、沟通几乎没点，和队友也难处好关系' : ''}。`,
-    }
-  }
-  if (share >= 0.45) return { label: '有侧重', line: `长项撑住综合，短板也不至于太短，关键回合里多数选项都能用${lowSocial ? '；协同、沟通几乎没点，和队友难处一些' : ''}。` }
-  return { label: '很均衡', line: '哪一项都不拖后腿，关键回合里哪个选项都能用；代价是综合比专精的路线低一些。' }
+  const social = (talents.teamwork ?? 0) + (talents.communication ?? 0)
+  const notes = [
+    (talents.igl ?? 0) >= 4 && (talents.communication ?? 0) >= 3
+      ? '指挥、沟通点得多：站稳首发、在队里待满一个赛段、教练信任你，他会让你当主指挥，全队按你的指挥来打；指挥本身几乎不算进综合'
+      : '',
+    social <= 2
+      ? '协同、沟通几乎没点：和队友的关系掉得快，输了容易起争执，状态受影响，能力接近时教练先用合得来的人'
+      : social >= 10 ? '协同、沟通点得多：和队友的关系稳，少起争执，状态好，能力接近时教练先用你' : '',
+  ].filter(Boolean)
+  const tail = notes.map((n) => `；${n}`).join('')
+  if (share >= 0.7) return { label: '高度专精', line: `综合冲得最快；但关键回合和对位练习赛里，用到短板那一项的选项很难成功${tail}。` }
+  if (share >= 0.45) return { label: '有侧重', line: `长项撑住综合，短板也不至于太短，关键回合里多数选项都能用${tail}。` }
+  return { label: '很均衡', line: `哪一项都不拖后腿，关键回合里哪个选项都能用；代价是综合比专精的路线低一些${tail}。` }
 }
+
+/** The talent panel's line on the three that 综合 hardly counts, in what the engine does with them. */
+export const TALENT_TEAM_HINT = '指挥：当上主指挥才上场起作用，全队按主指挥的指挥来打。协同、沟通：关键回合的配合选项、和队友的关系、输球后会不会起争执、状态，教练在能力接近的人里选首发时也看。'
 
 /** The eight, the way the new-career screen previews them. */
 export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, originKey: string, rng?: Rng): Attrs {
@@ -314,7 +325,9 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
     // and has to climb to it, the way 破晓 opens — see prepro.expectOf
     attrs[k] = clamp(52 + (talents[k] ?? 0) * 3 + (top.includes(k) ? 3 : 0) + (o?.attrs?.[k] ?? 0) + (rng ? rng.int(-1, 1) : 0), 40, 90)
   }
-  attrs.igl = Math.min(attrs.igl, 62)
+  // a rookie's 指挥 opens under a Challengers caller's (2026: p10 72): 62 until 2026-09-14, when the coach
+  // could start naming him caller (me/igl.ts) and four talent points and eight were still the same 62
+  attrs.igl = Math.min(attrs.igl, 66)
   return attrs
 }
 

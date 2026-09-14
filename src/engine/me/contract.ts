@@ -8,6 +8,8 @@ import { pop } from './pending'
 import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
 import { makeRoom } from './club'
+import { iglDrop } from './igl'
+import { ensureCaller } from '../world'
 import { addMoney } from './money'
 import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
@@ -242,6 +244,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   if (from) {
     from.roster = from.roster.filter((id) => id !== me.id)
     from.starters = from.starters.filter((id) => id !== me.id)
+    // the calls stay at the club I leave, and it names its own caller again (me/igl.ts)
+    if (from.id !== to.id) { iglDrop(state, from.id); ensureCaller(state, from.id) }
     if (from.starters.length < 5 && from.id !== to.id) {
       // the old club's five is the engine's business again
       from.starters = from.starters.slice()
@@ -311,6 +315,9 @@ export function leaveClub(state: GameState, why: string): void {
   if (from) {
     from.roster = from.roster.filter((id) => id !== me.id)
     from.starters = from.starters.filter((id) => id !== me.id)
+    // the calls stay behind, and the club names its own caller again (me/igl.ts)
+    iglDrop(state, from.id)
+    ensureCaller(state, from.id)
   }
   p.teamId = null
   // nobody's club again: the world keeps no club for a free agent

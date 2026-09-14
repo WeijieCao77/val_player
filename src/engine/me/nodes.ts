@@ -109,6 +109,26 @@ export function autoChance(manual: number, base: number, decides?: boolean): num
 /** an opponent's point on the call's attribute counts half what a point of mine does, measured from 50 */
 export const NODE_OPP = 0.5
 
+/**
+ * The man who calls leans on his 指挥 in a team-play call (decided 2026-09-14):
+ * once the coach has named me main caller (me/igl.ts), an option judged on 协同
+ * or 沟通 — hold together, rotate, fake and go — adds this much to the blend for
+ * each point of my 指挥 over 60. 指挥 80 is +6, about three points on the
+ * chance. 快进 and 托管 do not gain by it: autoChance caps a call made with
+ * nobody in the chair at the chance where it does nothing on average.
+ */
+export const NODE_CALL = 0.3
+
+/** What my calling adds to an option's blend: nothing unless I call for this five and the option is team play. */
+export function nodeCallEdge(state: GameState, dim: NodeDim, teamId?: string): number {
+  if (dim !== 'teamwork' && dim !== 'communication') return 0
+  const me = state.me
+  if (!me || me.phase !== 'pro' || (teamId ?? state.myTeam) !== state.myTeam) return 0
+  const p = state.players[me.id]
+  if (!p?.isIgl || p.iglSource !== 'appointed' || p.teamId !== state.myTeam) return 0
+  return Math.max(0, (p.attrs.igl - 60) * NODE_CALL)
+}
+
 export interface NodeCtx {
   round: number
   mine: number
@@ -382,7 +402,8 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string, oppT
     const dim = opt.dim
     const mine = p.attrs[dim] + injuryHit(state, dim)
     const avg = mates.length ? mates.reduce((s, m) => s + m.attrs[dim], 0) / mates.length : mine
-    v = mine * NODE_MINE + avg * (1 - NODE_MINE)
+    // and a team-play call of the man who calls leans on his 指挥 (NODE_CALL)
+    v = mine * NODE_MINE + avg * (1 - NODE_MINE) + nodeCallEdge(state, dim, teamId)
     const five = oppTeamId ? (state.teams[oppTeamId]?.starters ?? []).map((id) => state.players[id]).filter(Boolean) : []
     if (five.length) opp = ((five.reduce((s, x) => s + x.attrs[dim], 0) / five.length - 50) / 100) * 0.55 * NODE_OPP
   }
@@ -403,10 +424,10 @@ export function nodeChance(state: GameState, opt: NodeOpt, teamId?: string, oppT
  */
 export function nodeReadout(
   state: GameState, opt: NodeOpt, teamId?: string, oppTeamId?: string,
-): { mine: number; mates: number | null; theirs: number | null } {
+): { mine: number; mates: number | null; theirs: number | null; call: number } {
   const me = state.me!
   const p = state.players[me.id]
-  if (opt.dim === 'mental') return { mine: Math.round(me.mental), mates: null, theirs: null }
+  if (opt.dim === 'mental') return { mine: Math.round(me.mental), mates: null, theirs: null, call: 0 }
   const dim = opt.dim
   const avgOf = (ids: string[]) => {
     const rows = ids.map((id) => state.players[id]).filter(Boolean)
@@ -414,7 +435,8 @@ export function nodeReadout(
   }
   const mates = avgOf((state.teams[teamId ?? state.myTeam]?.starters ?? []).filter((id) => id !== me.id))
   const theirs = oppTeamId ? avgOf(state.teams[oppTeamId]?.starters ?? []) : null
-  return { mine: Math.round(p.attrs[dim]), mates, theirs }
+  // what my calling adds to the blend on a team-play option (NODE_CALL); 0 when I do not call
+  return { mine: Math.round(p.attrs[dim]), mates, theirs, call: Math.round(nodeCallEdge(state, dim, teamId)) }
 }
 
 /**
