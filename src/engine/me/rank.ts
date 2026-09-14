@@ -230,11 +230,13 @@ export const rankFull = (r: Rank): string => (r.pos === null ? `${r.name} · ${r
 /** For a table cell: 「辐能战魂 第 87」. */
 export const rankShort = (r: Rank): string => (r.pos === null ? r.name : `${r.name} 第 ${r.pos.toLocaleString('en-US')}`)
 
-const roundPlace = (n: number) => (n < 20 ? n : n < 100 ? Math.round(n / 5) * 5 : n < 1000 ? Math.round(n / 50) * 50 : Math.round(n / 500) * 500)
+/** a place said roughly, since the board wanders: 469 is 「前 500 名左右」 */
+const roundPlace = (n: number) => (n < 20 ? n : n < 200 ? Math.round(n / 10) * 10 : n < 1000 ? Math.round(n / 100) * 100 : Math.round(n / 500) * 500)
 
-/** A ladder score as a line to aim at, on my server: 「辐能战魂（国服前 500 名左右）」. */
+/** A ladder score as a line to aim at, on my server: 「辐能战魂（国服前 500 名左右）」, 「辐能战魂（韩服第一）」. */
 export function rankBar(state: GameState, l: number): string {
   const r = rankAt(state, l)
   if (r.pos === null) return r.name
+  if (r.pos === 1) return `${r.name}（${r.server.name}第一）`
   return `${r.name}（${r.server.name}前 ${roundPlace(r.pos).toLocaleString('en-US')} 名${r.pos >= 20 ? '左右' : ''}）`
 }

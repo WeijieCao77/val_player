@@ -339,7 +339,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 {climb} · 最高 {rankText(rankAt(game, me.pre.ladderPeak))}{nums ? `（实力对应 ${rankAt(game, aim).name}）` : ''}
               </p>
               <p className="tiny faint" style={{ margin: '0 0 4px' }}>
-                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR` : ''}才是辐能战魂。
+                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR ` : ''}才是辐能战魂。
                 {me.region === 'China' && rankAt(game).server.key === 'AP' ? '国服 2023 年 7 月开服以前，都在亚服打。' : ''}
               </p>
               <p className="tiny faint" style={{ margin: 0 }}>
