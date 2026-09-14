@@ -284,6 +284,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   me.badStreak = 0
   me.scrimRounds = 0
   me.tenure = 0
+  me.startsHere = 0
+  me.graceMatches = 0
   me.freeYears = 0
   me.abroad = to.region !== me.region
   // a club I turned down this year stays away this year, at this club too (me/prepro.ts declinedNow)
@@ -337,6 +339,8 @@ export function leaveClub(state: GameState, why: string): void {
   // nobody's man any more: no tryout in the period I signed in is a rule for a man under contract (me/window.ts signedThisPeriod)
   me.flags.signedPeriod = 0
   me.tenure = 0
+  me.startsHere = 0
+  me.graceMatches = 0
   me.trial = undefined
   me.benchLock = undefined
   me.proven = false

@@ -4,7 +4,7 @@ import { bondBetween } from '../../engine/bonds'
 import { callerOf } from '../../engine/roster'
 import { attrWord, trustLabel, useNumbers } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
-import { duelTarget, EDGE_NEED, roomCall } from '../../engine/me/coach'
+import { duelTarget, roomCall, standingLine } from '../../engine/me/coach'
 import { IGL_TRUST_LOST, SKID_OF, SKID_WINS, clubCaller, iglBlock, iglGates, myCall } from '../../engine/me/igl'
 import { roomView } from '../../engine/me/room'
 import { mateMark } from '../../engine/me/hurtplay'
@@ -117,12 +117,11 @@ export default function TeamScreen() {
             ) : <p className="tiny muted" style={{ margin: '0 0 6px' }}>名单里没有第二个 {p.role}，这个位置暂时没人跟你抢。</p>
           })()}
           <p className="small" style={{ margin: '0 0 6px' }}>
-            {team.starters.includes(me.id)
-              ? (me.trial ? `试用期，还剩 ${me.trial.left} 场。赢下比赛或打出队内前二就算过。` : me.proven ? '你是教练认定的首发。' : '你在名单里，但教练还没把你当自己人。')
-              : `再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场对位，教练给试用期。`}
+            {/* the week screen's own sentence (engine/me/coach.ts standingLine), so the two never disagree */}
+            {standingLine(game, 'team')}
           </p>
           <p className="tiny faint" style={{ margin: 0 }}>
-            名单每周一重排；连着三场全队最差会被换下两周；能力接近时，教练先用和队伍合得来的人。
+            名单每周一重排；以首发打满 8 场、教练信任到「信任」以上，或者以首发拿下冠军，就是他认定的首发，输球时不会被拿去试新阵容；连着三场全队最差会被换下两周（刚以首发拿下冠军的几场不算）；能力接近时，教练先用和队伍合得来的人。
           </p>
         </Panel>
       </div>

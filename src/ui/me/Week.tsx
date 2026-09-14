@@ -11,7 +11,7 @@ import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
-import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
+import { EDGE_NEED, duelTarget, standingLine } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { fixturesFor } from '../../engine/season'
 import { WAIT_CN, nextUp } from '../../engine/me/nextup'
@@ -345,7 +345,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 主教练 <b>{team?.coach?.name ?? '（未知）'}</b> · {trustLabel(me.coachTrust)}{nums ? `（${Math.round(me.coachTrust)}）` : ''}
               </p>
               <p className="small" style={{ margin: 0 }}>
-                {me.proven ? '你已经是他认定的首发。' : '他还当你是新人：训练赛、对位、正赛都能改变这一点。'}
+                {/* the team screen's own sentence (engine/me/coach.ts standingLine), so the two never disagree */}
+                {standingLine(game, 'week')}
               </p>
               {/* who calls, and what stands between me and the calls (engine/me/igl.ts) */}
               <p className="tiny faint" style={{ margin: '6px 0 0' }}>{iglLine(game)}</p>

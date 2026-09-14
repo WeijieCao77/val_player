@@ -307,8 +307,19 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     return
   }
 
+  if (rec.started && !rec.friendly) {
+    // A starter the coach keeps naming becomes his own starter without a trial (2026-09-14). A man
+    // signed as a starter never had one, and read 「教练没把你当自己人」 under 「完全信任」 for good.
+    // A save from before counts from this season's starts.
+    me.startsHere = (me.startsHere ?? Math.max(0, me.seasonStart.starts - 1)) + 1
+    if (me.graceMatches) me.graceMatches = Math.max(0, me.graceMatches - 1)
+    earnProven(state)
+  }
+
   if (rec.started && !calling) {
-    if (!rec.won && rec.rank >= 5) me.badStreak++
+    // straight after a title won as a starter, a bad night is a bad night (coachAfterTitle)
+    const grace = (me.graceMatches ?? 0) > 0
+    if (!rec.won && rec.rank >= 5 && !grace) me.badStreak++
     else me.badStreak = Math.max(0, me.badStreak - 1)
     if (me.badStreak >= 3) {
       me.badStreak = 0
@@ -320,9 +331,12 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
       return
     }
     // losing with me in the bottom half, again: a coach who keeps losing
-    // starts trying other fives to see who is dragging the team
+    // starts trying other fives to see who is dragging the team — but not with the
+    // starter he has settled on and trusts, nor one who has just won him a title
+    // (2026-09-14: 「拿了世界冠军fmvp但是一样被轮换」)
     if (!rec.won && rec.rank >= 4) me.rotateHeat = (me.rotateHeat ?? 0) + 1
     else if (rec.won) me.rotateHeat = 0
+    if (grace || (me.proven && me.coachTrust >= PROVEN_TRUST)) me.rotateHeat = 0
     if ((me.rotateHeat ?? 0) >= 2 && !(me.benchLock && me.benchLock > state.day)) {
       const r = new Rng(hashStr(`rotate:${state.seed}:${state.year}:${state.day}`))
       if (r.chance(0.4)) {
@@ -333,4 +347,71 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
       }
     }
   }
+}
+
+/** trust at 「信任」 and this many official starts at the club: the coach's own starter, trial or not (2026-09-14) */
+export const PROVEN_TRUST = 66
+export const PROVEN_STARTS = 8
+/** official starts after a title won as a starter in which a bad run costs no place: any title, an international one, the final's MVP on top */
+export const GRACE_TITLE = 4
+export const GRACE_BIG = 8
+export const GRACE_FMVP = 4
+
+/** A starter who has started enough here, and whom the coach trusts, is his own: the rookie discount goes, as a trial passed takes it. */
+function earnProven(state: GameState): void {
+  const me = state.me
+  if (!me || me.proven || me.trial) return
+  if ((me.startsHere ?? 0) < PROVEN_STARTS || me.coachTrust < PROVEN_TRUST) return
+  me.proven = true
+  pushLog(state, 'good', `以首发打了 ${me.startsHere} 场，教练拍板：你是他认定的首发。`)
+}
+
+/**
+ * A title won as a starter, as the coach takes it (2026-09-14, 「拿了世界冠军fmvp但是一样被轮换」):
+ * trust up — more for an international title, more again for the final's MVP — the place his for
+ * good, and a run of official starts after it in which a bad night costs no place. `cls` is the
+ * title's me/compclass.ts compClass.
+ */
+export function coachAfterTitle(state: GameState, cls: string, fmvp: boolean): void {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return
+  const big = cls === 'champions' || cls === 'masters' || cls === 'lockin'
+  me.coachTrust = clamp(me.coachTrust + (cls === 'champions' ? 10 : big ? 8 : 5) + (fmvp ? 4 : 0), 0, 100)
+  const was = me.proven
+  me.proven = true
+  me.trial = undefined
+  me.badStreak = 0
+  me.rotateHeat = 0
+  me.graceMatches = Math.max(me.graceMatches ?? 0, (big ? GRACE_BIG : GRACE_TITLE) + (fmvp ? GRACE_FMVP : 0))
+  pushLog(state, 'good', `${fmvp ? '决赛 MVP 是你' : '首发拿下冠军'}，${was ? '教练更信你了' : '教练认定你是他的首发'}：接下来 ${me.graceMatches} 场正赛，不会因为几场状态起伏把你换下。`)
+}
+
+/**
+ * Where I stand with the coach, in one sentence, for the week screen's 「教练怎么看你」 and the team
+ * screen's 「首发之争」 alike (2026-09-14). Both used to read `proven` alone, so a starter never put
+ * on trial read 「教练没把你当自己人」 beside 「完全信任」.
+ */
+export function standingLine(state: GameState, where: 'week' | 'team'): string {
+  const me = state.me
+  const team = state.teams[state.myTeam]
+  if (!me || !team) return ''
+  if (me.trial) return `试用期，还剩 ${me.trial.left} 场。赢下比赛或打出队内前二就算过。`
+  if (!team.starters.includes(me.id)) {
+    if (me.benchLock && me.benchLock > state.day) return `教练暂时把你换下来了，${me.benchLock - state.day} 天后重新考虑。`
+    return where === 'team'
+      ? `再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场对位，教练给试用期。`
+      : '你还在替补席：训练赛、对位、正赛都能改变这一点。'
+  }
+  if (me.proven) {
+    return (me.graceMatches ?? 0) > 0
+      ? `你是教练认定的首发。刚以首发拿下冠军，接下来 ${me.graceMatches} 场正赛不会因为状态起伏被换下。`
+      : '你是教练认定的首发。'
+  }
+  const left = Math.max(0, PROVEN_STARTS - (me.startsHere ?? 0))
+  if (me.coachTrust >= PROVEN_TRUST) {
+    return left > 0
+      ? `你在首发里，教练也信任你：再以首发打 ${left} 场，就是他认定的首发。`
+      : '你在首发里，教练也信任你：下一场首发打完，就是他认定的首发。'
+  }
+  return `你在首发里，教练还在观察：信任到「信任」、以首发打满 ${PROVEN_STARTS} 场，就是他认定的首发。`
 }

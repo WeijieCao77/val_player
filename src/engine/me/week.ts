@@ -19,7 +19,7 @@ import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { wageCny } from './paytable'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
-import { refreshMyRounds, runDuel, weeklyLineup } from './coach'
+import { coachAfterTitle, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
 import { pushLog } from './log'
@@ -454,6 +454,8 @@ export function syncTitles(state: GameState): void {
     bondNoteTitle(state, t.title)
     // and a trophy I started in loosens a ceiling, the final's MVP one more (me/bottleneck.ts)
     if (started) bottleneckTitle(state, t.title, t.year, fmvp)
+    // and the coach who started me in it counts on me now (me/coach.ts, 2026-09-14: 「拿了世界冠军fmvp但是一样被轮换」)
+    if (started) coachAfterTitle(state, compClass(t.title), fmvp)
     // and gets its card (me/moments.ts): the full screen for one I started in, the event card for one won from the bench
     pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp, bench: !started })
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
