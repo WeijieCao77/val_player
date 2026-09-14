@@ -488,7 +488,8 @@ export function createCareer(o: CareerOpts): GameState {
     deal.role = o.start === 'chal' ? 'starter' : 'rotation'
     deal.years = o.start === 'chal' ? 1 : 1
     deal.signBonus = 0
-    joinClub(state, deal)
+    // the career opens at the club: no signing card on the first screen (me/moments.ts)
+    joinClub(state, deal, { quiet: true })
   }
   beginWeek(state)
   return state

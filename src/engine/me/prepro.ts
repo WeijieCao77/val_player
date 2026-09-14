@@ -8,6 +8,7 @@ import { CUPS } from './cups'
 import { formatOf } from '../era'
 import { hasPlace } from '../timeline'
 import { clubOpen } from './window'
+import { noteRankPeak } from './moments'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -46,7 +47,10 @@ export function playRanked(state: GameState, rng: Rng): { wins: number; losses: 
     if (rng.chance(pw)) { wins++; delta += step } else { losses++; delta -= step * 0.82 }
   }
   me.pre.ladder = clamp(me.pre.ladder + delta, 0, 100)
+  const wasPeak = me.pre.ladderPeak
   me.pre.ladderPeak = Math.max(me.pre.ladderPeak, me.pre.ladder)
+  // the first time the best reaches 超凡入圣 / 神话 / 辐能战魂 gets a card (me/moments.ts)
+  if (me.pre.ladderPeak > wasPeak) noteRankPeak(state, wasPeak)
   return { wins, losses, delta }
 }
 

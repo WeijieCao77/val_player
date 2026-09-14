@@ -43,6 +43,7 @@ import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
+import { pushMoment } from './moments'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -449,6 +450,8 @@ export function syncTitles(state: GameState): void {
     bondNoteTitle(state, t.title)
     // and a trophy I started in loosens a ceiling, the final's MVP one more (me/bottleneck.ts)
     if (started) bottleneckTitle(state, t.title, t.year, fmvp)
+    // and gets its own card (me/moments.ts); one won from the bench stays a line in the log
+    if (started) pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp })
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }

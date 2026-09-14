@@ -37,6 +37,20 @@
 .mo-rays { position: absolute; width: 340px; height: 340px; color: var(--tone); opacity: .2; animation: mo-spin 80s linear infinite; }
 .mo-art { position: relative; width: 108px; height: 108px; color: #fff; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .5)); animation: mo-pop .45s cubic-bezier(.2, 1.4, .4, 1); }
 .mo-art svg { display: block; width: 100%; height: 100%; }
+/* two crests and an arrow (a signing): as wide as they need */
+.mo-art.wide { width: max-content; height: auto; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .45)); }
+.mo-move { display: flex; align-items: center; gap: 14px; }
+/* a crest keeps its size in the row — an auto-width box let `max-width: 100%` fold it down to the arrow's width */
+.mo-move img, .mo-move .mo-tag { flex: none; max-width: none; }
+/* a club with no crest (an academy, mostly): its tag on the same six-sided shape */
+.mo-tag {
+  display: grid; place-items: center;
+  clip-path: polygon(50% 0, 100% 22%, 100% 74%, 50% 100%, 0 74%, 0 22%);
+  background: linear-gradient(160deg, color-mix(in srgb, #fff 22%, var(--panel-2)), var(--panel-2));
+  color: var(--text); font-weight: 900; letter-spacing: .03em; line-height: 1;
+}
+.mo-arrow { font-size: 30px; font-weight: 900; color: #fff; }
+.mo-people { display: flex; justify-content: center; margin: 0 0 16px; }
 /* no band behind it: the art takes the tone instead of white */
 .moment.bare .mo-art { color: var(--tone); filter: drop-shadow(0 0 16px color-mix(in srgb, var(--tone) 55%, transparent)); }
 .mo-eyebrow { margin: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .24em; color: var(--tone); overflow-wrap: anywhere; }

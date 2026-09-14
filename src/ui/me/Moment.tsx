@@ -16,12 +16,14 @@ export interface MomentChip { text: string; kind?: 'up' | 'dn' | 'gold' }
 interface Press { label: string; onClick: () => void }
 
 export default function Moment({
-  tone = 'accent', band = true, art, eyebrow, title, body, chips, children, primary, secondary, next,
+  tone = 'accent', band = true, wide = false, art, eyebrow, title, body, chips, children, primary, secondary, next,
 }: {
   /** gold for the rare ones (a hidden achievement); red for the rest */
   tone?: 'accent' | 'gold'
   /** the red slash behind the art; without it the art takes the tone */
   band?: boolean
+  /** art wider than the square slot, e.g. two crests and an arrow */
+  wide?: boolean
   art: ReactNode
   eyebrow: string
   title: string
@@ -62,7 +64,7 @@ export default function Moment({
           <div className="mo-hero" aria-hidden="true">
             {band && <span className="mo-band" />}
             <Rays className="mo-rays" />
-            <div className="mo-art">{art}</div>
+            <div className={`mo-art${wide ? ' wide' : ''}`}>{art}</div>
           </div>
           <p className="mo-eyebrow">{eyebrow}</p>
           <h2 className="mo-title" id="mo-title">{title}</h2>

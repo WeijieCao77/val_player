@@ -14,6 +14,7 @@ import { keepInBand, offerOf, payOf } from './paytable'
 import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { absDay, dateCn, windowAt } from './window'
+import { pushMoment } from './moments'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -233,7 +234,7 @@ function applyTerms(state: GameState, d: Deal): void {
  * Off one roster, onto another, with everything that belongs to the old
  * room left behind: the coach's regard, the trial, the bench lock, the duels.
  */
-export function joinClub(state: GameState, d: Deal): void {
+export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = {}): void {
   const me = state.me!
   const p = state.players[me.id]
   const to = state.teams[d.teamId]
@@ -295,6 +296,11 @@ export function joinClub(state: GameState, d: Deal): void {
   pushLog(state, 'deal', `签约 ${to.name}（${to.tier === 1 ? 'VCT' : 'Challengers'}）：${ROLE_CN[d.role]}，${d.years} 年，年薪 ${fmtMoney(d.salary, d.cur, y)}${d.signBonus ? `，签字费 ${fmtMoney(d.signBonus, d.cur, y)}` : ''}，违约金 ${fmtMoney(d.buyout, d.cur, y)}${where}。`)
   if (to.starters.includes(me.id)) pushLog(state, 'good', '教练看了你的第一次训练，把你放进了首发。')
   else pushLog(state, 'info', `首发是 ${to.starters.map((id) => state.players[id]?.ign).join('、')}，你从替补席开始。`)
+  // a signing gets its card, the first club of a career said so (me/moments.ts); a career opening at its club does not
+  if (!opts.quiet) {
+    const first = (p.clubHist?.length ?? 0) <= 1
+    pushMoment(state, { kind: 'sign', key: `sign:${y}:${state.day}:${to.id}`, teamId: to.id, fromId: from?.id, first, years: d.years, pay: fmtMoney(d.salary, d.cur, y), role: ROLE_CN[d.role] })
+  }
 }
 
 /** The club lets me go. Back to the market, with a record this time. */

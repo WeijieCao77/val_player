@@ -29,6 +29,7 @@ import EconomyScreen from './ui/me/EconomyScreen'
 import AchievementsScreen from './ui/me/AchievementsScreen'
 import AchPop from './ui/me/AchPop'
 import { Held, heldNow, holdCard } from './ui/me/hold'
+import MomentQueue from './ui/me/MomentQueue'
 import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
@@ -250,9 +251,11 @@ export default function PlayerGame() {
   const starter = !!team && team.starters.includes(me.id)
   // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
   // under a card's scrim could not be pressed (z45 against z50), and the tour's veil covered it too
-  const unlocks = !live && !summary ? unseenAch(me).length : 0
+  // the big moments first (me/moments.ts), then the achievements they unlocked, then the cards the clock stopped on
+  const moments = !live && !summary ? (me.moments?.length ?? 0) : 0
+  const unlocks = !live && !summary && !moments ? unseenAch(me).length : 0
   // an answer's result still up (ui/me/hold.tsx) goes before the next card too
-  const pending = !live && !summary && !unlocks && !heldNow() ? me.pending[0] : undefined
+  const pending = !live && !summary && !moments && !unlocks && !heldNow() ? me.pending[0] : undefined
 
   const Screen = screen === 'me' ? MeScreen
     : screen === 'team' && pro ? TeamScreen
@@ -439,9 +442,11 @@ export default function PlayerGame() {
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
         {/* an answer's result, up until it is closed (ui/me/hold.tsx) */}
         <Held />
-        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || unlocks > 0 || heldNow()} />
-        {/* what just unlocked waits for the match and the run's summary, and goes before any card (unlocks above) */}
-        {!live && !summary && <AchPop />}
+        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || moments > 0 || unlocks > 0 || heldNow()} />
+        {/* a title, a signing, an award, a new tier: a card each, before anything else takes its turn (ui/me/MomentQueue.tsx) */}
+        {!live && !summary && <MomentQueue />}
+        {/* what just unlocked waits for the match, the run's summary and those cards, and goes before any card (unlocks above) */}
+        {!live && !summary && !moments && <AchPop />}
         {/* a build that went live under this tab: 刷新 saves first; a match being played lives only in memory, so the bar waits for it */}
         <UpdateNudge busy={!!live} onBeforeReload={commit} />
         {toastMsg && <div className="toast">{toastMsg}</div>}

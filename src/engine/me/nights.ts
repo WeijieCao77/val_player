@@ -13,6 +13,7 @@ import { compCn } from './compname'
 import { outletRecap } from './outlets'
 import { ARRIVALS_UNTIL, arrivalsBetween, arrivedBy } from './releases'
 import type { Arrival } from './releases'
+import { pushMoment } from './moments'
 
 /**
  * Five more nights that are not matches: 年度颁奖夜, 退役仪式, 版本发布会,
@@ -466,6 +467,10 @@ export function nightApply(state: GameState, kind: NightKind, tier: CerTier, ski
       pushLog(state, color, skipped
         ? `${def.name}：你没上台${thisYear(state).some((a) => a.won) ? '，奖是经理替你领的' : ''}。`
         : `${def.name}的致辞 <b>${TIER_WORD[tier]}</b>：${awardsAfter(state, tier)}`)
+      // what was won gets its card once the night is over, so no card says the name before the stage does (me/moments.ts)
+      for (const a of thisYear(state).filter((x) => x.won)) {
+        pushMoment(state, { kind: 'award', key: `award:${a.year}:${a.key}`, award: a.name, league: a.league, nominees: a.nominees })
+      }
       return
     }
     case 'showmatch': {

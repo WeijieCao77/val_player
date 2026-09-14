@@ -468,6 +468,39 @@ export interface PendingItem {
   day: number
 }
 
+/**
+ * A big moment waiting for its full-screen card (me/moments.ts, ui/me/MomentQueue.tsx): what
+ * happened, kept as it was that day, so the card says it even when the club or the board has
+ * moved on by the time it is shown.
+ */
+export interface MomentItem {
+  kind: 'title' | 'sign' | 'award' | 'rank'
+  /** one card per key */
+  key: string
+  year: number
+  day: number
+  /** title: the competition as the timeline names it, and whether I was the final's MVP */
+  comp?: string
+  fmvp?: boolean
+  /** sign: the club I joined and the one I left, my first pro contract, the terms as signed */
+  teamId?: string
+  fromId?: string
+  first?: boolean
+  years?: number
+  pay?: string
+  role?: string
+  /** award: the category, the league, who was up for it */
+  award?: string
+  league?: string
+  nominees?: string[]
+  /** rank: 「神话 1」, its tier and division, the server, the place on its board */
+  rank?: string
+  tier?: string
+  div?: number
+  server?: string
+  pos?: number | null
+}
+
 export interface MeState {
   /** the year this save began on the one timeline; older saves read it off their first season (stars.ts savedFrom) */
   entryYear?: number
@@ -559,6 +592,8 @@ export interface MeState {
   dueFixture?: string
   /** things waiting on me before the clock moves */
   pending: PendingItem[]
+  /** big moments waiting for their full-screen card — me/moments.ts; absent in older saves */
+  moments?: MomentItem[]
   seasons: MeSeason[]
   seasonStart: { year: number; overall: number; matches: number; starts: number; wins: number; acsSum: number }
   lastLineupIn?: boolean
