@@ -3,7 +3,7 @@ import { Crest, Panel, fmtDay, moneyIn } from './common'
 import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
-import { absDay, dateCn, inviteBlock, signedThisPeriod, windowBlock, windowLine } from '../../engine/me/window'
+import { absDay, dateCn, inviteBlock, listBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
 import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
@@ -94,12 +94,12 @@ export default function TransferScreen() {
               <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式转会。</p>
             )}
             {(() => {
-              const shut = windowBlock(game)
-              const why = shut ?? (me.moveAfter ? '已经谈妥了下一家' : me.listedYear === game.year ? '今年已经挂过牌了' : null)
+              // the engine's own gate, greyed with its line: an agreed move, the period I signed in, the window, this year's listing
+              const why = listBlock(game)
               return (
                 <>
                   <button className="sm" disabled={!!why} title={why ?? undefined} onClick={() => { toast(listSelf(game)); commit() }}>主动挂牌（经理会不高兴）</button>
-                  {why && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{shut ? '窗口开着、名单没锁才能挂牌。' : why}。</p>}
+                  {why && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{why}。</p>}
                 </>
               )
             })()}
