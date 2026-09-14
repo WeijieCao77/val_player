@@ -1,4 +1,4 @@
-import { eventOf, gameOf, phaseSeatsOf, rankPhase } from './circuit'
+import { eventOf, gameOf, isPlacementRound, phaseSeatsOf, rankPhase } from './circuit'
 import type { CUnit, Game } from './circuit'
 import type { Competition, GameState } from './types'
 
@@ -92,6 +92,7 @@ export function roundCn(round: string): string {
     .replace(/^Round (\d+) \((\d+-\d+)\)$/, '第 $1 轮（$2）')
     .replace(/^Middle Round (\d+)$/, '中段组第 $1 轮')
     .replace(/^Middle Final$/, '中段组决赛')
+    .replace(/^(Bronze( Match| Final)?|Consolation)$/, '季军赛')
 }
 
 /** A unit's phase and group: 「小组赛 · A组」 is the A组 of 小组赛. */
@@ -276,7 +277,7 @@ export function eventTables(state: GameState, comp: Competition): EventTable[] {
       // a match still to play is the truth of it, whatever the graph says a side's last result led to
       if (playing != null) {
         rows.push({ team: t, state: 'in', round: nodes[playing].round })
-      } else if (end && end.won && !/季军赛|亚军赛/.test(nodes[end.i].round)) {
+      } else if (end && end.won && !isPlacementRound(nodes[end.i].round)) {
         rows.push({ team: t, state: 'won', round: nodes[end.i].round })
       } else if (end) {
         rows.push({ team: t, state: 'out', round: nodes[end.i].round })

@@ -386,7 +386,9 @@ def round_cn(series: str) -> str:
         (r'^Semifinals?$', '半决赛'),
         (r'^Quarterfinals?$', '四分之一决赛'),
         (r'^(Third|3rd) Place.*$', '季军赛'),
-        (r'^Consolation Finals?$', '季军赛'),
+        # vlr's other words for it: engine/circuit.ts isPlacementRound reads the ones already in circuit.json
+        (r'^Bronze( Match| Final)?$', '季军赛'),
+        (r'^Consolation( Finals?)?$', '季军赛'),
         (r'^Runner-?Up Finals?$', '亚军赛'),
         (r'^Opening$', '首轮'),
         (r"^Winner'?s$", '胜者赛'),

@@ -359,6 +359,15 @@ function flat(ev: CEvent): { nodes: Flat[]; base: number[] } {
   return hit
 }
 
+/**
+ * A match for third place, or for second, played by two sides already out. scripts/build_circuit.py names
+ * most of them 季军赛 and 亚军赛, but thirteen kept vlr's words — 「Bronze Match」 and 「Bronze Final」 at 2021's
+ * Indonesian and Hong Kong & Taiwan Challengers and Thailand's 2022 Stage 1, 「Consolation」 at France's 2024
+ * Revolution splits — and in a world that played one, its winner ranked above the side that lost the final.
+ */
+export const isPlacementRound = (round: string): boolean =>
+  /(季军赛|亚军赛)$/.test(round) || /^(Bronze( Match| Final)?|(Third|3rd) Place.*|Consolation( Finals?)?|Runner-?Up Finals?)$/i.test(round)
+
 /** One decided node, whoever decided it: a match or a walkover. */
 export interface Game { a: string | null; b: string | null; w: string | null; round: string; mapsA: number; mapsB: number; roundsA: number; roundsB: number }
 
@@ -429,7 +438,7 @@ export function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = fa
   const out = (t: string): boolean => {
     const g = games[last.get(t)!]
     // a third-place or runner-up match is played by two sides already out
-    return !!g.w && (g.w !== t || g.round.endsWith('季军赛') || g.round.endsWith('亚军赛'))
+    return !!g.w && (g.w !== t || isPlacementRound(g.round))
   }
   // a bracket that ends with no grand final — 2025's Pacific Ascension — leaves
   // two sides unbeaten, and the one that came up the upper side is ahead
