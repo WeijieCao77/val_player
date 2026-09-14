@@ -1005,6 +1005,10 @@ export interface WorldState {
    * Symmetric by construction — see engine/bonds.ts.
    */
   bonds?: Record<string, number>
+  /** at the career player's club, when each feud past the line was last said (year × 400 + day), by the same key — engine/bonds.ts FEUD_GAP */
+  feudSaid?: Record<string, number>
+  /** at the career player's club, when each pair last argued after a match (year × 400 + day), by the same key — engine/bonds.ts ARGUE_GAP */
+  argueSaid?: Record<string, number>
   /** optional rule: each club may hold at most two players from other regions */
   importLimit?: boolean
   /** qualification posters already shown, as `${year}:${event}` */

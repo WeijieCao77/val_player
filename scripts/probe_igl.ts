@@ -8,13 +8,17 @@
  *                                                                            with b, b − a as well
  *
  * builds: even (均衡型 2+2), igl (the 指挥型 preset), iglmax (指挥 8 · 沟通 6 · 协同 4), social (协同 8 · 沟通 8)
+ * builds: gun (the 枪法型 preset) as well
  * pol:    auto — left on 快进 (me/auto.ts autoWeek)
+ *         role — the same, with the steady plan's talent session off (autoPlan's `talent` false): the role's three sessions
  *         call — a player chasing the calls: the same steady plan, with its 排位 points spent on a 跟队训练赛 and a
  *                双排 with the club's caller instead; the 综合 hours stay
  */
 import { appendFileSync, readFileSync } from 'node:fs'
 import { createCareer, emptyTalents, TALENT_PRESETS } from '../src/engine/me/career'
-import { autoPlan, autoResolve, autoWeek } from '../src/engine/me/auto'
+import { autoPlan, autoResolve } from '../src/engine/me/auto'
+import { ACTION_BY_KEY } from '../src/engine/me/actions'
+import type { MeAction } from '../src/engine/me/types'
 import { advanceWeek, setPlan } from '../src/engine/me/week'
 import type { WeekStop } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
@@ -42,12 +46,13 @@ type T = Record<keyof Attrs, number>
 export const BUILDS: Record<string, T> = {
   even: emptyTalents(),
   igl: { ...TALENT_PRESETS.find((x) => x.key === 'igl')!.t },
+  gun: { ...TALENT_PRESETS.find((x) => x.key === 'gun')!.t },
   iglmax: { aim: 1, reaction: 0, awareness: 1, utility: 0, clutch: 0, teamwork: 4, communication: 6, igl: 8 },
   social: { aim: 1, reaction: 1, awareness: 1, utility: 1, clutch: 0, teamwork: 8, communication: 8, igl: 0 },
 }
 const REGION_OF: Record<number, Region> = { 7: 'Americas', 8: 'Pacific', 9: 'EMEA', 10: 'China', 11: 'Americas', 12: 'Pacific' }
 
-type Pol = 'auto' | 'call'
+type Pol = 'auto' | 'call' | 'role'
 
 export interface Row {
   build: string; role: Role; seed: number; pol?: Pol
@@ -55,8 +60,18 @@ export interface Row {
   signed: number; firstVct: number; vctSeasons: number
   proWeeks: number; startShare: number
   teamWin: number; startWin: number; matches: number
+  /** my rating and ACS rank on my side, over the official matches I started */
+  rating?: number; rank?: number
   titles: number; intl: number
   bond: number; harmony: number; form: number; conflicts: number
+  /** of conflicts: arguments after a match (赛后起了争执), and the weekly 「关系还没缓和」 notes, naming me */
+  argues?: number; feuds?: number
+  /** of argues, the ones where I was the one who carried (named first) */
+  carried?: number
+  /** my eight at the end */
+  attrs?: Attrs
+  /** action points the week's plan put on each action, over the professional weeks */
+  hours?: Record<string, number>
   iglWeeks: number; iglYear: number; offers: number; declines: number; revokes: number
   igl: number; comm: number; tw: number
   trust?: number; firstCall?: number
@@ -67,7 +82,7 @@ export interface Row {
  * A player chasing the calls: the steady plan (autoPlan), with its 排位 points spent on a 跟队训练赛 and a
  * 双排 with the club's caller instead — the 综合 hours stay. Everything else as 快进 plays it.
  */
-function callerWeek(state: GameState): WeekStop {
+function callerWeek(state: GameState, hours: Record<string, number>): WeekStop {
   const me = state.me!
   const clear = () => { let g = 0; while (me.pending.length && g++ < 20) autoResolve(state, me.pending[0]) }
   clear()
@@ -80,6 +95,24 @@ function callerWeek(state: GameState): WeekStop {
     if ((me.plan.ranked ?? 0) > 0 && me.ap < 1) setPlan(state, 'ranked', -1)
     const mate = clubCaller(state) ?? squadOf(state, state.myTeam).find((x) => x.id !== me.id)
     if (mate && me.ap >= 1 && setPlan(state, 'duo', 1) === null) me.duoWith = mate.id
+  }
+  return playWeek(state, hours, clear)
+}
+
+/** The week as 快进 plays it (me/auto.ts autoWeek), step for step, with the plan's hours written down. */
+function steadyWeek(state: GameState, hours: Record<string, number>, talent = true): WeekStop {
+  const me = state.me!
+  const clear = () => { let g = 0; while (me.pending.length && g++ < 20) autoResolve(state, me.pending[0]) }
+  clear()
+  if (me.phase === 'retired' || state.gameOver) return { kind: 'game-over' }
+  autoPlan(state, talent)
+  return playWeek(state, hours, clear)
+}
+
+function playWeek(state: GameState, hours: Record<string, number>, clear: () => void): WeekStop {
+  const me = state.me!
+  if (me.phase === 'pro' && state.myTeam) {
+    for (const [k, n] of Object.entries(me.plan)) if (n) hours[k] = (hours[k] ?? 0) + n * ACTION_BY_KEY[k as MeAction].cost
   }
   let stop = advanceWeek(state)
   let guard = 0
@@ -102,10 +135,11 @@ function career(build: string, role: Role, seed: number, seasons: number, pol: P
   let signed = 0
   let firstVct = 0
   const vctYears = new Set<number>()
-  let proWeeks = 0, startWeeks = 0, iglWeeks = 0, iglYear = 0, conflicts = 0, firstCall = 0
+  let proWeeks = 0, startWeeks = 0, iglWeeks = 0, iglYear = 0, conflicts = 0, argues = 0, carried = 0, feuds = 0, firstCall = 0
   const bonds: number[] = [], harm: number[] = [], forms: number[] = [], trust: number[] = []
+  const hours: Record<string, number> = {}
   while (state.year < 2026 + seasons && me.phase !== 'retired' && weeks < seasons * 60) {
-    const stop = pol === 'call' ? callerWeek(state) : autoWeek(state)
+    const stop = pol === 'call' ? callerWeek(state, hours) : steadyWeek(state, hours, pol !== 'role')
     weeks++
     peak = Math.max(peak, p.overall)
     if (!firstCall && p.isIgl && p.iglSource === 'appointed') firstCall = weeks
@@ -121,7 +155,11 @@ function career(build: string, role: Role, seed: number, seasons: number, pol: P
       harm.push(squadHarmony(state, state.myTeam))
       forms.push(p.form)
       if (p.isIgl && callerOf(state, state.myTeam)?.id === me.id) { iglWeeks++; if (!iglYear) iglYear = state.year }
-      conflicts += me.weekNotes.filter((n) => n.includes('💢') && n.includes(p.ign)).length
+      const mine = me.weekNotes.filter((n) => n.includes('💢') && n.includes(p.ign))
+      conflicts += mine.length
+      argues += mine.filter((n) => n.includes('赛后起了争执')).length
+      carried += mine.filter((n) => n.includes('赛后起了争执') && n.startsWith(`💢 ${p.ign} 和`)).length
+      feuds += mine.filter((n) => n.includes('关系还没缓和')).length
     }
     if (stop.kind === 'game-over') break
   }
@@ -132,12 +170,13 @@ function career(build: string, role: Role, seed: number, seasons: number, pol: P
     build, role, seed, pol, start, peak, final: p.overall,
     signed, firstVct, vctSeasons: vctYears.size,
     proWeeks, startShare: proWeeks ? startWeeks / proWeeks : 0,
+    rating: mean(started.map((m) => m.rating)), rank: mean(started.map((m) => m.rank)),
     teamWin: official.length ? official.filter((m) => m.won).length / official.length : 0,
     startWin: started.length ? started.filter((m) => m.won).length / started.length : 0,
     matches: official.length,
     titles: me.titles.filter((x) => x.started).length,
     intl: me.titles.filter((x) => x.started && /Masters|Champions|大师赛|冠军赛/.test(x.title)).length,
-    bond: mean(bonds), harmony: mean(harm), form: mean(forms), conflicts,
+    bond: mean(bonds), harmony: mean(harm), form: mean(forms), conflicts, argues, carried, feuds, hours, attrs: { ...p.attrs },
     iglWeeks, iglYear, offers: book?.offers ?? 0, declines: book?.declines ?? 0, revokes: book?.revokes ?? 0,
     igl: p.attrs.igl, comm: p.attrs.communication, tw: p.attrs.teamwork,
     trust: mean(trust), firstCall,
@@ -150,7 +189,7 @@ const sg = (v: number) => (Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed
 const COLS: [keyof Row, string, number][] = [
   ['start', '起点', 1], ['peak', '峰值综合', 1], ['firstVct', '首个VCT年', 1], ['vctSeasons', 'VCT赛季', 1],
   ['startShare', '首发周%', 100], ['teamWin', '队伍胜率%', 100], ['titles', '冠军(首发)', 1], ['intl', '国际冠军', 1],
-  ['bond', '和队友关系', 1], ['harmony', '全队关系', 1], ['form', '状态', 1], ['conflicts', '争执', 1],
+  ['bond', '和队友关系', 1], ['harmony', '全队关系', 1], ['form', '状态', 1], ['conflicts', '💢合计', 1], ['argues', '赛后争执', 1], ['feuds', '还没缓和', 1],
   ['trust', '教练信任', 1], ['iglWeeks', '主指挥周', 1], ['revokes', '被收回', 1], ['igl', '末指挥', 1], ['comm', '末沟通', 1],
 ]
 const vctOf = (r: Row) => (r.firstVct || 2033)
@@ -207,7 +246,7 @@ if (mode === 'dist') {
   for (const role of roles) for (const seed of seeds) for (const b of builds) {
     const r = career(b, role, seed, seasons, pol)
     appendFileSync(out, `${JSON.stringify(r)}\n`)
-    process.stderr.write(`${role} ${b} ${pol} seed ${seed}: ${r.start}→${r.peak} vct ${r.firstVct || '-'} call ${r.iglWeeks}w from wk ${r.firstCall || '-'} revoked ${r.revokes} trust ${f1(r.trust ?? NaN)} starts ${(r.startShare * 100).toFixed(0)}% bond ${f1(r.bond)} form ${f1(r.form)} igl ${r.igl}/${r.comm} · ${r.secs}s\n`)
+    process.stderr.write(`${role} ${b} ${pol} seed ${seed}: ${r.start}→${r.peak} vct ${r.firstVct || '-'} call ${r.iglWeeks}w from wk ${r.firstCall || '-'} revoked ${r.revokes} trust ${f1(r.trust ?? NaN)} starts ${(r.startShare * 100).toFixed(0)}% bond ${f1(r.bond)} form ${f1(r.form)} argue ${r.argues}+${r.feuds}/${r.conflicts} igl ${r.igl}/${r.comm} titles ${r.titles} · ${r.secs}s\n`)
   }
 } else if (mode === 'report') {
   const read = (f: string): Row[] => readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Row)

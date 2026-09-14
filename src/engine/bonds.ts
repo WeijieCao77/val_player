@@ -273,6 +273,15 @@ export function applyMatchBonds(
       // off it, and they were already not getting on — or, for two awkward men,
       // not getting on well enough.
       if (gap >= 0.45 && after < argueAt(live)) {
+        // where the room is live, the same two do not argue again inside ARGUE_GAP days; the defeat above still cost the bond
+        const today = state.year * 400 + state.day
+        const k = key(x.p.id, y.p.id)
+        const last = live != null ? state.argueSaid?.[k] : undefined
+        if (last != null && today - last < ARGUE_GAP) continue
+        if (live != null) {
+          const kept = Object.entries(state.argueSaid ?? {}).filter(([, d]) => today - d < ARGUE_GAP)
+          state.argueSaid = { ...Object.fromEntries(kept), [k]: today }
+        }
         notes.push(
           `💢 ${carrier.p.ign} 和 ${passenger.p.ign} 在赛后起了争执（${carrier.p.ign} ${carrier.r.toFixed(2)} / ${passenger.p.ign} ${passenger.r.toFixed(2)}）。`,
         )
@@ -282,6 +291,30 @@ export function applyMatchBonds(
     }
   }
 }
+
+/**
+ * How often the room's friction is said, where the room is live (decided 2026-09-14, 「争执降回改指挥前的两倍
+ * 左右」).
+ *
+ * Two lines say it, and each costs morale: an argument after a match (applyMatchBonds: −5 and −9) and the weekly
+ * reminder that a feud has festered (weeklyBonds, 「关系还没缓和」: −3 each and a grievance). Once the room was
+ * live, a balanced duelist on 托管 was in 25 of them in six seasons against 7.7 before (scripts/probe_igl.ts,
+ * seeds 7–9). His arguments were where they had been (6.0 → 6.7); the reminders had gone from 1.7 to 18 — 49 in
+ * one career, a pair past a line that had moved by up to fifteen points for an awkward pair, said one week in
+ * five or six for years — and the notes' morale fed the spiral they reported.
+ *
+ * Now the same two are not said twice too soon. After an argument they do not argue again for ARGUE_GAP days
+ * (the defeat still costs their bond), and a pair past the line is reminded at most once every FEUD_GAP days
+ * while it stays there — at once again if it gets back above the line and sinks under it anew. How a bond moves
+ * is what it was (the EASE_* terms), so an awkward pair still cools faster, argues sooner and shows its feud
+ * sooner, and what the room does to form and the coach's eye (me/room.ts) is untouched.
+ *
+ * On the same careers: 25.0 → 14.7 (arguments 6.7 → 5.7, reminders 18.3 → 9.0). Halving the match terms as well
+ * went to 8.3, where it was before the room was live. The count is heavy-tailed: seed 13 spirals under every rule
+ * (146 before the room was live, 145 at its first cut, 86 with these), so three seeds make a rough mean.
+ */
+export const ARGUE_GAP = 28
+export const FEUD_GAP = 56
 
 /** Where a pair's bond drifts back to when nothing happens, where the room is live (EASE_REST). */
 export const restOf = (live: number | null): number => NEUTRAL + (live == null ? 0 : live * EASE_REST)
@@ -314,17 +347,28 @@ export function weeklyBonds(state: GameState, rng: Rng, notes: string[]): void {
   }
 
   // a feud that has festered starts costing the manager something visible
+  // where the room is live, a feud is said at most once every FEUD_GAP days; a pair back above the line drops out of the book
+  const today = state.year * 400 + state.day
+  const said = state.feudSaid ?? {}
+  const still: Record<string, number> = {}
+  let live0 = false
   for (const { a, b, value } of notableBonds(state, state.myTeam)) {
-    if (value > -25) break
     // two awkward men start to show it sooner, two easy ones later
     const live = liveEase(state, a, b)
+    if (live != null) live0 = true
     if (value > -40 + (live == null ? 0 : clamp(-live, -15, 15))) continue
+    const k = key(a.id, b.id)
+    const last = live != null ? said[k] : undefined
+    if (last != null) still[k] = last
+    if (last != null && today - last < FEUD_GAP) continue
     if (!rng.chance(0.18)) continue
     a.morale = clamp(a.morale - 3, 0, 100)
     b.morale = clamp(b.morale - 3, 0, 100)
     a.grievance = clamp((a.grievance ?? 0) + 4, 0, 100)
+    if (live != null) still[k] = today
     notes.push(`💢 ${a.ign} 与 ${b.ign} 的关系还没缓和，队内氛围受到影响。`)
   }
+  if (live0 || state.feudSaid) state.feudSaid = Object.keys(still).length ? still : undefined
 }
 
 /** Pair work is the direct way to fix a relationship. */

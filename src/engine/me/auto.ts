@@ -1,6 +1,10 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
-import type { GameState } from '../types'
+import type { Attrs, GameState, Player } from '../types'
+import { squadOf } from '../roster'
+import { bondBetween } from '../bonds'
+import { hourValues } from './growth'
+import { emptyTalents, talentsOf } from './career'
 import { ceilingOf, weightsFor } from '../player'
 import { chasing } from './bottleneck'
 import { traitMul } from './traits'
@@ -78,11 +82,107 @@ export function weekEndFatigue(state: GameState, load = matchLoad(state)): numbe
   return me.flags.relax_flat && f > RELIEF_FLOOR ? Math.max(RELIEF_FLOOR, f - FLAT_RELIEF) : f
 }
 
+/** A practice session of the steady plan: the three the role picks from, and 双排 for a talent in 沟通. */
+export type Practice = 'aim' | 'vod' | 'util' | 'duo'
+
+/**
+ * The practice that trains each attribute, for the talent's session: the week board's own (actions.ts), 复盘
+ * carrying 指挥 too — and for 沟通 two 队友双排, which put 0.3 of a training week an hour into it where a
+ * session of 道具与跑图 puts 0.11 in two (growth.ts settleTraining), with the team-mate I get on worst with.
+ */
+export const TALENT_PRACTICE: Record<keyof Attrs, Practice> = {
+  aim: 'aim', reaction: 'aim', awareness: 'vod', clutch: 'vod', igl: 'vod',
+  utility: 'util', teamwork: 'util', communication: 'duo',
+}
+/** the golden ratio's fractional part: week n's talent pick sits at (n + 1) × this, mod 1 */
+export const TALENT_STEP = (Math.sqrt(5) - 1) / 2
+/** the attribute whose break counts a session (me/bottleneck.ts breakCount, and 枪法's two a week): while it is live the session stays */
+const FEEDS: Record<Exclude<Practice, 'duo'>, keyof Attrs> = { aim: 'aim', vod: 'awareness', util: 'utility' }
+
+/** points past 均衡型 at which the talent has its session every week; a smaller lean has it that share of the weeks */
+export const LEAN_FULL = 6
+
+/** How far a talent leans past 均衡型 (career.ts emptyTalents, the build the role's three sessions were drawn on), attribute by attribute, never under zero. */
+export function talentLean(t: Record<keyof Attrs, number>): Record<keyof Attrs, number> {
+  const even = emptyTalents()
+  return Object.fromEntries(ATTR_KEYS.map((k) => [k, Math.max(0, (t[k] ?? 0) - even[k])])) as Record<keyof Attrs, number>
+}
+
+/**
+ * This week's talent pick, or null for a week the role's plan keeps: an attribute with room under its ceiling,
+ * in proportion to the points it has past 均衡型 (talentLean). The line is the lean — LEAN_FULL when the lean is
+ * shorter, and what it does not cover is the role's — so a preset build (7 to 12 points past 均衡型) has the
+ * session every week, a point or two moved off 均衡型 one week in six or in three, and 均衡型 itself never.
+ * Not a roll: week n takes the point (n + 1) × TALENT_STEP mod 1 along the line, and those points fall into each
+ * share as often as it is long — over any ten weeks or so the picks split as the lean does, a save picks the
+ * same way every time, and nothing is kept.
+ */
+export function talentPick(state: GameState): keyof Attrs | null {
+  const me = state.me!
+  const p = state.players[me.id]
+  const lean = talentLean(talentsOf(state))
+  const open = ATTR_KEYS.filter((k) => lean[k] > 0 && p.attrs[k] < ceilingOf(p, k))
+  const total = open.reduce((s, k) => s + lean[k], 0)
+  if (!total) return null
+  const at = (((me.week + 1) * TALENT_STEP) % 1) * Math.max(total, LEAN_FULL)
+  let acc = 0
+  for (const k of open) {
+    acc += lean[k]
+    if (at < acc) return k
+  }
+  return null
+}
+
+/** Who the talent's 双排 goes to: the team-mate at my club I get on worst with. */
+export function duoMate(state: GameState): Player | undefined {
+  const me = state.me!
+  if (me.phase !== 'pro' || !state.myTeam) return undefined
+  return squadOf(state, state.myTeam)
+    .filter((x) => x.id !== me.id)
+    .sort((a, b) => bondBetween(state, me.id, a.id) - bondBetween(state, me.id, b.id))[0]
+}
+
+/**
+ * The week's three practice sessions, with the talent's among them (decided 2026-09-14, 「托管训练跟着天赋走」).
+ *
+ * The steady plan practised only what the role is judged on — the session of its weakest attribute, 复盘 and
+ * 枪法训练 — so on 快进 and 托管 the points put into 指挥 or 沟通 trained nothing the role did not. A 指挥型
+ * duelist ended six seasons at 沟通 67–71, under what a coach wants from his caller, and called 25 weeks in one
+ * career of three (scripts/probe_igl.ts).
+ *
+ * Now, for a talent that leans off 均衡型, one session in three is the talent's: about a third of the practice
+ * hours, a quarter of a professional week's eight points. It is the practice of the week's pick (talentPick,
+ * TALENT_PRACTICE), and it takes the place of the session worth the least to 综合 this week (growth.ts
+ * hourValues) — never one a live break is counting (FEEDS), and never one of its own practice, so the talent
+ * always adds a session: a 指挥型 duelist whose pick is 指挥 gives up an 枪法训练 for a second 复盘.
+ *
+ * Weighted by the raw points, 均衡型 — points everywhere — put a third of its practice off its role too: the
+ * balanced duelist's 道具 and 沟通 rose, he out-rated his team-mates in defeat and argued as the one who had
+ * carried, and over six seasons his arguments went from 7 to 27 and his average bond from 19 to 5, for 0.3 of
+ * peak (probe_igl.ts, 3 seeds). So the pick reads the lean past 均衡型, and 均衡型 practises as it always has.
+ */
+export function talentSessions(state: GameState, role: Practice[]): Practice[] {
+  const k = talentPick(state)
+  if (!k) return role
+  const own: Practice = TALENT_PRACTICE[k] === 'duo' && !duoMate(state) ? 'util' : TALENT_PRACTICE[k]
+  const worth = new Map<string, number>(hourValues(state).map((h) => [h.key, h.perPoint]))
+  const room = role
+    .map((s, i) => ({ s, i, v: worth.get(s) ?? 0 }))
+    .filter((x) => x.s !== own && (x.s === 'duo' || !chasing(state, FEEDS[x.s])))
+    .sort((a, b) => a.v - b.v || a.i - b.i)[0]
+  if (!room) return role
+  const out = [...role]
+  out[room.i] = own
+  return out
+}
+
 /**
  * The steady plan — never the best plan. Chase a trial when benched, practise
- * what the role is judged on, keep the ladder warm without a club — and not at
+ * what the role is judged on and, a session in three, what the talent is in
+ * (talentSessions) — keep the ladder warm without a club — and not at
  * the body's expense: an hour goes on only while the week still ends with
- * 体力 60 or so, and rest makes the room when it would not.
+ * 体力 60 or so, and rest makes the room when it would not. `talent` false
+ * leaves the role's three sessions as they were (scripts/probe_igl.ts).
  *
  * It used to rest by thresholds (once above 45 fatigue, twice above 65) and put
  * every other point into training whatever it cost, matches not counted. On the
@@ -90,7 +190,7 @@ export function weekEndFatigue(state: GameState, load = matchLoad(state)): numbe
  * a probe's ladder start had 24 weeks under 40). The headless bot's week goes
  * through exactly the buttons' functions.
  */
-export function autoPlan(state: GameState): void {
+export function autoPlan(state: GameState, talent = true): void {
   const me = state.me!
   const p = state.players[me.id]
   const pro = me.phase === 'pro'
@@ -130,14 +230,24 @@ export function autoPlan(state: GameState): void {
   const weakest = ATTR_KEYS
     .filter((k) => k !== 'igl' && p.attrs[k] < ceilingOf(p, k))
     .sort((a, b) => p.attrs[a] / w[a] - p.attrs[b] / w[b])[0]
-  const first = weakest === 'aim' || weakest === 'reaction' ? 'aim'
+  const first: Practice = weakest === 'aim' || weakest === 'reaction' ? 'aim'
     : weakest === 'awareness' || weakest === 'clutch' ? 'vod' : 'util'
-  want(first)
+  const role: Practice[] = [first, 'vod', 'aim']
+  const sessions = talent ? talentSessions(state, role) : role
+  const session = (s: Practice): void => {
+    if (s !== 'duo') { want(s); return }
+    const mate = duoMate(state)
+    if (!mate) { want('util'); return }
+    me.duoWith = mate.id
+    want('duo')
+    want('duo')
+  }
+  session(sessions[0])
   if (chasing(state, 'aim')) want('aim')
   if (pro && me.ap >= 3 && !starter) want('scrim')
   if (!pro) { want('ranked'); want('ranked') }
-  want('vod')
-  want('aim')
+  session(sessions[1])
+  session(sessions[2])
   if (me.quests.some((q) => q.kind === 'stream' && q.done < q.need)) want('stream')
   // a signed stream deal is a contract: its minimum is kept even on a tired week
   if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage && !want('stream')) spend('stream')

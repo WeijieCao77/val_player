@@ -10,14 +10,21 @@
  *    指挥 term with him, and the coach does not ask again the next week
  * 三 the room: 协同 and 沟通 move a bond, form and the coach's eye inside the ranges reported with
  *    scripts/probe_igl.ts, at the career player's club only; between two players of the same level the coach
- *    starts the easier one, and a clearly better player is not passed over for it
+ *    starts the easier one, and a clearly better player is not passed over for it; a feud that stays past the
+ *    line is said at most once every FEUD_GAP days, and at once again after it has been above the line; the
+ *    same two do not argue again inside ARGUE_GAP days, and the defeat still costs their bond
  * 四 快进 and 托管 stay expectation-neutral: autoChance is what it was, and a caller's call made on autopilot
  *    lands exactly as often as anyone's
  * 五 the new-career screen names the caller path and the room only where they are true
+ * 六 托管's training follows the talent: a career keeps its talent and an older save reads it back off its
+ *    ceilings; the week's pick follows the lean past 均衡型, 均衡型's plan is the role's to the point, and the
+ *    talent's session adds one of its own practice in place of one other — never a session a live break counts
+ * 七 how often the balanced duelist is in a 💢 line on 托管 over six seasons, on three seeds: ARGUE_BAND
+ *    (decided 2026-09-14: about twice the 7.7 before the room was live)
  *
  *   npx tsx scripts/check_igl.ts
  */
-import { createCareer, emptyTalents, talentShape, TALENT_PRESETS } from '../src/engine/me/career'
+import { createCareer, emptyTalents, talentCeilings, talentShape, talentsOf, TALENT_PRESETS } from '../src/engine/me/career'
 import { AUTO_PENALTY, KEY_FAIL, KEY_OK, NODE_CALL, autoChance, nodeCallEdge, nodeChance } from '../src/engine/me/nodes'
 import {
   CALLER_READ_MAX, COMM_FLOOR, IGL_FLOOR, IGL_TRUST, IGL_TRUST_LOST, IGL_WEEKS, OFFER_GAP, SKID_OF,
@@ -27,13 +34,16 @@ import { callerOf, squadOf } from '../src/engine/roster'
 import { IGL_EDGE, activePool, buildLineup } from '../src/engine/match'
 import { coachStarters, coachView } from '../src/engine/me/coach'
 import { ROOM_EDGE_MAX, ROOM_FORM_MAX, roomBond, roomEdge, roomForm } from '../src/engine/me/room'
-import { argueAt, bondBetween, liveEase, lossMul, rateMul, restOf, weeklyBonds, winMul } from '../src/engine/bonds'
+import { ARGUE_GAP, FEUD_GAP, applyMatchBonds, argueAt, bondBetween, duoBonded, liveEase, lossMul, rateMul, restOf, weeklyBonds, winMul } from '../src/engine/bonds'
 import { leaveClub } from '../src/engine/me/contract'
-import { autoWeek } from '../src/engine/me/auto'
+import { LEAN_FULL, autoPlan, autoWeek, duoMate, talentLean, talentPick, talentSessions } from '../src/engine/me/auto'
+import type { Practice } from '../src/engine/me/auto'
+import { chasing } from '../src/engine/me/bottleneck'
 import { confidentRating } from '../src/engine/world'
 import { Rng } from '../src/engine/rng'
 import { recomputeOverall } from '../src/engine/player'
-import type { GameState, Player } from '../src/engine/types'
+import { ATTR_KEYS } from '../src/engine/types'
+import type { Attrs, GameState, MatchResult, Player, Region } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -295,6 +305,61 @@ console.log('三、协同、沟通')
     ok(c.me, `你比 ${rival.ign} 强 ${2 * ROOM_EDGE_MAX + 0.5}，只因为不好相处就被放上替补席`)
   }
 }
+{
+  // 「关系还没缓和」: a pair held far past the line for a year is still said, never twice inside FEUD_GAP days
+  const s = fresh()
+  const [a, b] = squadOf(s, s.myTeam).filter((x) => x.id !== s.me!.id)
+  const r = new Rng(20260915)
+  const k = [a.id, b.id].sort().join('|')
+  const said: number[] = []
+  for (let w = 0; w < 52; w++) {
+    duoBonded(s, a.id, b.id, -80 - bondBetween(s, a.id, b.id))
+    const notes: string[] = []
+    weeklyBonds(s, r, notes)
+    if (notes.some((n) => n.includes('关系还没缓和') && n.includes(a.ign) && n.includes(b.ign))) said.push(s.year * 400 + s.day)
+    s.day += 7
+  }
+  const gaps = said.slice(1).map((d, i) => d - said[i])
+  console.log(`  一对关系 −80 的队友，一年里「关系还没缓和」说了 ${said.length} 次，间隔 ${gaps.join(' / ') || '-'} 天`)
+  ok(said.length >= 2, `关系一直 −80，一年里只说了 ${said.length} 次「关系还没缓和」`)
+  ok(gaps.every((g) => g >= FEUD_GAP), `「关系还没缓和」隔了不到 ${FEUD_GAP} 天又说：${gaps.join(' / ')}`)
+  // back above the line: out of the book, so the next time it sinks is said at once
+  duoBonded(s, a.id, b.id, 40 - bondBetween(s, a.id, b.id))
+  weeklyBonds(s, r, [])
+  ok(s.feudSaid?.[k] == null, '关系回到线上以后，这对队友还记在「刚说过」里')
+  // no career player (the manager game): the old rule, and nothing written
+  const m = { ...fresh(), me: undefined, feudSaid: undefined } as GameState
+  const [c, d] = squadOf(m, m.myTeam)
+  duoBonded(m, c.id, d.id, -80 - bondBetween(m, c.id, d.id))
+  for (let w = 0; w < 8; w++) { weeklyBonds(m, r, []); m.day += 7 }
+  ok(m.feudSaid === undefined, '没有生涯主角的存档也记下了「刚说过」')
+}
+{
+  // an argument: the same two do not argue again inside ARGUE_GAP days, and the defeat still costs their bond
+  const s = fresh()
+  const [a, b] = squadOf(s, s.myTeam).filter((x) => x.id !== s.me!.id)
+  const line = (kills: number, deaths: number) => ({ rounds: 24, kills, deaths, assists: 0, firstKills: 0, firstDeaths: 0, damage: 0, clutches: 0 })
+  // a defeat one of them carried (rating about 1.7) and the other did not (about 0.2)
+  const loss = { mapsWonA: 0, mapsWonB: 2, lineups: { a: [a.id, b.id], b: [] }, maps: [{ lines: { [a.id]: line(30, 10), [b.id]: line(4, 22) } }] } as unknown as MatchResult
+  const r = new Rng(20260916)
+  const argue = (t: GameState) => {
+    duoBonded(t, a.id, b.id, -60 - bondBetween(t, a.id, b.id))
+    const notes: string[] = []
+    applyMatchBonds(t, loss, t.myTeam, true, r, notes)
+    return { said: notes.some((n) => n.includes('赛后起了争执')), bond: bondBetween(t, a.id, b.id) }
+  }
+  const first = argue(s)
+  const again = argue(s)
+  s.day += ARGUE_GAP
+  const later = argue(s)
+  ok(first.said, '（检查本身）一个人扛着输了、关系 −60，赛后却没起争执')
+  ok(!again.said, `同一天同一对队友又吵了一次（应隔 ${ARGUE_GAP} 天）`)
+  ok(again.bond < -60, `隔得太近不再吵，这场输球却没伤到关系（${again.bond}）`)
+  ok(later.said, `过了 ${ARGUE_GAP} 天，同样的输球却吵不起来了`)
+  // no career player (the manager game): the old rule, and nothing written
+  const m = { ...fresh(), me: undefined, argueSaid: undefined } as GameState
+  ok(argue(m).said && argue(m).said && m.argueSaid === undefined, '没有生涯主角的存档，同一对队友的争执也被隔开了')
+}
 
 console.log('四、快进和托管仍然期望中性')
 {
@@ -343,6 +408,128 @@ console.log('五、天赋页说的话')
   ok(!line('even').includes('关系'), `均衡型也在说关系：${line('even')}`)
 }
 
+console.log('六、托管的训练跟着天赋走')
+const IGL_T = { ...TALENT_PRESETS.find((x) => x.key === 'igl')!.t }
+const same = (x: Record<keyof Attrs, number> | undefined, y: Record<keyof Attrs, number>) => !!x && ATTR_KEYS.every((k) => x[k] === y[k])
+/** a clone with room under every ceiling, so each attribute can be picked */
+function roomy(t: Record<keyof Attrs, number>): GameState {
+  const s = fresh()
+  const p = s.players[s.me!.id]
+  for (const k of ATTR_KEYS) p.caps![k] = Math.max(p.caps![k], p.attrs[k] + 10)
+  s.me!.talents = { ...t }
+  return s
+}
+{
+  // a career keeps its talent; a save without it reads it back off ceilings that nothing has opened yet
+  const s = fresh()
+  ok(same(s.me!.talents, emptyTalents()), `新生涯没有记下天赋：${JSON.stringify(s.me!.talents)}`)
+  const p = s.players[s.me!.id]
+  const caps = talentCeilings(p.role, IGL_T, s.me!.originKey)
+  for (const k of ATTR_KEYS) p.caps![k] = Math.max(caps[k], p.attrs[k])
+  s.me!.talents = undefined
+  s.me!.bottleneck = { ...s.me!.bottleneck!, mech: {}, mile: {}, exp: 0 }
+  const back = talentsOf(s)
+  ok(same(back, IGL_T) && same(s.me!.talents, IGL_T), `老存档从上限读回的天赋是 ${JSON.stringify(back)}，应是 ${JSON.stringify(IGL_T)}`)
+}
+{
+  // the pick: 均衡型 never; a preset every week, split as its lean past 均衡型; a point off 均衡型 one week in LEAN_FULL
+  const WEEKS = 240
+  const picks = (t: Record<keyof Attrs, number>) => {
+    const s = roomy(t)
+    const n: Record<string, number> = {}
+    for (let w = 0; w < WEEKS; w++) {
+      s.me!.week = w
+      const k = talentPick(s) ?? 'none'
+      n[k] = (n[k] ?? 0) + 1
+    }
+    return n
+  }
+  const even = picks(emptyTalents())
+  ok(even.none === WEEKS, `均衡型也排了天赋那一节：${JSON.stringify(even)}`)
+  const lean = talentLean(IGL_T)
+  const leanSum = ATTR_KEYS.reduce((a, k) => a + lean[k], 0)
+  const igl = picks(IGL_T)
+  console.log(`  指挥型（比均衡型多 ${leanSum} 点）${WEEKS} 周的天赋那一节：${JSON.stringify(igl)}`)
+  ok(!igl.none && leanSum >= LEAN_FULL, `指挥型有 ${igl.none} 周没排天赋那一节`)
+  for (const k of ATTR_KEYS) {
+    const want = lean[k] / leanSum
+    ok(Math.abs((igl[k] ?? 0) / WEEKS - want) <= 0.03, `指挥型的 ${k} 排了 ${igl[k] ?? 0} 周，应约 ${(want * WEEKS).toFixed(0)} 周`)
+  }
+  const one = picks({ ...emptyTalents(), aim: 4, igl: 1 })
+  ok(Math.abs((one.aim ?? 0) / WEEKS - 1 / LEAN_FULL) <= 0.03 && (one.aim ?? 0) + (one.none ?? 0) === WEEKS,
+    `比均衡型多 1 点枪法，天赋那一节排了 ${one.aim ?? 0} 周，应约 ${(WEEKS / LEAN_FULL).toFixed(0)} 周`)
+}
+{
+  const s = roomy(IGL_T)
+  const me = s.me!
+  let callWeek = -1, commWeek = -1
+  for (let w = 0; w < 60; w++) {
+    me.week = w
+    const k = talentPick(s)
+    if (k === 'igl' && callWeek < 0) callWeek = w
+    if (k === 'communication' && commWeek < 0) commWeek = w
+  }
+  const role: Practice[] = ['util', 'vod', 'aim']
+  const changed = (x: Practice[]) => x.filter((v, i) => v !== role[i]).length
+  me.week = callWeek
+  const call = talentSessions(s, role)
+  ok(changed(call) === 1 && call.filter((v) => v === 'vod').length === 2, `指挥那一周的三节是 ${call.join('、')}，应多一节复盘、只换一节`)
+  me.week = commWeek
+  const comm = talentSessions(s, role)
+  ok(changed(comm) === 1 && comm.includes('duo'), `沟通那一周的三节是 ${comm.join('、')}，应有一节双排、只换一节`)
+  // the plan itself: 沟通's week goes to 双排 with the team-mate I get on worst with
+  const t = structuredClone(s)
+  t.me!.plan = {}
+  t.me!.ap = t.me!.apMax
+  t.players[t.me!.id].fatigue = 0
+  autoPlan(t)
+  ok((t.me!.plan.duo ?? 0) >= 1 && t.me!.duoWith === duoMate(t)?.id, `沟通那一周托管没有排和关系最差的队友双排：${JSON.stringify(t.me!.plan)} · ${t.me!.duoWith}`)
+  // a session a live break counts never makes room: 枪法 at its ceiling keeps its 枪法训练
+  const u = structuredClone(s)
+  const q = u.players[u.me!.id]
+  q.attrs.aim = q.caps!.aim
+  u.me!.week = callWeek
+  ok(chasing(u, 'aim'), '（检查本身）枪法顶到上限却没在冲瓶颈')
+  ok(talentSessions(u, role).includes('aim'), `枪法正在冲瓶颈，天赋那一节却把枪法训练换掉了：${talentSessions(u, role).join('、')}`)
+  // 均衡型: the week's plan is the role's, to the point
+  const e1 = fresh()
+  const e2 = structuredClone(e1)
+  autoPlan(e1)
+  autoPlan(e2, false)
+  ok(JSON.stringify(e1.me!.plan) === JSON.stringify(e2.me!.plan), `均衡型托管的一周和原来不一样：${JSON.stringify(e1.me!.plan)} / ${JSON.stringify(e2.me!.plan)}`)
+}
+
+console.log('七、均衡型决斗者托管六个赛季的争执')
+{
+  const ARGUE_BAND = [10, 20]
+  const REGION_OF: Record<number, Region> = { 7: 'Americas', 8: 'Pacific', 9: 'EMEA' }
+  const per: string[] = []
+  let total = 0
+  for (const seed of [7, 8, 9]) {
+    const s = createCareer({ name: `P${seed}`, region: REGION_OF[seed], role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2026 })
+    const me = s.me!
+    const p = s.players[me.id]
+    let weeks = 0, argues = 0, feuds = 0, all = 0
+    // as scripts/probe_igl.ts counts them: the 💢 lines of a professional week that name me
+    while (s.year < 2032 && me.phase !== 'retired' && weeks < 360) {
+      const stop = autoWeek(s)
+      weeks++
+      if (me.phase === 'pro' && s.myTeam) {
+        const mine = me.weekNotes.filter((n) => n.includes('💢') && n.includes(p.ign))
+        all += mine.length
+        argues += mine.filter((n) => n.includes('赛后起了争执')).length
+        feuds += mine.filter((n) => n.includes('关系还没缓和')).length
+      }
+      if (stop.kind === 'game-over') break
+    }
+    per.push(`种子 ${seed}：${all}（赛后争执 ${argues} · 还没缓和 ${feuds}）`)
+    total += all
+  }
+  const avg = total / 3
+  console.log(`  ${per.join('；')}；平均 ${avg.toFixed(1)}`)
+  ok(avg >= ARGUE_BAND[0] && avg <= ARGUE_BAND[1], `均衡型决斗者六个赛季平均 ${avg.toFixed(1)} 条 💢，应在 ${ARGUE_BAND[0]}–${ARGUE_BAND[1]}`)
+}
+
 const secs = ((Date.now() - t0) / 1000).toFixed(0)
-console.log(fails ? `\n✗ ${fails} 项不对 · ${secs}s` : `\n✓ 条件满足才会被任命、拒绝留住原指挥、收回和离队都对，协同、沟通的作用在范围内且只在主角队里，快进和托管仍然期望中性，天赋页只说真的 · ${secs}s`)
+console.log(fails ? `\n✗ ${fails} 项不对 · ${secs}s` : `\n✓ 条件满足才会被任命、拒绝留住原指挥、收回和离队都对，协同、沟通的作用在范围内且只在主角队里，同一对队友的争执和「关系还没缓和」不再反复说，快进和托管仍然期望中性，托管的训练跟着天赋走，均衡型决斗者的争执在目标范围里，天赋页只说真的 · ${secs}s`)
 process.exit(fails ? 1 : 0)

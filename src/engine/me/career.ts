@@ -23,7 +23,7 @@ import { makeDeal, joinClub } from './contract'
 import { MERGED_INTO, onTimeline, regionsOf, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
-import { TALENT_CAP_MAX, ceilingPotential, ensureCeilings } from './bottleneck'
+import { SEASON_LOOSENS, TALENT_CAP_MAX, ceilingPotential, ensureCeilings } from './bottleneck'
 import { entryBands } from '../ruler'
 import type { EntryBands } from '../ruler'
 import { cupFor } from './cups'
@@ -268,6 +268,29 @@ export function zeroTalents(): Record<keyof Attrs, number> {
 }
 
 /**
+ * The talent points this career was made with (the steady plan's talent session reads them: me/auto.ts
+ * talentPick). A career keeps them from the day it is made. A save from before that has them read back once
+ * off its ceilings and kept: what each ceiling stands above the one the same role and background give with no
+ * talent (talentCeilings), less what breaks and seasons have opened on it since (me/bottleneck.ts), at +3 a
+ * point. What a break spilled onto other attributes and a winter's re-rating are not booked by attribute, so on
+ * a long career the estimate leans toward the role's heaviest attributes — toward the plan it had before.
+ */
+export function talentsOf(state: GameState): Record<keyof Attrs, number> {
+  const me = state.me!
+  if (me.talents) return me.talents
+  const p = state.players[me.id]
+  const base = talentCeilings(p.role, zeroTalents(), me.originKey)
+  const bn = me.bottleneck
+  const t = zeroTalents()
+  for (const k of ATTR_KEYS) {
+    const opened = (bn?.mech[k] ?? 0) + (bn?.mile[k] ?? 0) + (SEASON_LOOSENS.includes(k) ? bn?.exp ?? 0 : 0)
+    t[k] = clamp(Math.round(((p.caps?.[k] ?? base[k]) - opened - base[k]) / 3), 0, TALENT_MAX)
+  }
+  me.talents = t
+  return t
+}
+
+/**
  * The new-career screen's starting builds, 破晓's 天赋预设: pick what kind of
  * player first, then tune. Each spends all twenty under TALENT_MAX. 均衡型 is
  * emptyTalents, the spread every script's career is built on.
@@ -463,6 +486,7 @@ export function createCareer(o: CareerOpts): GameState {
 
   const me: MeState = {
     id: ME_ID, originKey: o.originKey, phase: 'pre', week: 0, weekDay: 0, ap: AP_PRE, apMax: AP_PRE, plan: {},
+    talents: { ...zeroTalents(), ...o.talents },
     mental: clamp(50 + (origin.mental ?? 0), 0, 100), body: clamp(55 + (origin.body ?? 0), 0, 100), tilt: 0,
     edge: 0, duelsThisWeek: 0, scrimRounds: 0, badStreak: 0, proven: false, coachTrust: 50, gmTrust: 50,
     fans: Math.max(0, 20 + (origin.fans ?? 0)), heat: 10, money: 20000 + (origin.money ?? 0), upkeep: origin.upkeep ?? 0,

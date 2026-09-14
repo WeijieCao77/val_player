@@ -624,6 +624,8 @@ export interface MeState {
   ap: number
   apMax: number
   plan: Partial<Record<MeAction, number>>
+  /** the talent points the career was made with — me/career.ts talentsOf; a save from before they were kept has them read once off its ceilings */
+  talents?: Record<keyof Attrs, number>
   /** who the 双排 goes to */
   duoWith?: string
   /** 心态 0-100: nerve in the big moments, resistance to tilt */
