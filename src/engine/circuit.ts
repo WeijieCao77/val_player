@@ -1223,7 +1223,13 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
       return { i, now }
     })
     for (const { i, now } of next) {
-      if (!now) continue
+      // a seat its feeder's order ran out for keeps its side — unless another seat of this feeder was just given
+      // that side, and then the place is the next side's (fillGaps). In a world whose EMEA Challengers finished
+      // otherwise, 2026's Challengers EMEA Last Chance Qualifier seated Galions twice: in F9 EICAR's place and its own
+      if (!now) {
+        if (out[i] && taken.has(out[i]!)) out[i] = null
+        continue
+      }
       if (now !== out[i]) swaps.push({ real: ev.seeds[i], now, from: feeder.key })
       out[i] = now
     }
