@@ -2444,6 +2444,26 @@ tr.other td .club span { color: var(--faint); }
 }
 @media (prefers-reduced-motion: reduce) { .update-nudge { animation: none; } }
 
+/* ---------------------------------------------------------------- save notice
+
+   The latest progress did not go into this browser (ui/me/SaveNotice.tsx): the
+   update nudge's shape and corner in the warning amber (--loss is this game's
+   muted grey), up until a save lands. 收起 folds it into a chip at the top
+   centre, where the top bar has nothing to cover (the wordmark is at its left
+   end, 回到首页 at its right). */
+.save-nudge { border-color: var(--warn); border-left-color: var(--warn); }
+.save-nudge .update-body b { color: var(--warn); }
+.save-chip {
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 85;
+  min-height: 32px; padding: 4px 12px; white-space: nowrap;
+  font-size: var(--t-small); font-weight: 650; color: var(--warn); background: var(--panel);
+  border: 1px solid var(--warn); border-left: 3px solid var(--warn); border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+@media (max-width: 720px) {
+  .save-chip { top: calc(4px + env(safe-area-inset-top)); min-height: 40px; }
+}
+
 /* ---------------------------------------------------------------- qualification poster
 
    The moment the season is built around, marked the way a broadcast marks

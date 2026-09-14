@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, autosaveInfo, claimAutosave, loadAutosave } from './engine/me/save'
+import { autosave, autosaveInfo, claimAutosave, flushAutosave, flushAutosaveNow, loadAutosave } from './engine/me/save'
 import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
@@ -14,6 +14,7 @@ import { noteHall } from './engine/me/hall'
 import { unseenAch } from './engine/me/achievements'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
+import SaveNotice, { useSaveTrouble } from './ui/me/SaveNotice'
 import { ladderLabel } from './engine/me/prepro'
 import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
@@ -81,8 +82,25 @@ export default function PlayerGame() {
   const mainRef = useRef<HTMLElement>(null)
   // a phone's 更多: the screens that are not on its tab bar, opened over it (me.css)
   const [more, setMore] = useState(false)
+  // the latest progress not in this browser (engine/me/save.ts): a bar says so until a save lands (ui/me/SaveNotice.tsx)
+  const trouble = useSaveTrouble()
+  // 回到首页 waits for the save to land
+  const [leaving, setLeaving] = useState(false)
+  const liveRef = useRef<MeMatch | null>(null)
+  useEffect(() => { liveRef.current = live }, [live])
 
   useEffect(() => { setBooted(true) }, [])
+  // a page going out of sight or away can be frozen before a background write lands: the newest career goes in at once where it fits
+  useEffect(() => {
+    const away = () => flushAutosaveNow()
+    const hidden = () => { if (document.visibilityState === 'hidden') flushAutosaveNow() }
+    window.addEventListener('pagehide', away)
+    document.addEventListener('visibilitychange', hidden)
+    return () => {
+      window.removeEventListener('pagehide', away)
+      document.removeEventListener('visibilitychange', hidden)
+    }
+  }, [])
   useEffect(() => {
     mainRef.current?.scrollTo(0, 0)
     // a phone scrolls the page itself (me.css): the new screen opens at its own top, the overview left scrolled away if it was
@@ -98,8 +116,15 @@ export default function PlayerGame() {
     if (!g) return
     // the 成就殿堂, outside the save: this career's unlocks, and its card once it has ended (me/hall.ts)
     noteHall(g)
-    try { autosave(g) } catch { /* storage full or blocked; the game goes on in memory */ }
+    // taken now, written in the background and in order (engine/me/save.ts); a write that does not go in is said on screen (SaveNotice)
+    autosave(g)
   }, [])
+
+  /** Save now and wait for the write: before a reload (ui/me/UpdateNudge.tsx) and from the notice's 再试一次. false when it did not go in. */
+  const saveNow = useCallback((): Promise<boolean> => {
+    commit()
+    return flushAutosave()
+  }, [commit])
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg)
@@ -189,10 +214,17 @@ export default function PlayerGame() {
    * career back; 「开新生涯」 there still asks before anything replaces it.
    * A match being played lives only in memory, so it finishes first.
    */
-  const toHome = useCallback(() => {
-    if (!gameRef.current) return
+  const toHome = useCallback(async () => {
+    if (!gameRef.current || leaving) return
     if (live) { toast('这场比赛打完再回首页。'); return }
     commit()
+    // the write comes after the commit (engine/me/save.ts): the career closes only once it is in, or this stretch would be gone
+    setLeaving(true)
+    const saved = await flushAutosave()
+    setLeaving(false)
+    if (!saved) { toast('最新进度没存进浏览器，先不回首页：现在回去，这段进度就没了。'); return }
+    // a match started while it was saving lives only in memory
+    if (liveRef.current) { toast('这场比赛打完再回首页。'); return }
     // an answer's result still up goes with the career (ui/me/hold.tsx)
     holdCard(null)
     gameRef.current = null
@@ -202,7 +234,7 @@ export default function PlayerGame() {
     setMore(false)
     setScreen('week')
     bump()
-  }, [commit, live, toast])
+  }, [commit, leaving, live, toast])
 
   const ctxValue = useMemo(() => ({
     game: gameRef.current!,
@@ -227,8 +259,8 @@ export default function PlayerGame() {
         onStart={start}
         // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
         save={autosaveInfo()}
-        onContinue={() => {
-          const g = loadAutosave()
+        onContinue={async () => {
+          const g = await loadAutosave()
           if (!g?.me) return false
           // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
           // a save from before the eight ceilings gets them now, not at the end of its first week
@@ -278,7 +310,7 @@ export default function PlayerGame() {
             VAL<span>选手生涯</span><em className="by">demo</em>
           </button>
           <div className="spacer" />
-          <button className="sm ghost" onClick={toHome} title="回到存档首页：存档留着，点「继续」接着打">回到首页</button>
+          <button className="sm ghost" onClick={toHome} disabled={leaving} title="回到存档首页：存档留着，点「继续」接着打">{leaving ? '存档中…' : '回到首页'}</button>
         </header>
 
         {/* who I am, where I am, and the six numbers that matter — the rest
@@ -447,8 +479,11 @@ export default function PlayerGame() {
         {!live && !summary && <MomentQueue />}
         {/* what just unlocked waits for the match, the run's summary and those cards, and goes before any card (unlocks above) */}
         {!live && !summary && !moments && <AchPop />}
-        {/* a build that went live under this tab: 刷新 saves first; a match being played lives only in memory, so the bar waits for it */}
-        <UpdateNudge busy={!!live} onBeforeReload={commit} />
+        {/* the latest progress did not go into this browser: said until a save lands, with 再试一次 (ui/me/SaveNotice.tsx) */}
+        {trouble && <SaveNotice trouble={trouble} onRetry={saveNow} />}
+        {/* a build that went live under this tab: 刷新 saves and waits for the write. A match being played lives only in memory,
+            so the bar waits for it; and while a save is not going in, the save notice has the corner (a reload would lose that stretch) */}
+        <UpdateNudge busy={!!live || !!trouble} onBeforeReload={saveNow} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>

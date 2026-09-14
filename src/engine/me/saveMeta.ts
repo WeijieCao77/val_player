@@ -120,10 +120,14 @@ export function buildSaveMeta(state: GameState): SaveMeta | null {
   }
 }
 
-/** Written after every autosave. Never throws: a summary that cannot be written is removed, and the card falls back. */
-export function writeSaveMeta(state: GameState): void {
+/**
+ * Written after every autosave that landed, from the summary built when the
+ * career was taken (me/save.ts autosave: the write itself comes after, and the
+ * career may have moved on by then). Never throws: a summary that cannot be
+ * written is removed, and the card falls back.
+ */
+export function writeSaveMeta(meta: SaveMeta | null): void {
   try {
-    const meta = buildSaveMeta(state)
     if (meta) localStorage.setItem(META_KEY, JSON.stringify(meta))
     else localStorage.removeItem(META_KEY)
   } catch {
