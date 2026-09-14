@@ -32,8 +32,14 @@ simulated ones (the side he does). Both walk the same nodes on the same days.
 
     python scripts/build_circuit.py
     python scripts/build_circuit.py --show 353,449,334
+    python scripts/build_circuit.py --rosters-only
 
 Output: src/data/circuit.json, keyed by year (2021 and 2022: the open era).
+
+`--rosters-only` reads each event's `rosters` again into the circuit.json that
+is there and leaves every other field as it stands — for a change to who sits
+where (scripts/staff.py) that must not bring a later change to the bracket
+builder in with it. Every roster is written the way a full build writes it.
 """
 from __future__ import annotations
 
@@ -47,6 +53,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import event_rosters  # noqa: E402
+import staff as staff_book  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
@@ -753,6 +760,64 @@ def infer_event(ev: dict, matches: list[dict], by_name: dict[str, set[str]],
     return out, problems, notes
 
 
+def staff_at(staff: staff_book.Staff, cards: dict[str, list[str]], rows: list[dict], day: dt.date | None) -> frozenset[str]:
+    """Everyone an event's cards and statlines name who was on a club's staff that day (scripts/staff.py)."""
+    if not staff:
+        return frozenset()
+    return staff.among({p for ids in cards.values() for p in ids} | {r['id'] for r in rows}, day)
+
+
+def event_sides(e: dict, hev: dict) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """A circuit event's team cards (history.json) and every club side its bracket names, as main() reads them."""
+    cards = {t['id']: [p['id'] for p in t['players']] for t in hev.get('teams', []) if t.get('players')}
+    sides = set(e['seeds']) | {t for u in e['units'] for nd in u.get('nodes', []) for t in nd['teams']}
+    return cards, {t: e['names'].get(t, t) for t in sides if not t.startswith('N:')}
+
+
+def seats_to_staff(year: int, e: dict, hev: dict, rows: list[dict], carded_year: dict, staff: staff_book.Staff) -> dict[str, int]:
+    """How many of each side's seats at a circuit event went to someone on a staff that day.
+
+    The side still took the field with five: build_timeline.py counts them when it asks whether
+    a club fielded five that year, and gives the seat to nobody.
+    """
+    cards, clubs = event_sides(e, hev)
+    if not staff_at(staff, cards, rows, staff_book.day_of(year, e['start'])):
+        return {}
+    full = event_rosters.rosters_for(clubs, cards, rows, carded_year)
+    kept = e.get('rosters') or {}
+    return {tid: len(ids) - len(kept.get(tid, [])) for tid, ids in full.items() if len(ids) > len(kept.get(tid, []))}
+
+
+def rosters_only(path: str, history: dict, stats: dict, carded: dict, staff: staff_book.Staff) -> int:
+    """Each event's `rosters` read again into the circuit.json at `path`; every other field as it stands."""
+    with open(path, encoding='utf-8') as f:
+        years = json.load(f)
+    changed = 0
+    for y, evs in years.items():
+        for e in evs:
+            ev = history[e['id']]
+            cards, clubs = event_sides(e, ev)
+            rows = stats.get(e['id'], {}).get('rows', [])
+            off = staff_at(staff, cards, rows, staff_book.day_of(int(y), e['start']))
+            new = event_rosters.rosters_for(clubs, cards, rows, carded[int(y)], off)
+            if new != e.get('rosters'):
+                changed += 1
+                ign = {r['id']: r.get('ign') for r in rows}
+                ign.update({p['id']: p['ign'] for t in ev.get('teams', []) for p in t.get('players', [])})
+                for tid in sorted(set(new) | set(e.get('rosters') or {})):
+                    was, now = (e.get('rosters') or {}).get(tid, []), new.get(tid, [])
+                    if was != now:
+                        out_ = [ign.get(p, p) for p in was if p not in now]
+                        in_ = [ign.get(p, p) for p in now if p not in was]
+                        print(f'  {y} {e["name"][:58]} · {e["names"].get(tid, tid)}：{len(was)} → {len(now)} 人'
+                              + (f'  少了 {"、".join(out_)}' if out_ else '') + (f'  补上 {"、".join(in_)}' if in_ else ''))
+            e['rosters'] = new
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(years, f, ensure_ascii=False, separators=(',', ':'))
+    print(f'写入 {path}：只重读名单，{changed} 场赛事的名单有变化')
+    return 0
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser()
@@ -760,16 +825,22 @@ def main() -> int:
     ap.add_argument('--out', default=os.path.join(DATA, 'circuit.json'))
     ap.add_argument('--years', default='2021,2022')
     ap.add_argument('--show', default='')
+    # who was on a club's staff when, and takes no seat (scripts/staff.py); 'none' builds as before it
+    ap.add_argument('--staff', default=staff_book.PATH)
+    ap.add_argument('--rosters-only', action='store_true')
     a = ap.parse_args()
     years_wanted = {int(y) for y in a.years.split(',') if y}
     with open(os.path.join(DATA, 'history.json'), encoding='utf-8') as f:
         history = json.load(f)
-    with open(a.matches, encoding='utf-8') as f:
-        all_matches = json.load(f)
     # the statlines fill the rosters vlr's event pages leave out (scripts/event_rosters.py)
     stats_path = os.path.join(DATA, 'stats_history.json')
     stats = json.load(open(stats_path, encoding='utf-8')) if os.path.exists(stats_path) else {}
     carded = event_rosters.carded_by_year(history)
+    staff = staff_book.Staff(a.staff)
+    if a.rosters_only:
+        return rosters_only(a.out, history, stats, carded, staff)
+    with open(a.matches, encoding='utf-8') as f:
+        all_matches = json.load(f)
     by_name, by_year = team_index(history)
 
     years: dict[str, list] = collections.defaultdict(list)
@@ -799,9 +870,12 @@ def main() -> int:
         sides = set(out['seeds']) | {t for u in out['units'] for nd in u.get('nodes', []) for t in nd['teams']}
         clubs = {t: out['names'].get(t, t) for t in sides if not t.startswith('N:')}
         before = len(out['rosters'])
-        out['rosters'] = event_rosters.rosters_for(clubs, out['rosters'], stats.get(eid, {}).get('rows', []),
-                                                   carded[ev['year']])
+        rows = stats.get(eid, {}).get('rows', [])
+        off = staff_at(staff, out['rosters'], rows, staff_book.day_of(ev['year'], out['start']))
+        out['rosters'] = event_rosters.rosters_for(clubs, out['rosters'], rows, carded[ev['year']], off)
         report['名单从数据行补上的队'] += len(out['rosters']) - before
+        if off:
+            report['教练组成员不占名单席位（人次）'] += len(off)
         # a Challengers League split that opens in November is the next
         # year's format, played early; it is not this season's event
         if out['end'] is not None and out['end'] > 363:

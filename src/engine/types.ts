@@ -940,6 +940,8 @@ export interface WorldState {
   seed: number
   /** the world's caller data this save has been brought up to — see syncCallersWithWorld */
   callerSync?: string
+  /** the staff stints (src/data/staff_stints.json) this save has been brought up to — see me/staffMigrate.ts */
+  staffSync?: string
   /** which rulebook this career plays by — see engine/ruleset.ts; absent is vct-2025 */
   rulesetId?: 'vct-2025' | 'vct-2026'
   /** the ruler the world's real players are measured on — see engine/ruler.ts; absent is the builders' own scale */

@@ -38,6 +38,12 @@ rosters, its ratings and its league seats are read off the events of 2026 that
 are on record, so the world a 2021 career carries into 2026 is 2026's — not a
 different world put in its place.
 
+A coach, analyst or manager who stood in is not a player on the days vlr has
+him on a club's staff (scripts/staff.py): circuit.json already gives him no
+seat, and here his statlines from inside the stint count toward no rating and
+no year on record — so a player who became a coach retires the year he last
+played, not the year he last stood in.
+
     python scripts/build_circuit.py --years 2021,2022,2023,2024,2025,2026
     python scripts/build_timeline.py
 """
@@ -55,6 +61,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_circuit as bc  # noqa: E402  names, regions, stages, scenes
 import build_world_2021 as bw  # noqa: E402  the ruler
+import staff as staff_book  # noqa: E402  who was on a staff when
 
 DATA = bw.DATA
 YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
@@ -119,8 +126,12 @@ def event_tier(ev: dict) -> str | None:
 
 
 def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], club_of: dict[str, str],
-         club_best: dict[str, str], age_of: dict[str, int], prev_role: dict[str, str]) -> dict[str, dict]:
-    """build_world_2021.py main() steps 3–5 for one year's pool, unchanged but for the year."""
+         club_best: dict[str, str], age_of: dict[str, int], prev_role: dict[str, str],
+         on_staff=lambda pid, eid: False) -> dict[str, dict]:
+    """build_world_2021.py main() steps 3–5 for one year's pool, unchanged but for the year.
+
+    `on_staff(pid, eid)`: a statline played while on a club's staff (scripts/staff.py), which rates nobody.
+    """
     line: dict[str, dict] = {}
     for eid, ev in raw_stats.items():
         if ev['year'] != year or eid not in ev_tier:
@@ -128,7 +139,7 @@ def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], cl
         half = 'sub' if ev_tier[eid] == 'open' else 'top'
         for r in ev['rows']:
             rnd = r.get('rnd') or 0
-            if not rnd or r['id'] not in pool:
+            if not rnd or r['id'] not in pool or on_staff(r['id'], eid):
                 continue
             L = line.setdefault(r['id'], {'top': collections.defaultdict(float), 'topw': collections.defaultdict(float),
                                           'sub': collections.defaultdict(float), 'subw': collections.defaultdict(float),
@@ -268,6 +279,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--circuit', default=os.path.join(DATA, 'circuit.json'))
     ap.add_argument('--out', default=os.path.join(DATA, 'timeline.json'))
+    # who was on a club's staff when (scripts/staff.py); 'none' builds the book as it was before
+    ap.add_argument('--staff', default=staff_book.PATH)
     a = ap.parse_args()
 
     history = bw.load('history.json')
@@ -284,6 +297,18 @@ def main() -> int:
     known_players = {p['id'][1:]: p for p in world['players']}
     known_clubs = {t['id'][4:]: t for t in world['teams']}
 
+    # ---- who was on a club's staff on an event's day: the day circuit.json has it played, else vlr's dates
+    staff = staff_book.Staff(a.staff)
+    played_on = {cev['id']: staff_book.day_of(int(y), cev['start'])
+                 for y, cevs in circuit.items() for cev in cevs if cev.get('start') is not None}
+
+    def on_staff(pid: str, eid: str) -> bool:
+        if pid not in staff.spans:
+            return False
+        return staff.on(pid, played_on.get(eid) or bw.start_of((history.get(eid) or {}).get('dates')))
+
+    carded = bc.event_rosters.carded_by_year(history)
+
     # ---- first and last year on record for everyone, cards and statlines, 2021 to today
     first_year: dict[str, int] = {}
     last_year: dict[str, int] = {}
@@ -298,13 +323,15 @@ def main() -> int:
             continue
         for t in ev.get('teams', []):
             for p in t.get('players', []):
+                if on_staff(p['id'], ev['id']):
+                    continue
                 seen(p['id'], ev['year'])
                 who.setdefault(p['id'], p)
     for eid, ev in raw_stats.items():
         if eid not in history or not event_tier(history[eid]):
             continue
         for r in ev['rows']:
-            if (r.get('rnd') or 0) > 0:
+            if (r.get('rnd') or 0) > 0 and not on_staff(r['id'], eid):
                 seen(r['id'], ev['year'])
                 who.setdefault(r['id'], {'id': r['id'], 'ign': r.get('ign'), 'country': None})
 
@@ -347,6 +374,9 @@ def main() -> int:
         for day, cev, tier in evs:
             name, region, scene = cev['name'], cev['region'], cev.get('scene')
             rosters = cev.get('rosters') or {}
+            # a side whose coach stood in still took the field with five: a club that year, one seat short
+            stood_in = bc.seats_to_staff(Y, cev, history[cev['id']], raw_stats.get(cev['id'], {}).get('rows', []),
+                                         carded[Y], staff) if staff else {}
             sides = {x for x in cev['seeds'] if not x.startswith('N:')}
             sides |= {x for u in cev['units'] for nd in u.get('nodes', []) for x in nd['teams'] if not x.startswith('N:')}
             # the league seat, read off who played the league's own events —
@@ -375,7 +405,7 @@ def main() -> int:
                 if scene:
                     club_scene[tid] = scene
                 ids = rosters.get(tid) or []
-                if len(ids) >= bw.ROSTER_MIN and tid not in club_roster:
+                if len(ids) + stood_in.get(tid, 0) >= bw.ROSTER_MIN and tid not in club_roster:
                     club_roster[tid] = ids[:bw.ROSTER_MAX]
                     club_first[tid] = day
                 for pid in ids:
@@ -389,7 +419,8 @@ def main() -> int:
 
         pool = set(player_club)
         ages = {pid: age_in(pid, Y) for pid in pool}
-        people = rate(Y, ev_tier, raw_stats, pool, player_club, club_best, {p: v[0] for p, v in ages.items()}, prev_role)
+        people = rate(Y, ev_tier, raw_stats, pool, player_club, club_best, {p: v[0] for p, v in ages.items()}, prev_role,
+                      on_staff)
         for ids in club_roster.values():
             call_the_shots(people, ids)
 

@@ -1612,12 +1612,16 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
  * Every person in this game is a real player, so nothing is invented here: if
  * the market is empty a club simply runs short and the shortage is reported,
  * rather than conjuring a fictional prospect to paper over it.
+ *
+ * `only` keeps it to those clubs, and `quiet` keeps the signings off the news: a
+ * save brought up to corrected data fills the seats the correction emptied
+ * without a line for each (me/staffMigrate.ts).
  */
 
-export function ensureMinimumRosters(state: GameState, rng: Rng): void {
+export function ensureMinimumRosters(state: GameState, rng: Rng, only?: ReadonlySet<string>, quiet = false): void {
   const short: string[] = []
   for (const team of Object.values(state.teams)) {
-    if (team.id === managedClub(state) || team.dormant) continue
+    if (team.id === managedClub(state) || team.dormant || (only && !only.has(team.id))) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
       const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
@@ -1636,17 +1640,19 @@ export function ensureMinimumRosters(state: GameState, rng: Rng): void {
       target.salary = expectedSalary(target, team.tier)
       team.roster.push(target.id)
       // offseason emergency signings go on the record like any other move
-      state.news.push({
-        day: state.day, kind: 'transfer',
-        text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。`,
-      })
+      if (!quiet) {
+        state.news.push({
+          day: state.day, kind: 'transfer',
+          text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。`,
+        })
+      }
     }
     if (team.roster.length < 5) short.push(team.name)
     // expiries and retirements can walk a club's caller out the door too
     ensureCaller(state, team.id)
     if (team.starters.length < 5) team.starters = autoStarters(state, team.id)
   }
-  if (short.length) {
+  if (short.length && !quiet) {
     state.news.push({
       day: state.day, kind: 'system',
       text: `自由市场已无可签选手，以下战队人数不足：${short.slice(0, 6).join('、')}。`,

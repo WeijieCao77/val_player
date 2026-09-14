@@ -67,11 +67,28 @@ author chose debut on those numbers.
     --ages strict   only people with a real, full birthdate are in the world;
                     a club left with fewer than five dissolves
 
+Staff who stood in
+------------------
+A coach who took the server is not one of a club's people (scripts/staff.py):
+a card from inside his staff stint gives him no first club, and his statlines
+from inside it rate nobody.
+
+The file as it is was settled on 2026-09-10's inputs, and a build from today's
+does not reproduce it — the statlines have grown since, and the builder's
+order of a few ties moves with the interpreter's hash seed — so a full build
+would move 2021's ratings as well. `--staff-pass` takes out of the settled
+file exactly the people step 2 would now leave out, and does for each club
+that loses one what step 6 does with the squad that is left: its rating,
+reputation and facilities read off it again. Everyone else stays as settled.
+It stops, rather than guess, where it would have to move a caller, dissolve a
+club or send a man to a different first club.
+
 Usage
 -----
     python scripts/build_world_2021.py
     python scripts/build_world_2021.py --ages debut
     python scripts/build_world_2021.py --out src/data/world_2021.json
+    python scripts/build_world_2021.py --staff-pass
 """
 from __future__ import annotations
 
@@ -85,6 +102,9 @@ import random
 import re
 import sys
 from datetime import date
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import staff as staff_book  # noqa: E402  who was on a staff when
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
@@ -252,14 +272,92 @@ def load(name: str):
         return json.load(f)
 
 
+def staff_pass(path: str, history: dict, staff: staff_book.Staff) -> int:
+    """The settled world at `path` without the people it holds only for a staff stint — see the module's docstring."""
+    with open(path, encoding='utf-8') as f:
+        world = json.load(f)
+    events = []
+    for eid, e in history.items():
+        if e['year'] != SEASON_YEAR:
+            continue
+        region, when = region_of(e['name']), start_of(e.get('dates'))
+        if region and when:
+            events.append((when, eid, e))
+    events.sort(key=lambda x: x[0])
+    # step 2, leaving out the cards from inside a staff stint
+    first: dict[str, tuple[str, date]] = {}
+    for when, _, e in events:
+        for t in e['teams']:
+            for p in t['players']:
+                if not staff.on(p['id'], when):
+                    first.setdefault(p['id'], (t['id'], when))
+    teams = {t['id']: t for t in world['teams']}
+    gone = []
+    for p in world['players']:
+        pid = p['id'][1:]
+        if pid not in staff.spans:
+            continue
+        fc = first.get(pid)
+        if fc and fc[1] <= START_CUTOFF:
+            if p['teamId'] and p['teamId'] != f'V21T{fc[0]}':
+                print(f'  ✗ {p["ign"]}：去掉教练组期间的名单后，第一支队从 {p["teamId"]} 变成 V21T{fc[0]}——这一步做不了，要整体重建')
+                return 1
+            continue
+        if p.get('isIgl'):
+            print(f'  ✗ {p["ign"]} 是 {p["teamId"]} 推定的指挥：换人要重算那名选手的属性，这一步做不了，要整体重建')
+            return 1
+        gone.append(p)
+    ids = {p['id'] for p in gone}
+    world['players'] = [p for p in world['players'] if p['id'] not in ids]
+    for p in gone:
+        t = teams.get(p['teamId'] or '')
+        where = f'（{t["name"]}，名单 {len(t["roster"])} → {len(t["roster"]) - 1} 人）' if t else '（自由人）'
+        print(f'  去掉 {p["ign"]}{where}')
+        if not t:
+            continue
+        t['roster'] = [x for x in t['roster'] if x != p['id']]
+        if len(t['roster']) < ROSTER_MIN:
+            print(f'  ✗ {t["name"]} 只剩 {len(t["roster"])} 人，按 step 6 要解散：这一步做不了，要整体重建')
+            return 1
+        tier = t['tier']
+        club = t['id'][4:]
+
+        def priced(rating: int) -> tuple[int, int]:
+            # step 6's draws, in its order: the budget, then the facilities
+            rng = random.Random(seed_of('t21:' + club))
+            budget = int(rng.uniform(2_000_000, 8_500_000) if tier == 1 else rng.uniform(240_000, 900_000))
+            return budget, int(clamp(round(rng.gauss(rating - (5 if tier == 1 else 18), 8)), 20, 94))
+
+        if priced(t['rating']) != (t['budget'], t['facilities']):
+            print(f'  ✗ {t["name"]} 的预算和设施对不上 step 6 的算法：这一步做不了，要整体重建')
+            return 1
+        squad = [q for q in world['players'] if q['teamId'] == t['id']]
+        rating = int(round(sum(sorted((q['overall'] for q in squad), reverse=True)[:5]) / 5))
+        if rating != t['rating']:
+            print(f'    {t["name"]} 评分 {t["rating"]} → {rating}')
+            t['rating'] = rating
+            t['reputation'] = int(clamp(round(rating * (1.0 if tier == 1 else 0.72)), 20, 99))
+            t['facilities'] = priced(rating)[1]
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(world, f, ensure_ascii=False, separators=(',', ':'))
+    print(f'写入 {path}：去掉 {len(gone)} 名教练组成员，其他人照旧')
+    return 0
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser()
     ap.add_argument('--ages', choices=['strict', 'debut'], default='debut')
     ap.add_argument('--out', default=os.path.join(DATA, 'world_2021.json'))
+    # who was on a club's staff when (scripts/staff.py); 'none' builds as before it
+    ap.add_argument('--staff', default=staff_book.PATH)
+    ap.add_argument('--staff-pass', action='store_true')
     a = ap.parse_args()
 
     history = load('history.json')
+    staff = staff_book.Staff(a.staff)
+    if a.staff_pass:
+        return staff_pass(a.out, history, staff)
     bios = load('bios.json')
     raw_stats = load('stats_history.json')
 
@@ -273,6 +371,7 @@ def main() -> int:
             events.append((when, eid, region, tier_of(e['name']), e))
     events.sort(key=lambda x: x[0])
     ev_tier = {eid: tier for _, eid, _, tier, _ in events}
+    played_on = {eid: when for when, eid, _, _, _ in events}
 
     # ---- 2. who was where: each person's first club, each club's best level
     first_club: dict[str, tuple] = {}
@@ -289,7 +388,9 @@ def main() -> int:
             if rank[tier] > rank[club_best[t['id']]]:
                 club_best[t['id']] = tier
             for p in t['players']:
-                first_club.setdefault(p['id'], (t['id'], when, p))
+                # a coach who stood in is not one of the club's people (scripts/staff.py)
+                if not staff.on(p['id'], when):
+                    first_club.setdefault(p['id'], (t['id'], when, p))
                 club_in_event[eid][p['id']] = t['id']
 
     # ---- 3. each person's 2021 line, split into top-tier and sub-tier halves
@@ -312,7 +413,7 @@ def main() -> int:
             if cid and r.get('team'):
                 club_tags[cid][r['team']] += 1
             rnd = r.get('rnd') or 0
-            if not rnd:
+            if not rnd or staff.on(r['id'], played_on.get(eid)):
                 continue
             L = line[r['id']]
             L['rnd'] += rnd

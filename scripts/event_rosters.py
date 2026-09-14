@@ -18,6 +18,10 @@ tag, and the tag is read back to its club by, in turn:
 A card is kept exactly as vlr lists it; the statlines only fill sides that
 have none. Used by build_circuit.py (each event's `rosters`) and, through
 circuit.json, by build_timeline.py.
+
+Nobody who was on a club's staff that day takes a seat (scripts/staff.py): a
+coach who stood in is left off his club's card and out of the statlines that
+fill a side, and a card he was on is one short rather than filled from them.
 """
 from __future__ import annotations
 
@@ -62,12 +66,13 @@ def carded_by_year(history: dict) -> dict[int, dict[str, collections.Counter]]:
 
 
 def rosters_for(clubs: dict[str, str], cards: dict[str, list[str]], rows: list[dict],
-                carded: dict[str, collections.Counter]) -> dict[str, list[str]]:
-    """clubs: every club side in the event, vlr id -> name; cards: vlr's team cards; rows: the event's statlines."""
-    out = {tid: list(ids) for tid, ids in cards.items()}
+                carded: dict[str, collections.Counter], staff: frozenset[str] = frozenset()) -> dict[str, list[str]]:
+    """clubs: every club side in the event, vlr id -> name; cards: vlr's team cards; rows: the event's statlines;
+    staff: the people on a club's staff on the event's day (scripts/staff.py), who take no seat."""
+    out = {tid: [p for p in ids if p not in staff] for tid, ids in cards.items()}
     by_tag: dict[str, list[dict]] = collections.defaultdict(list)
     for r in rows:
-        if r.get('team') and (r.get('rnd') or 0) > 0:
+        if r.get('team') and (r.get('rnd') or 0) > 0 and r['id'] not in staff:
             by_tag[r['team']].append(r)
     tag_club: dict[str, str] = {}
 
