@@ -26,6 +26,9 @@ import ShareCard from './ShareCard'
 import CeremonyModal from './Ceremony'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
+import { Scene } from './art/scenes'
+import { SCENE_CN, sceneOfEvent } from './art/sceneOf'
+import './moment.css'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
 export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
@@ -320,16 +323,21 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
   if (!ev) { pop(game, 'event', eventId); onDone(); return null }
   // the question stays on screen after the choice, with what it did right
   // under the option you took — a popup that closes on click teaches nothing
+  // where it happens along the top, and what kind of week it is in the header (art/sceneOf.ts); a card about home has no picture
+  const scene = sceneOfEvent(ev.id)
   return (
-    <Modal title="事件" onClose={result ? onDone : () => {}} onBgClose={result ? onDone : () => {}}>
+    <Modal title={scene ? SCENE_CN[scene] : '事件'} art={scene ? <Scene kind={scene} /> : undefined} onClose={result ? onDone : () => {}} onBgClose={result ? onDone : () => {}}>
       {tags.map((line) => <p key={line} className="tiny muted" style={{ margin: '0 0 4px' }}>{line}</p>)}
-      <p className="q" style={{ fontSize: 'var(--t-h2)', fontWeight: 650, margin: '0 0 4px' }}>{ev.q}</p>
+      <p className="q ev-q">{ev.q}</p>
       <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctx}</p>
       {result ? (
         <>
           <div className="node-line ok">
             你选了「{result.pick}」
-            <div className="small" style={{ marginTop: 4 }}>{result.lines.length ? result.lines.join('，') : '没有立刻的变化。'}</div>
+            {/* what it did as tags, a rise green and a fall red — not one sentence to parse */}
+            {result.lines.length
+              ? <div className="ev-chips">{result.lines.map((l, i) => <span key={i} className={`mo-chip${/[−-]\s?\d/.test(l) ? ' dn' : /\+\s?\d/.test(l) ? ' up' : ''}`}>{l}</span>)}</div>
+              : <div className="small" style={{ marginTop: 4 }}>没有立刻的变化。</div>}
           </div>
           <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onDone}>继续</button></div>
         </>

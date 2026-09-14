@@ -164,8 +164,12 @@ export function Stat({ k, v, small }: { k: string; v: ReactNode; small?: boolean
 }
 
 export function Modal({
-  title, onClose, onBgClose, children, wide,
-}: { title: ReactNode; onClose: () => void; onBgClose?: () => void; children: ReactNode; wide?: boolean }) {
+  title, onClose, onBgClose, children, wide, art,
+}: {
+  title: ReactNode; onClose: () => void; onBgClose?: () => void; children: ReactNode; wide?: boolean
+  /** a scene strip between the header and the text (事件档, ui/me/art/scenes.tsx) */
+  art?: ReactNode
+}) {
   return (
     <div className="modal-bg" onClick={onBgClose ?? onClose}>
       <div
@@ -178,6 +182,7 @@ export function Modal({
           <div className="spacer" style={{ flex: 1 }} />
           <button className="sm ghost" onClick={onClose}>关闭 ✕</button>
         </div>
+        {art && <div className="modal-art" aria-hidden="true">{art}</div>}
         <div className="modal-body">{children}</div>
       </div>
     </div>

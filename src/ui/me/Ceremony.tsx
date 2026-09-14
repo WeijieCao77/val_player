@@ -5,6 +5,10 @@ import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip, mediaMoment
 import { speechOf } from '../../engine/me/nights'
 import type { CerTier } from '../../engine/me/types'
 import { AceGame, PickGame, SpeechGame } from './CeremonyGames'
+import { Medal } from './art/fx'
+import { Scene } from './art/scenes'
+import { CEREMONY_SCENE } from './art/sceneOf'
+import './moment.css'
 
 /**
  * The one place in the game where your own hand decides something.
@@ -35,7 +39,8 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
 
   return (
     // the × walks past it too, which is silver — never a dead end
-    <Modal title={def.name} onClose={step === 2 ? close : skip} onBgClose={() => {}}>
+    // the place it happens along the top, every step (art/sceneOf.ts)
+    <Modal title={def.name} onClose={step === 2 ? close : skip} onBgClose={() => {}} art={CEREMONY_SCENE[cer.kind] ? <Scene kind={CEREMONY_SCENE[cer.kind]} /> : undefined}>
       {step === 0 && (
         <>
           <p className="cer-story">{def.story(game, cer.about ?? '')}</p>
@@ -72,11 +77,15 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
           {def.game === 'pick'
             // a choice is not a grade either: what was chosen goes up there
             ? <div className="cer-tier pick">{def.picks?.(game, cer).find((x) => x.key === cer.detail?.pick)?.label ?? '定了'}</div>
-            : <div className={`cer-tier ${cer.tier ?? 'silver'}`}>
-              {def.game === 'choice'
-                ? (TONES.find((t) => t.key === cer.detail?.tone)?.name ?? '说完了')
-                : TIER_CN[cer.tier ?? 'silver']}
-            </div>}
+            : <>
+              {/* a grade gets its medal; a tone (媒体日) is not a grade, so it gets none */}
+              {def.game !== 'choice' && <span className={`cer-medal ${cer.tier ?? 'silver'}`} aria-hidden="true"><Medal /></span>}
+              <div className={`cer-tier ${cer.tier ?? 'silver'}`}>
+                {def.game === 'choice'
+                  ? (TONES.find((t) => t.key === cer.detail?.tone)?.name ?? '说完了')
+                  : TIER_CN[cer.tier ?? 'silver']}
+              </div>
+            </>}
           <p className="cer-story" style={{ textAlign: 'center' }}>{def.after ? def.after(game, cer) : def.blurb[cer.tier ?? 'silver']}</p>
           <div className="row" style={{ justifyContent: 'center', marginTop: 14 }}>
             <button className="primary" onClick={close}>{def.done ?? '走了'}</button>

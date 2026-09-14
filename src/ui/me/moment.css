@@ -60,6 +60,27 @@
 .mo-list li small { display: block; color: var(--muted); font-size: var(--t-small, 13.5px); line-height: 1.5; }
 .mo-list li em { font-style: normal; font-size: 12.5px; color: var(--pos-ink); text-align: right; }
 
+/* ---------------------------------------------------------------- the event tier (事件档)
+
+   The same Modal as before with a scene strip between its header and its text
+   (common.tsx `art`), a red bar before the question, and what an answer did as
+   tags rather than one sentence. A ceremony's result gets its medal. */
+.modal-art {
+  position: relative; height: 108px; overflow: hidden;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border-bottom: 1px solid var(--line);
+  color: color-mix(in srgb, var(--muted) 75%, transparent);
+}
+.modal-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ev-q { margin: 0 0 4px; padding-left: 12px; border-left: 3px solid var(--accent); font-size: var(--t-h2); font-weight: 650; line-height: 1.55; }
+.ev-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cer-medal { display: block; width: 72px; height: 72px; margin: 4px auto 0; }
+.cer-medal svg { display: block; width: 100%; height: 100%; }
+.cer-medal.gold { color: var(--gold); filter: drop-shadow(0 0 12px color-mix(in srgb, var(--gold) 55%, transparent)); }
+.cer-medal.silver { color: #9aa7b4; }
+.cer-medal.bronze { color: #b0703f; }
+@media (max-width: 720px) { .modal-art { height: 84px; } }
+
 @keyframes mo-fade { from { opacity: 0; } }
 @keyframes mo-pop { from { transform: scale(.4); opacity: 0; } }
 @keyframes mo-spin { to { transform: rotate(1turn); } }
