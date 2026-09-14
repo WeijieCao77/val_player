@@ -16,6 +16,13 @@ export interface ChangeEntry {
 
 export const CHANGELOG_ME: ChangeEntry[] = [
   {
+    date: '2026-09-14',
+    title: '游戏里能回到首页',
+    changes: [
+      { kind: '新增', text: '<b>右上角加了「回到首页」。</b>点一下回到存档卡：存档先存好、留在原处，点「继续」接着打；想开新生涯，首页照旧会先问一句才覆盖。正在打的比赛要先打完。' },
+    ],
+  },
+  {
     date: '2026-09-13',
     title: '在二线打出来，VCT 俱乐部会先来找你',
     changes: [

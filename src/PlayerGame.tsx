@@ -171,6 +171,25 @@ export default function PlayerGame() {
     setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why })
   }, [commit, toast])
 
+  /**
+   * Back to the home page (asked 2026-09-14): the save is written first and
+   * stays where it is, so the home page's card shows it and 「继续」 brings the
+   * career back; 「开新生涯」 there still asks before anything replaces it.
+   * A match being played lives only in memory, so it finishes first.
+   */
+  const toHome = useCallback(() => {
+    if (!gameRef.current) return
+    if (live) { toast('这场比赛打完再回首页。'); return }
+    commit()
+    gameRef.current = null
+    setFixture(null)
+    setPlayerId(null)
+    setSummary(null)
+    setMore(false)
+    setScreen('week')
+    bump()
+  }, [commit, live, toast])
+
   const ctxValue = useMemo(() => ({
     game: gameRef.current!,
     commit,
@@ -236,6 +255,7 @@ export default function PlayerGame() {
             VAL<span>选手生涯</span><em className="by">demo</em>
           </button>
           <div className="spacer" />
+          <button className="sm ghost" onClick={toHome} title="回到存档首页：存档留着，点「继续」接着打">回到首页</button>
         </header>
 
         {/* who I am, where I am, and the six numbers that matter — the rest
