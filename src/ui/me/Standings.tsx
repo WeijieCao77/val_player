@@ -5,8 +5,11 @@ import Bracket from './Bracket'
 import { groupTable, sortStandings } from '../../engine/league'
 import { DRAW_KIND_CN, drawsOf } from '../../engine/draw'
 import { PLAYOFF_CUT } from '../../engine/season'
-import { formatOf, onTimeline, regionsOf, stagesOf } from '../../engine/era'
+import { formatOf, onTimeline, regionIn, regionsOf, stagesOf } from '../../engine/era'
 import CircuitPanel, { circuitShows } from './CircuitPanel'
+import { circuitPaid, eventOf, pointsTables } from '../../engine/circuit'
+import type { PointsBasis, PointsRow, PointsTable } from '../../engine/circuit'
+import { eventTables } from '../../engine/eventTable'
 import { qualification } from '../../engine/qualify'
 import { ratingOf } from '../../engine/match'
 import { statLine } from '../../engine/player'
@@ -18,6 +21,11 @@ import type { Competition, Region } from '../../engine/types'
  * copy of the manager game's standings page: no draw button, none of the
  * manager's notes on format and points, and the player table in the columns a
  * player reads.
+ *
+ * Laid out the way 破晓 lays out its standings: the table of the region on
+ * screen first — here the year's points table where the year had one, under
+ * 晋级形势 — then the events, what is being played now on top, and at the foot
+ * 「其他赛区」, each region's current first, a click away.
  */
 
 function Table({ comp, members, cut: cutOverride }: { comp: Competition; members?: string[]; cut?: number }) {
@@ -93,6 +101,131 @@ function Table({ comp, members, cut: cutOverride }: { comp: Competition; members
   )
 }
 
+/** A points pool by the name a Chinese broadcast gives the circuit or league. */
+const POOL_CN: Record<string, string> = {
+  NA: '北美', EMEA: '欧非中东', BR: '巴西', LATAM: '拉美', KR: '韩国', JP: '日本', SEA: '东南亚', APAC: '亚太',
+  Americas: '美洲', Pacific: '太平洋', China: '中国',
+}
+
+const BASIS_CN: Record<PointsBasis, string> = { drawn: '名单已出', settled: '积分已定', standing: '按目前积分', history: '照真实历史' }
+
+const BASIS_NOTE: Record<PointsBasis, string> = {
+  standing: '还有给积分的比赛没打完，这条线会跟着积分动。',
+  settled: '能改变名额的比赛都打完了，抽签就照这张表给名额。',
+  drawn: '冠军赛名单已经出来，标出的就是真正拿到名额的队。',
+  history: '你的世界还没碰到这个赛区的积分，名额照真实历史给，抽签那天标出来。',
+}
+
+/** An event's name without its region: 「EMEA · 第三赛段 挑战者决赛」 is 第三赛段 挑战者决赛 in the region's own table. */
+const shortName = (name: string): string => name.split(' · ').pop() ?? name
+
+/**
+ * The year's points table for the region on screen — 2021 and 2022's circuit
+ * points, the Championship Points from 2024 — as vlr.gg lists one, team and
+ * points, with the places it gives marked the way the draw gives them
+ * (engine/circuit.ts pointsTables): a line under the last Champions place, a
+ * dashed line under the last Last Chance Qualifier place, and a side already
+ * through by another road marked as through. The club is lit wherever it
+ * stands, and the table is there whichever tier the club plays in.
+ */
+export function PointsPanel({ table }: { table: PointsTable }) {
+  const { game } = useGame()
+  const [all, setAll] = useState(false)
+  const open = game.year <= 2022
+  // where a side's points came from: what each event this year has paid out
+  const from = new Map<string, { name: string; v: number }[]>()
+  for (const c of Object.values(game.comps)) {
+    if (c.format !== 'circuit' || !c.awarded) continue
+    for (const [t, v] of circuitPaid(game, c)) from.set(t, [...(from.get(t) ?? []), { name: shortName(c.name), v }])
+  }
+  const rows = table.rows
+  const marks = rows.map((r) => r.mark)
+  const lastDirect = marks.lastIndexOf('direct')
+  const lastLcq = marks.lastIndexOf('lcq')
+  const cap = Math.max(8, Math.max(lastDirect, lastLcq, marks.lastIndexOf('through')) + 3)
+  const mine = rows.findIndex((r) => r.team === game.myTeam)
+  const rule = open
+    ? `还没拿到冠军赛名额的队里，积分最高的 ${table.direct} 队直接去冠军赛${table.lcq ? `，再往下 ${table.lcq} 队去最后机会资格赛` : ''}。已经靠别的途径拿到名额的队不占积分名额，名额往下顺延。`
+    : `第二赛段季后赛前 ${table.stage2} 名直接去冠军赛；另外 ${table.direct} 个名额给其余队里冠军积分最高的队。`
+  const line = (i: number) => (i === lastDirect ? { borderBottom: '2px solid var(--accent)' }
+    : i === lastLcq ? { borderBottom: '2px dashed var(--muted)' } : undefined)
+  const row = (r: PointsRow, i: number) => {
+    const src = (from.get(r.team) ?? []).slice().sort((a, b) => b.v - a.v).slice(0, 2)
+    return (
+      <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''} data-team={r.team} data-mark={r.mark ?? ''}>
+        <td className="num muted" style={line(i)}>{i + 1}</td>
+        <td style={line(i)}>
+          <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><span>{game.teams[r.team]?.name}</span></span>
+        </td>
+        <td className="num mono" style={line(i)}><b>{r.points}</b></td>
+        <td className="small" style={line(i)}>
+          {r.mark === 'direct' ? <span className="tag t1">冠军赛</span>
+            : r.mark === 'lcq' ? <span className="tag">最后机会资格赛</span>
+              : r.mark === 'through' ? <span className="tag win">已晋级</span> : ''}
+          {r.mark === 'through' && r.via && <div className="tiny faint">{r.via}</div>}
+        </td>
+        <td className="tiny faint" style={line(i)}>{src.map((x) => `${x.name} ${x.v}`).join(' · ')}</td>
+      </tr>
+    )
+  }
+  return (
+    <Panel
+      tut="points"
+      title={`${open ? '赛区积分榜' : '冠军积分榜'} · ${POOL_CN[table.pool] ?? table.pool}`}
+      actions={<span className={`tag${table.basis === 'drawn' || table.basis === 'settled' ? ' t1' : ''}`}>{BASIS_CN[table.basis]}</span>}
+      flush
+    >
+      <p className="tiny muted" style={{ margin: 0, padding: '9px 13px' }}>{rule}</p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th className="num">#</th><th>战队</th><th className="num">积分</th><th>名额</th><th>积分主要来自</th></tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, all ? rows.length : cap).map(row)}
+            {!all && mine >= cap && <tr><td colSpan={5} className="tiny faint center">⋯</td></tr>}
+            {!all && mine >= cap && row(rows[mine], mine)}
+          </tbody>
+        </table>
+      </div>
+      <div className="row wrap" style={{ padding: '8px 13px', gap: 10 }}>
+        <span className="tiny faint" style={{ flex: '1 1 220px' }}>
+          {BASIS_NOTE[table.basis]}{table.lcqBasis === 'drawn' && table.basis !== 'drawn' ? '最后机会资格赛的名单已经出来。' : ''}
+        </span>
+        {rows.length > cap && (
+          <button className="small" onClick={() => setAll(!all)}>{all ? '收起' : `展开全部 ${rows.length} 队`}</button>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+interface Other { key: string; label: string; go: Region; leader: string; value: string }
+
+/** 破晓's 「其他赛区」: each region's current first, one row each; a row opens that region. */
+function OtherRegions({ rows, onPick }: { rows: Other[]; onPick: (r: Region) => void }) {
+  if (!rows.length) return null
+  return (
+    <Panel title="其他赛区" flush>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>赛区</th><th>当前第一</th><th>战绩 / 积分</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key} className="clickable" onClick={() => onPick(r.go)}>
+                <td>{r.label}</td>
+                <td><b>{r.leader}</b></td>
+                <td className="small muted">{r.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="tiny faint" style={{ margin: 0, padding: '8px 13px' }}>点一行，切到那个赛区。</p>
+    </Panel>
+  )
+}
+
 export default function Standings() {
   const { game, openPlayer } = useGame()
   const [tab, setTab] = useState<'leagues' | 'players'>('leagues')
@@ -112,9 +245,10 @@ export default function Standings() {
     if (i >= 0) return i
     return c.stage === 'challengers1' ? 3.5 : c.stage === 'challengers2' ? 5.5 : 9
   }
-  const shown = Object.values(game.comps)
-    .filter((c) => (c.format === 'circuit' ? circuitShows(c, region) : !c.region || c.region === region))
+  const eventsFor = (r: string): Competition[] => Object.values(game.comps)
+    .filter((c) => (c.format === 'circuit' ? circuitShows(c, r) : !c.region || c.region === r))
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 3 ? order(b) - order(a) : order(a) - order(b)))
+  const shown = eventsFor(region)
 
   const leaders = Object.values(game.players)
     .filter((p) => p.season.maps >= 8 && p.teamId)
@@ -126,6 +260,51 @@ export default function Standings() {
   const tabs: Region[] = formatOf(game.year) === 'open'
     ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r))
     : REGIONS
+
+  // the year's points tables, and the one the region on screen counts toward
+  const tables = tab === 'leagues' ? pointsTables(game) : []
+  const tableFor = (r: Region): PointsTable | undefined => tables.find((t) =>
+    t.regions.includes(r) || t.league === r || (!!t.league && regionIn(r, game.year) === t.league))
+  const points = tableFor(region)
+
+  /** A region's current first: the top of its live table, or its latest champion — its own events, not the internationals every tab shows. */
+  const leaderOf = (r: Region): { leader: string; value: string } | null => {
+    for (const c of eventsFor(r)) {
+      if (c.format === 'circuit') {
+        const ev = c.circuit && eventOf(c.circuit.id)
+        if (!ev || (!ev.region && !ev.layer)) continue
+        if (c.champion) return { leader: game.teams[c.champion]?.name ?? '—', value: `${shortName(c.name)} 冠军` }
+        const t = eventTables(game, c)[0]
+        if (t?.kind === 'table' && t.rows.some((x) => x.w + x.l + x.d > 0)) {
+          return { leader: game.teams[t.rows[0].team]?.name ?? '—', value: `${t.rows[0].w}-${t.rows[0].l} · ${shortName(c.name)}` }
+        }
+        if (t?.kind === 'bracket' && t.rows[0]) return { leader: game.teams[t.rows[0].team]?.name ?? '—', value: `还在赛 · ${shortName(c.name)}` }
+      } else if (c.region === r) {
+        if (c.champion) return { leader: game.teams[c.champion]?.name ?? '—', value: `${c.name} 冠军` }
+        const top = sortStandings(c)[0]
+        const row = top ? c.standings[top] : undefined
+        if (row && row.w + row.l > 0) return { leader: game.teams[top]?.name ?? '—', value: `${row.w}-${row.l} · ${c.name}` }
+      }
+    }
+    return null
+  }
+  const others: Other[] = []
+  if (tab === 'leagues') {
+    const seen = new Set<string>()
+    for (const r of tabs) {
+      const t = tableFor(r)
+      if (t) {
+        if (t === points || seen.has(t.pool)) continue
+        seen.add(t.pool)
+        const top = t.rows[0]
+        const any = !!top && top.points > 0
+        others.push({ key: `pool:${t.pool}`, label: POOL_CN[t.pool] ?? t.pool, go: r, leader: any ? game.teams[top.team]?.name ?? '—' : '—', value: any ? `${top.points} 分` : '还没有积分' })
+      } else if (r !== region && regionIn(region, game.year) !== r) {
+        const l = leaderOf(r)
+        others.push({ key: r, label: REGION_CN[r] ?? r, go: r, leader: l?.leader ?? '—', value: l?.value ?? '还没开打' })
+      }
+    }
+  }
 
   return (
     <>
@@ -155,6 +334,7 @@ export default function Standings() {
               </div>
             </Panel>
           )}
+          {points && <PointsPanel key={points.pool} table={points} />}
           {shown.length === 0 && <div className="empty">该赛区本阶段没有进行中的赛事。</div>}
           {shown.map((c) => c.format === 'circuit' ? <CircuitPanel key={c.key} comp={c} /> : c.region ? (
             <Panel
@@ -219,6 +399,7 @@ export default function Standings() {
               )}
             </Panel>
           ))}
+          <OtherRegions rows={others} onPick={setRegion} />
         </>
       ) : (
         <Panel title="赛季选手排行（至少 8 张图）" flush>
