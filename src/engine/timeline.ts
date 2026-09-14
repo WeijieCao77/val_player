@@ -352,7 +352,7 @@ for (const [scenes, codes] of [
  * stood that year: a Russian five in 2023 play East Surge, and in 2025 the
  * NORTH//EAST league that replaced it.
  */
-export function sceneFor(state: GameState, t: Team): string | undefined {
+export function sceneFor(state: GameState, t: Team, keep = true): string | undefined {
   // a league club plays in no Challengers league: it keeps the one history gave it (China's partners
   // played the Evolution Series) and is never given one off its players' passports — Team Liquid,
   // read as NORTH//EAST, entered that league's Kickoff through the open decider
@@ -373,7 +373,9 @@ export function sceneFor(state: GameState, t: Team): string | undefined {
     ?? [...Object.values(Y.clubs).filter((c) => c.s && regionIn(c.r as Region, state.year) === league)
       .reduce((m, c) => m.set(c.s!, (m.get(c.s!) ?? 0) + 1), new Map<string, number>()).entries()]
       .sort((a, b) => b[1] - a[1])[0]?.[0]
-  if (scene) t.scene = scene
+  // kept on the club, unless the caller only reads (engine/circuit.ts couldStillTake, playsElsewhere; engine/me/window.ts):
+  // a screen asking whether an event could still take the club wrote a scene into the save for a club that had none the book names
+  if (scene && keep) t.scene = scene
   return scene
 }
 

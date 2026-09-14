@@ -1519,13 +1519,13 @@ export function isLeagueEvent(year: number, ev: CEvent): boolean {
  * club does not play the league above it; and the world does not move for a
  * player with no club to move it.
  */
-function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: string | null): boolean {
+function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: string | null, keep = true): boolean {
   // a player with no club moves nothing, in any year: the world is his only once he is in it
   if (!team || !club) return false
   if (state.year < 2023) return inScope(ev, team.region)
   // a VCT league club is in no Challengers-tier event's reach: it plays one only where history put it (leagueOut)
   if (inVctLeague(state, team) && tierOf(ev) === 2) return false
-  if (ev.scene) return sceneFor(state, team) === ev.scene
+  if (ev.scene) return sceneFor(state, team, keep) === ev.scene
   if (isLeagueEvent(state.year, ev)) return false
   return inScope(ev, team.region)
 }
@@ -1650,7 +1650,8 @@ function playsElsewhere(state: GameState, ev: CEvent): ReadonlySet<string> {
     } else if (other.scene) {
       for (const t of Object.values(state.teams)) if (t.scene === other.scene && !t.dormant) out.add(t.id)
     }
-    if (club && isHome(state, other, state.teams[club], club)) out.add(club)
+    // read without keeping the scene it works out: the week's reads of a draw (drawOutlook, couldStillTake) come here too
+    if (club && isHome(state, other, state.teams[club], club, false)) out.add(club)
   }
   if (!ev.projected) {
     for (const v of ev.seeds) {
@@ -1873,8 +1874,10 @@ function couldStillTake(
     return ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event)) ? 'maybe' : null
   }
   // a place the draw fills from the player's own scene (fillGaps, offerPlayIn): open to it only where a
-  // qualifier's last place, or a closed league's promotion place, is there to play a decider for
-  if (teamId === playerClub(state) && isHome(state, ev, team, teamId)) {
+  // qualifier's last place, or a closed league's promotion place, is there to play a decider for. Read without keeping
+  // the scene it works out: this is a read — the week screen's 「下一场」 (me/nextup.ts), quietAhead, a break's lock
+  // (me/outlets.ts) — and a club with no scene the roster book names had one written into the save by being looked at
+  if (teamId === playerClub(state) && isHome(state, ev, team, teamId, false)) {
     const decider = openOutputs(ev).length > 0 || (state.year >= 2023 && ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0))
     return decider ? 'entry' : 'maybe'
   }

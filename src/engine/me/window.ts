@@ -399,7 +399,8 @@ const deciderDay = (comp: Competition, ev: CEvent): number =>
  */
 function concerns(state: GameState, ev: CEvent, comp: Competition, team: Team, at: string): boolean {
   if (ev.region === null || comp.teams.includes(team.id)) return true
-  if (ev.scene) return daily(SCENES, state, at, team.id, () => sceneFor(state, team)) === ev.scene
+  // a read: the scene it works out is not kept on the club (timeline.ts sceneFor)
+  if (ev.scene) return daily(SCENES, state, at, team.id, () => sceneFor(state, team, false)) === ev.scene
   const league = regionIn(team.region, state.year)
   return (ev.layer ?? [ev.region]).some((r) => r === team.region || r === league)
 }
@@ -459,7 +460,7 @@ function firstNextSeason(state: GameState, team: Team): Busy | null {
   const kickoff = league ? firstOf(y, `kickoff:${league}`, (ev) => !ev.scene && ev.region === league && ev.stage === 'kickoff') : null
   let best: CEvent | undefined = [booked, kickoff].filter((ev): ev is CEvent => !!ev).sort((a, b) => a.start! - b.start!)[0]
   if (!best && !league) {
-    const scene = sceneFor(state, team)
+    const scene = sceneFor(state, team, false)
     best = (scene ? firstOf(y, `scene:${scene}`, (ev) => ev.scene === scene && ev.units.some((u) => u.type !== 'open')) : null) ?? undefined
   }
   return best ? { from: absDay(y, Math.max(0, best.start!)), until: absDay(y, best.end!), name: best.cn, tentative: true } : null
