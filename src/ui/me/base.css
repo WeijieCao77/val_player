@@ -551,6 +551,11 @@ tr.me:hover { background: var(--accent-wash-2); }
 tr.clickable { cursor: pointer; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
 .table-wrap { overflow-x: auto; }
+/* a standings line under the last side going on (破晓's tr.cut): solid once nothing left to play can move it, dashed while it can */
+tr.cut-solid > td { border-bottom: 2px solid var(--accent); }
+tr.cut-dash > td { border-bottom: 2px dashed var(--accent); }
+/* the one line under a table that says what its lines mean */
+.table-legend { margin: 0; padding: 6px 13px 9px; }
 
 /* ---------------------------------------------------------------- bits */
 .role {

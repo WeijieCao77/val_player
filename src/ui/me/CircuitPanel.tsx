@@ -1,8 +1,8 @@
 import { useGame } from './ctx'
 import { Crest, Panel, fmtDay } from './common'
 import { eventOf, realPlacesOf, realResultOf } from '../../engine/circuit'
-import { eventTables, roundCn } from '../../engine/eventTable'
-import type { EventTable, GroupTable, PlaceTable } from '../../engine/eventTable'
+import { eventTables, onwardSets, roundCn } from '../../engine/eventTable'
+import type { Band, EventTable, GroupTable, Line, OnwardSet, PlaceRow, PlaceTable } from '../../engine/eventTable'
 import { REGION_CN } from '../../engine/types'
 import type { Competition, Region } from '../../engine/types'
 
@@ -15,12 +15,14 @@ import type { Competition, Region } from '../../engine/types'
  * my club is in it, it is my region's, or a result upstream changed who got
  * in) or replayed as it really went. A played event quotes history beside
  * every result and under its final placings; a replayed one says plainly that
- * it is out of reach.
+ * it is out of reach, and still counts each real match the day it is played.
  *
  * Its body is the event's standings, the way vlr.gg and the broadcast show
- * one: a table for each group, Swiss stage or regular season, placings for a
- * knockout bracket (engine/eventTable.ts). It used to be every fixture, one row
- * each — 「为什么积分榜里放的是所有队伍的比赛记录而不是积分」 — and the matches
+ * one: a table for each group, Swiss stage or regular season, placings and
+ * series for a knockout bracket (engine/eventTable.ts) — and, the way 破晓
+ * shows its league table, a line where the places going on end and one line
+ * under the table saying what the lines mean. It used to be every fixture, one
+ * row each — 「为什么积分榜里放的是所有队伍的比赛记录而不是积分」 — and the matches
  * are still there, folded into 比赛记录.
  */
 
@@ -40,12 +42,29 @@ const WHY: Record<string, string> = { mine: '你们在打', home: '本赛区 · 
 
 const signed = (n: number): string => `${n > 0 ? '+' : ''}${n}`
 const placeText = (p?: [number, number]): string => (!p ? '—' : p[0] === p[1] ? String(p[0]) : `${p[0]}–${p[1]}`)
+const cls = (...xs: (string | false | null | undefined)[]): string => xs.filter(Boolean).join(' ')
 
-function Club({ id }: { id: string }) {
+/** 前 3 名, 第 2 名, 第 3–8 名 */
+const rangeText = (lo: number, hi: number): string => (lo === hi ? `第 ${lo} 名` : lo === 1 ? `前 ${hi} 名` : `第 ${lo}–${hi} 名`)
+const bandText = (b: Band): string => `${rangeText(b.from, b.to)}进${b.dest}`
+const onwardText = (s: OnwardSet): string => {
+  const r = rangeText(s.places[0], s.places[s.places.length - 1])
+  if (s.kind === 'points') return `${r}拿积分`
+  return s.league ? `${REGION_CN[s.league as Region] ?? s.league}的队伍里${r}去${s.name}` : `${r}去${s.name}`
+}
+/** the class of the row a line is drawn under */
+const lineAt = (lines: Line[]) => (i: number): string => {
+  const l = lines.find((x) => x.after === i + 1)
+  return l ? (l.solid ? 'cut-solid' : 'cut-dash') : ''
+}
+
+function Club({ id, name }: { id: string; name?: string }) {
   const { game } = useGame()
+  const team = game.teams[id]
+  const label = team?.name ?? name ?? id
   return (
-    <span className="club" title={game.teams[id]?.name}>
-      <Crest id={id} /><span>{game.teams[id]?.name ?? id}</span>
+    <span className="club" title={label}>
+      {team && <Crest id={id} />}<span>{label}</span>
     </span>
   )
 }
@@ -81,7 +100,7 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
         )}
         {c.mode === 'history' && (
           <p className="muted" style={{ margin: '6px 0 0' }}>
-            你够不着这里，这场照真实历史进行{comp.champion || c.done ? '。' : `，${fmtDay(c.end, game.year)} 出结果。`}
+            你够不着这里，这场照真实历史进行{comp.champion || c.done ? '。' : `：真实赛程打完一场，榜上记一场，${fmtDay(c.end, game.year)} 结束。`}
           </p>
         )}
         {c.done && (
@@ -158,7 +177,7 @@ function EventBody({ comp, tables }: { comp: Competition; tables: EventTable[] }
             {p.list.map((t) => {
               const title = p.list.length > 1 ? t.group || t.phase : [t.phase, t.group].filter(Boolean).join(' · ')
               return t.kind === 'table'
-                ? <GroupTableView key={t.unit} t={t} title={title} />
+                ? <GroupTableView key={`${t.unit}:${t.group}`} t={t} title={title} />
                 : <PlaceTableView key={t.unit} t={t} comp={comp} title={title} />
             })}
           </div>
@@ -168,17 +187,32 @@ function EventBody({ comp, tables }: { comp: Competition; tables: EventTable[] }
   )
 }
 
-/** A group, a Swiss stage, a regular season: record, maps, map difference, round difference — and where each place went. */
+/** The one line under a group's table, 破晓's 「粗线以上进季后赛」. */
+function groupLegend(t: GroupTable): string {
+  const bits: string[] = []
+  const single = t.bands.length === 1 && t.bands[0].from === 1 ? t.bands[0] : null
+  if (t.lines.length) {
+    const solid = t.lines.every((l) => l.solid)
+    const word = solid ? '实线' : '虚线'
+    bits.push(single ? `${word}以上晋级${single.dest}` : `${word}分开去向不同的名次`)
+    if (!solid) bits.push('比赛还没打完，线会跟着名次动')
+  } else if (t.bands.length && !t.ordered) {
+    bits.push('这一组是淘汰赛制：打完才排出名次、画线，现在按战绩排')
+  } else if (t.bands.length && t.done) {
+    bits.push('名次和真正晋级的队有出入，以「去向」为准')
+  }
+  if (t.history) bits.push('照真实比分记，没有回合数')
+  return bits.length ? `${bits.join('；')}。` : ''
+}
+
+/** A group, a Swiss stage, a regular season: record, maps, map difference, round difference — and where each place goes. */
 function GroupTableView({ t, title }: { t: GroupTable; title: string }) {
   const { game } = useGame()
   const draws = t.rows.some((r) => r.d > 0)
   const fate = t.rows.some((r) => r.next !== undefined)
-  const note = t.done ? ''
-    : t.cut != null && t.to ? `前 ${t.cut} 名进${t.to}`
-      : t.dests.length > 1 ? `按名次去${t.dests.join('或')}`
-        : t.advance && t.to ? `${t.advance} 队进${t.to}` : ''
-  // the line under the last side going on: solid once the table is complete, dashed while it is not
-  const line = (i: number) => (t.cut === i + 1 ? { borderBottom: `2px ${t.done ? 'solid' : 'dashed'} var(--accent)` } : undefined)
+  const note = t.bands.map(bandText).join(' · ')
+  const line = lineAt(t.lines)
+  const legend = groupLegend(t)
   return (
     <div style={{ minWidth: 0 }}>
       <div className="nav-group" style={{ padding: '8px 13px 4px' }}>
@@ -196,16 +230,16 @@ function GroupTableView({ t, title }: { t: GroupTable; title: string }) {
           </thead>
           <tbody>
             {t.rows.map((r, i) => (
-              <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''}>
-                <td className="num muted" style={line(i)}>{i + 1}</td>
-                <td style={line(i)}><Club id={r.team} /></td>
-                <td className="num mono" style={line(i)}>{r.w}-{r.l}</td>
-                {draws && <td className="num mono muted" style={line(i)}>{r.d}</td>}
-                <td className="num muted" style={line(i)}>{r.mapW}-{r.mapL}</td>
-                <td className={`num mono ${r.mapW - r.mapL >= 0 ? 'pos' : 'neg'}`} style={line(i)}>{signed(r.mapW - r.mapL)}</td>
-                <td className="num muted mono" style={line(i)}>{signed(r.roundW - r.roundL)}</td>
+              <tr key={r.team} className={cls(r.team === game.myTeam && 'me', line(i))} data-team={r.team}>
+                <td className="num muted">{t.ordered ? i + 1 : '—'}</td>
+                <td><Club id={r.team} name={r.name} /></td>
+                <td className="num mono">{r.w}-{r.l}</td>
+                {draws && <td className="num mono muted">{r.d}</td>}
+                <td className="num muted">{r.mapW}-{r.mapL}</td>
+                <td className={`num mono ${r.mapW - r.mapL >= 0 ? 'pos' : 'neg'}`}>{signed(r.mapW - r.mapL)}</td>
+                <td className="num muted mono">{t.history ? '—' : signed(r.roundW - r.roundL)}</td>
                 {fate && (
-                  <td className="small" style={line(i)}>
+                  <td className="small">
                     {r.next ? <span className="tag t1">→ {r.next}</span> : r.next === null ? <span className="faint">淘汰</span> : ''}
                   </td>
                 )}
@@ -214,38 +248,100 @@ function GroupTableView({ t, title }: { t: GroupTable; title: string }) {
           </tbody>
         </table>
       </div>
+      {legend && <p className="tiny faint table-legend">{legend}</p>}
     </div>
   )
 }
 
-/** A knockout bracket as placings: who is still in and what they play next, who went out where. */
+/** The one line under a bracket. */
+function placeLegend(t: PlaceTable, over: boolean): string {
+  const bits: string[] = []
+  if (t.lives > 1) bits.push(`输满 ${t.lives} 场淘汰`)
+  if (!over) bits.push('名次按已经打完的比赛算')
+  if (t.onward.length) {
+    const first = t.onward.find((s) => s.kind === 'event' && !s.league && s.places[0] === 1)
+    if (t.lines.length && first && t.lines.some((l) => l.after === first.places[first.places.length - 1])) bits.push(`实线以上去${first.name}`)
+    else if (t.lines.length) bits.push('实线是名额的分界')
+    if (!over && t.onward.some((_, k) => t.rows.some((r) => r.marks[k] === 'open'))) bits.push('名额没定的时候不画线，看每一行的「名额」')
+    if (t.onward.some((s) => s.kind === 'points')) bits.push('积分在赛事结束时入账')
+  }
+  if (t.history) bits.push('照真实比分记，没有回合数')
+  return `${bits.join('；')}。`
+}
+
+function outText(r: PlaceRow, over: boolean): string {
+  if (!r.place) return `止步${roundCn(r.round)}`
+  if (over && (/总决赛/.test(r.round) || (r.place[0] === 2 && r.place[1] === 2))) return '亚军'
+  if (over && r.place[0] === 3 && r.place[1] === 3 && roundCn(r.round).endsWith('季军赛')) return '季军'
+  return over ? `第 ${placeText(r.place)} 名` : `淘汰（第 ${placeText(r.place)} 名）`
+}
+
+/**
+ * A side's marks against the places the event gives on: 已拿到 or 无缘 each, and where a later event's places are
+ * still open to it, 还在赛 — 待定 for a side already out on a joint place, 等抽签 for a league's places once over.
+ */
+function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolean }) {
+  const open = sets.some((s, k) => s.kind === 'event' && r.marks[k] === 'open')
+  return (
+    <span className="row wrap" style={{ gap: 4 }}>
+      {sets.map((s, k) => {
+        const m = r.marks[k]
+        if (s.kind === 'points') {
+          const v = over && r.place ? s.pays?.[r.place[0] - 1] : undefined
+          return m === 'yes' ? <span key={k} className="tag win">{v ? `+${v} 积分` : '拿积分'}</span>
+            : m === 'no' ? <span key={k} className="faint">没有积分</span> : null
+        }
+        return m === 'yes' ? <span key={k} className="tag t1">已拿到{s.name}名额</span>
+          : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
+      })}
+      {open && <span className="muted">{over ? '等抽签' : r.state === 'out' ? '待定' : '还在赛'}</span>}
+    </span>
+  )
+}
+
+/** A knockout bracket: each side's series, maps and rounds; who is still in, who went out in what place — and the places it gives on. */
 function PlaceTableView({ t, comp, title }: { t: PlaceTable; comp: Competition; title: string }) {
   const { game } = useGame()
-  const outText = (round: string, place?: [number, number]): string =>
-    /总决赛/.test(round) ? '亚军' : /季军赛/.test(round) && place?.[0] === 3 ? '季军' : `止步${roundCn(round)}`
+  const over = !!comp.champion
+  const note = t.onward.map(onwardText).join(' · ')
+  const line = lineAt(t.lines)
+  const marks = t.onward.length > 0
   return (
     <div style={{ minWidth: 0 }}>
-      <div className="nav-group" style={{ padding: '8px 13px 4px' }}>{title}</div>
+      <div className="nav-group" style={{ padding: '8px 13px 4px' }}>
+        {title}{note && <span className="faint"> · {note}</span>}
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th className="num">名次</th><th>战队</th><th>状态</th></tr>
+            <tr>
+              <th className="num">名次</th><th>战队</th><th className="num">战绩</th><th className="num">小局</th><th className="num">回合差</th>
+              {t.lives > 1 && <th className="num">败场</th>}
+              <th>状态</th>
+              {marks && <th>名额</th>}
+            </tr>
           </thead>
           <tbody>
-            {t.rows.map((r) => (
-              <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''}>
-                <td className="num mono">{placeText(r.place)}{comp.champion === r.team && ' 🏆'}</td>
-                <td><Club id={r.team} /></td>
+            {t.rows.map((r, i) => (
+              <tr key={r.team} className={cls(r.team === game.myTeam && 'me', line(i))} data-team={r.team}>
+                <td className="num mono">{r.state === 'in' ? '—' : placeText(r.place)}{comp.champion === r.team && ' 🏆'}</td>
+                <td><Club id={r.team} name={r.name} /></td>
+                <td className="num mono">{r.w}-{r.l}</td>
+                <td className="num muted">{r.mapW}-{r.mapL}</td>
+                <td className="num muted mono">{t.history ? '—' : signed(r.roundW - r.roundL)}</td>
+                {t.lives > 1 && <td className="num mono muted">{r.l}/{t.lives}</td>}
                 <td className="small">
                   {r.state === 'won' ? <b>{comp.champion === r.team ? '冠军' : `${roundCn(r.round)}胜出`}</b>
                     : r.state === 'in' ? <span className="pos">还在赛{r.round ? ` · 下一轮 ${roundCn(r.round)}` : ''}</span>
-                      : <span className="muted">{outText(r.round, r.place)}</span>}
+                      : <span className="muted">{outText(r, over)}</span>}
                 </td>
+                {marks && <td className="small"><Marks r={r} sets={t.onward} over={over} /></td>}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="tiny faint table-legend">{placeLegend(t, over)}</p>
     </div>
   )
 }
@@ -255,13 +351,26 @@ function FinalPlaces({ comp }: { comp: Competition }) {
   const { game } = useGame()
   const rows = comp.finished.map((id, i) => ({ id, p: comp.places?.[i] ?? i + 1 }))
   const joint = (p: number) => (comp.places ? comp.places.filter((x) => x === p).length : 1)
-  const body = (list: typeof rows) => (
+  const sets = onwardSets(game, comp).filter((s) => !s.league)
+  // a line where a run of places given on starts or ends — if the sides the draw seated are those rows
+  const cuts = new Set<number>()
+  for (const s of sets) {
+    const [lo, hi] = [s.places[0], s.places[s.places.length - 1]]
+    const inRange = rows.filter((r) => r.p >= lo && r.p + joint(r.p) - 1 <= hi).map((r) => r.id)
+    if (s.seated && (inRange.length !== s.seated.length || inRange.some((t) => !s.seated!.includes(t)))) continue
+    rows.forEach((r, i) => {
+      const nx = rows[i + 1]
+      const end = r.p + joint(r.p) - 1
+      if (nx && ((end <= hi && nx.p > hi) || (end < lo && nx.p >= lo))) cuts.add(i + 1)
+    })
+  }
+  const body = (list: typeof rows, from: number) => (
     <div className="table-wrap">
       <table>
         <thead><tr><th className="num">名次</th><th>战队</th></tr></thead>
         <tbody>
-          {list.map(({ id, p }) => (
-            <tr key={id} className={id === game.myTeam ? 'me' : ''}>
+          {list.map(({ id, p }, i) => (
+            <tr key={id} className={cls(id === game.myTeam && 'me', cuts.has(from + i + 1) && 'cut-solid')}>
               <td className="num mono">{placeText([p, p + joint(p) - 1])}{comp.champion === id && ' 🏆'}</td>
               <td><Club id={id} /></td>
             </tr>
@@ -270,14 +379,16 @@ function FinalPlaces({ comp }: { comp: Competition }) {
       </table>
     </div>
   )
+  const note = sets.map(onwardText).join(' · ')
   return (
     <div style={{ borderTop: '1px solid var(--line)' }}>
-      <div className="nav-group" style={{ padding: '8px 13px 4px' }}>最终名次</div>
-      {body(rows.slice(0, 8))}
+      <div className="nav-group" style={{ padding: '8px 13px 4px' }}>最终名次{note && <span className="faint"> · {note}</span>}</div>
+      {body(rows.slice(0, 8), 0)}
+      {cuts.size > 0 && <p className="tiny faint table-legend">实线是名额的分界：{sets.map(onwardText).join('，')}。</p>}
       {rows.length > 8 && (
         <details style={{ margin: '0 13px 8px' }}>
           <summary className="small muted" style={{ cursor: 'pointer', padding: '6px 0' }}>其余 {rows.length - 8} 队</summary>
-          {body(rows.slice(8))}
+          {body(rows.slice(8), 8)}
         </details>
       )}
     </div>

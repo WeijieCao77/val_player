@@ -1830,9 +1830,10 @@ function outsideSeat(state: GameState, ev: CEvent, c: NonNullable<Competition['c
  * a point a match win, a point for topping a group, a point for a playoff bye
  * (src/data/routes_partnered.json has each event's rules). Counted off this
  * world's results — the fixtures where the event was played, history's where
- * it was not — so a pool reads the same way whichever it was.
+ * it was not — so a pool reads the same way whichever it was. `asOf`: history's
+ * only up to the day before it, for the standings page while the event is on.
  */
-export function circuitBonus(state: GameState, comp: Competition): Map<string, number> {
+export function circuitBonus(state: GameState, comp: Competition, asOf?: number): Map<string, number> {
   const out = new Map<string, number>()
   const c = comp.circuit
   const rules = c ? rulesOf(c.id) : undefined
@@ -1848,6 +1849,7 @@ export function circuitBonus(state: GameState, comp: Competition): Map<string, n
       const g = f ? gameOf(f) : null
       return g ? { a: g.a, b: g.b, w: g.w, md: g.mapsA - g.mapsB } : { a: null, b: null, w: null, md: 0 }
     }
+    if (asOf != null && n.day >= asOf) return { a: null, b: null, w: null, md: 0 }
     return {
       a: teamOf(state, ev, n.teams[0]), b: teamOf(state, ev, n.teams[1]),
       w: n.winner ? teamOf(state, ev, n.winner) : null, md: (n.score[0] ?? 0) - (n.score[1] ?? 0),
@@ -2432,4 +2434,195 @@ export function pointsTables(state: GameState): PointsTable[] {
       lcqBasis,
     }
   })
+}
+
+/* ------------------------------------------------------------------ */
+/*  an event as far as it has gone, for the standings page             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * An event as the standings page may show it today: the ties decided, the ties drawn and still to play, and who
+ * sits in a slot wherever that can be read.
+ *
+ * Played here, that is this world's fixtures and the draw's own reading of each slot (graphOf). Replayed as
+ * history, it is the real results whose day has passed — a side this world does not hold under a key of its own,
+ * `real:` and its vlr id, with its real name — and a slot read only once what fills it is over: a seed from the
+ * day the event is drawn, a winner or loser once that tie is played, a place once its whole phase is. Nothing
+ * later shows early (作者：「虽然 kickoff 还没打完，但是已经打了的场次的输赢也应该在榜上体现」).
+ */
+export interface EventSoFar {
+  ev: CEvent
+  /** each unit's first node, as a global node index */
+  base: number[]
+  /** decided ties by global node index; a walkover has one side */
+  games: Map<number, Game>
+  walks: Set<number>
+  /** ties drawn and still to play: their two sides */
+  pending: Map<number, [string, string]>
+  /** who sits on each side of a tie: a club, nobody (null), or not known yet (undefined) */
+  sides: (at: number) => [string | null | undefined, string | null | undefined]
+  /** who a slot read by unit `ui` seats, where that can be read today */
+  slot: (ui: number, s: Slot) => string | null | undefined
+  /** replayed as history: real results — maps, and no rounds but a single map's */
+  history: boolean
+  /** a side this world does not hold: its real name */
+  names: Map<string, string>
+  /** history: each side's real vlr id */
+  real: Map<string, string>
+}
+
+export function eventSoFar(state: GameState, comp: Competition): EventSoFar | null {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev || !c.mode || c.done) return null
+  const { nodes, base } = flat(ev)
+  const games = new Map<number, Game>()
+  const walks = new Set<number>()
+  const pending = new Map<number, [string, string]>()
+  const names = new Map<string, string>()
+  const real = new Map<string, string>()
+  let slot: EventSoFar['slot']
+
+  if (c.mode === 'sim') {
+    const g = graphOf(state, comp, ev)
+    for (const [at, f] of g.fx) {
+      if (at < 0) continue
+      const played = gameOf(f)
+      if (played) games.set(at, played)
+      else pending.set(at, [f.teamA, f.teamB])
+    }
+    for (const [k, w] of Object.entries(c.walk ?? {})) {
+      const at = Number(k)
+      if (games.has(at) || pending.has(at) || !nodes[at]) continue
+      walks.add(at)
+      games.set(at, { a: w || null, b: null, w: w || null, round: nodes[at].round, mapsA: 0, mapsB: 0, roundsA: 0, roundsB: 0 })
+    }
+    // a slot read off a table works its groups out again each time: once per page is enough
+    const memo = new Map<string, string | null | undefined>()
+    slot = (ui, s) => {
+      const k = `${ui}|${s.join(',')}`
+      if (!memo.has(k)) memo.set(k, g.slot(ui, s))
+      return memo.get(k)
+    }
+  } else {
+    // the event over, every tie of it is history's to show
+    const today = comp.champion ? Infinity : state.day
+    const known = new Map<string, string>()
+    const sideOf = (vlr: string | null | undefined): string | null => {
+      if (!vlr) return null
+      let t = known.get(vlr)
+      if (t === undefined) {
+        t = teamOf(state, ev, vlr) ?? `real:${vlr}`
+        known.set(vlr, t)
+        if (!real.has(t)) real.set(t, vlr)
+        if (t.startsWith('real:')) names.set(t, ev.names[vlr] ?? vlr.replace(/^N:/, ''))
+      }
+      return t
+    }
+    for (const n of nodes) {
+      if (n.day >= today) continue
+      const g = realGame(n)
+      const [a, b] = [sideOf(g.a), sideOf(g.b)]
+      games.set(n.at, { ...g, a, b, w: sideOf(g.w) })
+      if (!a || !b) walks.add(n.at)
+    }
+    const over = (uj: number): boolean => {
+      const u = ev.units[uj]
+      if (!u) return false
+      if (isOpen(u)) return today > (u.last ?? 0)
+      return (u.nodes ?? []).every((_, i) => nodes[base[uj] + i].day < today)
+    }
+    // the real side each entry slot seated
+    const entered = new Map<string, string>()
+    for (const n of nodes) {
+      ;[n.a, n.b].forEach((s, k) => {
+        if ((s[0] === 's' || s[0] === 'g') && n.teams[k] && !entered.has(s.join(','))) entered.set(s.join(','), n.teams[k])
+      })
+    }
+    slot = (ui, s) => {
+      if (s[0] === 'w' || s[0] === 'l') {
+        const g = games.get(base[ui] + s[1])
+        if (!g) return undefined
+        return s[0] === 'w' ? g.w : g.w === g.a ? g.b : g.a
+      }
+      if (s[0] === 'g' && !over(s[1])) return undefined
+      return sideOf(entered.get(s.join(',')) ?? (s[0] === 's' ? ev.seeds[s[1]] : undefined))
+    }
+    for (const n of nodes) {
+      if (games.has(n.at)) continue
+      const [a, b] = [slot(n.unit, n.a), slot(n.unit, n.b)]
+      if (a && b) pending.set(n.at, [a, b])
+    }
+  }
+
+  const read = slot
+  const sides = (at: number): [string | null | undefined, string | null | undefined] => {
+    const g = games.get(at)
+    if (g) return [g.a, g.b]
+    const p = pending.get(at)
+    if (p) return p
+    const n = nodes[at]
+    return n ? [read(n.unit, n.a), read(n.unit, n.b)] : [undefined, undefined]
+  }
+  return { ev, base, games, walks, pending, sides, slot: read, history: c.mode === 'history', names, real }
+}
+
+/**
+ * A later event of the year that takes places off this one, and which places: a Masters its Kickoff's top two,
+ * 2027's Cup its Kickoff's top eight and the Open Playoffs its bottom four. Read off the route book's `top` and
+ * `winner` seats — each takes the next side of this event's order not already in — and from 2027 off each
+ * place's own rule (engine/ahead.ts). For the standings page's 「前 N 名去 …」.
+ */
+export interface Onward {
+  event: string
+  name: string
+  /** the places, from 1st */
+  places: number[]
+  /** the seats are a league's: they skip sides from other leagues, so no line of places says who takes them */
+  league?: string
+  /** the sides the draw put in those seats, once it is drawn */
+  seated: string[] | null
+}
+
+export function onwardOf(state: GameState, comp: Competition): Onward[] {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev) return []
+  const out: Onward[] = []
+  for (const e of eventsOf(state.year)) {
+    if (e.id === ev.id) continue
+    const at: number[] = []
+    const places: number[] = []
+    let league: string | undefined
+    if (e.plan) {
+      e.plan.seats.forEach((s, i) => {
+        if (s.from !== 'place' || s.event !== ev.id) return
+        at.push(i)
+        places.push(s.k + 1)
+      })
+    } else {
+      const book = rulesOf(e.id)?.routes
+      if (!book) continue
+      e.seeds.map((v, i) => ({ i, r: book[v] }))
+        .filter((x): x is { i: number; r: Route } => !!x.r?.event && (x.r.kind === 'top' || x.r.kind === 'winner')
+          && (e.projected ? counterpart(x.r.event, e) : x.r.event) === ev.id)
+        .sort((x, y) => Number(x.r.kind === 'top') - Number(y.r.kind === 'top') || (x.r.k ?? 0) - (y.r.k ?? 0))
+        .forEach((x, n) => {
+          at.push(x.i)
+          places.push(n + 1)
+          if (x.r.league) league = x.r.league
+        })
+    }
+    if (!places.length) continue
+    const target = state.comps[`ev:${e.id}`]
+    const drawn = target?.circuit?.mode ? target.circuit.seeds : null
+    out.push({
+      event: e.id,
+      name: target?.name ?? e.cn,
+      places: uniq(places).sort((a, b) => a - b),
+      league,
+      seated: drawn ? at.map((i) => drawn[i]).filter((t): t is string => !!t) : null,
+    })
+  }
+  return out
 }

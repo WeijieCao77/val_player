@@ -7,7 +7,7 @@ import { DRAW_KIND_CN, drawsOf } from '../../engine/draw'
 import { PLAYOFF_CUT } from '../../engine/season'
 import { formatOf, onTimeline, regionIn, regionsOf, stagesOf } from '../../engine/era'
 import CircuitPanel, { circuitShows } from './CircuitPanel'
-import { circuitPaid, eventOf, pointsTables } from '../../engine/circuit'
+import { circuitBonus, circuitPaid, eventOf, pointsTables } from '../../engine/circuit'
 import type { PointsBasis, PointsRow, PointsTable } from '../../engine/circuit'
 import { eventTables } from '../../engine/eventTable'
 import { qualification } from '../../engine/qualify'
@@ -138,10 +138,24 @@ export function PointsPanel({ table }: { table: PointsTable }) {
     if (c.format !== 'circuit' || !c.awarded) continue
     for (const [t, v] of circuitPaid(game, c)) from.set(t, [...(from.get(t) ?? []), { name: shortName(c.name), v }])
   }
+  // what an event still being played has already earned a side — 2024 and 2025's point a match win — paid when it ends
+  const running = new Map<string, number>()
+  for (const c of Object.values(game.comps)) {
+    if (c.format !== 'circuit' || c.awarded || c.champion || !c.circuit?.mode || c.circuit.done) continue
+    for (const [t, v] of circuitBonus(game, c, game.day)) running.set(t, (running.get(t) ?? 0) + v)
+  }
+  const live = table.rows.some((r) => (running.get(r.team) ?? 0) > 0)
   const rows = table.rows
   const marks = rows.map((r) => r.mark)
   const lastDirect = marks.lastIndexOf('direct')
   const lastLcq = marks.lastIndexOf('lcq')
+  // 破晓's one line under the table: what its lines mean
+  const legend = [
+    lastDirect >= 0 || lastLcq >= 0
+      ? `${[lastDirect >= 0 ? `实线以上${open ? '直接' : '靠积分'}去冠军赛` : '', lastLcq >= 0 ? '虚线以上去最后机会资格赛' : ''].filter(Boolean).join('，')}；标「已晋级」的队不占积分名额，名额往下顺延`
+      : '',
+    live ? '「本赛事已得」是还在打的赛事里赢球拿到的分，赛事结束才加进积分' : '',
+  ].filter(Boolean).join('。')
   const cap = Math.max(8, Math.max(lastDirect, lastLcq, marks.lastIndexOf('through')) + 3)
   const mine = rows.findIndex((r) => r.team === game.myTeam)
   const rule = open
@@ -158,6 +172,7 @@ export function PointsPanel({ table }: { table: PointsTable }) {
           <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><span>{game.teams[r.team]?.name}</span></span>
         </td>
         <td className="num mono" style={line(i)}><b>{r.points}</b></td>
+        {live && <td className="num mono muted" style={line(i)}>{running.get(r.team) ? `+${running.get(r.team)}` : ''}</td>}
         <td className="small" style={line(i)}>
           {r.mark === 'direct' ? <span className="tag t1">冠军赛</span>
             : r.mark === 'lcq' ? <span className="tag">最后机会资格赛</span>
@@ -179,15 +194,20 @@ export function PointsPanel({ table }: { table: PointsTable }) {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th className="num">#</th><th>战队</th><th className="num">积分</th><th>名额</th><th>积分主要来自</th></tr>
+            <tr>
+              <th className="num">#</th><th>战队</th><th className="num">积分</th>
+              {live && <th className="num">本赛事已得</th>}
+              <th>名额</th><th>积分主要来自</th>
+            </tr>
           </thead>
           <tbody>
             {rows.slice(0, all ? rows.length : cap).map(row)}
-            {!all && mine >= cap && <tr><td colSpan={5} className="tiny faint center">⋯</td></tr>}
+            {!all && mine >= cap && <tr><td colSpan={live ? 6 : 5} className="tiny faint center">⋯</td></tr>}
             {!all && mine >= cap && row(rows[mine], mine)}
           </tbody>
         </table>
       </div>
+      {legend && <p className="tiny faint table-legend">{legend}。</p>}
       <div className="row wrap" style={{ padding: '8px 13px', gap: 10 }}>
         <span className="tiny faint" style={{ flex: '1 1 220px' }}>
           {BASIS_NOTE[table.basis]}{table.lcqBasis === 'drawn' && table.basis !== 'drawn' ? '最后机会资格赛的名单已经出来。' : ''}
@@ -228,8 +248,9 @@ function OtherRegions({ rows, onPick }: { rows: Other[]; onPick: (r: Region) => 
 
 /**
  * The tab a place's clubs play under: its own where the year has one (2021's circuits), else the league
- * it is folded into that year. From 2023 the tabs are the four leagues and every place is under one; a
- * 2022 place folded into no tab that year (Turkey, the Southeast Asian circuits) has none.
+ * it is folded into that year. From 2023 the tabs are the four leagues and every place is under one. In 2022
+ * the Southeast Asian circuits are under 东南亚; Turkey and CIS, which the book folds into EMEA only from 2023,
+ * have none.
  */
 export function tabOf(place: Region, tabs: Region[], year: number): Region | undefined {
   if (tabs.includes(place)) return place
@@ -240,9 +261,12 @@ export function tabOf(place: Region, tabs: Region[], year: number): Region | und
 export default function Standings() {
   const { game, openPlayer } = useGame()
   const [tab, setTab] = useState<'leagues' | 'players'>('leagues')
-  // 2021 ran a dozen circuits; a tab for every one that has a club in it
+  // 2021 ran a dozen circuits; a tab for every one that has a club in it. 2022 folded the Southeast Asian
+  // circuits into VCT APAC's Challengers, 东南亚 — and no club's own place is 'SEA', so that tab never showed and
+  // a club from Malaysia & Singapore, Indonesia, Thailand, the Philippines, Vietnam or Hong Kong & Taiwan opened
+  // the page on no tab at all
   const tabs: Region[] = formatOf(game.year) === 'open'
-    ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r))
+    ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r || regionIn(t.region, game.year) === r))
     : REGIONS
   // The page opens on the tab my club plays under — its VCT league, or the league over its Challengers
   // circuit — and with no club, on the one over where I am from (「来自」). From 2023 a club's place
