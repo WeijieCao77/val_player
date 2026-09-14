@@ -4,7 +4,9 @@
  * The page printed an event as every fixture, one row each, and had no points
  * table at all (作者：「为什么积分榜里放的是所有队伍的比赛记录而不是积分，这个部分也学学
  * lol breaker」). Now it prints each event's tables and each year's points table,
- * and a table that disagrees with the draw is worse than none. So:
+ * with 破晓's lines (「积分榜里面也要有赛程小分」「包括要达到哪个名次才能拿分或者进入
+ * 季后赛也要有一根线标出来」), and a table that disagrees with the draw is worse than
+ * none. So:
  *
  *  - points: every year that gave places off a points table — 2021 and 2022's
  *    circuit points, 2024–2026's Championship Points — shows one, runs by points,
@@ -14,11 +16,19 @@
  *    it is drawn, the page marks the draw. 2023 and 2027 on gave no place off
  *    points and show no table.
  *  - events: a played event's tables are its matches — a side's record, maps and
- *    rounds the sum of its matches in that phase; a finished table sends on the
- *    sides the next phase seated; a side out of a bracket lost a match there; an
- *    event over carries its own placings.
+ *    rounds the sum of its matches in that phase, in whichever group's table it
+ *    sits, and a knockout side's series, maps and rounds the same; a finished
+ *    phase sends on the sides the next phase seated, and its lines sit exactly
+ *    where the sides the next phases seated change — while it is still played,
+ *    only between the bands the draw reads; a side out of a bracket lost a match
+ *    there; an event over carries its own placings.
+ *  - onward: a final bracket's points line is under the last place its prize
+ *    table pays, a later event takes as many places as the route book gives it,
+ *    and once that event is drawn a side marked as having one is a side it seated.
+ *  - history: an event replayed as history shows, while it is on, exactly the real
+ *    results whose day has passed, and none after.
  *  - render: the points panel as React renders it lists the table's rows, in its
- *    order, with its marks.
+ *    order, with its marks; an event's panel draws each line under its row.
  *
  * Two careers: a Challengers starter in Europe from 2021 into 2027, and a VCT
  * club in EMEA from the 2026 entrance, whose league events are played.
@@ -32,13 +42,16 @@ import partneredRaw from '../src/data/routes_partnered.json'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { circuitPaid, eventOf, eventsOf, pointsTables } from '../src/engine/circuit'
+import { circuitAward, circuitPaid, eventOf, eventSoFar, eventsOf, pointsTables } from '../src/engine/circuit'
 import type { CEvent, PointsTable } from '../src/engine/circuit'
-import { eventTables } from '../src/engine/eventTable'
+import { circuitPointsFor } from '../src/engine/era'
+import { eventTables, labelOf } from '../src/engine/eventTable'
+import type { EventTable, GroupTable, PlaceTable, TableRow } from '../src/engine/eventTable'
 import { qualifyHolds, qualifyStats } from './qualify_holds'
 import { GameCtx } from '../src/ui/me/ctx'
+import CircuitPanel from '../src/ui/me/CircuitPanel'
 import { PointsPanel } from '../src/ui/me/Standings'
-import type { GameState, Region } from '../src/engine/types'
+import type { Competition, Fixture, GameState, Region } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -60,7 +73,7 @@ const fail = (msg: string) => { if (said.has(msg)) return; said.add(msg); bad++;
 /** The years that gave Champions or Last Chance Qualifier places off a points table. */
 const POINTS_YEARS = new Set([2021, 2022, 2024, 2025, 2026])
 
-type Route = { kind: string; pool?: string }
+type Route = { kind: string; pool?: string; event?: string }
 const BOOK = {
   ...(routesRaw as unknown as { events: Record<string, { routes?: Record<string, Route> }> }).events,
   ...(partneredRaw as unknown as { events: Record<string, { routes?: Record<string, Route> }> }).events,
@@ -89,10 +102,19 @@ function seatsByPool(state: GameState, ev: CEvent): Map<string, string[]> {
 }
 
 const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x))
+const uniq = <T>(xs: T[]): T[] => [...new Set(xs)]
 const names = (state: GameState, ids: Iterable<string>) => [...ids].map((t) => state.teams[t]?.name ?? t).join('、') || '（无）'
+const renderCtx = (state: GameState) => ({
+  game: state, commit: () => {}, toast: () => {}, openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
+})
 
 interface Snap { year: number; day: number; tables: PointsTable[]; drawn: Set<string> }
-const stats = { weeks: 0, tables: 0, rows: 0, settled: 0, standing: 0, standingOff: 0, drawn: 0, renders: 0, events: 0, eventTables: 0 }
+const stats = {
+  weeks: 0, tables: 0, rows: 0, settled: 0, standing: 0, standingOff: 0, drawn: 0, renders: 0, events: 0, eventTables: 0,
+  lines: 0, linesAtSeats: 0, knockoutRows: 0, pointsLines: 0, onward: 0, historyEvents: 0, historyRows: 0, panelRenders: 0,
+}
+/** a history event once it is over: looked at once */
+const historyOver = new Set<string>()
 
 function snap(state: GameState): Snap {
   return {
@@ -173,12 +195,9 @@ function pointsPaid(state: GameState, tables: PointsTable[], label: string): voi
 
 /** The points panel as rendered: the table's rows in its order, with its marks; the club's own row may follow a gap. */
 function renderHolds(state: GameState, tables: PointsTable[], label: string): void {
-  const ctx = {
-    game: state, commit: () => {}, toast: () => {}, openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
-  }
   for (const t of tables) {
     stats.renders++
-    const html = renderToStaticMarkup(createElement(GameCtx.Provider, { value: ctx }, createElement(PointsPanel, { table: t })))
+    const html = renderToStaticMarkup(createElement(GameCtx.Provider, { value: renderCtx(state) }, createElement(PointsPanel, { table: t })))
     const got = [...html.matchAll(/data-team="([^"]*)" data-mark="([^"]*)"/g)].map((m) => ({ team: m[1], mark: m[2] }))
     if (!got.length && t.rows.length) { fail(`${label}：${state.year} ${t.pool} 积分榜渲染出来一行都没有`); continue }
     const lastIsMine = got.length > 1 && got[got.length - 1].team === state.myTeam && t.rows.findIndex((r) => r.team === state.myTeam) !== got.length - 1
@@ -194,12 +213,118 @@ function renderHolds(state: GameState, tables: PointsTable[], label: string): vo
   }
 }
 
-/** A played event's tables are its matches. */
+/** Each side's series, level series, maps and rounds in these fixtures: [w, l, d, mapW, mapL, roundW, roundL]. */
+function sumFixtures(fx: Fixture[]): Map<string, number[]> {
+  const sum = new Map<string, number[]>()
+  const add = (team: string, row: number[]) => sum.set(team, (sum.get(team) ?? [0, 0, 0, 0, 0, 0, 0]).map((x, i) => x + row[i]))
+  for (const f of fx) {
+    if (!f.played || !f.result) continue
+    const { mapsWonA: a, mapsWonB: b, maps } = f.result
+    const [ra, rb] = maps.reduce((s, m) => [s[0] + m.scoreA, s[1] + m.scoreB], [0, 0])
+    add(f.teamA, [Number(a > b), Number(a < b), Number(a === b), a, b, ra, rb])
+    add(f.teamB, [Number(b > a), Number(b < a), Number(a === b), b, a, rb, ra])
+  }
+  return sum
+}
+
+/** The event's final bracket against the places it gives on: the points line, the route book's count, the draw's seats. */
+function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTable, where: string): void {
+  const over = !!comp.champion && comp.finished.length > 0
+  t.onward.forEach((s, k) => {
+    const hi = s.places[s.places.length - 1]
+    if (s.kind === 'points') {
+      stats.pointsLines++
+      const size = Math.max(comp.teams.length, ev.seeds.length, ev.places.length)
+      let last = 0
+      for (let p = 1; p <= size; p++) if ((circuitAward(comp, p) ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, p) : 0)) > 0) last = p
+      if (hi !== last) fail(`${where}：积分标到第 ${hi} 名，奖励表最后一个给分的名次是第 ${last} 名`)
+      if (over && hi < t.rows.length && !t.lines.some((l) => l.after === hi)) fail(`${where}：赛事结束，第 ${hi} 名下面没有积分线`)
+      return
+    }
+    stats.onward++
+    const target = s.event ? eventOf(s.event) : undefined
+    if (target && !target.plan && !target.projected) {
+      const want = Object.values(BOOK[target.id]?.routes ?? {}).filter((r) => (r.kind === 'top' || r.kind === 'winner') && r.event === ev.id).length
+      if (want !== s.places.length) fail(`${where}：${s.name} 从这里拿 ${want} 个名额，表上写的是 ${s.places.length} 个`)
+    }
+    if (s.seated) {
+      for (const r of t.rows) {
+        if ((r.marks[k] === 'yes') !== s.seated.includes(r.team)) fail(`${where}：${state.teams[r.team]?.name ?? r.name} 的「${s.name}」名额标记和抽签不一致`)
+      }
+    }
+    if (over && s.seated && !s.league && t.lines.some((l) => l.after === hi)) {
+      const above = new Set(t.rows.slice(s.places[0] - 1, hi).map((r) => r.team))
+      if (!same(above, new Set(s.seated))) fail(`${where}：${s.name} 的线以上是 ${names(state, above)}，抽签给了 ${names(state, s.seated)}`)
+    }
+  })
+}
+
+/** An event's panel as rendered draws each of its tables' lines under the row it belongs under. */
+function panelHolds(state: GameState, comp: Competition, tables: EventTable[], label: string): void {
+  if (!tables.some((t) => t.lines.length)) return
+  stats.panelRenders++
+  const html = renderToStaticMarkup(createElement(GameCtx.Provider, { value: renderCtx(state) }, createElement(CircuitPanel, { comp })))
+  const got = [...html.matchAll(/<tr class="([^"]*)" data-team="([^"]*)"/g)].map((m) => `${m[2]}${/cut-solid/.test(m[1]) ? '=' : /cut-dash/.test(m[1]) ? '-' : ''}`)
+  const want = tables.flatMap((t) => t.rows.map((r, i) => {
+    const l = t.lines.find((x) => x.after === i + 1)
+    return `${r.team}${l ? (l.solid ? '=' : '-') : ''}`
+  }))
+  if (got.join('|') !== want.join('|')) fail(`${label}：${state.year} ${comp.name} 渲染出来的线和表里的线不一致`)
+}
+
+/** An event replayed as history: the real results whose day has passed, exactly, and none after. */
+function historyHolds(state: GameState, comp: Competition, ev: CEvent, tables: EventTable[], label: string): void {
+  const so = eventSoFar(state, comp)
+  if (!so) return
+  stats.historyEvents++
+  const today = comp.champion ? Infinity : state.day
+  const days = ev.units.flatMap((u) => (u.nodes ?? []).map((n) => n.day))
+  const where = `${label}：${state.year} ${comp.name}（照真实历史）`
+  const early = [...so.games.keys()].filter((at) => days[at] >= today)
+  if (early.length) fail(`${where}：表里算进了 ${early.length} 场还没到日子的比赛`)
+  for (const ui of uniq(tables.map((t) => t.unit))) {
+    const u = ev.units[ui]
+    // each real side's record so far: [w, l, d, mapW, mapL]
+    const real = new Map<string, number[]>()
+    const add = (v: string, row: number[]) => real.set(v, (real.get(v) ?? [0, 0, 0, 0, 0]).map((x, i) => x + row[i]))
+    for (const n of u.nodes ?? []) {
+      if (n.day >= today || !n.teams[0] || !n.teams[1]) continue
+      const [sa, sb] = [n.score[0] ?? 0, n.score[1] ?? 0]
+      const one = Math.max(sa, sb) >= 13
+      const [ma, mb] = one ? [Number(n.winner === n.teams[0]), Number(n.winner === n.teams[1])] : [sa, sb]
+      const [aw, bw] = [n.winner === n.teams[0], n.winner === n.teams[1]]
+      add(n.teams[0], [Number(aw), Number(bw), Number(!n.winner), ma, mb])
+      add(n.teams[1], [Number(bw), Number(aw), Number(!n.winner), mb, ma])
+    }
+    for (const t of tables.filter((x) => x.unit === ui)) {
+      for (const r of t.rows as (TableRow | PlaceTable['rows'][number])[]) {
+        stats.historyRows++
+        const want = real.get(so.real.get(r.team) ?? '') ?? [0, 0, 0, 0, 0]
+        const got = 'd' in r ? [r.w, r.l, r.d, r.mapW, r.mapL] : [r.w, r.l, want[2], r.mapW, r.mapL]
+        if (got.join() !== want.join()) {
+          fail(`${where} ${labelOf(u).phase}${t.group ? ` ${t.group}` : ''}：${state.teams[r.team]?.name ?? r.name} 表里是 ${got.join('/')}，真实比赛到今天是 ${want.join('/')}`)
+        }
+      }
+    }
+  }
+}
+
+/** A played event's tables are its matches, and its lines sit where the draw seats sides. */
 function eventsHold(state: GameState, label: string): void {
   for (const comp of Object.values(state.comps)) {
-    if (comp.format !== 'circuit' || comp.circuit?.mode !== 'sim') continue
+    if (comp.format !== 'circuit' || !comp.circuit?.mode) continue
     const ev = eventOf(comp.circuit.id)
     if (!ev) continue
+    if (comp.circuit.mode === 'history') {
+      if (historyOver.has(comp.key)) continue
+      if (comp.champion) historyOver.add(comp.key)
+      const tables = eventTables(state, comp)
+      if (tables.length) stats.events++
+      stats.eventTables += tables.length
+      historyHolds(state, comp, ev, tables, label)
+      panelHolds(state, comp, tables, label)
+      continue
+    }
     const base: number[] = []
     let n = 0
     for (const u of ev.units) { base.push(n); n += u.nodes?.length ?? 0 }
@@ -207,68 +332,94 @@ function eventsHold(state: GameState, label: string): void {
     const byNode = new Map(fx.map((f) => [f.node!, f]))
     const tables = eventTables(state, comp)
     if (tables.length) stats.events++
-    tables.forEach((t, ti) => {
-      stats.eventTables++
-      const u = ev.units[t.unit]
-      const lo = base[t.unit]
+    stats.eventTables += tables.length
+    for (const ui of uniq(tables.map((t) => t.unit))) {
+      const u = ev.units[ui]
+      const mine = tables.filter((t) => t.unit === ui)
+      const lo = base[ui]
       const hi = lo + (u.nodes?.length ?? 0)
-      const inUnit = fx.filter((f) => f.node! >= lo && f.node! < hi)
-      const where = `${label}：${state.year} ${comp.name} ${[t.phase, t.group].filter(Boolean).join(' · ')}`
-      if (t.kind === 'table') {
-        // record, maps and rounds: the sum of the phase's matches
-        const sum = new Map<string, number[]>()
-        const add = (team: string, row: number[]) => {
-          const s = sum.get(team) ?? [0, 0, 0, 0, 0, 0, 0]
-          sum.set(team, s.map((x, i) => x + row[i]))
+      const sums = sumFixtures(fx.filter((f) => f.node! >= lo && f.node! < hi))
+      const where = `${label}：${state.year} ${comp.name} ${mine[0].phase}`
+      if (mine[0].kind === 'table') {
+        const groups = mine as GroupTable[]
+        // record, maps and rounds: the sum of the phase's matches, in whichever group's table the side sits
+        const rowOf = new Map<string, TableRow>()
+        for (const t of groups) for (const r of t.rows) {
+          if (rowOf.has(r.team)) fail(`${where}：${state.teams[r.team]?.name} 在两张表里`)
+          rowOf.set(r.team, r)
         }
-        for (const f of inUnit) {
-          if (!f.played || !f.result) continue
-          const { mapsWonA: a, mapsWonB: b, maps } = f.result
-          const [ra, rb] = maps.reduce((s, m) => [s[0] + m.scoreA, s[1] + m.scoreB], [0, 0])
-          add(f.teamA, [Number(a > b), Number(a < b), Number(a === b), a, b, ra, rb])
-          add(f.teamB, [Number(b > a), Number(b < a), Number(a === b), b, a, rb, ra])
-        }
-        for (const [team, s] of sum) {
-          const r = t.rows.find((x) => x.team === team)
+        for (const [team, s] of sums) {
+          const r = rowOf.get(team)
           const have = r ? [r.w, r.l, r.d, r.mapW, r.mapL, r.roundW, r.roundL] : null
           if (!have) fail(`${where}：${state.teams[team]?.name} 打了这个阶段的比赛，表里没有`)
           else if (have.join() !== s.join()) fail(`${where}：${state.teams[team]?.name} 表里是 ${have.join('/')}，比赛加起来是 ${s.join('/')}`)
         }
-        if (t.done) {
-          // who the table sent on: exactly the sides the next phase seated
-          const seated = new Set<string>()
-          let seats = 0
-          ev.units.forEach((x, uj) => (x.nodes ?? []).forEach((nd, i) => [nd.a, nd.b].forEach((s, side) => {
-            if (s[0] !== 'g' || s[1] !== t.unit) return
-            seats++
-            const f = byNode.get(base[uj] + i)
-            const team = f ? (side === 0 ? f.teamA : f.teamB) : undefined
-            if (team) seated.add(team)
-          })))
-          const going = new Set(t.rows.filter((r) => r.next).map((r) => r.team))
+        // the next phases' seats, as their ties have them: rank → the side, and where it went
+        const seatOf = new Map<number, string | undefined>()
+        const destOf = new Map<string, string>()
+        ev.units.forEach((x, uj) => (x.nodes ?? []).forEach((nd, i) => [nd.a, nd.b].forEach((s, side) => {
+          if (s[0] !== 'g' || s[1] !== ui || s[2] == null) return
+          const f = byNode.get(base[uj] + i)
+          const team = f ? (side === 0 ? f.teamA : f.teamB) : undefined
+          if (!seatOf.get(s[2])) seatOf.set(s[2], team)
+          if (team) destOf.set(team, labelOf(x).phase)
+        })))
+        const allSeated = [...seatOf.values()].every(Boolean)
+        if (groups[0].done) {
+          // who the phase sent on: exactly the sides the next phase seated
+          const going = new Set(groups.flatMap((t) => t.rows.filter((r) => r.next).map((r) => r.team)))
+          const seated = new Set(destOf.keys())
           const strays = [...seated].filter((x) => !going.has(x))
           if (strays.length) fail(`${where}：${names(state, strays)} 进了下一阶段，表上没标晋级`)
-          if (seated.size === seats && !same(seated, going)) fail(`${where}：表上标晋级的是 ${names(state, going)}，下一阶段坐进来的是 ${names(state, seated)}`)
+          if (allSeated && !same(seated, going)) fail(`${where}：表上标晋级的是 ${names(state, going)}，下一阶段坐进来的是 ${names(state, seated)}`)
         }
-      } else {
-        for (const r of t.rows) {
-          const mine = inUnit.filter((f) => f.teamA === r.team || f.teamB === r.team)
-          // a level Bo2 in a knockout (FGC 2023's qualifiers have them) leads neither side on: out without a loss
-          const lost = mine.some((f) => f.played && f.result && (f.result.mapsWonA === f.result.mapsWonB
-            || (f.result.mapsWonA > f.result.mapsWonB) !== (f.teamA === r.team)))
-          if (r.state === 'out' && !lost) fail(`${where}：${state.teams[r.team]?.name} 标着止步，这个阶段一场没输也没打平`)
-          if (r.state !== 'in' && mine.some((f) => !f.played)) fail(`${where}：${state.teams[r.team]?.name} 标着${r.state === 'won' ? '胜出' : '止步'}，还有比赛没打`)
-          if (comp.champion) {
-            const k = comp.finished.indexOf(r.team)
-            if (k >= 0 && r.place?.[0] !== (comp.places?.[k] ?? k + 1)) fail(`${where}：${state.teams[r.team]?.name} 名次写 ${r.place?.join('–')}，赛事记的是 ${comp.places?.[k] ?? k + 1}`)
+        for (const t of groups) {
+          stats.lines += t.lines.length
+          const bandDest = (p: number) => t.bands.find((b) => p >= b.from && p <= b.to)?.dest ?? null
+          for (const l of t.lines) {
+            if (bandDest(l.after) === bandDest(l.after + 1)) fail(`${where}${t.group ? ` ${t.group}` : ''}：第 ${l.after} 名下面有线，上下两名去的是同一个地方`)
+          }
+          if (t.done && t.lines.some((l) => !l.solid)) fail(`${where}${t.group ? ` ${t.group}` : ''}：打完了，线还是虚线`)
+          if (t.done && allSeated && t.lines.length) {
+            // a line exactly where the sides the next phases seated change
+            stats.linesAtSeats++
+            const want = t.rows.flatMap((r, i) => (i > 0 && (destOf.get(t.rows[i - 1].team) ?? null) !== (destOf.get(r.team) ?? null) ? [i] : []))
+            const have = t.lines.map((l) => l.after)
+            if (want.join() !== have.join()) fail(`${where}${t.group ? ` ${t.group}` : ''}：线在第 ${have.join('、')} 名下面，下一阶段实际在第 ${want.join('、') || '（无）'} 名下面分开`)
           }
         }
-        const won = t.rows.filter((r) => r.state === 'won')
-        if (comp.champion && ti === 0 && won.length === 1 && won[0].team !== comp.champion) {
-          fail(`${where}：最后一个阶段胜出的是 ${state.teams[won[0].team]?.name}，冠军是 ${state.teams[comp.champion]?.name}`)
+      } else {
+        for (const t of mine as PlaceTable[]) {
+          for (const r of t.rows) {
+            stats.knockoutRows++
+            // series won and lost, maps and rounds: the sum of the bracket's matches; a level Bo2 is neither side's
+            const s = sums.get(r.team) ?? [0, 0, 0, 0, 0, 0, 0]
+            const have = [r.w, r.l, r.mapW, r.mapL, r.roundW, r.roundL]
+            const want = [s[0], s[1], s[3], s[4], s[5], s[6]]
+            if (have.join() !== want.join()) fail(`${where}：${state.teams[r.team]?.name} 淘汰赛表里是 ${have.join('/')}，比赛加起来是 ${want.join('/')}`)
+            const played = fx.filter((f) => f.node! >= lo && f.node! < hi && (f.teamA === r.team || f.teamB === r.team))
+            // a level Bo2 in a knockout (FGC 2023's qualifiers had them) leads neither side on: out without a loss
+            const lost = played.some((f) => f.played && f.result && (f.result.mapsWonA === f.result.mapsWonB
+              || (f.result.mapsWonA > f.result.mapsWonB) !== (f.teamA === r.team)))
+            if (r.state === 'out' && !lost) fail(`${where}：${state.teams[r.team]?.name} 标着淘汰，这个阶段一场没输也没打平`)
+            if (r.state !== 'in' && played.some((f) => !f.played)) fail(`${where}：${state.teams[r.team]?.name} 标着${r.state === 'won' ? '胜出' : '淘汰'}，还有比赛没打`)
+            if (comp.champion) {
+              const k = comp.finished.indexOf(r.team)
+              if (k >= 0 && r.place?.[0] !== (comp.places?.[k] ?? k + 1)) fail(`${where}：${state.teams[r.team]?.name} 名次写 ${r.place?.join('–')}，赛事记的是 ${comp.places?.[k] ?? k + 1}`)
+            }
+          }
+          if (t.onward.length) onwardHolds(state, comp, ev, t, where)
         }
       }
-    })
+    }
+    const first = tables[0]
+    if (comp.champion && first?.kind === 'bracket') {
+      const won = first.rows.filter((r) => r.state === 'won')
+      if (won.length === 1 && won[0].team !== comp.champion) {
+        fail(`${label}：${state.year} ${comp.name}：最后一个阶段胜出的是 ${state.teams[won[0].team]?.name}，冠军是 ${state.teams[comp.champion]?.name}`)
+      }
+    }
+    panelHolds(state, comp, tables, label)
   }
 }
 
@@ -311,9 +462,13 @@ function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026
 run('二线 · 欧洲 2021 起', 'Europe', 'chal', 2021, 2027)
 run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
-console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时的线不同）· 渲染 ${stats.renders} 次 · 赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）`)
+console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时的线不同）· 渲染 ${stats.renders} 次`)
+console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分线 ${stats.pointsLines} 次 · 跨赛事名额 ${stats.onward} 次 · 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
 if (!stats.settled) fail('没有一次抽签是在页面标「积分已定」之后发生的：检查没有覆盖到定下来的名额')
+if (!stats.linesAtSeats) fail('没有一张打完的表对过下一阶段的座位：检查没有覆盖到线')
+if (!stats.pointsLines) fail('没有一张淘汰赛表标过积分线：检查没有覆盖到积分线')
+if (!stats.historyRows) fail('没有一场照真实历史的赛事对过真实比分：检查没有覆盖到进行中的历史赛事')
 console.log(`资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛`)
 if (!qualifyStats.tables) fail('资格判定：一个打完的小组赛、常规赛、瑞士轮出线单元都没检查到')
-console.log(bad ? `\n✗ ${bad} 处不对` : '\n✓ 积分榜、赛事表和抽签一致')
+console.log(bad ? `\n✗ ${bad} 处不对` : '\n✓ 积分榜、赛事表、线和抽签一致')
 process.exit(bad ? 1 : 0)
