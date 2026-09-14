@@ -6,6 +6,7 @@ import { formatOf, onTimeline, stageNameIn, stagesOf } from '../../engine/era'
 import { realResultOf } from '../../engine/circuit'
 import { INTERNATIONAL_START, eventRounds, nextInEvent, upcomingInternational } from '../../engine/qualify'
 import { hostCity } from '../../engine/hosts'
+import { roundsAhead } from '../../engine/me/nextup'
 // TODO(engine split): the three event names move out of the manager's endings.ts into the world core
 // (separation notes, rule 7); point this import at their new home.
 import { CHAMPIONS, MASTERS_1, MASTERS_2 } from '../../engine/era'
@@ -109,6 +110,21 @@ export default function Schedule() {
         })
       }
       byStage.set(k, rows.sort((x, y) => x.day - y.day))
+    }
+    // A real event writes a tie only once both of its sides are known, so the
+    // round a result or a seed has already made ours sits here on its day as
+    // 对手待定 — the round the week's 下一场 names (engine/me/nextup.ts). The
+    // round a group of ours still being played may send us to says 待定 vs 待定.
+    for (const r of roundsAhead(game)) {
+      if (!r.comp?.circuit) continue
+      const k = stageNameIn(game.year, r.comp.stage, onTimeline(game))
+      const ours = r.kind === 'round'
+      const vs = ours ? r.opponent : null
+      byStage.set(k, [...(byStage.get(k) ?? []), {
+        key: `${r.comp.key}:ahead`, day: r.day, comp: r.name, round: r.round,
+        a: ours ? me : undefined, b: vs ?? undefined, bo: ours ? r.bo : undefined,
+        other: !ours, pending: vs ? undefined : ours ? '对手待定' : '待定 vs 待定',
+      }].sort((x, y) => x.day - y.day))
     }
     for (const [title, rows] of byStage) groups.push({ key: title, title, day: rows[0].day, rows })
 

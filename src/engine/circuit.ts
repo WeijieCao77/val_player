@@ -1174,25 +1174,82 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
  */
 export function mayStillDraw(state: GameState, comp: Competition, teamId: string, depth = 0): boolean {
   const c = comp.circuit
+  // in the field, or booked into it: no draw to read
+  if (c && !comp.champion && !c.done && state.teams[teamId] && eventOf(c.id)
+    && (comp.teams.includes(teamId) || c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId))) return true
+  return drawStanding(state, comp, teamId, depth) !== null
+}
+
+/** How a club stands with an event that is not over: see drawStanding. */
+export type DrawStanding = 'seated' | 'entry' | 'maybe' | 'booked'
+
+/**
+ * How a club stands with an event, most certain first — for the week's
+ * 「下一场」 between events (engine/me/nextup.ts):
+ *
+ *  - `seated`: in its field; or, not drawn yet, holding a place the event's own
+ *    matches are drawn from in the draw this world's results would make today
+ *  - `entry`: open to it — an open qualifier it can enter, a qualifier's last
+ *    place its own scene lets it play for (offerPlayIn)
+ *  - `maybe`: a place its results may still earn, through a feeder or a points
+ *    table, or one its scene's draw may hand it (fillGaps)
+ *  - `booked`: in the event's list and nowhere on its floor — history's booking,
+ *    or a side that only played the open qualifier, which is history's to replay
+ *
+ * Null once the event cannot take it; mayStillDraw is any of the four.
+ */
+export function drawStanding(state: GameState, comp: Competition, teamId: string, depth = 0): DrawStanding | null {
+  const c = comp.circuit
   const ev = c && eventOf(c.id)
   const team = state.teams[teamId]
-  if (!c || !ev || !team || comp.champion || c.done) return false
-  if (comp.teams.includes(teamId) || c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId)) return true
+  if (!c || !ev || !team || comp.champion || c.done) return null
+  // a drawn field, or an event under way; before its draw `teams` is only history's booking
+  if (c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId) || (c.mode && comp.teams.includes(teamId))) return 'seated'
   // drawn and under way without it
-  if (c.start <= state.day) return false
-  if (leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)).includes(teamId)) return true
+  if (c.start <= state.day) return comp.teams.includes(teamId) ? 'seated' : null
+  const at = leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)).indexOf(teamId)
+  if (at >= 0) {
+    // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play there
+    const through = openOutputs(ev).some(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
+    return mainSeedsOf(ev).has(at) || through ? 'seated' : 'booked'
+  }
+  return couldStillTake(state, comp, ev, team, depth) ?? (comp.teams.includes(teamId) ? 'booked' : null)
+}
+
+/** The seed places an event's own matches are drawn from: its open qualifiers' entrants are not among them. */
+const MAIN_SEEDS = new Map<string, Set<number>>()
+function mainSeedsOf(ev: CEvent): Set<number> {
+  let hit = MAIN_SEEDS.get(ev.id)
+  if (!hit) {
+    hit = new Set<number>()
+    for (const u of ev.units) {
+      if (isOpen(u)) continue
+      for (const n of u.nodes ?? []) for (const s of [n.a, n.b]) if (s[0] === 's') hit.add(s[1])
+    }
+    MAIN_SEEDS.set(ev.id, hit)
+  }
+  return hit
+}
+
+/** An event not drawn yet whose draw as it stands leaves the club out: could anything still put it in? See drawStanding. */
+function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number): 'entry' | 'maybe' | null {
+  const teamId = team.id
   const deeper = (id: string): boolean => {
     const f = state.comps[`ev:${id}`]
     return !!f && f !== comp && depth < 3 && mayStillDraw(state, f, teamId, depth + 1)
   }
   if (ev.plan) {
-    if (ev.plan.seats.some((s) => s.from === 'pool') && planEligible(state, ev, team, null)) return true
-    return ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event))
+    if (ev.plan.seats.some((s) => s.from === 'pool') && planEligible(state, ev, team, null)) return 'entry'
+    return ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event)) ? 'maybe' : null
   }
-  // a place the draw fills from the player's own scene (fillGaps, offerPlayIn)
-  if (teamId === playerClub(state) && isHome(state, ev, team, teamId)) return true
+  // a place the draw fills from the player's own scene (fillGaps, offerPlayIn): open to it only where a
+  // qualifier's last place, or a closed league's promotion place, is there to play a decider for
+  if (teamId === playerClub(state) && isHome(state, ev, team, teamId)) {
+    const decider = openOutputs(ev).length > 0 || (state.year >= 2023 && ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0))
+    return decider ? 'entry' : 'maybe'
+  }
   const book = rulesOf(ev.id)?.routes
-  if (!book) return false
+  if (!book) return null
   for (const r of Object.values(book)) {
     if (r.kind === 'points' && r.pool) {
       if (!poolRanking(state, r.pool).includes(teamId)) continue
@@ -1202,10 +1259,10 @@ export function mayStillDraw(state: GameState, comp: Competition, teamId: string
         !!region && (regions.has(region) || (!!def?.league && regionIn(region as Region, state.year) === def.league))
       // a table the club is on, while an event that pays into it is still to finish
       if (Object.values(state.comps).some((x) => x !== comp && !!x.circuit && !x.champion && !x.circuit.done && !!rulesOf(x.circuit.id)?.award
-        && (x.teams.length ? x.teams.some((t) => counts(state.teams[t]?.region)) : (scopeOf(eventOf(x.circuit.id)!) ?? []).some(counts)))) return true
-    } else if (r.event && deeper(ev.projected ? counterpart(r.event, ev) : r.event)) return true
+        && (x.teams.length ? x.teams.some((t) => counts(state.teams[t]?.region)) : (scopeOf(eventOf(x.circuit.id)!) ?? []).some(counts)))) return 'maybe'
+    } else if (r.event && deeper(ev.projected ? counterpart(r.event, ev) : r.event)) return 'maybe'
   }
-  return false
+  return null
 }
 
 /** The places an open qualifier sends into the rest of its event. */
@@ -1425,7 +1482,25 @@ export function gameOf(f: Fixture): Game | null {
   }
 }
 
-function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
+/** An event's graph as it stands: the ties written, the nodes settled, and who sits in each slot. */
+interface Graph {
+  c: NonNullable<Competition['circuit']>
+  nodes: Flat[]
+  fx: Map<number, Fixture>
+  games: Map<number, Game>
+  unitGames: (ui: number) => Game[] | undefined
+  playIn: Fixture | undefined
+  /** who sits in a slot: a club, nobody (null), or not known yet (undefined) */
+  slot: (ui: number, s: Slot) => string | null | undefined
+}
+
+/**
+ * The graph read off the ties and walkovers written so far. `ahead` reads an
+ * open qualifier's places before its last day: they are history's, or the
+ * decider's once that is played, and only the writing of a tie waits for the
+ * qualifier to be over (roundAheadOf).
+ */
+function graphOf(state: GameState, comp: Competition, ev: CEvent, ahead = false): Graph {
   const c = comp.circuit!
   const { nodes, base } = flat(ev)
   const fx = new Map<number, Fixture>()
@@ -1493,7 +1568,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
     const u = ev.units[uj]
     const key = `${uj}:${rank}`
     if (u.type === 'open') {
-      if (state.day < (u.last ?? 0)) return undefined
+      if (!ahead && state.day < (u.last ?? 0)) return undefined
       if (c.playin?.key === key) {
         const g = playIn && gameOf(playIn)
         return g ? g.w : undefined
@@ -1518,7 +1593,137 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
     if (!gs) return undefined
     return rankPhase(u.type, gs, u.upperFirst).ranked[rank! - 1] ?? null
   }
+  return { c, nodes, fx, games, unitGames, playIn, slot }
+}
 
+/** A round of an event under way that is already a club's, before its tie is written. */
+export interface RoundAhead {
+  /** its day as the event has it, tomorrow at the earliest */
+  day: number
+  /** the round, as its tie will be labelled */
+  round: string
+  bo: 1 | 2 | 3 | 5
+  /** the other side, when it is known too and only the tie is still to be written */
+  opponent: string | null
+  /** what the other side still waits on: a match before it, a group, an open qualifier, a decider */
+  wait: 'match' | 'group' | 'qualifier' | 'entry'
+  /** not surely the club's: a phase of its own is still being played, and this is the first round that phase's places feed */
+  waiting?: true
+}
+
+/**
+ * The next round of an event under way that is already `teamId`'s, with no tie
+ * of it written yet.
+ *
+ * playOn writes a tie once both of its sides are known, so a side that has just
+ * lost a Swiss round, or sits seeded into a playoff while the groups feeding it
+ * are still on, has a round and a day and no fixture — and the week said nothing
+ * was scheduled (reported 2026-09-14, engine/me/nextup.ts). This reads the same
+ * graph and writes nothing: a walkover settles the way playOn settles it, and an
+ * open qualifier's places count as known before its last day. Failing a round
+ * that is surely the club's, the first round fed by a phase the club is still
+ * playing (`waiting`). Null once the club is out, or while a tie of its own in
+ * the event is written and unplayed.
+ */
+export function roundAheadOf(state: GameState, comp: Competition, teamId: string): RoundAhead | null {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev || c.mode !== 'sim' || comp.champion || c.done) return null
+  if (state.fixtures.some((f) => f.comp === comp.key && !f.played && (f.teamA === teamId || f.teamB === teamId))) return null
+  const g = graphOf(state, comp, ev, true)
+  const { base } = flat(ev)
+  const waitOf = (s: Slot): RoundAhead['wait'] =>
+    s[0] === 'w' || s[0] === 'l' ? 'match' : s[0] === 's' ? 'entry' : isOpen(ev.units[s[1]]) ? 'qualifier' : 'group'
+  let best: RoundAhead | null = null
+  let moved = true
+  while (moved) {
+    moved = false
+    for (const n of g.nodes) {
+      if (g.games.has(n.at) || g.fx.has(n.at)) continue
+      const a = g.slot(n.unit, n.a)
+      const b = g.slot(n.unit, n.b)
+      if (a !== undefined && b !== undefined && (!a || !b || a === b)) {
+        // a walkover, settled here as playOn settles it — on this copy of the graph only
+        const w = a || b || null
+        g.games.set(n.at, { a: w, b: null, w, round: n.round, mapsA: 0, mapsB: 0, roundsA: 0, roundsB: 0 })
+        moved = true
+        continue
+      }
+      if (a !== teamId && b !== teamId) continue
+      const day = Math.max(n.day, state.day + 1)
+      if (best && best.day <= day) continue
+      const opponent = (a === teamId ? b : a) ?? null
+      best = { day, round: n.round, bo: n.bo, opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
+    }
+  }
+  if (best) return best
+  // A phase the club is still in, being played: the first round its places feed —
+  // while the club can still finish high enough for one of those places. Read as
+  // rankPhase reads a phase, and only what cannot change: in a round robin every
+  // side already on more points finishes above it; out of a bracket, every side
+  // out after it does, and so does every side still in once each tie left comes
+  // after its last.
+  const taken = new Map<number, number>()
+  for (const n of g.nodes) for (const s of [n.a, n.b]) if (s[0] === 'g') taken.set(s[1], Math.max(taken.get(s[1]) ?? 0, s[2] ?? 0))
+  const canPlace = (ui: number): boolean => {
+    const size = ev.units[ui].nodes?.length ?? 0
+    const at = (i: number) => g.games.get(base[ui] + i)
+    const last = new Map<string, number>()
+    let firstOpen = Infinity
+    for (let i = 0; i < size; i++) {
+      const gm = at(i)
+      if (!gm) { firstOpen = Math.min(firstOpen, i); continue }
+      for (const t of [gm.a, gm.b]) if (t) last.set(t, i)
+    }
+    const mine = last.get(teamId)
+    if (mine == null) return false
+    const others = [...last.keys()].filter((t) => t !== teamId)
+    let above: number
+    if (ev.units[ui].type === 'rr') {
+      const pts = new Map<string, number>()
+      const add = (t: string, v: number) => pts.set(t, (pts.get(t) ?? 0) + v)
+      for (let i = 0; i < size; i++) {
+        const gm = at(i)
+        if (!gm?.a || !gm.b) continue
+        if (gm.w === gm.a) add(gm.a, 3)
+        else if (gm.w === gm.b) add(gm.b, 3)
+        else { add(gm.a, 1); add(gm.b, 1) }
+      }
+      above = others.filter((t) => (pts.get(t) ?? 0) > (pts.get(teamId) ?? 0)).length
+    } else {
+      // a side with a tie still to come in this phase is not out, whatever its last result was: a group's upper-final loser plays its decider
+      const still = new Set<string>()
+      for (let i = 0; i < size; i++) {
+        if (at(i)) continue
+        const n = ev.units[ui].nodes![i]
+        for (const s of [n.a, n.b]) {
+          const t = g.slot(ui, s)
+          if (t) still.add(t)
+        }
+      }
+      const out = (t: string): boolean => {
+        if (still.has(t)) return false
+        const gm = at(last.get(t)!)!
+        return !!gm.w && (gm.w !== t || gm.round.endsWith('季军赛') || gm.round.endsWith('亚军赛'))
+      }
+      if (!out(teamId)) return true
+      above = others.filter((t) => (out(t) ? last.get(t)! > mine : firstOpen > mine)).length
+    }
+    return above < (taken.get(ui) ?? 0)
+  }
+  for (const n of g.nodes) {
+    if (g.games.has(n.at) || g.fx.has(n.at)) continue
+    for (const s of [n.a, n.b]) {
+      if (s[0] !== 'g' || isOpen(ev.units[s[1]]) || g.unitGames(s[1]) || !canPlace(s[1])) continue
+      const day = Math.max(n.day, state.day + 1)
+      if (!best || day < best.day) best = { day, round: n.round, bo: n.bo, opponent: null, wait: 'group', waiting: true }
+    }
+  }
+  return best
+}
+
+function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
+  const { c, nodes, fx, games, unitGames, playIn, slot } = graphOf(state, comp, ev)
   let moved = true
   while (moved) {
     moved = false
