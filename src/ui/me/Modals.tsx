@@ -362,7 +362,7 @@ function EventResult({ title, scene, q, pick, lines, onClose }: {
         你选了「{pick}」
         {/* what it did as tags, a rise green and a fall red — not one sentence to parse */}
         {lines.length
-          ? <div className="ev-chips">{lines.map((l, i) => <span key={i} className={`mo-chip${/[−-]\s?\d/.test(l) ? ' dn' : /\+\s?\d/.test(l) ? ' up' : ''}`}>{l}</span>)}</div>
+          ? <div className="ev-chips">{lines.map((l, i) => <span key={i} className={`mo-chip${/[−-]\s?[¥$€₩]?\d/.test(l) ? ' dn' : /\+\s?[¥$€₩]?\d/.test(l) ? ' up' : ''}`}>{l}</span>)}</div>
           : <div className="small" style={{ marginTop: 4 }}>没有立刻的变化。</div>}
       </div>
       <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onClose}>继续</button></div>
