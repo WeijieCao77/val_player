@@ -413,8 +413,9 @@ export const CIRCUIT_POINTS_2021: Record<string, number[]> = {
 /** 1st at the Berlin Masters skipped the points and went straight to Champions. */
 export const MASTERS2_WINNER_QUALIFIES = true
 
+/** `place` counts from 1, as every caller has it (a competition's places, `i + 1`); the chart's first column is 1st. */
 export function circuitPointsFor(stage: StageKey, place: number): number {
-  return CIRCUIT_POINTS_2021[stage]?.[place] ?? 0
+  return CIRCUIT_POINTS_2021[stage]?.[place - 1] ?? 0
 }
 
 /**

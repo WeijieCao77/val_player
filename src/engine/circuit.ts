@@ -1890,7 +1890,8 @@ export function pointsTables(state: GameState): PointsTable[] {
     (r.event ? (target.projected ? counterpart(r.event, target) : r.event) : undefined)
   const pays = (x: Competition): boolean => {
     const r = x.circuit && rulesOf(x.circuit.id)
-    return !!(r?.award || r?.wins || r?.groupWin || r?.bye) || (state.year <= 2022 && circuitPointsFor(x.stage, 1) > 0)
+    // the 2021 chart pays a Challengers final's and Berlin's winners nothing, and their runners-up something
+    return !!(r?.award || r?.wins || r?.groupWin || r?.bye) || (state.year <= 2022 && [1, 2].some((p) => circuitPointsFor(x.stage, p) > 0))
   }
   // drawn, or as a draw made today would seat it — the projection mayStillDraw reads
   const seatsOf = (ev: CEvent): { seeds: (string | null)[]; drawn: boolean } => {

@@ -17,10 +17,10 @@
 import { readFileSync } from 'node:fs'
 import {
   CIRCUIT_POINTS_2021, DOMESTIC_POINT_CEILING_2021, ENTRY_YEARS, PARTNER_TEAMS_2023,
-  formatOf, layerOf, regionIn, regionsOf, stageAtIn, stagesOf,
+  circuitPointsFor, formatOf, layerOf, regionIn, regionsOf, stageAtIn, stagesOf,
 } from '../src/engine/era'
 import { REGION_CN } from '../src/engine/types'
-import type { Region } from '../src/engine/types'
+import type { Region, StageKey } from '../src/engine/types'
 
 const history: Record<string, { year: number; name: string; teams: { name: string }[] }> =
   JSON.parse(readFileSync('src/data/history.json', 'utf8'))
@@ -128,6 +128,9 @@ for (const [k, arr] of Object.entries(CIRCUIT_POINTS_2021)) {
   for (let i = 1; i < arr.length; i++) {
     if (arr[i] > arr[i - 1] && arr[i - 1] !== 0) fail(`${k} 的第 ${i + 1} 名比第 ${i} 名分高`)
   }
+  // each placing is paid its own column: read as [place], 1st was paid 2nd's points and last place nothing
+  const paid = arr.map((_, i) => circuitPointsFor(k as StageKey, i + 1))
+  if (paid.some((v, i) => v !== arr[i])) fail(`${k} 第 1–${arr.length} 名实付 ${paid.join(' ')}，积分表是 ${arr.join(' ')}`)
 }
 console.log(`  积分表结构正确；国内天花板 ${DOMESTIC_POINT_CEILING_2021} 分，`
   + `一次国际赛冠军 ${CIRCUIT_POINTS_2021.masters1[0]} 分（是国内一整年的 ${(CIRCUIT_POINTS_2021.masters1[0] / DOMESTIC_POINT_CEILING_2021).toFixed(1)} 倍；对赛区冠军是 ${CIRCUIT_POINTS_2021.masters1[0] / CIRCUIT_POINTS_2021.s1masters[0]} 倍）`)
