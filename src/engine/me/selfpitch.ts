@@ -71,8 +71,13 @@ export const FAME = { immortal: 3, radiant: 6, fans: 3, pro: 4 } as const
 export const BUYOUT_SHORT = 30
 export const ODDS_MIN = 2
 export const ODDS_MAX = 75
-/** a man who has never played professionally, writing to a first-tier club */
-export const NEVPRO_TOP = 5
+/**
+ * a man who has never played professionally, writing to a first-tier club. The design's first value was 5%; the
+ * batch (scripts/probe_selfpitch.ts vct, a ladder player writing to the best first-tier club he could every time)
+ * answered yes on 3.6% of 359 answers from 2026 and 3.8% of 158 from 2021 — over the design's line of 3% — with
+ * most of the 2021 answers held at the cap. At 3% the same answers' chances come to about 2.3% and 2.7%.
+ */
+export const NEVPRO_TOP = 3
 
 /** The chance in words, for the screens with 数值 off. */
 export const oddsWord = (pct: number): string => (pct >= 50 ? '很有希望' : pct >= 25 ? '有机会' : pct >= 10 ? '希望不大' : '几乎不可能')
