@@ -57,25 +57,31 @@ export interface PayBand {
 const T1_PARTNER: Record<PayGroup, [number, number, number]> = {
   NA: [0.8, 50_000, 500_000],
   LATAM: [0.8, 50_000, 500_000],
-  EU: [0.9, 50_000, 500_000],
-  KRJP: [0.7, 67_000_000, 670_000_000],
-  SEA: [0.7, 67_000_000, 670_000_000],
+  // 0.9 put EMEA's 2023–25 median at €14.5 万, over the reported €8–11 万 (2026-09-14)
+  EU: [0.55, 50_000, 500_000],
+  // 0.7 put Pacific's 2023–25 median at ₩1.51 亿, over the reported ₩0.9–1.3 亿 (2026-09-14)
+  KRJP: [0.45, 67_000_000, 670_000_000],
+  SEA: [0.45, 67_000_000, 670_000_000],
   // floor 暂定: the league has one, unpublished
   CN: [0.55, 300_000, 3_000_000],
 }
 /** first team before partnership (2021–22), and China's 2023 with no league: no floor. All 暂定 but North America. */
 const T1_OPEN: Record<PayGroup, number> = { NA: 1.0, LATAM: 0.35, EU: 0.6, KRJP: 0.55, SEA: 0.3, CN: 0.18 }
 const CN_2023 = 0.3
-/** second team, every year: a month's floor and cap (all 暂定); the dollar wage itself is not moved */
-const T2_MONTH: Record<PayGroup, [number, number]> = {
-  NA: [1_000, 5_000],
-  LATAM: [600, 3_000],
-  EU: [500, 2_500],
-  KRJP: [1_500_000, 7_500_000],
-  SEA: [550_000, 2_750_000],
-  CN: [6_000, 30_000],
+/**
+ * second team, every year: multiplier on the world's dollar wage, a month's floor and cap (the caps 暂定).
+ * China's floor is ¥6,000 in every year, 2021–22 too (the author, 2026-09-14: a 2021 rookie at Suning
+ * signed for ¥4.8 万 on the ¥4,000 floor). EMEA's wage is moved down: at 1 its median was about €2.2k a
+ * month, over the reported €500–1,500 (VZone 2026, THESPIKE 2025, Strafe 2024).
+ */
+const T2_MONTH: Record<PayGroup, [number, number, number]> = {
+  NA: [1, 1_000, 5_000],
+  LATAM: [1, 600, 3_000],
+  EU: [0.6, 500, 2_500],
+  KRJP: [1, 1_500_000, 7_500_000],
+  SEA: [1, 550_000, 2_750_000],
+  CN: [1, 6_000, 30_000],
 }
-const CN_T2_OPEN_FLOOR = 4_000
 
 export function payBand(region: Region | string | null | undefined, tier: number, year: number): PayBand {
   const g = payGroupOf(region)
@@ -86,9 +92,8 @@ export function payBand(region: Region | string | null | undefined, tier: number
     if (partnered) return { cur, mul: T1_PARTNER[g][0], floor, cap, floorTbd: g === 'CN' }
     return { cur, mul: g === 'CN' && year === 2023 ? CN_2023 : T1_OPEN[g], floor: 0, cap, floorTbd: false }
   }
-  const [floor, cap] = T2_MONTH[g]
-  const f = g === 'CN' && year <= 2022 ? CN_T2_OPEN_FLOOR : floor
-  return { cur, mul: 1, floor: f * 12, cap: cap * 12, floorTbd: true }
+  const [mul, floor, cap] = T2_MONTH[g]
+  return { cur, mul, floor: floor * 12, cap: cap * 12, floorTbd: true }
 }
 
 /** A wage the world would pay in dollars, as this club writes it into a contract: its league's level and currency, floored and capped. */

@@ -239,12 +239,21 @@ fmtFacts.push([`日记里的外币金额都带人民币换算${bare.length ? `�
 const barePaper = bareIn([...paper, ...state.news.map((n) => ({ year: state.year, text: n.text }))])
 fmtFacts.push([`周报和新闻里的外币金额也都带人民币换算（周报 ${paper.length} 行）${barePaper.length ? `（${barePaper.length} 处：${barePaper.slice(0, 3).join(' | ')}）` : ''}`, barePaper.length === 0])
 fmtFacts.push([`合同一直按俱乐部所在联赛的货币、在联赛工资带里${bandBreaks.length ? `（${bandBreaks.slice(0, 3).join(' | ')}）` : ''}`, bandBreaks.length === 0])
+// the pay table's floors (me/paytable.ts): the partner leagues' published minimums, and the second tier's monthly floors
+fmtFacts.push(['工资带地板：2023 年起合作战队 $50,000 / €50,000 / ₩67,000,000；中国二线每月 ¥6,000，2021–22 年也是；欧洲二线每月 €500',
+  payBand('North America', 1, 2023).floor === 50_000 && payBand('Europe', 1, 2024).floor === 50_000 && payBand('Korea', 1, 2025).floor === 67_000_000
+  && [2021, 2022, 2026].every((y) => payBand('China', 2, y).floor === 72_000 && payBand('China', 2, y).cur === 'CNY')
+  && payBand('Europe', 2, 2026).floor === 6_000])
 
 /* ------------------------------------------------------------------ */
 /*  an old dollar save, converted once                                  */
 /* ------------------------------------------------------------------ */
 
 const legacy: GameState = createCareer({ name: 'Old', region: 'China', role: '先锋', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: seed + 1, year: 2021 })
+// before it is dressed as an old save: the first contract a 2021 rookie signs at a Chinese second team (作者嫌 ¥4.8 万太低)
+const rookie = legacy.me!.pay ? { ...legacy.me!.pay } : null
+fmtFacts.push([`2021 年中国二线新人首约不低于 ¥7.2 万/年（这次 ${rookie ? money(rookie.salary, rookie.cur, 2021) : '没有合同'}）`,
+  !!rookie && rookie.cur === 'CNY' && rookie.tier === 2 && rookie.salary >= 72_000])
 {
   const lm = legacy.me!
   const lp = legacy.players[lm.id]
