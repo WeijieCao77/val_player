@@ -16,7 +16,7 @@ import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
 import { leaguePool, seasonBar } from './nights'
 import type { Invite } from './types'
-import { clubOpen, periodKey, rollWeight, windowAt, windowBlock } from './window'
+import { clubOpen, periodKey, rollWeight, signedThisPeriod, windowAt, windowBlock } from './window'
 import type { RollKind } from './window'
 
 /**
@@ -283,8 +283,10 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
  */
 export function vctApproach(state: GameState, rng: Rng, weight = 1): number {
   const me = state.me!
-  // once a transfer period, as once a window before (me/window.ts periodKey), and not with a move already agreed
-  if (me.moveAfter || me.flags.vctGot) return 0
+  // once a transfer period, as once a window before (me/window.ts periodKey), not with a move already agreed —
+  // and not in the period I signed in: the author's rule for a tryout invitation, and the terms this call brings
+  // instead of one would be the same move by another door (me/window.ts signedThisPeriod)
+  if (me.moveAfter || me.flags.vctGot || signedThisPeriod(state)) return 0
   const read = vctRead(state)
   if (!read?.by || read.starts < VCT_SEEN) return 0
   const needs = vctNeeds(state, read.league)

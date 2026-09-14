@@ -7,7 +7,7 @@ import { push } from './pending'
 import { CUPS } from './cups'
 import { formatOf } from '../era'
 import { hasPlace } from '../timeline'
-import { clubOpen } from './window'
+import { clubOpen, inviteBlock } from './window'
 import { noteRankPeak } from './moments'
 
 export const AP_PRE = 12
@@ -206,7 +206,9 @@ export function cupInvite(state: GameState, run: CupRun, rng: Rng): void {
   const me = state.me!
   const depth = run.rounds ? run.reached / run.rounds : 0
   me.pre.scoutSeen += depth >= 0.5 ? 1 : 0
-  if (me.pre.invites.length) return
+  // the run is still remembered; a call waits for a transfer period that can bring one (me/window.ts inviteBlock):
+  // a run that ended after a signing — agreed under a roster lock, or made that day — used to bring a tryout to a signed man
+  if (me.pre.invites.length || inviteBlock(state)) return
   const p = clamp(0.08 + depth * 0.45 + (run.won ? 0.30 : 0) + me.pre.scoutSeen * 0.04, 0.05, 0.96)
   if (!rng.chance(p)) return
   const team = pickClub(state, rng, run.won ? 0 : 2)
@@ -225,8 +227,8 @@ export const INVITE_FANS_T1 = 400
 /** The weekly channels: the ladder, the following, and being a known free agent. */
 export function rollInvites(state: GameState, rng: Rng): void {
   const me = state.me!
-  // a signing already agreed, waiting on a roster lock (me/contract.ts settleMove), takes no more calls
-  if (me.pre.invites.length || me.moveAfter) return
+  // a signing already agreed (me/contract.ts settleMove), one made this transfer period, or my window shut: no calls (me/window.ts inviteBlock)
+  if (me.pre.invites.length || inviteBlock(state)) return
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
   const l = me.pre.ladder
