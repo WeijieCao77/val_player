@@ -202,7 +202,7 @@ export function eventTables(state: GameState, comp: Competition): EventTable[] {
       const played = games.filter((g): g is Game => !!g)
       // a round robin is its own table (points, head to head, maps, rounds); anything else by its record
       const order = u.type === 'rr'
-        ? (() => { const ranked = rankPhase('rr', played).ranked; return [...ranked, ...[...rows.keys()].filter((t) => !ranked.includes(t))] })()
+        ? (() => { const ranked = rankPhase('rr', played, false, u.tiebreak === 'riot').ranked; return [...ranked, ...[...rows.keys()].filter((t) => !ranked.includes(t))] })()
         : [...rows.values()].sort((x, y) => y.w - x.w || x.l - y.l
           || (y.mapW - y.mapL) - (x.mapW - x.mapL) || (y.roundW - y.roundL) - (x.roundW - x.roundL)).map((r) => r.team)
 

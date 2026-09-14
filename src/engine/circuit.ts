@@ -74,6 +74,8 @@ export interface CUnit {
   seats?: PhaseSeats
   /** a fixed schedule — a round robin, two groups playing each other — as the slot each side of each tie entered by */
   follow?: [Slot, Slot][]
+  /** 2023 on: a table's sides level on record are split by Riot's own tie-breakers (riotTiers) */
+  tiebreak?: 'riot'
 }
 
 export interface CEvent {
@@ -371,6 +373,65 @@ export const isPlacementRound = (round: string): boolean =>
 /** One decided node, whoever decided it: a match or a walkover. */
 export interface Game { a: string | null; b: string | null; w: string | null; round: string; mapsA: number; mapsB: number; roundsA: number; roundsB: number }
 
+/** The first season whose tables are split by Riot's own tie-breakers (riotTiers). */
+const RIOT_TIES_FROM = 2023
+
+/**
+ * Sides level on record, split the way Riot's rulebooks split them: 2023 on (CUnit.tiebreak).
+ *
+ *  - two sides: head-to-head match score, head-to-head map difference, head-to-head round difference, then the
+ *    stage's map difference and round difference
+ *  - three: a side that beat both others is first and the other two go to the two-way rules; where none did,
+ *    the stage's map difference, then its round difference
+ *  - four or more: the stage's map difference, its round difference, then the map and round difference of the
+ *    games among the tied sides only
+ *
+ * Whenever a step separates some of them the places go by it, and each group still level starts again from the
+ * rules for its own size (「a new tie-breaker will be declared … starting at the first applicable criteria」). A
+ * tie no step separates went to a best-of-one decider: not modelled, so `fallback`, the order the game had.
+ *
+ * Sources: VCT 2024 EMEA Official Competition Ruleset §5.1.7, Riot —
+ * liquipedia.net/commons/images/4/40/VCT_2024_EMEA_Official_Competiton_Rulebook.pdf; Challengers EMEA 2025
+ * Tournament Rules §6.1, 「VCT EMEA tie-breaker rules will be followed」 —
+ * liquipedia.net/commons/images/f/f1/VCT_EMEA_Challengers_Tournament_Rules_Version_1_1.pdf; VCT Challengers SEA
+ * 2026 Competition Ruleset §11.7 — liquipedia.net/commons/images/2/21/VALORANT_Challengers_Southeast_Asia_2026_Competition_Ruleset.pdf —
+ * and the 2026 VCT ruleset as quoted at vlr.gg/664122. 2023's two- and three-way rules as reported for its
+ * leagues (dotesports.com, 「Playoff scenarios for every VCT Americas team」); its four-way rule is 暂定, 2024's.
+ * 2027 on: 2026's, 暂定 (engine/ahead.ts).
+ */
+function riotTiers(tied: string[], games: Game[], fallback: string[][]): string[][] {
+  if (tied.length < 2) return [tied]
+  const level = new Set(tied)
+  const tally = (among: boolean) => {
+    const m = new Map(tied.map((t) => [t, { w: 0, beat: new Set<string>(), md: 0, rd: 0 }]))
+    for (const g of games) {
+      if (!g.a || !g.b) continue
+      const [ra, rb] = [m.get(g.a), m.get(g.b)]
+      if (among ? !(ra && rb) : !(ra || rb)) continue
+      if (ra) { ra.md += g.mapsA - g.mapsB; ra.rd += g.roundsA - g.roundsB; if (g.w === g.a) { ra.w++; ra.beat.add(g.b) } }
+      if (rb) { rb.md += g.mapsB - g.mapsA; rb.rd += g.roundsB - g.roundsA; if (g.w === g.b) { rb.w++; rb.beat.add(g.a) } }
+    }
+    return m
+  }
+  const h2h = tally(true)
+  const all = tally(false)
+  const steps: ((t: string) => number)[] = []
+  if (tied.length === 2) {
+    steps.push((t) => h2h.get(t)!.w, (t) => h2h.get(t)!.md, (t) => h2h.get(t)!.rd, (t) => all.get(t)!.md, (t) => all.get(t)!.rd)
+  } else if (tied.length === 3) {
+    const first = tied.filter((t) => h2h.get(t)!.beat.size === 2)
+    if (first.length === 1) return [first, ...riotTiers(tied.filter((t) => t !== first[0]), games, fallback)]
+    steps.push((t) => all.get(t)!.md, (t) => all.get(t)!.rd)
+  } else {
+    steps.push((t) => all.get(t)!.md, (t) => all.get(t)!.rd, (t) => h2h.get(t)!.md, (t) => h2h.get(t)!.rd)
+  }
+  for (const step of steps) {
+    const values = [...new Set(tied.map(step))].sort((a, b) => b - a)
+    if (values.length > 1) return values.flatMap((v) => riotTiers(tied.filter((t) => step(t) === v), games, fallback))
+  }
+  return fallback.map((tier) => tier.filter((t) => level.has(t))).filter((tier) => tier.length > 0)
+}
+
 /**
  * Order a phase's sides, and say which of them the format cannot tell apart.
  *
@@ -378,9 +439,12 @@ export interface Game { a: string | null; b: string | null; w: string | null; ro
  * round robin is its table (a win 3, a draw 1); a bracket is its sides still
  * alive by how few losses they carry, then sides knocked out by how late —
  * and two sides out in the same round share a place, so the semi-final losers
- * of a single bracket are joint third.
+ * of a single bracket are joint third. With `riot` (2023 on) a round robin's
+ * sides level on points are split by Riot's tie-breakers instead (riotTiers):
+ * rank_unit's numbers reach such a table only through PhaseSeats, which reads
+ * each table's seats in this same order.
  */
-export function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = false): { ranked: string[]; tiers: string[][] } {
+export function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = false, riot = false): { ranked: string[]; tiers: string[][] } {
   const teams = uniq(games.flatMap((g) => [g.a, g.b]).filter((t): t is string => !!t))
   if (type === 'rr') {
     const s = new Map(teams.map((t) => [t, { pts: 0, md: 0, rd: 0 }]))
@@ -426,7 +490,16 @@ export function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = fa
       if (prev && key(prev[0]).join() === key(t).join()) prev.push(t)
       else tiers.push([t])
     }
-    return { ranked, tiers }
+    if (!riot) return { ranked, tiers }
+    // each run of sides level on points split by Riot's rules; the order above only where they cannot split it
+    const split: string[][] = []
+    for (let i = 0; i < ranked.length;) {
+      let j = i
+      while (j < ranked.length && s.get(ranked[j])!.pts === s.get(ranked[i])!.pts) j++
+      split.push(...riotTiers(ranked.slice(i, j), games, tiers))
+      i = j
+    }
+    return { ranked: split.flat(), tiers: split }
   }
   const last = new Map<string, number>()
   const losses = new Map<string, number>()
@@ -513,8 +586,8 @@ function placesFrom(units: CUnit[], tiers: string[][][]): [string, number][] {
  *  - `bracket`: anything else. A bracket's order is its results, who is still in and who went out when, and
  *    its rank numbers keep meaning what they meant — read within the group they came from.
  *
- * A table's order is points, then fewer losses, then as rankPhase orders a round robin (head-to-head maps and
- * rounds, then overall): Riot's own tiebreakers for these stages are not in the data. Worked out once, off
+ * A table's order is points, then fewer losses, then — 2023 on — Riot's own tie-breakers (riotTiers); before that
+ * as rankPhase orders a round robin (head-to-head maps and rounds, then overall). Worked out once, off
  * each real event as the game loads; a projected event and a later season's Cup copy the units, and this
  * with them. Nothing here is read for an event replayed as history.
  */
@@ -612,13 +685,37 @@ function tableRecord(games: Game[], teams: string[]): Map<string, { pts: number;
   return rec
 }
 
-/** A table's order: points, then fewer losses — a Swiss side through at 3-2 above one out at 2-3 — then as rankPhase orders a round robin. */
-function tableOrder(games: Game[], teams: string[]): string[] {
+/**
+ * A table's order: points, then fewer losses — a Swiss side through at 3-2 above one out at 2-3 — then as rankPhase
+ * orders a round robin; with `riot` (2023 on), each run of sides on the same record split by riotTiers first.
+ */
+function tableOrder(games: Game[], teams: string[], riot = false): string[] {
   const played = games.filter((g) => !!g.a && !!g.b)
   const rec = tableRecord(played, teams)
   const rr = new Map(rankPhase('rr', played).ranked.map((t, i) => [t, i]))
-  return teams.slice().sort((x, y) => rec.get(y)!.pts - rec.get(x)!.pts || rec.get(x)!.l - rec.get(y)!.l
+  const order = teams.slice().sort((x, y) => rec.get(y)!.pts - rec.get(x)!.pts || rec.get(x)!.l - rec.get(y)!.l
     || (rr.get(x) ?? 1e6) - (rr.get(y) ?? 1e6))
+  if (!riot) return order
+  const record = (t: string) => `${rec.get(t)!.pts}|${rec.get(t)!.l}`
+  const out: string[] = []
+  for (let i = 0; i < order.length;) {
+    let j = i
+    while (j < order.length && record(order[j]) === record(order[i])) j++
+    const run = order.slice(i, j)
+    out.push(...riotTiers(run, played, run.map((t) => [t])).flat())
+    i = j
+  }
+  return out
+}
+
+/** One group's table in the order the draw reads it (groupOrders): `teams` are the group's sides, played or not. For the standings page too. */
+export function tableOrderOf(u: CUnit, games: Game[], teams: string[]): string[] {
+  const riot = u.tiebreak === 'riot'
+  if (u.type === 'rr') {
+    const ranked = rankPhase('rr', games, false, riot).ranked
+    return [...ranked, ...teams.filter((t) => !ranked.includes(t))]
+  }
+  return tableOrder(games, teams, riot)
 }
 
 /** Each group of a phase in its own order, off the ties decided so far (indexed as the unit's own ties). */
@@ -635,11 +732,7 @@ function groupOrders(u: CUnit, seats: PhaseSeats, games: (Game | null | undefine
       teams = uniq(gs.flatMap((g) => [g.a, g.b]).filter((t): t is string => !!t))
     }
     if (seats.kind === 'bracket') return rankPhase('bracket', gs, u.upperFirst).ranked
-    if (u.type === 'rr') {
-      const ranked = rankPhase('rr', gs).ranked
-      return [...ranked, ...teams.filter((t) => !ranked.includes(t))]
-    }
-    return tableOrder(gs, teams)
+    return tableOrderOf(u, gs, teams)
   })
 }
 
@@ -667,7 +760,10 @@ function bandsOf(real: Map<number, number>, size: number): Map<number, number> {
   return out
 }
 
-/** A group's real seats are its table's top places, but for places level on record with a seat below them. */
+/**
+ * A group's real seats are its table's top places, but for places level on record with a seat — above or below:
+ * 2025 NA ACE Stage 2 sent 4-1 Ambrosia on and not 4-1 M80, and Riot's head-to-head puts Ambrosia above.
+ */
 function levelTop(order: string[], games: Game[], real: Map<number, { team: string; to: number }>): boolean {
   const rec = tableRecord(games, order)
   const key = (t: string) => { const r = rec.get(t)!; return `${r.pts}|${r.l}` }
@@ -676,7 +772,7 @@ function levelTop(order: string[], games: Game[], real: Map<number, { team: stri
   for (const to of new Set(seated.values())) {
     const ps = [...seated].filter(([, x]) => x === to).map(([p]) => p).sort((a, b) => a - b)
     for (let p = ps[0]; p < ps[ps.length - 1]; p++) {
-      if (!seated.has(p) && !ps.some((q) => q > p && key(order[q - 1]) === key(order[p - 1]))) return false
+      if (!seated.has(p) && !ps.some((q) => key(order[q - 1]) === key(order[p - 1]))) return false
     }
   }
   return true
@@ -734,9 +830,11 @@ function seatsOfUnit(ev: CEvent, ui: number): PhaseSeats | undefined {
   return { kind, shape, groups, at }
 }
 
-for (const evs of Object.values(CIRCUIT)) {
+for (const [year, evs] of Object.entries(CIRCUIT)) {
   for (const ev of evs) {
     ev.units.forEach((u, ui) => {
+      // before the seats are worked out: they are read in the order the table is
+      if (Number(year) >= RIOT_TIES_FROM && !isOpen(u)) u.tiebreak = 'riot'
       const seats = seatsOfUnit(ev, ui)
       if (!seats) return
       u.seats = seats
@@ -748,7 +846,7 @@ for (const evs of Object.values(CIRCUIT)) {
 /** A phase's joint places: groups that each play a full round robin, or each other, share their Nth places. */
 function tiersOf(u: CUnit, games: Game[], entry: (s: Slot) => string | null | undefined): string[][] {
   const seats = u.seats
-  if (seats?.shape !== 'robin' && seats?.shape !== 'cross') return rankPhase(u.type as 'rr' | 'bracket', games, u.upperFirst).tiers
+  if (seats?.shape !== 'robin' && seats?.shape !== 'cross') return rankPhase(u.type as 'rr' | 'bracket', games, u.upperFirst, u.tiebreak === 'riot').tiers
   const orders = groupOrders(u, seats, games, entry)
   const tiers: string[][] = []
   for (let p = 0; p < Math.max(0, ...orders.map((o) => o.length)); p++) tiers.push(orders.map((o) => o[p]).filter((t): t is string => !!t))
@@ -1907,12 +2005,12 @@ function graphOf(state: GameState, comp: Competition, ev: CEvent, ahead = false)
         known.push(g)
         upTo.push(g)
       }
-      const ranked = rankPhase(u.type, known, u.upperFirst).ranked
+      const ranked = rankPhase(u.type, known, u.upperFirst, u.tiebreak === 'riot').ranked
       if (ranked.length >= early.need) return seat ? inGroup(upTo) : ranked[rank! - 1] ?? null
     }
     const gs = unitGames(uj)
     if (!gs) return undefined
-    return seat ? inGroup(gs) : rankPhase(u.type, gs, u.upperFirst).ranked[rank! - 1] ?? null
+    return seat ? inGroup(gs) : rankPhase(u.type, gs, u.upperFirst, u.tiebreak === 'riot').ranked[rank! - 1] ?? null
   }
   return { c, nodes, fx, games, unitGames, playIn, slot }
 }
