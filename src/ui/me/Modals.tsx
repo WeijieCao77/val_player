@@ -79,7 +79,9 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
     const r = cup.rounds[run.round]
     const prize = cup.prize[Math.min(run.round, cup.prize.length - 1)] ?? 0
     return (
-      <Modal title={`${cup.name} · ${r.label}`} onClose={() => {}} onBgClose={() => {}}>
+      <Modal title={`${cup.name} · ${r.label}`} onClose={() => toast('今天是比赛日：这一轮要么打，要么弃权。')} onBgClose={() => {}}>
+        {/* a match day is answered, not closed: the × stays and says why, as 回到首页 does in the middle of a match
+            (PlayerGame). Reported 2026-09-14: the × on this card did nothing */}
         <p className="small muted" style={{ marginTop: 0 }}>你的车队：{run.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}，还有你。</p>
         {run.results.length > 0 && <p className="small">{run.results.join(' · ')}</p>}
         <p className="small">今天是比赛日：第 {run.round + 1}/{cup.rounds.length} 轮，BO{r.bo}。对手一轮比一轮强。</p>
