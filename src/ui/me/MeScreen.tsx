@@ -193,7 +193,7 @@ export default function MeScreen() {
                 const def = cupOf(cu.key)
                 const view = def && cupView(def, cu.year, p.region)
                 return (
-                  <tr key={i}><td>{cu.year}</td><td className="comp">{view?.name}</td><td>{cu.won ? '冠军' : view ? `止步${view.rounds[Math.min(cu.reached, view.rounds.length - 1)].label}` : ''}</td><td className="num">{cu.prize ? money(cu.prize) : ''}</td></tr>
+                  <tr key={i}><td>{cu.year}</td><td className="comp">{view?.name}</td><td>{cu.won ? '冠军' : view ? (cu.forfeit ? `${view.rounds[Math.min(cu.reached, view.rounds.length - 1)].label}弃权` : `止步${view.rounds[Math.min(cu.reached, view.rounds.length - 1)].label}`) : ''}</td><td className="num">{cu.prize ? money(cu.prize) : ''}</td></tr>
                 )
               })}
             </tbody></table>

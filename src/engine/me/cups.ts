@@ -3,7 +3,7 @@ import { defaultTactics, emptyStats, ROLES } from '../types'
 import type { GameState, Player, Region, Role, Team } from '../types'
 import { MAPS } from '../content'
 import { recomputeOverall } from '../player'
-import type { CupRun, PickupMate } from './types'
+import type { CupRun, PendingItem, PickupMate } from './types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
 import { addMoney } from './money'
@@ -163,14 +163,63 @@ export function dropTempTeams(state: GameState): void {
 }
 
 /**
- * Sign up, pay, meet the four. The cup's card stays up: it is where the rounds
- * are played, and afterCupMatch takes it down when the run is over. Taking it
- * down here left a run with nowhere to be played and nothing to end it, and
- * every cup after it refused with 「你已经在打一项赛事了。」 — a dead save
+ * A round a week, on a weekend.
+ *
+ * Reported 2026-09-14: 「网吧赛一旦报名会直接一直到打完为止……中间要给玩家恢复
+ * 体力，训练甚至是买外设的操作时间」. It was so: every round was played on the
+ * day the cup was entered, back to back, 体力 four lower a map and nothing in
+ * between. It now runs the way 破晓's 城市争霸赛 does (its cup.ts: 「报名 →
+ * 隔一周打第一轮 → 赢了才有下一轮」, 「一周一轮，整届 3–4 周打完」): the week it
+ * is entered in is still mine, the first round is the next week's, and a round
+ * a week after that. Between two rounds the week is an ordinary week.
+ *
+ * On a Saturday or a Sunday, and never on a week's seventh day: the plan
+ * settles on the seventh (me/week.ts settleWeek), so a round on days one to six
+ * has exactly one settlement between it and the round before — the rest put
+ * into the week between them is in the legs by the next round. Six days always
+ * hold a Saturday or a Sunday.
+ */
+export const CUP_ROUND_GAP = 7
+
+/** The day of the next round: next week's Saturday, or its Sunday. */
+export function cupRoundDay(state: GameState): number {
+  const me = state.me!
+  const start = state.day - me.weekDay + 7
+  for (const want of [6, 0]) {
+    for (let j = 1; j <= 6; j++) {
+      if (new Date(Date.UTC(state.year, 0, 1 + start + j)).getUTCDay() === want) return start + j
+    }
+  }
+  return start + 1
+}
+
+/** 「2月20日（周六）」 */
+export function cupDateCn(state: GameState, day: number): string {
+  const d = new Date(Date.UTC(state.year, 0, 1 + day))
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（周${'日一二三四五六'[d.getUTCDay()]}）`
+}
+
+/** This card is a round of the run I am in — a match day — and not an entry to answer. */
+export function isCupRound(state: GameState, item: PendingItem): boolean {
+  return item.kind === 'cup' && !!item.id && state.me?.pre.cup?.key === item.id
+}
+
+/** A round of mine is today's, still to be played. */
+export function cupRoundToday(state: GameState): boolean {
+  const me = state.me
+  const run = me?.pre.cup
+  return !!me && !!run && run.next != null && run.next <= state.day && me.phase !== 'pro' && me.phase !== 'retired'
+}
+
+/**
+ * Sign up, pay, meet the four. The entry card comes down; the round's own card
+ * comes up on its day (resumeCup, from every day of me/week.ts runDays) and
+ * afterCupMatch takes it down again. A run always has a day to be played on and
+ * a way to end: enterCup once took the card down with no way to play the rounds,
+ * and every cup after it refused with 「你已经在打一项赛事了。」 — a dead save
  * (reported 2026-09-11).
  */
 export function enterCup(state: GameState, key: string, rng: Rng): string | null {
-  void rng
   const me = state.me!
   const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事。'
@@ -179,8 +228,11 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   if (me.fans < cup.minFans) return `这是邀请赛，粉丝要过 ${fansCn(cup.minFans)}。`
   addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
-  me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [] }
-  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
+  const next = cupRoundDay(state)
+  me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [], next, year: state.year }
+  pop(state, 'cup', key)
+  const plan = cup.rounds.length > 1 ? `赛程 ${cup.rounds.map((r) => r.label).join(' → ')}，一周一轮，` : ''
+  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。${plan}${cup.rounds[0].label}在 ${cupDateCn(state, next)}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
   return null
 }
 
@@ -190,30 +242,68 @@ export function skipCup(state: GameState, key: string): void {
   pop(state, 'cup', key)
 }
 
-/** After a round: on to the next, or out — and then the prize, the followers and the phone. */
+/** After a round: on to next week's, or out. The round's card comes down either way. */
 export function afterCupMatch(state: GameState, won: boolean, score: string, rng: Rng): CupRun | null {
-  void rng
   const me = state.me!
   const run = me.pre.cup
   if (!run) return null
   const cup = cupFor(state, run.key)!
   run.results.push(`${cup.rounds[run.round].label} ${won ? '胜' : '负'} ${score}`)
+  pop(state, 'cup', run.key)
   if (won) run.round++
-  const over = !won || run.round >= cup.rounds.length
-  if (!over) return null
+  if (won && run.round < cup.rounds.length) {
+    // the two fives go home for the week; the next round stands them up again
+    dropTempTeams(state)
+    run.next = cupRoundDay(state)
+    run.year = state.year
+    pushLog(state, 'cup', `${cup.name}晋级${cup.rounds[run.round].label}，${cupDateCn(state, run.next)}开打。`)
+    return null
+  }
+  return endRun(state, cup, won, false, rng)
+}
+
+/**
+ * Not turning up on a round's day is a forfeit — 破晓's rule (cup.ts forfeitCup:
+ * 「现实里没上场就是弃权，这里也一样——但必须先问清楚」), asked twice on the
+ * round's card. The run ends where it stands and is paid for the rounds already
+ * won, as a loss in that round would be; the round not played teaches nothing.
+ */
+export function forfeitCup(state: GameState, rng: Rng): CupRun | null {
+  const me = state.me!
+  const run = me.pre.cup
+  if (!run) return null
+  const cup = cupFor(state, run.key)
+  if (!cup) {
+    dropTempTeams(state)
+    me.pre.cup = undefined
+    pop(state, 'cup', run.key)
+    return null
+  }
+  run.results.push(`${cup.rounds[Math.min(run.round, cup.rounds.length - 1)].label} 弃权`)
+  return endRun(state, cup, false, true, rng)
+}
+
+/** The run is over — lost, won, or given up on: the prize for the rounds won, the heat, what a five taught me. */
+function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, rng: Rng): CupRun {
+  void rng
+  const me = state.me!
+  const run = me.pre.cup!
   dropTempTeams(state)
   const reached = run.round
   const prize = cup.prize[Math.min(reached, cup.prize.length - 1)] ?? 0
-  const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize }
+  const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize, ...(forfeit ? { forfeit: true } : {}) }
   me.pre.cups.push(rec)
   me.pre.cup = undefined
   pop(state, 'cup', run.key)
   addMoney(state, 'prize', prize)
-  me.heat += cup.heat * (0.4 + reached / cup.rounds.length)
-  me.pre.tac = clamp(me.pre.tac + 1.5 + reached, 0, 60)
+  me.heat += cup.heat * ((forfeit ? 0 : 0.4) + reached / cup.rounds.length)
+  me.pre.tac = clamp(me.pre.tac + (forfeit ? 0 : 1.5) + reached, 0, 60)
+  const at = cup.rounds[Math.min(reached, cup.rounds.length - 1)].label
   const line = rec.won
     ? `${cup.name}冠军！奖金 $${prize}。`
-    : `${cup.name}止步${cup.rounds[Math.min(reached, cup.rounds.length - 1)].label}${prize ? `，奖金 $${prize}` : ''}。`
+    : forfeit
+      ? `${cup.name}${at}弃权，到此为止${prize ? `，奖金 $${prize}` : ''}。`
+      : `${cup.name}止步${at}${prize ? `，奖金 $${prize}` : ''}。`
   pushLog(state, rec.won ? 'good' : 'cup', line)
   return rec
 }
@@ -227,10 +317,17 @@ export function offerCup(state: GameState, key: string): void {
 }
 
 /**
- * A run with no card to play it on — a save from before enterCup kept the card
- * up. For a player still without a club the card goes back in front of
- * everything else, so the rounds can be played and the run can end. Signed to a
- * club by now, the run is withdrawn from: a pro does not go back to a café cup.
+ * The run's card: up on its round's day, and only then. Called at every press
+ * and on every day of me/week.ts runDays, and when a save is read (me/save.ts).
+ *
+ * Signed to a club by now, the run is withdrawn from: a pro does not go back to
+ * a café cup (破晓's acceptOffer does the same, the fee not returned).
+ *
+ * A save from before the rounds had days holds a run whose next round was due
+ * the moment it was read: that round is today's — the card it had in front
+ * stays, or comes back if the old dead save had lost it — and the rounds after
+ * it are a week apart. So is a round whose day went by without its card, or a
+ * run the year turned under: played today, never skipped in silence.
  */
 export function resumeCup(state: GameState): void {
   const me = state.me
@@ -243,7 +340,14 @@ export function resumeCup(state: GameState): void {
     pushLog(state, 'cup', `退出了${cupFor(state, run.key)?.name ?? '杯赛'}。`)
     return
   }
-  if (me.pending[0]?.kind === 'cup' && me.pending[0].id === run.key) return
-  me.pending = me.pending.filter((x) => !(x.kind === 'cup' && x.id === run.key))
-  me.pending.unshift({ kind: 'cup', id: run.key, day: state.day })
+  if (run.next == null || run.year !== state.year) {
+    run.next = state.day
+    run.year = state.year
+  }
+  const up = me.pending.some((x) => x.kind === 'cup' && x.id === run.key)
+  if (run.next <= state.day) {
+    if (!up) push(state, { kind: 'cup', id: run.key })
+    return
+  }
+  if (up) me.pending = me.pending.filter((x) => !(x.kind === 'cup' && x.id === run.key))
 }

@@ -7,6 +7,7 @@ import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
 import { advanceTurn, carriesOn, weekCalendar, weekInDays, weekMatches } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
+import { isCupRound } from './engine/me/cups'
 import { advanceUntil, leftToMe, runAutoPilot, stopLine } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
@@ -162,6 +163,11 @@ export default function PlayerGame() {
     if (stop.kind === 'match') {
       if (notes.length) toast(`推进了 ${weeks} 周，替你处理了 ${notes.length} 件事，到你的比赛了。`)
       setLive(new MeMatch(g, stop.fixture))
+      return
+    }
+    // a round of my cup on the road, handed over the way a match is: its card opens as this returns (engine/me/cups.ts)
+    if (stop.kind === 'pending' && isCupRound(g, stop.item)) {
+      toast(`${weeks ? `推进了 ${weeks} 周，` : ''}${stopLine(g, stop.item)}。`)
       return
     }
     // stopped in front of a decision that is mine: the summary says which, and its card comes after it

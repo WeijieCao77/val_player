@@ -1,4 +1,5 @@
 import { migrateWorld, packState, unpackState } from '../save'
+import { resumeCup } from './cups'
 import { stripToTheBone } from '../match'
 import type { GameState } from '../types'
 import { readSaveMeta, writeSaveMeta } from './saveMeta'
@@ -72,6 +73,8 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me && state.me.phase !== 'pro') state.myTeam = ''
   // 「今年不再来」 keeps its year now (me/prepro.ts declinedNow): a save from before kept the clubs alone, and those have lapsed
   if (state.me) state.me.declined = (state.me.declined ?? []).filter((d) => typeof d === 'object' && d !== null && typeof d.year === 'number')
+  // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
+  if (state.me) resumeCup(state)
   return state
 }
 
