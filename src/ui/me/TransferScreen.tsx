@@ -1,7 +1,8 @@
 import { useGame } from './ctx'
 import { Crest, Panel, moneyIn } from './common'
 import { payOf } from '../../engine/me/paytable'
-import { VCT_SEEN, inWindow, listSelf, nextWindow, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
+import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
+import { absDay, dateCn, windowBlock, windowLine } from '../../engine/me/window'
 import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
@@ -41,20 +42,31 @@ export default function TransferScreen() {
         {pro && (
           <Panel title="市场怎么看你" actions={nums ? <span className="tag">{perf.toFixed(1)}</span> : undefined}>
             <p className="small" style={{ marginTop: 0 }}><b>{perfWord(perf)}</b>。</p>
-            <p className="tiny faint">评价够高，赛段结束时会有别队来看你的比赛；转会窗开了就来报价。</p>
+            <p className="tiny faint">评价够高，赛段结束时会有别队来看你的比赛；转会窗口开着的时候，报价随时可能来。</p>
             {vct && (
               <p className="small">
                 本联赛 {top} 首发的水平：<b>{nums ? vct.median : attrWord(vct.median)}</b>。
                 {vct.by
-                  ? <>{vct.by === 'rating' ? '你的综合已经够到这条线' : vct.by === 'title' ? '你是 Challengers 冠军队的主力' : '你这个赛季的数据是联赛里最好的'}：转会窗开时，位置上用得着你的 {top} 俱乐部会先来找你{vct.starts < VCT_SEEN ? `（本赛季先打满 ${VCT_SEEN} 场正赛首发）` : ''}。</>
-                  : <>综合够到{nums ? ` ${vct.bar}` : '这条线附近'}、打出联赛里最好的赛季数据，或者作为主力拿下 Challengers 冠军，转会窗开时位置上用得着你的 {top} 俱乐部就会来找你。</>}
+                  ? <>{vct.by === 'rating' ? '你的综合已经够到这条线' : vct.by === 'title' ? '你是 Challengers 冠军队的主力' : '你这个赛季的数据是联赛里最好的'}：转会窗口开着时，位置上用得着你的 {top} 俱乐部会先来找你{vct.starts < VCT_SEEN ? `（本赛季先打满 ${VCT_SEEN} 场正赛首发）` : ''}。</>
+                  : <>综合够到{nums ? ` ${vct.bar}` : '这条线附近'}、打出联赛里最好的赛季数据，或者作为主力拿下 Challengers 冠军，转会窗口开着时位置上用得着你的 {top} 俱乐部就会来找你。</>}
               </p>
             )}
             {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
-            <p className="small">
-              {inWindow(game) ? <b>转会窗开着。</b> : <>转会窗关着，下一次：<b>{nextWindow(game).label}</b>（约 {nextWindow(game).weeks} 周后）。</>}
-            </p>
-            <button className="sm" disabled={!inWindow(game) || me.listedYear === game.year} onClick={() => { toast(listSelf(game)); commit() }}>主动挂牌（经理会不高兴）</button>
+            {/* the window as it stands, greyed with its reason and its date, never hidden (engine/me/window.ts) */}
+            <p className="small"><b>{windowLine(game)}</b></p>
+            {me.moveAfter && (
+              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式转会。</p>
+            )}
+            {(() => {
+              const shut = windowBlock(game)
+              const why = shut ?? (me.moveAfter ? '已经谈妥了下一家' : me.listedYear === game.year ? '今年已经挂过牌了' : null)
+              return (
+                <>
+                  <button className="sm" disabled={!!why} title={why ?? undefined} onClick={() => { toast(listSelf(game)); commit() }}>主动挂牌（经理会不高兴）</button>
+                  {why && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{shut ? '窗口开着、名单没锁才能挂牌。' : why}。</p>}
+                </>
+              )
+            })()}
           </Panel>
         )}
         {me.deals.length > 0 && (
@@ -69,6 +81,9 @@ export default function TransferScreen() {
             {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你。</p>
               : me.pre.invites.map((i) => <p key={i.id} className="small">{game.teams[i.teamId]?.name} · {i.expires - game.day} 天内答复</p>)}
             {declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
+            {me.moveAfter && (
+              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式签约。</p>
+            )}
           </Panel>
         )}
       </div>

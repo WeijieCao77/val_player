@@ -15,6 +15,7 @@ import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { fixturesFor } from '../../engine/season'
 import { WAIT_CN, nextUp } from '../../engine/me/nextup'
+import { windowLine } from '../../engine/me/window'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
 import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText } from '../../engine/me/rank'
@@ -335,6 +336,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   </p>
                 ) : null
               })()}
+              {/* the transfer window in one line, in the transfer screen's own words (engine/me/window.ts) */}
+              <p className="tiny faint" style={{ margin: '8px 0 0' }}>{windowLine(game)}</p>
             </Panel>
             <Panel title="教练怎么看你">
               <p className="small" style={{ margin: '0 0 6px' }}>

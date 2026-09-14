@@ -5,7 +5,7 @@ import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'
 import { AP_PRE } from '../../engine/me/prepro'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
-import { PLAYER_WINDOWS, windowLabel } from '../../engine/me/transfer'
+import { windowRuleLines } from '../../engine/me/window'
 import { WORLD_END } from '../../engine/era'
 import './tour.css'
 
@@ -93,7 +93,8 @@ const SECTIONS: { title: string; lines: string[] }[] = [
   {
     title: '转会',
     lines: [
-      `转会窗一年开两次：${PLAYER_WINDOWS.map(windowLabel).join('、')}。窗口一开，看上你的俱乐部来报价；也只有窗口开着才能主动挂牌。`,
+      // the year's window rules go in front of these, read off the save (engine/me/window.ts windowRuleLines)
+      '也只有窗口开着才能主动挂牌、要求签人。',
       '买走你的俱乐部要付违约金。刚签约又在首发，这一季没人来挖。',
       '主动挂牌一年一次，经理会不高兴。「转会」页写着市场怎么看你、离下一级还差多少。',
     ],
@@ -133,11 +134,15 @@ export default function HelpScreen() {
         )}
       </Panel>
       <div className="help-grid">
-        {SECTIONS.map((s) => (
-          <Panel key={s.title} title={s.title}>
-            <ul className="help-list">{s.lines.map((l) => <li key={l}>{l}</li>)}</ul>
-          </Panel>
-        ))}
+        {SECTIONS.map((s) => {
+          // the transfer rules are the save's year's (engine/me/window.ts), not written once for every year
+          const lines = s.title === '转会' ? [...windowRuleLines(game), ...s.lines] : s.lines
+          return (
+            <Panel key={s.title} title={s.title}>
+              <ul className="help-list">{lines.map((l) => <li key={l}>{l}</li>)}</ul>
+            </Panel>
+          )
+        })}
       </div>
     </div>
   )

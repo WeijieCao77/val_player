@@ -26,7 +26,7 @@ import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from '../../engine/
 import { AP_PRE } from '../../engine/me/prepro'
 import { TRIAL_MATCHES } from '../../engine/me/coach'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
-import { PLAYER_WINDOWS, windowLabel } from '../../engine/me/transfer'
+import { windowLine } from '../../engine/me/window'
 import { weekInDays } from '../../engine/me/week'
 
 /** The week screen without a club, the week screen with one, and what signing adds. */
@@ -116,7 +116,7 @@ const panel = (title: string): TourTarget => ({ sel: '.panel', text: title })
 const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛'] }
 
 export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
-  if (kind === 'season') return seasonSteps()
+  if (kind === 'season') return seasonSteps(g)
   const pro = kind === 'club'
   const days = pro && weekInDays(g)
   const calm = 100 - WEEK_END_FATIGUE
@@ -185,7 +185,7 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
 }
 
 /** The first club: who plays, how to get in, what a match asks of you, and when the market opens. */
-function seasonSteps(): TourStep[] {
+function seasonSteps(g: GameState): TourStep[] {
   return [
     {
       screen: 'team', at: [panel('名单')], title: '首发名单',
@@ -201,7 +201,8 @@ function seasonSteps(): TourStep[] {
     },
     {
       screen: 'transfer', at: [panel('市场怎么看你')], title: '转会窗',
-      body: `一年开两次：${PLAYER_WINDOWS.map(windowLabel).join('、')}。赛段里打得好，别队教练会记下你，窗口一开就来报价。`,
+      // the year's own rule and today's state (engine/me/window.ts); the full rule is on the help page
+      body: `${windowLine(g)}。${g.year <= 2022 ? '这两年没有固定窗口，俱乐部不打大赛就能转' : 'VCT 联赛照 Riot 的窗口，Challengers 只在打季后赛、晋级赛时锁名单'}（详见「帮助」）。赛段里打得好，别队教练会记下你，窗口开着就可能来报价。`,
     },
   ]
 }
