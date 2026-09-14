@@ -3,7 +3,8 @@ import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
 import { candidateClubs, careerRegions, ceilingLines, ceilingPreview, createCareer, emptyTalents, isAcademy, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
-import { ORIGINS, originOf } from '../../engine/me/origins'
+import { ORIGINS, originName, originOf } from '../../engine/me/origins'
+import { serverAt } from '../../engine/me/rank'
 import { hallAchCount, hallTitle, noteHall, readHall } from '../../engine/me/hall'
 import { ACHIEVEMENTS } from '../../engine/me/achievements'
 import { loadAutosave } from '../../engine/me/save'
@@ -394,7 +395,8 @@ export default function NewCareer({
               <button key={k} className={`origin-pick${originKey === k ? ' on' : ''}`} aria-pressed={originKey === k} onClick={() => setOriginKey(k)}>
                 {/* the card is the story; what it does to the numbers stays in
                     origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
-                <b>{o.name}</b>
+                {/* named on the server 「来自」 queues on, the year it opens: 韩服榜一路人王, 2021's China on 亚服 */}
+                <b>{originName(o, serverAt(region, year, 0))}</b>
                 <span>{o.blurb}</span>
               </button>
             )
