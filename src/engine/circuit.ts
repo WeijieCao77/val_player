@@ -3,7 +3,7 @@ import routesRaw from '../data/routes.json'
 import partneredRaw from '../data/routes_partnered.json'
 import { aheadEventsOf, oqPoolOf } from './ahead'
 import type { Plan, Seat } from './ahead'
-import { regionIn, stageAtIn } from './era'
+import { circuitPointsFor, regionIn, stageAtIn } from './era'
 import { bookLeague, foldDue, inVctLeague, sceneFor, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import { realName } from './names'
@@ -351,7 +351,7 @@ function flat(ev: CEvent): { nodes: Flat[]; base: number[] } {
 }
 
 /** One decided node, whoever decided it: a match or a walkover. */
-interface Game { a: string | null; b: string | null; w: string | null; round: string; mapsA: number; mapsB: number; roundsA: number; roundsB: number }
+export interface Game { a: string | null; b: string | null; w: string | null; round: string; mapsA: number; mapsB: number; roundsA: number; roundsB: number }
 
 /**
  * Order a phase's sides, and say which of them the format cannot tell apart.
@@ -362,7 +362,7 @@ interface Game { a: string | null; b: string | null; w: string | null; round: st
  * and two sides out in the same round share a place, so the semi-final losers
  * of a single bracket are joint third.
  */
-function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = false): { ranked: string[]; tiers: string[][] } {
+export function rankPhase(type: 'rr' | 'bracket', games: Game[], upperFirst = false): { ranked: string[]; tiers: string[][] } {
   const teams = uniq(games.flatMap((g) => [g.a, g.b]).filter((t): t is string => !!t))
   if (type === 'rr') {
     const s = new Map(teams.map((t) => [t, { pts: 0, md: 0, rd: 0 }]))
@@ -1415,7 +1415,7 @@ export function circuitBonus(state: GameState, comp: Competition): Map<string, n
   return out
 }
 
-function gameOf(f: Fixture): Game | null {
+export function gameOf(f: Fixture): Game | null {
   if (!f.played || !f.result) return null
   const aWon = f.result.mapsWonA > f.result.mapsWonB
   const rounds = f.result.maps.reduce((s, m) => [s[0] + m.scoreA, s[1] + m.scoreB], [0, 0])
@@ -1595,4 +1595,182 @@ export function realPlacesOf(comp: Competition): { name: string; place: number }
   const ev = comp.circuit && eventOf(comp.circuit.id)
   if (!ev || ev.projected) return []
   return ev.places.slice(0, 8).map(([t, place]) => ({ name: ev.names[t] ?? t.replace(/^N:/, ''), place }))
+}
+
+/* ------------------------------------------------------------------ */
+/*  the points tables, for the standings page                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What an event paid each side toward its points table: its placing — the
+ * event's own prize table where Liquipedia has it, Riot's 2021 chart for the
+ * open era otherwise, joint places paid alike — and from 2024 its matches,
+ * groups and byes. Settling the event pays exactly this (engine/season.ts
+ * settleCompetition); the standings page reads it back to say where a side's
+ * points came from.
+ */
+export function circuitPaid(state: GameState, comp: Competition): Map<string, number> {
+  const out = new Map<string, number>()
+  const add = (t: string, v: number) => { if (v) out.set(t, (out.get(t) ?? 0) + v) }
+  comp.finished.forEach((t, i) => {
+    const place = comp.places?.[i] ?? i + 1
+    add(t, circuitAward(comp, place) ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, place) : 0))
+  })
+  for (const [t, v] of circuitBonus(state, comp)) add(t, v)
+  return out
+}
+
+/**
+ * How a points table's places are marked.
+ *  - drawn: off the draw itself
+ *  - settled: off the draw as it would be made today, with nothing left to
+ *    happen before it that could change it
+ *  - standing: the table as it stands — its first places not already through
+ *    by another road
+ *  - history: not marked — nothing this world played has reached the table,
+ *    and its places go as they really went
+ */
+export type PointsBasis = 'drawn' | 'settled' | 'standing' | 'history'
+
+export interface PointsRow {
+  team: string
+  points: number
+  /** direct: a Champions place off this table; lcq: a Last Chance Qualifier place off it; through: at Champions by another road */
+  mark: 'direct' | 'lcq' | 'through' | null
+  /** for `through`: the road, where an event of this year was it */
+  via?: string
+}
+
+export interface PointsTable {
+  /** the pool's key in the route book: NA, EMEA, Americas… */
+  pool: string
+  /** the club regions it counts */
+  regions: string[]
+  /** from 2024: the league it is */
+  league?: string
+  /** in the draw's own order: points, then the order history had, then strength */
+  rows: PointsRow[]
+  /** the Champions places the table gives, and its Last Chance Qualifier places */
+  direct: number
+  lcq: number
+  /** from 2024: the Champions places the league's Stage 2 playoffs give before the table is read */
+  stage2: number
+  basis: PointsBasis
+  lcqBasis: PointsBasis | null
+}
+
+const pointsRoutes = (ev: CEvent): Route[] =>
+  ev.plan ? [] : Object.values(rulesOf(ev.id)?.routes ?? {}).filter((r) => r.kind === 'points' && !!r.pool)
+
+/**
+ * The year's points tables — 2021 and 2022's circuit points, the Championship
+ * Points from 2024 — in the order the draw reads them, each place marked the
+ * way the draw gives it: the seats of a Champions or a Last Chance Qualifier
+ * already drawn, or the seats seedsFor would draw today once nothing is left
+ * that could change them. Before that, the table as it stands. A year that gave
+ * no place off points (2023; 2027 on, engine/ahead.ts) has no tables.
+ */
+export function pointsTables(state: GameState): PointsTable[] {
+  const evs = eventsOf(state.year)
+  const champs = evs.find((e) => /Valorant Champions 20/i.test(e.name) && !e.plan)
+  const book = champs && rulesOf(champs.id)?.routes
+  if (!champs || !book || !pointsRoutes(champs).length) return []
+  const lcqs = evs.filter((e) => e.stage === 'lcq' && pointsRoutes(e).length > 0)
+  const compOf = (id: string): Competition | undefined => state.comps[`ev:${id}`]
+  const over = (x: Competition | undefined): boolean => !x || !!x.champion || !!x.circuit?.done
+  const feeder = (target: CEvent, r: Route): string | undefined =>
+    (r.event ? (target.projected ? counterpart(r.event, target) : r.event) : undefined)
+  const pays = (x: Competition): boolean => {
+    const r = x.circuit && rulesOf(x.circuit.id)
+    return !!(r?.award || r?.wins || r?.groupWin || r?.bye) || (state.year <= 2022 && circuitPointsFor(x.stage, 1) > 0)
+  }
+  // drawn, or as a draw made today would seat it — the projection mayStillDraw reads
+  const seatsOf = (ev: CEvent): { seeds: (string | null)[]; drawn: boolean } => {
+    const c = compOf(ev.id)?.circuit
+    if (c?.mode) return { seeds: c.seeds, drawn: true }
+    return { seeds: leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)), drawn: false }
+  }
+  // every placing the draw reads is in, and every event paying points before it opens is over
+  const settled = (target: CEvent, reads: CEvent[]): boolean =>
+    reads.every((e) => Object.values(rulesOf(e.id)?.routes ?? {}).every((r) => r.kind === 'points' || !feeder(e, r) || over(compOf(feeder(e, r)!))))
+    && !Object.values(state.comps).some((x) => !over(x) && !!x.circuit && x.circuit.end < (target.start ?? 0) && pays(x))
+
+  const cs = seatsOf(champs)
+  const cOk = cs.drawn || settled(champs, [champs])
+  // a Last Chance Qualifier's field leaves out the Champions places as they stand (championsDirect)
+  const ls = lcqs.map((e) => { const s = seatsOf(e); return { e, s, ok: s.drawn || settled(e, [e, champs]) } })
+
+  return uniq([champs, ...lcqs].flatMap((e) => pointsRoutes(e).map((r) => r.pool!))).map((pool) => {
+    const def = poolOf(state.year, pool)
+    const ranking = poolRanking(state, pool)
+    const inTable = new Set(ranking)
+    const touched = poolTouched(state, pool)
+    const marks = new Map<string, { mark: NonNullable<PointsRow['mark']>; via?: string }>()
+    // at Champions by another road, once that road has been travelled
+    champs.seeds.forEach((v, i) => {
+      const r = book[v]
+      const t = cs.seeds[i]
+      if (!r || r.kind === 'points' || !t || !inTable.has(t) || marks.has(t)) return
+      const id = feeder(champs, r)
+      const src = id ? compOf(id) : undefined
+      if (!cs.drawn && !(src && over(src))) return
+      const k = src ? src.finished.indexOf(t) : -1
+      marks.set(t, { mark: 'through', via: src && k >= 0 ? (k === 0 ? `${src.name} 冠军` : `${src.name} 第 ${src.places?.[k] ?? k + 1} 名`) : undefined })
+    })
+    let direct = 0
+    champs.seeds.forEach((v, i) => {
+      const r = book[v]
+      if (r?.kind !== 'points' || r.pool !== pool) return
+      direct++
+      const t = cs.seeds[i]
+      if (cOk && t && !marks.has(t)) marks.set(t, { mark: 'direct' })
+    })
+    const basis: PointsBasis = cs.drawn ? 'drawn' : cOk ? 'settled' : touched ? 'standing' : 'history'
+    // the table as it stands: its first places not already through by another road. Not the
+    // draw's projection: before the feeders are played that reads history's placings into them
+    if (basis === 'standing') {
+      let n = direct
+      for (const t of ranking) {
+        if (n <= 0) break
+        if (!marks.has(t)) { marks.set(t, { mark: 'direct' }); n-- }
+      }
+    }
+    let lcq = 0
+    let lcqBasis: PointsBasis | null = null
+    for (const { e, s, ok } of ls) {
+      const b = rulesOf(e.id)?.routes ?? {}
+      let here = 0
+      // a Last Chance Qualifier's places read only this table and the Champions places as they
+      // stand (championsDirect), so on a table this world has reached, the draw as it would be made
+      // today is the table as it stands — whatever that reading leaves out
+      const mark = ok || (touched && !s.drawn)
+      e.seeds.forEach((v, i) => {
+        const r = b[v]
+        if (r?.kind !== 'points' || r.pool !== pool) return
+        here++
+        const t = s.seeds[i]
+        if (mark && t && !marks.has(t)) marks.set(t, { mark: 'lcq' })
+      })
+      if (!here) continue
+      lcq += here
+      lcqBasis = s.drawn ? 'drawn' : ok ? 'settled' : touched ? 'standing' : 'history'
+    }
+    return {
+      pool,
+      regions: def?.regions ?? [],
+      league: def?.league,
+      rows: ranking.map((t) => ({ team: t, points: state.teams[t]?.champPoints ?? 0, mark: marks.get(t)?.mark ?? null, via: marks.get(t)?.via })),
+      direct,
+      lcq,
+      stage2: def?.league
+        ? champs.seeds.filter((v) => {
+          const r = book[v]
+          const id = r?.kind === 'top' ? feeder(champs, r) : undefined
+          return !!id && eventOf(id)?.region === def.league
+        }).length
+        : 0,
+      basis,
+      lcqBasis,
+    }
+  })
 }

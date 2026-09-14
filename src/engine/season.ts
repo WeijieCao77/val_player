@@ -28,7 +28,7 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
-import { bookAheadEvents, circuitAward, circuitBonus, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { bookAheadEvents, circuitPaid, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { announceLeagues, keepScore, turnLeagues } from './leagues'
 import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { historyNames } from './names'
@@ -318,23 +318,20 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
 
   awardPrize(state, comp.stage, comp.finished)
 
-  // a real event pays what it really paid, and joint places were paid alike
-  if (comp.format === 'circuit' || formatOf(state.year) === 'open') {
-    comp.finished.forEach((teamId, i) => {
-      const t = state.teams[teamId]
-      const place = comp.places?.[i] ?? i + 1
-      // the event's own prize table where Liquipedia has it; Riot's 2021 chart for the open era otherwise
-      const v = (comp.format === 'circuit' ? circuitAward(comp, place) : null)
-        ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, place) : 0)
-      if (t && v) t.champPoints += v
-    })
-  }
-  // and from 2024, what its matches, groups and byes paid on top
+  // a real event pays what it really paid: its placing, and from 2024 its matches, groups and
+  // byes (engine/circuit.ts circuitPaid — the standings page reads the same sum back)
   if (comp.format === 'circuit') {
-    for (const [teamId, v] of circuitBonus(state, comp)) {
+    for (const [teamId, v] of circuitPaid(state, comp)) {
       const t = state.teams[teamId]
       if (t) t.champPoints += v
     }
+  } else if (formatOf(state.year) === 'open') {
+    // Riot's 2021 chart, joint places paid alike
+    comp.finished.forEach((teamId, i) => {
+      const t = state.teams[teamId]
+      const v = circuitPointsFor(comp.stage, comp.places?.[i] ?? i + 1)
+      if (t && v) t.champPoints += v
+    })
   }
   const pts = comp.format === 'circuit' || formatOf(state.year) === 'open' ? undefined : CHAMP_POINTS[comp.stage]
   if (pts) {
