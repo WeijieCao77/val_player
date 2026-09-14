@@ -61,6 +61,8 @@ export interface InjuryDef {
   /** 理疗 treats it; a short trip away does */
   physio: boolean
   trip: boolean
+  /** the kit on the desk that guards it (me/shop.ts GEAR_SLOTS): a slot's tier takes GEAR_GUARD off its weekly chance */
+  gear: string[]
   /** a match played through it: the chance it leaves a mark */
   lasting: number
   lastingText: string
@@ -83,7 +85,7 @@ export const INJURY_KINDS: Record<InjuryKind, InjuryDef> = {
     days: [8, 21], sore: ['aim', 'reaction'], train: 0.9,
     hits: { aim: -12, reaction: -9 },
     strain: (p) => hrs(p, 'aim') + 0.5 * hrs(p, 'ranked'),
-    physio: true, trip: false, lasting: 0.07, autoPlays: false,
+    physio: true, trip: false, gear: ['mouse', 'keyboard'], lasting: 0.07, autoPlays: false,
     lastingText: '落下了病根：手腕以后更容易复发，枪法和反应也掉了一点。',
   },
   back: {
@@ -98,7 +100,7 @@ export const INJURY_KINDS: Record<InjuryKind, InjuryDef> = {
     hits: { reaction: -5, awareness: -5, clutch: -4, teamwork: -3, aim: -3 },
     weekly: { fatigue: 5 },
     strain: (p) => hrs(p, 'scrim') + 0.5 * (hrs(p, 'aim') + hrs(p, 'util')),
-    physio: true, trip: false, lasting: 0.05, autoPlays: false,
+    physio: true, trip: false, gear: ['chair'], lasting: 0.05, autoPlays: false,
     lastingText: '落下了病根：以后坐久了腰背就疼，体质差了一截。',
   },
   eyes: {
@@ -112,7 +114,7 @@ export const INJURY_KINDS: Record<InjuryKind, InjuryDef> = {
     days: [4, 10], sore: ['awareness', 'clutch'], train: 0.8,
     hits: { reaction: -8, awareness: -7, aim: -3 },
     strain: (p) => hrs(p, 'stream') + hrs(p, 'content') + hrs(p, 'vod'),
-    physio: true, trip: false, lasting: 0.03, autoPlays: true,
+    physio: true, trip: false, gear: ['monitor', 'headset'], lasting: 0.03, autoPlays: true,
     lastingText: '落下了病根：眼睛一累就头疼，反应慢了一点。',
   },
   ill: {
@@ -127,7 +129,7 @@ export const INJURY_KINDS: Record<InjuryKind, InjuryDef> = {
     hits: { aim: -4, reaction: -5, awareness: -4, utility: -3, clutch: -4, teamwork: -3, communication: -3 },
     mental: -3, formOnFloor: -8, weekly: { form: 4 },
     strain: (p) => 0.5 * drills(p),
-    physio: false, trip: false, lasting: 0, autoPlays: true,
+    physio: false, trip: false, gear: [], lasting: 0, autoPlays: true,
     lastingText: '',
   },
   burnout: {
@@ -142,12 +144,15 @@ export const INJURY_KINDS: Record<InjuryKind, InjuryDef> = {
     hits: { clutch: -9, communication: -6, awareness: -5 },
     mental: -10, formOnFloor: -6, weekly: { form: 4, tilt: 7 },
     strain: (p) => 0.5 * (drills(p) + hrs(p, 'stream')),
-    physio: false, trip: true, lasting: 0.05, autoPlays: false,
+    physio: false, trip: true, gear: [], lasting: 0.05, autoPlays: false,
     lastingText: '落下了病根：压力一大就睡不好，心态差了一截。',
   },
 }
 
 export const INJURY_ORDER: InjuryKind[] = ['wrist', 'back', 'eyes', 'ill', 'burnout']
+
+/** what a slot of gear at each tier (入门, 职业级, 旗舰) takes off the weekly chance of the lay-off it guards (InjuryDef.gear) */
+export const GEAR_GUARD = [0, 0.1, 0.18]
 
 /** ten days or more still to go: the coach will not play me on it, nor will the autopilot */
 export const SERIOUS_DAYS = 10
@@ -271,11 +276,17 @@ export function injuryHazards(state: GameState): Record<InjuryKind, number> {
     wrist: (0.0018 + 0.0008 * (hrs(plan, 'aim') + 0.5 * (hrs(plan, 'ranked') + hrs(plan, 'util'))) + 0.010 * load) *
       age * body * again('wrist', 1.8),
     back: (0.0011 + 0.0009 * Math.max(0, maps - 3) + 0.007 * load) * age * age * body * again('back', 1.6),
-    eyes: (0.0008 + 0.0005 * (hrs(plan, 'stream') + hrs(plan, 'content') + hrs(plan, 'vod')) + 0.004 * load) * again('eyes', 1.6),
+    // 复盘方法 (me/shop.ts): the review hours no longer strain the eyes
+    eyes: (0.0008 + 0.0005 * (hrs(plan, 'stream') + hrs(plan, 'content') + (me.courses?.includes('review') ? 0 : hrs(plan, 'vod'))) + 0.004 * load) * again('eyes', 1.6),
     ill: (0.0018 + 0.0012 * Math.max(0, maps - 2) + (travel ? 0.005 : 0)) * body * body,
     burnout: (0.0006 + 0.007 * load + 0.00012 * Math.max(0, me.tilt - 45) + 0.0003 * noRest) *
       clamp(1.35 - me.mental / 150, 0.6, 1.2) * again('burnout', 1.6),
   }
+  // what money buys against it (me/shop.ts), none of it practice: kit that guards the part, 理疗 or a trip this week, a flat to sleep in
+  for (const k of INJURY_ORDER) for (const slot of INJURY_KINDS[k].gear) h[k] *= 1 - (GEAR_GUARD[me.gear?.[slot] ?? 0] ?? GEAR_GUARD[GEAR_GUARD.length - 1])
+  if (me.flags.physioWk === me.week) { h.wrist *= 0.7; h.back *= 0.7 }
+  if (me.flags.tripWk === me.week) h.burnout *= 0.5
+  if (me.flags.relax_flat) { h.ill *= 0.8; h.burnout *= 0.8 }
   for (const k of INJURY_ORDER) h[k] *= grace
   return h
 }

@@ -9,7 +9,7 @@ import { ACTIONS } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
-import { REVIEW_MUL, courseMul, gearTrainMul, psychMul } from './shop'
+import { FLAT_RELIEF, RELIEF_FLOOR, courseMul, psychMul } from './shop'
 import { ladderLabel, playRanked } from './prepro'
 import { contentGross, mediaAfterCap, streamWeek } from './stream'
 import { questProgress } from './quests'
@@ -135,7 +135,7 @@ export function hourValues(state: GameState): HourValue[] {
   const out: HourValue[] = []
   for (const key of ['aim', 'vod', 'util'] as const) {
     const split = SPLIT[key]!
-    const mul = EXTRA * (pro ? 1 : 1.6) * (key === 'vod' ? courseMul(me.courses, 'review', REVIEW_MUL) : 1)
+    const mul = EXTRA * (pro ? 1 : 1.6)
     const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
     let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
     if (key === 'vod' && p.isIgl && open('igl')) { v += 0.25 * EXTRA * worth('igl'); attrs.push('igl') }
@@ -186,7 +186,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
   const team = me.phase === 'pro' ? state.teams[state.myTeam] : undefined
   if (!p) return
   const pro = me.phase === 'pro'
-  const g = gainBase(p, team ?? { coach: null, facilities: 40 } as Team, rng) * traitMul(me, 'train') * gearTrainMul(me.gear) * (me.flags.trainMul ?? 1)
+  const g = gainBase(p, team ?? { coach: null, facilities: 40 } as Team, rng) * traitMul(me, 'train') * (me.flags.trainMul ?? 1)
   const w = weightsFor(p)
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
   let fatigue = 0
@@ -210,13 +210,14 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
     switch (a.key) {
       case 'aim': case 'vod': case 'util': {
         const split = SPLIT[a.key]!
-        const mul = a.key === 'vod' ? courseMul(me.courses, 'review', REVIEW_MUL) : 1
         // without a club the hours are mine alone: no team practice underneath them
         const alone = pro ? 1 : 1.6
         for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) {
-          bump(k, g * EXTRA * n * share * mul * alone)
+          bump(k, g * EXTRA * n * share * alone)
         }
         if (a.key === 'vod' && p.isIgl) bump('igl', g * EXTRA * n * 0.25)
+        // 复盘方法 (me/shop.ts): a loss looked at properly is a loss put down; the hours train what they always did
+        if (a.key === 'vod' && me.courses.includes('review')) me.tilt = clamp(me.tilt - 2 * n, 0, 100)
         questProgress(state, 'train', n)
         break
       }
@@ -277,13 +278,14 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
     }
   }
   if (capped) notes.push('这周直播和内容挣的钱超过了平台按你工资结算的额度，超出的部分只结了一成。')
-  if (me.flags.relax_flat) fatigue -= 3
   // a week passes: the body gets some of it back on its own, more with a
   // better constitution — so an idle week is never a dead week, and a full
   // week of training is a real choice against it
   // 出征仪式的时差：国际赛期间身体回得快一点或慢一点
   fatigue -= clamp(6 + (me.body - 50) / 10, 3, 12) * cerRestMul(state)
   p.fatigue = clamp(p.fatigue + fatigue, 0, 100)
+  // the flat's better sleep (me/shop.ts): a hard week given back faster, down to RELIEF_FLOOR and no further
+  if (me.flags.relax_flat && p.fatigue > RELIEF_FLOOR) p.fatigue = Math.max(RELIEF_FLOOR, p.fatigue - FLAT_RELIEF)
   if (rose.length) {
     const cn: Record<keyof Attrs, string> = {
       aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',

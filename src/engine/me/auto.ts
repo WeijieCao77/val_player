@@ -16,7 +16,7 @@ import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
-import { COURSES, GEAR_PRICE, RELAX, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
+import { COURSES, FLAT_RELIEF, GEAR_PRICE, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
 import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
 import { retire } from './endings'
@@ -70,8 +70,9 @@ export function weekEndFatigue(state: GameState, load = matchLoad(state)): numbe
     f += d.fatigue * n
     if (k === 'rest') f -= 14 * n * ((me.body - 50) / 200 + traitMul(me, 'rest') - 1)
   }
-  if (me.flags.relax_flat) f -= 3
-  return f - clamp(6 + (me.body - 50) / 10, 3, 12)
+  f -= clamp(6 + (me.body - 50) / 10, 3, 12)
+  // the flat gives a hard week back, down to RELIEF_FLOOR (growth.ts settleTraining)
+  return me.flags.relax_flat && f > RELIEF_FLOOR ? Math.max(RELIEF_FLOOR, f - FLAT_RELIEF) : f
 }
 
 /**

@@ -51,9 +51,11 @@ export interface PayBand {
   cap: number
   /** the floor is not a published figure */
   floorTbd: boolean
+  /** above `ref` dollars the world's wage grows as its k-th power before `mul` (first teams from 2026) */
+  bend?: { ref: number; k: number }
 }
 
-/** first team, 2023 on (China's league from 2024): multiplier, floor, cap */
+/** first team, 2023–25 (China's league from 2024): multiplier, floor, cap */
 const T1_PARTNER: Record<PayGroup, [number, number, number]> = {
   NA: [0.8, 50_000, 500_000],
   LATAM: [0.8, 50_000, 500_000],
@@ -65,6 +67,32 @@ const T1_PARTNER: Record<PayGroup, [number, number, number]> = {
   // floor 暂定: the league has one, unpublished
   CN: [0.55, 300_000, 3_000_000],
 }
+
+/**
+ * First team from 2026, every league: the floors and caps of T1_PARTNER, and
+ * the world's dollar wage bent before the league's multiplier — up to $80,000
+ * as it is, above it growing as its fifth root.
+ *
+ * The same states measured (scripts/probe_pay.ts, 2026-09-14: 12 careers, a
+ * VCT start in each league from 2026 and a Challengers start in each from 2021,
+ * every same-tier club's offer every fourth week) put 2026–34's first-team
+ * medians at $19.7 万 Americas, €12.4 万 EMEA, ₩2.71 亿 Pacific and ¥83 万 China,
+ * against 2026's reported $10–12k, $8–10k, $6–8k and $6–8k a month. The clubs
+ * did not get stronger (their ratings held at 84–88 every year): the player
+ * did. His wage is an exponential of his 综合, and as he outgrew his clubs he
+ * went from rotation to starter pay too, so a star's offer ran fifteen times a
+ * rookie's and a year's median was whoever the careers had made of him by
+ * then. A multiplier for each year would have fitted that; the bend holds any
+ * year's player to the report instead. Bent, the medians are $13.1 万, €9.6 万,
+ * ₩1.19 亿 and ¥60 万; a proven starter at 综合 82 is offered $13 万, €10 万,
+ * ₩1.1 亿 and ¥66 万; a rookie is on the floor; a star at 90 about a sixth over
+ * the report's top.
+ *
+ * 2027–2034 have no report of their own: held at 2026's figures (暂定).
+ */
+const T1_BEND = { ref: 80_000, k: 0.2 }
+const T1_2026: Record<PayGroup, number> = { NA: 1.26, LATAM: 1.26, EU: 1.09, KRJP: 0.75, SEA: 0.75, CN: 0.9 }
+
 /** first team before partnership (2021–22), and China's 2023 with no league: no floor. All 暂定 but North America. */
 const T1_OPEN: Record<PayGroup, number> = { NA: 1.0, LATAM: 0.35, EU: 0.6, KRJP: 0.55, SEA: 0.3, CN: 0.18 }
 const CN_2023 = 0.3
@@ -72,12 +100,13 @@ const CN_2023 = 0.3
  * second team, every year: multiplier on the world's dollar wage, a month's floor and cap (the caps 暂定).
  * China's floor is ¥6,000 in every year, 2021–22 too (the author, 2026-09-14: a 2021 rookie at Suning
  * signed for ¥4.8 万 on the ¥4,000 floor). EMEA's wage is moved down: at 1 its median was about €2.2k a
- * month, over the reported €500–1,500 (VZone 2026, THESPIKE 2025, Strafe 2024).
+ * month, and at 0.6 still the top of the reported €500–1,500 (VZone 2026, THESPIKE 2025, Strafe 2024) —
+ * €1,417 a month 2026–34 and €1,750 for a strong second-team player (scripts/probe_pay.ts, 2026-09-14).
  */
 const T2_MONTH: Record<PayGroup, [number, number, number]> = {
   NA: [1, 1_000, 5_000],
   LATAM: [1, 600, 3_000],
-  EU: [0.6, 500, 2_500],
+  EU: [0.55, 500, 2_500],
   KRJP: [1, 1_500_000, 7_500_000],
   SEA: [1, 550_000, 2_750_000],
   CN: [1, 6_000, 30_000],
@@ -89,6 +118,7 @@ export function payBand(region: Region | string | null | undefined, tier: number
   if (tier === 1) {
     const partnered = year >= 2024 || (year === 2023 && g !== 'CN')
     const [, floor, cap] = T1_PARTNER[g]
+    if (partnered && year >= 2026) return { cur, mul: T1_2026[g], floor, cap, floorTbd: g === 'CN', bend: T1_BEND }
     if (partnered) return { cur, mul: T1_PARTNER[g][0], floor, cap, floorTbd: g === 'CN' }
     return { cur, mul: g === 'CN' && year === 2023 ? CN_2023 : T1_OPEN[g], floor: 0, cap, floorTbd: false }
   }
@@ -99,7 +129,8 @@ export function payBand(region: Region | string | null | undefined, tier: number
 /** A wage the world would pay in dollars, as this club writes it into a contract: its league's level and currency, floored and capped. */
 export function offerOf(team: Pick<Team, 'region' | 'tier'>, year: number, usd: number): { cur: Cur; salary: number } {
   const b = payBand(team.region, team.tier, year)
-  const raw = convert(usd * b.mul, 'USD', b.cur, year)
+  const bent = b.bend && usd > b.bend.ref ? b.bend.ref * (usd / b.bend.ref) ** b.bend.k : usd
+  const raw = convert(bent * b.mul, 'USD', b.cur, year)
   return { cur: b.cur, salary: roundPay(clamp(raw, b.floor, b.cap), b.cur) }
 }
 

@@ -6,21 +6,31 @@ import { injuryRelax } from './injury'
 import { cny } from './moneyfmt'
 
 /**
- * Where the money goes. The rule from 破晓: nothing here turns money into the
- * eight directly — gear and courses buy training speed, calm and access, and
- * even those stop at the second tier.
+ * Where the money goes. The rule from 破晓, and the author's: money does not buy
+ * strength. Gear and courses buy comfort, calm and fewer lay-offs; recovery
+ * brings a body back from a hard week; none of it buys an hour of practice or a
+ * point of the eight.
  *
  * Money still reached the match and the ceilings, found by measuring rather
  * than reading (2026-09-11, 「钱通过商城转成属性影响夺冠」): every tier of gear
  * added to the odds of every call in every match; every short trip added a
  * point of 心态 for good; and the training speed the kit and courses sold got a
  * player to his ceilings sooner, where the break paths count (me/bottleneck.ts)
- * — +0.9 of peak overall and 2.3 more points of ceiling opened, paired against
- * the same careers never buying. The first two are gone and the speed is about
- * halved, the second tier worth half the first. Money buys hours, recovery and
- * calm; the match is played with what the player is. And a VCT salary, which
- * bought the whole shop inside its first season, gets somewhere to go that is
- * not strength at all: LIFESTYLE below.
+ * — +0.9 of peak overall, paired against the same careers never buying. The
+ * first two went and the speed was halved.
+ *
+ * Measured again 2026-09-14 (scripts/probe_buy.ts: 托管's steady week, a
+ * Challengers start, 8 seasons, the same seeds buying everything and nothing):
+ * still +1.0 of peak overall, and 理疗 with short trips did all of it on their
+ * own — fatigue taken off for free, so the steady plan swapped 228 hours of rest
+ * for 146 of practice. Gear, 复盘方法, the flat, the agent and the other courses
+ * each measured as nothing. So paid recovery stops at RELIEF_FLOOR: it brings a
+ * body back from a hard week, never under where an ordinary week ends; and the
+ * speed gear and 复盘方法 still sold is gone for what they are worth off the
+ * clock (me/injury.ts). scripts/check_buy.ts holds all of it.
+ *
+ * And a VCT salary, which bought the whole shop inside its first season, gets
+ * somewhere to go that is not strength at all: LIFESTYLE below.
  */
 export const GEAR_SLOTS: { key: string; name: string }[] = [
   { key: 'mouse', name: '鼠标' }, { key: 'keyboard', name: '键盘' }, { key: 'headset', name: '耳机' },
@@ -36,8 +46,6 @@ export const GEAR_SLOTS: { key: string; name: string }[] = [
  */
 export const GEAR_PRICE = [0, 2000, 5500]
 export const GEAR_TIER_CN = ['入门', '职业级', '旗舰']
-/** training speed a slot at this tier adds, in all: the flagship adds half again for nearly five times the price */
-export const GEAR_TIER_TRAIN = [0, 0.006, 0.009]
 
 /**
  * What each tier is on the desk: kit VCT players really buy, not a tier word —
@@ -53,27 +61,36 @@ export const GEAR_MODELS: Record<string, [string, string, string]> = {
 }
 export const gearModel = (slot: string, tier: number): string => GEAR_MODELS[slot]?.[tier] ?? GEAR_TIER_CN[tier] ?? ''
 
-/** What a tier of gear does, in the shop's words. */
-export const GEAR_EFFECT = '训练收益：职业级每件 +0.6%，换旗舰再 +0.3%，五件全旗舰共 +4.5%。比赛里的判断不看外设。'
-
-/** 复盘方法's multiplier on the review hours */
-export const REVIEW_MUL = 1.15
+/** What gear does, in the shop's words (me/injury.ts GEAR_GUARD): the body, not the practice or the match. */
+export const GEAR_EFFECT = '外设不加训练收益，比赛里的判断也不看外设。好外设护的是身体：鼠标和键盘护手腕，椅子护腰背，显示器和耳机护眼睛；职业级每件让对应伤病的几率低一成，旗舰低近两成。'
 
 export interface Course { key: string; name: string; price: number; blurb: string }
 export const COURSES: Course[] = [
   // RMB, 暂定: no published price to anchor a course to
   { key: 'lang', name: '语言课', price: 9000, blurb: '去外赛区不再是问题，外赛区的报价权重也高。' },
   { key: 'psych', name: '运动心理', price: 12000, blurb: '输球后气压涨得少两成，气压对临场判断的拖累也少两成。' },
-  { key: 'review', name: '复盘方法', price: 8000, blurb: '复盘的训练收益 ×1.15。' },
+  { key: 'review', name: '复盘方法', price: 8000, blurb: '复盘有了章法，不再对着录像熬眼睛：复盘不再添眼疲劳和偏头痛的几率，每次复盘气压消 2 点。' },
   { key: 'talk', name: '沟通表达', price: 6000, blurb: '羁绊涨得快三成，教练信任涨得快两成。' },
 ]
 
+/**
+ * Paid recovery takes fatigue down to here (体力 55, under 「累」) and no further.
+ * The steady week ends at auto.ts WEEK_END_FATIGUE, under it, so on an ordinary
+ * week there is nothing for money to take off: it brings a body back from a
+ * hard week — a Masters, a run of series, a lay-off — and never turns into
+ * practice. At no floor, 理疗 twice a week let the steady plan skip a rest in
+ * two weeks of three (2026-09-14).
+ */
+export const RELIEF_FLOOR = 45
+/** the flat's better sleep, a week, down to RELIEF_FLOOR (growth.ts settleTraining) */
+export const FLAT_RELIEF = 3
+
 export interface Relax { key: string; name: string; price: number; fatigue: number; tilt: number; mental: number; once?: boolean; blurb: string }
 export const RELAX: Relax[] = [
-  // RMB, 暂定
-  { key: 'physio', name: '理疗', price: 400, fatigue: -18, tilt: -4, mental: 0, blurb: '不占行动点的恢复。' },
-  { key: 'trip', name: '短途旅行', price: 4000, fatigue: -30, tilt: -20, mental: 0, blurb: '离开电脑两天。' },
-  { key: 'flat', name: '电竞公寓', price: 60000, fatigue: 0, tilt: 0, mental: 0, once: true, blurb: '住得好，每周多回 3 点体力。' },
+  // RMB, 暂定. What each takes off a lay-off's weekly chance, and which lay-offs it shortens, is me/injury.ts's
+  { key: 'physio', name: '理疗', price: 400, fatigue: -18, tilt: -4, mental: 0, blurb: `不占行动点。累的时候回 18 点体力，最多回到 ${100 - RELIEF_FLOOR}；这周手腕、腰背少伤三成，手腕、腰背、眼睛的伤好得快。` },
+  { key: 'trip', name: '短途旅行', price: 4000, fatigue: -30, tilt: -20, mental: 0, blurb: `离开电脑两天：气压消 20 点，累的时候回 30 点体力（最多回到 ${100 - RELIEF_FLOOR}）；这周不容易焦虑失眠，倦怠缓得快。` },
+  { key: 'flat', name: '电竞公寓', price: 60000, fatigue: 0, tilt: 0, mental: 0, once: true, blurb: `住得好、睡得好：累的时候每周多回 ${FLAT_RELIEF} 点体力（最多回到 ${100 - RELIEF_FLOOR}），感冒发烧、焦虑失眠少两成。` },
 ]
 
 /** RMB signing fees, 暂定; the cut is a share of the wage */
@@ -164,11 +181,18 @@ export function buyRelax(state: GameState, key: string): string | null {
   if (!r.once && me.relaxUsed >= 2) return '这周已经放松过两次了。'
   addMoney(state, 'relax', -r.price)
   if (r.once) me.flags[`relax_${key}`] = 1
-  else me.relaxUsed++
-  p.fatigue = clamp(p.fatigue + r.fatigue, 0, 100)
+  else {
+    me.relaxUsed++
+    // this week's chance of the lay-offs it guards against (me/injury.ts injuryHazards)
+    me.flags[`${key}Wk`] = me.week
+  }
+  // down to RELIEF_FLOOR and no further: a hard week given back, never an ordinary one turned into practice
+  const was = p.fatigue
+  if (r.fatigue < 0 && was > RELIEF_FLOOR) p.fatigue = Math.max(RELIEF_FLOOR, was + r.fatigue)
+  const back = Math.round(was - p.fatigue)
   me.tilt = clamp(me.tilt + r.tilt, 0, 100)
   me.mental = clamp(me.mental + r.mental, 0, 100)
-  pushLog(state, 'money', `${r.name}（${cny(r.price)}）${r.fatigue ? `，体力回了 ${-r.fatigue}` : ''}。`)
+  pushLog(state, 'money', `${r.name}（${cny(r.price)}）${back ? `，体力回了 ${back}` : r.fatigue ? '，身上不累，体力没什么可回的' : ''}。`)
   // treatment for what I have shortens the lay-off (me/injury.ts)
   injuryRelax(state, key)
   return null
@@ -186,8 +210,6 @@ export function hireAgent(state: GameState, tier: number): string | null {
   return null
 }
 
-export const gearTrainMul = (gear: Record<string, number>): number =>
-  1 + Object.values(gear).reduce((s, t) => s + (GEAR_TIER_TRAIN[t] ?? GEAR_TIER_TRAIN[GEAR_TIER_TRAIN.length - 1]), 0)
 export const courseMul = (courses: string[], key: string, mul: number): number => (courses.includes(key) ? mul : 1)
 /** 运动心理: how much of a loss, and of the tilt it leaves, reaches the next call */
 export const psychMul = (courses: string[]): number => (courses.includes('psych') ? 0.8 : 1)

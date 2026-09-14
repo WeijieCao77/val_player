@@ -5,6 +5,7 @@ import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'
 import { AP_PRE } from '../../engine/me/prepro'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
+import { RELIEF_FLOOR } from '../../engine/me/shop'
 import { PLAYER_WINDOWS, windowLabel } from '../../engine/me/transfer'
 import { WORLD_END } from '../../engine/era'
 import './tour.css'
@@ -34,6 +35,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
       '训练、排位、直播、比赛都耗体力。休息补回来，体质越好补得越多；一周过去，身体自己也回一些。',
       '疲劳到「累」，训练收益打折；到「透支」，容易受伤。体力低于四成，状态和比赛发挥明显下滑。',
       `「按推荐安排」会算上这周的比赛，让周末体力留在 ${100 - WEEK_END_FATIGUE} 上下。`,
+      `理疗、短途旅行和电竞公寓不占行动点，但只把体力补到 ${100 - RELIEF_FLOOR} 为止：把人从一场硬仗里拉回来，替不了平常的休息。花钱买的是舒服、少受伤、心态，不是训练量。`,
     ],
   },
   {
