@@ -1,4 +1,4 @@
-import { eventOf, gameOf, rankPhase } from './circuit'
+import { eventOf, gameOf, phaseSeatsOf, rankPhase } from './circuit'
 import type { CUnit, Game } from './circuit'
 import type { Competition, GameState } from './types'
 
@@ -215,9 +215,10 @@ export function eventTables(state: GameState, comp: Competition): EventTable[] {
         }
       }
       if (done) {
-        const ranked = rankPhase(u.type === 'rr' ? 'rr' : 'bracket', games as Game[], u.upperFirst).ranked
+        // the places the draw reads off this table: each group's own top places (engine/circuit.ts PhaseSeats)
+        const reads = phaseSeatsOf(state, comp, ui)
         for (const rank of ranks) {
-          const t = ranked[rank - 1]
+          const t = reads?.get(rank)
           if (t && rows.has(t) && rows.get(t)!.next == null) rows.get(t)!.next = dest(rank)
         }
         for (const r of rows.values()) if (r.next === undefined) r.next = null
