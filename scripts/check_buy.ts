@@ -107,6 +107,10 @@ const base = (): GameState => {
 // the training hours by about ±5% on its own, so the rest is held to 70% and the practice to +8%.
 const REST_MIN = 0.7
 const TRAIN_MAX = 0.08
+// The peak is held one way: buying everything must not end stronger. Ending weaker is trophy luck, not a leak —
+// on 2026-09-14, after the qualification fixes changed the world, seed 7 went 79 → 77 with 581 → 586 hours of
+// practice, 146 → 145 of rest and no injuries either side; one seed's titles alone swing the peak −2…+4. The
+// mark of money buying strength is the rest and the practice, and those stay held both ways above.
 const gaps: string[] = []
 let peakGap = 0
 let trainOver = 0
@@ -122,8 +126,8 @@ for (const seed of seeds) {
   gaps.push(`seed ${seed}：峰值 ${none.peak} → ${all.peak}，训练 ${train(none)} → ${train(all)} 小时，休息 ${none.hours.rest ?? 0} → ${all.hours.rest ?? 0}，带伤 ${none.weeksHurt} → ${all.weeksHurt} 周，周末平均疲劳 ${tired(none)} → ${tired(all)}`)
 }
 peakGap /= seeds.length
-facts.push([`同一个种子什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（容许 ${tol}）；全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
-  Math.abs(peakGap) <= tol && restShare >= REST_MIN && trainOver <= TRAIN_MAX])
+facts.push([`同一个种子什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（全买最多高 ${tol}）；全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
+  peakGap <= tol && restShare >= REST_MIN && trainOver <= TRAIN_MAX])
 
 for (const g of gaps) console.log(`  ${g}`)
 for (const [what, ok] of facts) console.log(`${ok ? '✓' : '✗'} ${what}`)

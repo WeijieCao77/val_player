@@ -26,8 +26,9 @@ import ShareCard from './ShareCard'
 import CeremonyModal from './Ceremony'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
-import { Scene } from './art/scenes'
+import { Scene, type SceneKey } from './art/scenes'
 import { SCENE_CN, sceneOfEvent } from './art/sceneOf'
+import { holdCard } from './hold'
 import './moment.css'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
@@ -316,43 +317,55 @@ function StreamModal({ onDone }: { onDone: () => void }) {
 // ------------------------------------------------------------------ event
 function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }) {
   const { game, commit } = useGame()
-  const [result, setResult] = useState<{ pick: string; lines: string[] } | null>(null)
   // what the card echoes and which chain step it is, read once: the answer moves the chain on
   const [tags] = useState(() => { const e = eventOf(eventId); return e ? storyTag(game, e) : [] })
   const ev = eventOf(eventId)
   if (!ev) { pop(game, 'event', eventId); onDone(); return null }
-  // the question stays on screen after the choice, with what it did right
-  // under the option you took — a popup that closes on click teaches nothing
   // where it happens along the top, and what kind of week it is in the header (art/sceneOf.ts); a card about home has no picture
   const scene = sceneOfEvent(ev.id)
+  const title = scene ? SCENE_CN[scene] : '事件'
+  // The question stays on screen after the choice, with what it did under it — a popup that closes on click
+  // teaches nothing. The engine takes the event off the list as it is answered (me/events.ts resolveEvent), which
+  // closed this card before the result could show (found 2026-09-14), so the result goes up as a held card of its
+  // own (hold.tsx) and the week goes on only once that is closed.
+  const choose = (i: number) => {
+    const lines = resolveEvent(game, ev.id, i)
+    const close = () => { holdCard(null); onDone() }
+    holdCard(<EventResult title={title} scene={scene} q={ev.q} pick={ev.a[i].t} lines={lines} onClose={close} />)
+    commit()
+  }
   return (
-    <Modal title={scene ? SCENE_CN[scene] : '事件'} art={scene ? <Scene kind={scene} /> : undefined} onClose={result ? onDone : () => {}} onBgClose={result ? onDone : () => {}}>
+    <Modal title={title} art={scene ? <Scene kind={scene} /> : undefined} onClose={() => {}} onBgClose={() => {}}>
       {tags.map((line) => <p key={line} className="tiny muted" style={{ margin: '0 0 4px' }}>{line}</p>)}
       <p className="q ev-q">{ev.q}</p>
       <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctx}</p>
-      {result ? (
-        <>
-          <div className="node-line ok">
-            你选了「{result.pick}」
-            {/* what it did as tags, a rise green and a fall red — not one sentence to parse */}
-            {result.lines.length
-              ? <div className="ev-chips">{result.lines.map((l, i) => <span key={i} className={`mo-chip${/[−-]\s?\d/.test(l) ? ' dn' : /\+\s?\d/.test(l) ? ' up' : ''}`}>{l}</span>)}</div>
-              : <div className="small" style={{ marginTop: 4 }}>没有立刻的变化。</div>}
-          </div>
-          <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onDone}>继续</button></div>
-        </>
-      ) : (
-        <>
-          <div className="node-opt">
-            {ev.a.map((o, i) => (
-              <button key={i} onClick={() => { const lines = resolveEvent(game, ev.id, i); setResult({ pick: o.t, lines }); commit() }}>
-                <span>{o.t}</span>
-                <span className="m">{[describeEffect(o.e), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <div className="node-opt">
+        {ev.a.map((o, i) => (
+          <button key={i} onClick={() => choose(i)}>
+            <span>{o.t}</span>
+            <span className="m">{[describeEffect(o.e), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+/** What an answer did, held up after the event itself is off the list (hold.tsx). */
+function EventResult({ title, scene, q, pick, lines, onClose }: {
+  title: string; scene: SceneKey | null; q: string; pick: string; lines: string[]; onClose: () => void
+}) {
+  return (
+    <Modal title={title} art={scene ? <Scene kind={scene} /> : undefined} onClose={onClose} onBgClose={onClose}>
+      <p className="q ev-q">{q}</p>
+      <div className="node-line ok">
+        你选了「{pick}」
+        {/* what it did as tags, a rise green and a fall red — not one sentence to parse */}
+        {lines.length
+          ? <div className="ev-chips">{lines.map((l, i) => <span key={i} className={`mo-chip${/[−-]\s?\d/.test(l) ? ' dn' : /\+\s?\d/.test(l) ? ' up' : ''}`}>{l}</span>)}</div>
+          : <div className="small" style={{ marginTop: 4 }}>没有立刻的变化。</div>}
+      </div>
+      <div className="row" style={{ justifyContent: 'center', marginTop: 10 }}><button className="primary" onClick={onClose}>继续</button></div>
     </Modal>
   )
 }

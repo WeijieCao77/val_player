@@ -28,6 +28,7 @@ import TransferScreen from './ui/me/TransferScreen'
 import EconomyScreen from './ui/me/EconomyScreen'
 import AchievementsScreen from './ui/me/AchievementsScreen'
 import AchPop from './ui/me/AchPop'
+import { Held, heldNow, holdCard } from './ui/me/hold'
 import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
@@ -191,6 +192,8 @@ export default function PlayerGame() {
     if (!gameRef.current) return
     if (live) { toast('这场比赛打完再回首页。'); return }
     commit()
+    // an answer's result still up goes with the career (ui/me/hold.tsx)
+    holdCard(null)
     gameRef.current = null
     setFixture(null)
     setPlayerId(null)
@@ -248,7 +251,8 @@ export default function PlayerGame() {
   // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
   // under a card's scrim could not be pressed (z45 against z50), and the tour's veil covered it too
   const unlocks = !live && !summary ? unseenAch(me).length : 0
-  const pending = !live && !summary && !unlocks ? me.pending[0] : undefined
+  // an answer's result still up (ui/me/hold.tsx) goes before the next card too
+  const pending = !live && !summary && !unlocks && !heldNow() ? me.pending[0] : undefined
 
   const Screen = screen === 'me' ? MeScreen
     : screen === 'team' && pro ? TeamScreen
@@ -433,7 +437,9 @@ export default function PlayerGame() {
           />
         )}
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
-        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || unlocks > 0} />
+        {/* an answer's result, up until it is closed (ui/me/hold.tsx) */}
+        <Held />
+        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || unlocks > 0 || heldNow()} />
         {/* what just unlocked waits for the match and the run's summary, and goes before any card (unlocks above) */}
         {!live && !summary && <AchPop />}
         {/* a build that went live under this tab: 刷新 saves first; a match being played lives only in memory, so the bar waits for it */}
