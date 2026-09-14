@@ -35,6 +35,7 @@ import { autoWeek } from '../src/engine/me/auto'
 import { circuitPaid, eventOf, eventsOf, pointsTables } from '../src/engine/circuit'
 import type { CEvent, PointsTable } from '../src/engine/circuit'
 import { eventTables } from '../src/engine/eventTable'
+import { qualifyHolds, qualifyStats } from './qualify_holds'
 import { GameCtx } from '../src/ui/me/ctx'
 import { PointsPanel } from '../src/ui/me/Standings'
 import type { GameState, Region } from '../src/engine/types'
@@ -291,6 +292,7 @@ function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026
       return
     }
     stats.weeks++
+    qualifyHolds(state, label, fail)
     const drawnBefore = stats.drawn
     drawsSince(before, state, label)
     const after = snap(state)
@@ -311,5 +313,7 @@ run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
 console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时的线不同）· 渲染 ${stats.renders} 次 · 赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）`)
 if (!stats.settled) fail('没有一次抽签是在页面标「积分已定」之后发生的：检查没有覆盖到定下来的名额')
+console.log(`资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛`)
+if (!qualifyStats.tables) fail('资格判定：一个打完的小组赛、常规赛、瑞士轮出线单元都没检查到')
 console.log(bad ? `\n✗ ${bad} 处不对` : '\n✓ 积分榜、赛事表和抽签一致')
 process.exit(bad ? 1 : 0)

@@ -70,6 +70,10 @@ export interface CUnit {
    */
   promotes?: number
   feeds?: string
+  /** worked out as the game loads, off the real event: how this phase's places seat the phases after it (PhaseSeats) */
+  seats?: PhaseSeats
+  /** a fixed schedule — a round robin, two groups playing each other — as the slot each side of each tie entered by */
+  follow?: [Slot, Slot][]
 }
 
 export interface CEvent {
@@ -343,7 +347,12 @@ function flat(ev: CEvent): { nodes: Flat[]; base: number[] } {
   const base: number[] = []
   ev.units.forEach((u, ui) => {
     base.push(nodes.length)
-    for (const n of u.nodes ?? []) nodes.push({ ...n, unit: ui, at: nodes.length })
+    // a fixed schedule plays each seat's ties whoever wins them: the graph's winner and loser slots there
+    // only wrote down who really went on, and read as slots they paired a group's sides twice (PhaseSeats)
+    ;(u.nodes ?? []).forEach((n, i) => {
+      const f = u.follow?.[i]
+      nodes.push({ ...n, ...(f ? { a: f[0], b: f[1] } : {}), unit: ui, at: nodes.length })
+    })
   })
   hit = { nodes, base }
   FLAT.set(ev.id, hit)
@@ -470,6 +479,278 @@ function placesFrom(units: CUnit[], tiers: string[][][]): [string, number][] {
     }
   }
   return out
+}
+
+/* ------------------------------------------------------------------ */
+/*  a phase's groups, and the places they send on                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How a phase's places seat the phases after it, in an event this world plays.
+ *
+ * scripts/build_circuit.py wrote each `g` slot as the rank the really seated side had in rankPhase's
+ * order of the whole unit: where it found that side, not a cut line. 2023's Americas League sent its
+ * #1, 2, 3, 5, 6 and 8 to the playoffs; 2026 Americas Stage 1 is its two groups in one unit and sent #1, 2,
+ * 3, 4, 5, 8, 9 and 11. Read by those numbers in a world whose results differ, Cloud9 went through at 1-4
+ * and LOUD out at 3-2 (reported 2026-09-14). A table's rule is its own table, so a table seats by it:
+ *
+ *  - `table`: a round robin (typed `rr`); groups that each play a full round robin (`robin`: 2024–2026's
+ *    combined group stages); two groups that each play every side of the other (`cross`: 2024's Stage 1);
+ *    or a Swiss or league schedule (`swiss`) whose real seats are its table's top places, level records
+ *    aside. Each group's table seats as many of its top places as that group really sent to each later
+ *    phase, in the order the real seats came. A place above them that went nowhere was history's, not the
+ *    format's — RANKERS left 2025 NA ACE Stage 1's Swiss at 4-0 before its playoffs — so the top band starts
+ *    at 1st; a band that reached a group's last place (a relegation series) keeps it.
+ *  - `bracket`: anything else. A bracket's order is its results, who is still in and who went out when, and
+ *    its rank numbers keep meaning what they meant — read within the group they came from.
+ *
+ * A table's order is points, then fewer losses, then as rankPhase orders a round robin (head-to-head maps and
+ * rounds, then overall): Riot's own tiebreakers for these stages are not in the data. Worked out once, off
+ * each real event as the game loads; a projected event and a later season's Cup copy the units, and this
+ * with them. Nothing here is read for an event replayed as history.
+ */
+export interface PhaseSeats {
+  kind: 'table' | 'bracket'
+  shape: 'rr' | 'robin' | 'cross' | 'swiss' | 'bracket'
+  /** each group: the ties it plays — or, for two groups that play each other, the slots its sides enter by */
+  groups: { nodes?: number[]; entries?: Slot[] }[]
+  /** a rank number a later `g` slot reads → [its group, its place in that group's order from 1st] */
+  at: Record<number, [number, number]>
+}
+
+/** A table's rounds: a numbered round, a Swiss round and its record, a seeding match. Any other name is a bracket's. */
+const TABLE_ROUND = /^(第 \d+ 轮|Round \d+( \(\d+-\d+\))?( High| Low)?|Seeding( Match)?)$/
+
+/** A unit's ties joined by the winner and loser slots that lead from one to the next: its groups, each in the order it first plays. */
+function linkedGroups(nodes: CNode[]): number[][] {
+  const root = nodes.map((_, i) => i)
+  const find = (x: number): number => {
+    while (root[x] !== x) { root[x] = root[root[x]]; x = root[x] }
+    return x
+  }
+  nodes.forEach((n, j) => {
+    for (const s of [n.a, n.b]) if ((s[0] === 'w' || s[0] === 'l') && s[1] < nodes.length) root[find(j)] = find(s[1])
+  })
+  const out = new Map<number, number[]>()
+  nodes.forEach((_, j) => { const r = find(j); out.set(r, [...(out.get(r) ?? []), j]) })
+  return [...out.values()]
+}
+
+/** A real tie as rankPhase reads a played one. A score of 13 or more is one map's rounds. */
+function realGame(n: CNode): Game {
+  const [sa, sb] = [n.score[0] ?? 0, n.score[1] ?? 0]
+  const oneMap = Math.max(sa, sb) >= 13
+  return {
+    a: n.teams[0] || null, b: n.teams[1] || null, w: n.winner, round: n.round,
+    mapsA: oneMap ? Number(n.winner === n.teams[0]) : sa, mapsB: oneMap ? Number(n.winner === n.teams[1]) : sb,
+    roundsA: oneMap ? sa : 0, roundsB: oneMap ? sb : 0,
+  }
+}
+
+/** Each side of a real phase, and the slot — a seed, or a place from an earlier phase — it entered by. */
+function entriesOf(nodes: CNode[]): Map<string, Slot> {
+  const out = new Map<string, Slot>()
+  for (const n of nodes) {
+    ;[n.a, n.b].forEach((s, side) => {
+      const t = n.teams[side]
+      if (t && (s[0] === 's' || s[0] === 'g') && !out.has(t)) out.set(t, s)
+    })
+  }
+  return out
+}
+
+/** The two groups of a real cross-group stage — every side plays every side of the other group once — or null. */
+function crossGroups(nodes: CNode[]): [string[], string[]] | null {
+  const teams = uniq(nodes.flatMap((n) => n.teams).filter(Boolean))
+  if (teams.length < 4) return null
+  const side = new Map<string, number>([[teams[0], 0]])
+  const queue = [teams[0]]
+  while (queue.length) {
+    const t = queue.shift()!
+    for (const n of nodes) {
+      if (n.teams[0] !== t && n.teams[1] !== t) continue
+      const o = n.teams[0] === t ? n.teams[1] : n.teams[0]
+      if (!side.has(o)) { side.set(o, 1 - side.get(t)!); queue.push(o) } else if (side.get(o) === side.get(t)) return null
+    }
+  }
+  if (side.size !== teams.length) return null
+  const groups: [string[], string[]] = [teams.filter((t) => side.get(t) === 0), teams.filter((t) => side.get(t) === 1)]
+  const pairs = new Set(nodes.map((n) => [...n.teams].sort().join('|'))).size
+  return groups[0].length >= 2 && groups[1].length >= 2 && nodes.length === groups[0].length * groups[1].length && pairs === nodes.length ? groups : null
+}
+
+/** A fixed schedule's ties by the slot each side entered by: whoever takes a seat plays that seat's ties, won or lost. */
+function followOf(nodes: CNode[]): [Slot, Slot][] | undefined {
+  const enter = entriesOf(nodes)
+  const out: [Slot, Slot][] = []
+  for (const n of nodes) {
+    const side = (s: Slot, k: 0 | 1): Slot | undefined => (s[0] === 's' || s[0] === 'g' ? s : enter.get(n.teams[k]))
+    const [a, b] = [side(n.a, 0), side(n.b, 1)]
+    if (!a || !b) return undefined
+    out.push([a, b])
+  }
+  return out
+}
+
+/** A table's record of each of `teams`: a win 3, a level Bo2 1, and its losses. A walkover counts for neither side. */
+function tableRecord(games: Game[], teams: string[]): Map<string, { pts: number; l: number }> {
+  const rec = new Map(teams.map((t) => [t, { pts: 0, l: 0 }]))
+  for (const g of games) {
+    if (!g.a || !g.b) continue
+    const [ra, rb] = [rec.get(g.a), rec.get(g.b)]
+    if (g.w === g.a) { if (ra) ra.pts += 3; if (rb) rb.l++ } else if (g.w === g.b) { if (rb) rb.pts += 3; if (ra) ra.l++ } else { if (ra) ra.pts++; if (rb) rb.pts++ }
+  }
+  return rec
+}
+
+/** A table's order: points, then fewer losses — a Swiss side through at 3-2 above one out at 2-3 — then as rankPhase orders a round robin. */
+function tableOrder(games: Game[], teams: string[]): string[] {
+  const played = games.filter((g) => !!g.a && !!g.b)
+  const rec = tableRecord(played, teams)
+  const rr = new Map(rankPhase('rr', played).ranked.map((t, i) => [t, i]))
+  return teams.slice().sort((x, y) => rec.get(y)!.pts - rec.get(x)!.pts || rec.get(x)!.l - rec.get(y)!.l
+    || (rr.get(x) ?? 1e6) - (rr.get(y) ?? 1e6))
+}
+
+/** Each group of a phase in its own order, off the ties decided so far (indexed as the unit's own ties). */
+function groupOrders(u: CUnit, seats: PhaseSeats, games: (Game | null | undefined)[], entry: (s: Slot) => string | null | undefined): string[][] {
+  return seats.groups.map((grp) => {
+    let gs: Game[]
+    let teams: string[]
+    if (grp.entries) {
+      teams = uniq(grp.entries.map(entry).filter((t): t is string => !!t))
+      const mine = new Set(teams)
+      gs = games.filter((g): g is Game => !!g && ((!!g.a && mine.has(g.a)) || (!!g.b && mine.has(g.b))))
+    } else {
+      gs = (grp.nodes ?? []).map((i) => games[i]).filter((g): g is Game => !!g)
+      teams = uniq(gs.flatMap((g) => [g.a, g.b]).filter((t): t is string => !!t))
+    }
+    if (seats.kind === 'bracket') return rankPhase('bracket', gs, u.upperFirst).ranked
+    if (u.type === 'rr') {
+      const ranked = rankPhase('rr', gs).ranked
+      return [...ranked, ...teams.filter((t) => !ranked.includes(t))]
+    }
+    return tableOrder(gs, teams)
+  })
+}
+
+/**
+ * The places a group's table seats, off the places its real seats had (place → the phase it went to): each
+ * later phase's seats together and in the order they came, the top band from 1st, a band that reached the
+ * last place kept there.
+ */
+function bandsOf(real: Map<number, number>, size: number): Map<number, number> {
+  const bands = new Map<number, number[]>()
+  for (const p of [...real.keys()].sort((x, y) => x - y)) bands.set(real.get(p)!, [...(bands.get(real.get(p)!) ?? []), p])
+  const order = [...bands.values()]
+  const start: number[] = []
+  let end = 0
+  order.forEach((b, i) => { start.push(i === 0 ? 1 : Math.max(b[0], end + 1)); end = start[i] + b.length - 1 })
+  let below = size + 1
+  for (let i = order.length - 1; i >= 0; i--) {
+    const b = order[i]
+    const last = i > 0 && b[b.length - 1] === size ? size : start[i] + b.length - 1
+    start[i] = Math.max(1, Math.min(last, below - 1) - b.length + 1)
+    below = start[i]
+  }
+  const out = new Map<number, number>()
+  order.forEach((b, i) => b.forEach((p, k) => out.set(p, start[i] + k)))
+  return out
+}
+
+/** A group's real seats are its table's top places, but for places level on record with a seat below them. */
+function levelTop(order: string[], games: Game[], real: Map<number, { team: string; to: number }>): boolean {
+  const rec = tableRecord(games, order)
+  const key = (t: string) => { const r = rec.get(t)!; return `${r.pts}|${r.l}` }
+  const seated = new Map<number, number>()
+  for (const { team, to } of real.values()) { const p = order.indexOf(team); if (p >= 0) seated.set(p + 1, to) }
+  for (const to of new Set(seated.values())) {
+    const ps = [...seated].filter(([, x]) => x === to).map(([p]) => p).sort((a, b) => a - b)
+    for (let p = ps[0]; p < ps[ps.length - 1]; p++) {
+      if (!seated.has(p) && !ps.some((q) => q > p && key(order[q - 1]) === key(order[p - 1]))) return false
+    }
+  }
+  return true
+}
+
+/** PhaseSeats for one real phase, read off the event as it really went. */
+function seatsOfUnit(ev: CEvent, ui: number): PhaseSeats | undefined {
+  const u = ev.units[ui]
+  const nodes = u.nodes ?? []
+  if (isOpen(u) || !nodes.length || ev.projected) return undefined
+  // each rank number a later tie reads: the side really seated by it, and the phase that seated it
+  const real = new Map<number, { team: string; to: number }>()
+  ev.units.forEach((v, vj) => (v.nodes ?? []).forEach((n) => [n.a, n.b].forEach((s, side) => {
+    if (s[0] === 'g' && s[1] === ui && s[2] != null && n.teams[side] && !real.has(s[2])) real.set(s[2], { team: n.teams[side], to: vj })
+  })))
+  const games = nodes.map(realGame)
+  const linked = linkedGroups(nodes)
+  const teamsIn = (js: number[]) => uniq(js.flatMap((j) => nodes[j].teams).filter(Boolean))
+  const distinct = (js: number[]) => new Set(js.map((j) => [...nodes[j].teams].sort().join('|'))).size
+  const enter = entriesOf(nodes)
+  let shape: PhaseSeats['shape'] = 'bracket'
+  let groups: PhaseSeats['groups'] = linked.map((js) => ({ nodes: js }))
+  if (u.type === 'rr') {
+    shape = 'rr'
+    groups = [{ nodes: nodes.map((_, i) => i) }]
+  } else if (linked.every((js) => { const k = teamsIn(js).length; return k >= 3 && js.length === (k * (k - 1)) / 2 && distinct(js) === js.length })) {
+    shape = 'robin'
+  } else {
+    const cross = linked.length === 1 ? crossGroups(nodes) : null
+    if (cross && cross.every((ts) => ts.every((t) => enter.has(t)))) {
+      shape = 'cross'
+      groups = cross.map((ts) => ({ entries: ts.map((t) => enter.get(t)!) }))
+    }
+  }
+  if (shape === 'bracket' && !real.size) return undefined
+  const bySlot = new Map([...enter].map(([t, s]) => [s.join(','), t]))
+  const entryReal = (s: Slot) => bySlot.get(s.join(',')) ?? null
+  let orders = groupOrders(u, { kind: 'table', shape, groups, at: {} }, games, entryReal)
+  if (shape === 'bracket') {
+    const swiss = nodes.every((n) => TABLE_ROUND.test(n.round))
+      && [...real.values()].every(({ team }) => orders.some((o) => o.includes(team)))
+      && orders.every((order, gi) => levelTop(order, (groups[gi].nodes ?? []).map((i) => games[i]), real))
+    if (swiss) shape = 'swiss'
+    else if (groups.length < 2) return undefined
+    else orders = groupOrders(u, { kind: 'bracket', shape, groups, at: {} }, games, entryReal)
+  }
+  const kind: PhaseSeats['kind'] = shape === 'bracket' ? 'bracket' : 'table'
+  const at: PhaseSeats['at'] = {}
+  orders.forEach((order, gi) => {
+    const seated = new Map<number, number>()
+    for (const { team, to } of real.values()) { const p = order.indexOf(team); if (p >= 0 && !seated.has(p + 1)) seated.set(p + 1, to) }
+    const place = kind === 'table' ? bandsOf(seated, order.length) : new Map([...seated.keys()].map((p) => [p, p]))
+    for (const [r, { team }] of real) { const p = order.indexOf(team); if (p >= 0) at[r] = [gi, place.get(p + 1)!] }
+  })
+  return { kind, shape, groups, at }
+}
+
+for (const evs of Object.values(CIRCUIT)) {
+  for (const ev of evs) {
+    ev.units.forEach((u, ui) => {
+      const seats = seatsOfUnit(ev, ui)
+      if (!seats) return
+      u.seats = seats
+      if (seats.shape === 'robin' || seats.shape === 'cross') u.follow = followOf(u.nodes!)
+    })
+  }
+}
+
+/** A phase's joint places: groups that each play a full round robin, or each other, share their Nth places. */
+function tiersOf(u: CUnit, games: Game[], entry: (s: Slot) => string | null | undefined): string[][] {
+  const seats = u.seats
+  if (seats?.shape !== 'robin' && seats?.shape !== 'cross') return rankPhase(u.type as 'rr' | 'bracket', games, u.upperFirst).tiers
+  const orders = groupOrders(u, seats, games, entry)
+  const tiers: string[][] = []
+  for (let p = 0; p < Math.max(0, ...orders.map((o) => o.length)); p++) tiers.push(orders.map((o) => o[p]).filter((t): t is string => !!t))
+  return tiers
+}
+
+/** A phase's groups as the draw reads them, named A组, B组… — for the standings page. Empty for a phase that is one group. */
+export function phaseGroupsOf(ev: CEvent, ui: number): { name: string; kind: PhaseSeats['kind']; nodes?: number[]; entries?: Slot[] }[] {
+  const seats = ev.units[ui]?.seats
+  if (!seats || seats.groups.length < 2) return []
+  return seats.groups.map((g, i) => ({ name: `${String.fromCharCode(65 + i)}组`, kind: seats.kind, ...g }))
 }
 
 /* ------------------------------------------------------------------ */
@@ -667,7 +948,10 @@ function championsDirect(state: GameState): Set<string> {
       if (t) f.real.push(t)
       perFeeder.set(key, f)
     }
-    if (r?.kind === 'winner' && event) {
+    // a Last Chance Qualifier is through only once this world has played it. Before that its real
+    // winner holds no Champions place here, and counting one kept it out of its own qualifier:
+    // Cloud9 out of 2021 North America's, KRÜ and FURIA out of 2022 South America's (reported 2026-09-14)
+    if (r?.kind === 'winner' && event && (state.comps[`ev:${event}`]?.champion || eventOf(event)?.stage !== 'lcq')) {
       const c = state.comps[`ev:${event}`]
       const w = c?.champion ?? teamOf(state, champs, v)
       if (w) out.add(w)
@@ -1154,6 +1438,12 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   } else if (c.mode === 'sim') {
     // a club history has let go takes no place in a draw played here; the next side does
     c.seeds = c.seeds.map((t) => (t && t !== club && gone(state, t) ? null : t))
+    // one side, one way in: a club the event's own open qualifier really sent on is in by that road, and a
+    // seed that would seat it again is the next side's (fillGaps). 2023's third China Evolution Series act
+    // had Dragon Ranger Gaming in its main bracket twice — a Play-In group's winner, and in EDward Gaming's
+    // seed — playing two quarter-finals (reported 2026-09-14)
+    const through = openEntrants(state, ev)
+    c.seeds = c.seeds.map((t) => (t && through.has(t) ? null : t))
     fillGaps(state, comp, ev)
     offerPlayIn(state, comp, ev, club, notes)
   }
@@ -1279,16 +1569,27 @@ function openOutputs(ev: CEvent): { ui: number; rank: number }[] {
   return out
 }
 
+/** The clubs an event's open qualifiers really send on into its own matches (graphOf's `slot` reads them there): in by that road. */
+function openEntrants(state: GameState, ev: CEvent): Set<string> {
+  const out = new Set<string>()
+  for (const { ui, rank } of openOutputs(ev)) {
+    const t = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if (t && !gone(state, t)) out.add(t)
+  }
+  return out
+}
+
 /**
  * A place in the draw whose real side is not in this world — a club that
  * folded before the save's roster book was written, or never had five on it.
  * A simulated event cannot hand its opponent a walkover in every round, so
- * the best side in scope that is not already in stands in.
+ * the best side in scope that is not already in stands in — not already in
+ * by a seed, and not by the event's own open qualifier either.
  */
 function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const c = comp.circuit!
   const scope = scopeOf(ev)
-  const taken = new Set(c.seeds.filter((x): x is string => !!x))
+  const taken = new Set([...c.seeds.filter((x): x is string => !!x), ...openEntrants(state, ev)])
   const pool = Object.values(state.teams)
     .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && !gone(state, t.id) && (!scope || scope.includes(t.region))
       // no VCT league club stands in for a Challengers-tier side (leagueOut)
@@ -1327,7 +1628,7 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
  */
 function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: string | null, notes: string[]): void {
   const c = comp.circuit!
-  if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club)) return
+  if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club) || openEntrants(state, ev).has(club)) return
   if (!isHome(state, ev, state.teams[club], club)) return
   let best: { ui: number; rank: number } | undefined = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
   if (!best && state.year >= 2023) {
@@ -1509,6 +1810,9 @@ function graphOf(state: GameState, comp: Competition, ev: CEvent, ahead = false)
   for (const n of nodes) {
     const f = fx.get(n.at)
     const g = f && gameOf(f)
+    // a knockout tie a save from before tieBo holds as a level Bo2: the side with more rounds went on
+    const u = ev.units[n.unit]
+    if (g && !g.w && g.a && g.b && u.type !== 'rr' && !u.follow) g.w = g.roundsA >= g.roundsB ? g.a : g.b
     if (g) games.set(n.at, g)
     else if (c.walk && n.at in c.walk) {
       const w = c.walk[n.at] || null
@@ -1577,23 +1881,49 @@ function graphOf(state: GameState, comp: Competition, ev: CEvent, ahead = false)
       // a side history has let go since: the club that stood in for it at the draw, if one did
       return (real && gone(state, real) ? c.fill?.[key] ?? real : real ?? c.fill?.[key]) ?? null
     }
+    // a table seats each group's own top places, a bracket its order within its group (PhaseSeats);
+    // a rank number with no such reading is the whole unit's, as it always was
+    const seats = u.seats
+    const seat = seats?.at[rank!]
+    const inGroup = (gs: (Game | undefined)[]): string | null | undefined =>
+      (seat && seats ? groupOrders(u, seats, gs, (x) => slot(uj, x))[seat[0]]?.[seat[1] - 1] ?? null : undefined)
     const early = earlyCut(ui, uj)
     if (early) {
       const known: Game[] = []
+      const upTo: (Game | undefined)[] = []
       for (let i = 0; i < (u.nodes?.length ?? 0); i++) {
-        if (u.nodes![i].day >= early.day) continue
+        if (u.nodes![i].day >= early.day) { upTo.push(undefined); continue }
         const g = games.get(base[uj] + i)
         if (!g) return undefined
         known.push(g)
+        upTo.push(g)
       }
       const ranked = rankPhase(u.type, known, u.upperFirst).ranked
-      if (ranked.length >= early.need) return ranked[rank! - 1] ?? null
+      if (ranked.length >= early.need) return seat ? inGroup(upTo) : ranked[rank! - 1] ?? null
     }
     const gs = unitGames(uj)
     if (!gs) return undefined
-    return rankPhase(u.type, gs, u.upperFirst).ranked[rank! - 1] ?? null
+    return seat ? inGroup(gs) : rankPhase(u.type, gs, u.upperFirst).ranked[rank! - 1] ?? null
   }
   return { c, nodes, fx, games, unitGames, playIn, slot }
+}
+
+/**
+ * Who each rank number a later phase reads from phase `ui` seats in this world, once every tie of that phase
+ * is decided — the draw's own reading (PhaseSeats), for the standings page's 「晋级」 marks. Null for an event
+ * replayed as history, or a phase still being played.
+ */
+export function phaseSeatsOf(state: GameState, comp: Competition, ui: number): Map<number, string | null> | null {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev || c.mode !== 'sim' || !ev.units[ui]) return null
+  const g = graphOf(state, comp, ev)
+  if (!g.unitGames(ui)) return null
+  const out = new Map<number, string | null>()
+  ev.units.forEach((v, vj) => (v.nodes ?? []).forEach((n) => {
+    for (const s of [n.a, n.b]) if (s[0] === 'g' && s[1] === ui && s[2] != null && !out.has(s[2])) out.set(s[2], g.slot(vj, s) ?? null)
+  }))
+  return out
 }
 
 /** A round of an event under way that is already a club's, before its tie is written. */
@@ -1653,7 +1983,7 @@ export function roundAheadOf(state: GameState, comp: Competition, teamId: string
       const day = Math.max(n.day, state.day + 1)
       if (best && best.day <= day) continue
       const opponent = (a === teamId ? b : a) ?? null
-      best = { day, round: n.round, bo: n.bo, opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
+      best = { day, round: n.round, bo: tieBo(ev.units[n.unit], n), opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
     }
   }
   if (best) return best
@@ -1716,10 +2046,21 @@ export function roundAheadOf(state: GameState, comp: Competition, teamId: string
     for (const s of [n.a, n.b]) {
       if (s[0] !== 'g' || isOpen(ev.units[s[1]]) || g.unitGames(s[1]) || !canPlace(s[1])) continue
       const day = Math.max(n.day, state.day + 1)
-      if (!best || day < best.day) best = { day, round: n.round, bo: n.bo, opponent: null, wait: 'group', waiting: true }
+      if (!best || day < best.day) best = { day, round: n.round, bo: tieBo(ev.units[n.unit], n), opponent: null, wait: 'group', waiting: true }
     }
   }
   return best
+}
+
+/**
+ * The maps a tie is played to. Bo2 as it really was where a level series is a result: a round robin's point
+ * each, a fixed schedule's table (PhaseSeats `follow`). A tie whose winner and loser go on to different places
+ * is played to a third map instead — level, it sent neither side on: 2021 Indonesia's Challengers 1 drew a Bo2
+ * semi-final and handed its final to a walkover (reported 2026-09-14). The data's Bo2 knockout ties are forfeits
+ * and qualifier rounds that really had a winner.
+ */
+function tieBo(u: CUnit, n: CNode): 1 | 2 | 3 | 5 {
+  return n.bo === 2 && u.type !== 'rr' && !u.follow ? 3 : n.bo
 }
 
 function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
@@ -1740,8 +2081,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
         continue
       }
       const rr = ev.units[n.unit].type === 'rr'
-      // Bo2 as it really was: two maps, and a level series is a point each
-      const bo = n.bo
+      const bo = tieBo(ev.units[n.unit], n)
       // on its real day: a tie fed by one played this morning is played this
       // evening, the way Reykjavík opened (see advanceDay's second pass)
       const f = makeFixture(Math.max(n.day, state.day), comp.stage, comp.key, a, b, bo, rr ? n.round : `KO:${n.at + 1}:${n.round}`)
@@ -1763,7 +2103,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
     // a promotion place won in the decider is the winner's, whoever held it in history
     ? uniq((u.ranked ?? []).map((v, r) => (c.playin?.key === `${ui}:${r + 1}` && playInWon ? playInWon : teamOf(state, ev, v)))
       .filter((t): t is string => !!t)).map((t) => [t])
-    : rankPhase(u.type as 'rr' | 'bracket', unitGames(ui)!, u.upperFirst).tiers))
+    : tiersOf(u, unitGames(ui)!, (x) => slot(ui, x))))
   finish(comp, placesFrom(ev.units, tiers))
   return true
 }
@@ -1887,7 +2227,8 @@ export function pointsTables(state: GameState): PointsTable[] {
     (r.event ? (target.projected ? counterpart(r.event, target) : r.event) : undefined)
   const pays = (x: Competition): boolean => {
     const r = x.circuit && rulesOf(x.circuit.id)
-    return !!(r?.award || r?.wins || r?.groupWin || r?.bye) || (state.year <= 2022 && circuitPointsFor(x.stage, 1) > 0)
+    // the 2021 chart pays a Challengers final's and Berlin's winners nothing, and their runners-up something
+    return !!(r?.award || r?.wins || r?.groupWin || r?.bye) || (state.year <= 2022 && [1, 2].some((p) => circuitPointsFor(x.stage, p) > 0))
   }
   // drawn, or as a draw made today would seat it — the projection mayStillDraw reads
   const seatsOf = (ev: CEvent): { seeds: (string | null)[]; drawn: boolean } => {
