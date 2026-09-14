@@ -1,7 +1,7 @@
 import { clamp } from '../rng'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player } from '../types'
-import { CEILING_BANK, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
 import { compClass, isIntlComp, isQualifier } from './compclass'
@@ -35,8 +35,18 @@ import { compClass, isIntlComp, isQualifier } from './compclass'
  * role's heaviest attributes that still have room. The pools count 综合 too,
  * and shrink as they fill, 破晓's diminishing room.
  *
- * And a break is seen. Hours at a ceiling bank up to BANK_POINTS, which land
- * the moment it opens; a trophy lifts half of what it opens at once.
+ * And a break is seen. Reported 2026-09-14: 「复盘，练了六次从0/6到6/6之后就归零了，
+ * 始终没有突破……这个存点数我觉得不对」. Two things hid it. A practice pool's last
+ * sliver was under what a break needed, so after two breaks the count filled,
+ * emptied and opened nothing, week after week, while the card still called the
+ * path live. And hours at a ceiling banked up to three points (「存点数」) that
+ * filled the new ceiling the moment it opened, so the row went straight back to
+ * 卡在瓶颈 and the break looked like nothing. Now, as 破晓 settled it
+ * (trialCanPay, btkNote: 「攒满当场兑现……机械池满时也不再静默发 0，直说到头了」):
+ * a count that fills opens its own attribute's ceiling by at least a point, or
+ * the card has already said, greyed, why it cannot and the count has stopped;
+ * hours at a ceiling store nothing, so a break leaves room that practice fills
+ * point by point; and a trophy still lifts half of what it opens at once.
  */
 
 export const CAP_HARD = 99
@@ -78,8 +88,6 @@ export const MECH_VALUE_MAX = 1.2
 export const MILE_VALUE_MAX = 3.0
 /** professional seasons that each loosen the experience ceilings by one */
 export const CAP_EXP_MAX = 5
-/** points an attribute at its ceiling banks, landing when the ceiling opens */
-export const BANK_POINTS = CEILING_BANK / 100
 /** a club this strong teaches by being in the room: the weakest tenth of a new world's VCT clubs (engine/ruler.ts) */
 export const STRONG_TEAM = 80
 /** old enough to have seen most of it */
@@ -140,7 +148,7 @@ export function ceilingsOf(p: Player): Record<K, number> {
   return p.caps ?? firstCeilings(p)
 }
 
-/** Sitting at the ceiling: more hours only fill the bank. */
+/** Sitting at the ceiling: more hours go into what breaks it, not into the bar. */
 export const atCeiling = (p: Player, k: K): boolean => p.attrs[k] >= ceilingsOf(p)[k]
 
 /** The overall the eight ceilings add up to — what the attribute card calls 上限. */
@@ -189,7 +197,8 @@ function usedOf(p: Player, bn: BottleneckState, pool: 'mech' | 'mile', k: K): nu
  * The career's player gets his ceilings if he has none — a save from before
  * they existed — and the book that counts toward breaking them. Safe to call
  * every week. A book from an older build is brought forward once: its pools
- * valued, and the title breaks that build missed paid (lookBack).
+ * valued, what it banked at a ceiling dropped (dropBank), and the title breaks
+ * that build missed paid (lookBack).
  */
 export function ensureCeilings(state: GameState): BottleneckState | null {
   const me = state.me
@@ -203,6 +212,7 @@ export function ensureCeilings(state: GameState): BottleneckState | null {
   if (!me.bottleneck) me.bottleneck = freshBook(p)
   const bn = me.bottleneck
   valuePools(p, bn)
+  if (!bn.noBank) dropBank(state, p, bn)
   if (bn.rev !== 2) lookBack(state, p, bn)
   return bn
 }
@@ -212,16 +222,31 @@ function say(state: GameState, kind: LogKind, text: string): void {
   state.me!.weekNotes.push(text)
 }
 
-/** What banked while it waited at the ceiling turns into points the moment the ceiling moves. */
-function rollBanked(p: Player, k: K): number {
-  let n = 0
-  while (p.caps && (p.xp[k] ?? 0) >= 100 && p.attrs[k] < p.caps[k]) {
-    p.xp[k] = (p.xp[k] ?? 0) - 100
-    p.attrs[k] += 1
-    n++
+/**
+ * 「存点数」 is gone (2026-09-14). A save from before may still hold it: up to
+ * three points of practice (300 xp) on an attribute at its ceiling, or more than
+ * a full bar under one where the winter's ageing took a point from under the
+ * bank. The choice: what was banked is dropped, not paid — landing it now would
+ * be the very jump the author asked to remove, the moment the save is read — and
+ * the whole points dropped are said once, in the log and the week's notes.
+ * Nothing else goes with it: under a ceiling the progress toward the next point
+ * stays (only what is past a full bar was banked); at one there is no progress
+ * to keep, so all of it was bank; the counts toward a break are not touched.
+ */
+function dropBank(state: GameState, p: Player, bn: BottleneckState): void {
+  bn.noBank = true
+  const caps = p.caps
+  if (!caps) return
+  const lost: string[] = []
+  for (const k of ATTR_KEYS) {
+    const xp = p.xp[k] ?? 0
+    const keep = p.attrs[k] >= caps[k] ? 0 : xp >= 100 ? xp % 100 : xp
+    if (keep === xp) continue
+    p.xp[k] = keep
+    const pts = Math.floor((xp - keep) / 100)
+    if (pts > 0) lost.push(`${ATTR_CN[k]} ${pts} 点`)
   }
-  if (n) recomputeOverall(p)
-  return n
+  if (lost.length) say(state, 'info', `「存点数」取消了：卡在瓶颈时存下的练习（${lost.join('、')}）作废，不会一次涨上去。以后卡在瓶颈上的练习直接算进「我的」页上的「怎么破」。`)
 }
 
 /**
@@ -233,9 +258,9 @@ function rollBanked(p: Player, k: K): number {
 function settle(state: GameState, p: Player, bn: BottleneckState): void {
   if (p.caps && p.potential > bn.pot) {
     const lift = p.potential - bn.pot
+    const all = ATTR_KEYS.every((k) => p.caps![k] + lift <= CAP_HARD)
     for (const k of ATTR_KEYS) p.caps[k] = Math.min(CAP_HARD, p.caps[k] + lift)
-    for (const k of ATTR_KEYS) rollBanked(p, k)
-    say(state, 'good', `冬训后教练组重新评估了你：八项的瓶颈各松了 ${lift} 点。`)
+    say(state, 'good', `冬训后教练组重新评估了你：${all ? '八项' : `除了到 ${CAP_HARD} 的几项，其余`}的瓶颈各松了 ${lift} 点。`)
   }
   p.potential = ceilingPotential(p)
   bn.pot = p.potential
@@ -258,8 +283,49 @@ export interface BreakPath {
   done: (state: GameState) => boolean
 }
 
+/** What each counted path needs: sessions, clutches or maps at the ceiling. */
+const NEED: Partial<Record<K, number>> = { reaction: 12, awareness: 6, utility: 6, clutch: 5, teamwork: 4, igl: 8 }
+
+export interface BreakCount {
+  /** counted at the settlements so far — the number the break is judged on */
+  have: number
+  need: number
+  /** what this week's settlement will add: the plan on the board, the clutches and maps played since the last one */
+  week: number
+}
+
+/**
+ * A counted path's count: the one number the attribute card, the week board's
+ * note and the settlement all read. The card used to show only what earlier
+ * settlements had counted, so the six reviews a player had just put on the
+ * board read 「4/6」 until the settlement that broke it read 「0/6」 (reported
+ * 2026-09-14); the week's share is said beside it now. Null for the paths that
+ * count nothing: 枪法's streak and 沟通's company.
+ */
+export function breakCount(state: GameState, k: K): BreakCount | null {
+  const need = NEED[k]
+  const me = state.me
+  if (!need || !me) return null
+  const p = state.players[me.id]
+  const bn = me.bottleneck
+  const pro = me.phase === 'pro'
+  const week = k === 'reaction' ? me.plan.ranked ?? 0
+    : k === 'awareness' ? me.plan.vod ?? 0
+      : k === 'utility' ? me.plan.util ?? 0
+        : k === 'teamwork' ? (pro ? me.plan.scrim ?? 0 : 0)
+          : k === 'clutch' ? (bn ? Math.max(0, p.career.clutches - bn.clutchMark) : 0)
+            : bn && pro && p.isIgl ? Math.max(0, p.career.maps - bn.mapsMark) : 0
+  return { have: bn?.count[k] ?? 0, need, week }
+}
+
 const counted = (s: GameState, k: K) => s.me!.bottleneck?.count[k] ?? 0
 const upTo = (n: number, need: number) => `${Math.min(n, need)}/${need}`
+/** 「已复盘 4/6 次 · 本周还安排了 2 次复盘，周结算时算进去」 */
+function tally(s: GameState, k: K, head: string, unit: string, soon: string): string {
+  const c = breakCount(s, k)!
+  const more = c.week > 0 && chasing(s, k) ? ` · ${soon.replace('#', String(c.week))}，周结算时算进去` : ''
+  return `${head} ${upTo(c.have, c.need)} ${unit}${more}`
+}
 
 function veteranOf(state: GameState): Player | undefined {
   const me = state.me!
@@ -288,34 +354,34 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
     done: (s) => (s.me!.bottleneck?.aimStreak ?? 0) >= 3,
   },
   reaction: {
-    how: '卡在瓶颈上以后，打满 12 次排位', value: BREAK_VALUE.grind,
+    how: `卡在瓶颈上以后，打满 ${NEED.reaction} 次排位`, value: BREAK_VALUE.grind,
     reason: '一把接一把的对枪，把你的反应逼快了。',
-    prog: (s) => `已打 ${upTo(counted(s, 'reaction'), 12)} 次`,
-    done: (s) => counted(s, 'reaction') >= 12,
+    prog: (s) => tally(s, 'reaction', '已打', '次', '本周还安排了 # 次排位'),
+    done: (s) => counted(s, 'reaction') >= NEED.reaction!,
   },
   awareness: {
-    how: '卡在瓶颈上以后，复盘满 6 次', value: BREAK_VALUE.grind,
+    how: `卡在瓶颈上以后，复盘满 ${NEED.awareness} 次`, value: BREAK_VALUE.grind,
     reason: '泡在录像里的这些天，你看比赛的方式变了。',
-    prog: (s) => `已复盘 ${upTo(counted(s, 'awareness'), 6)} 次`,
-    done: (s) => counted(s, 'awareness') >= 6,
+    prog: (s) => tally(s, 'awareness', '已复盘', '次', '本周还安排了 # 次复盘'),
+    done: (s) => counted(s, 'awareness') >= NEED.awareness!,
   },
   utility: {
-    how: '卡在瓶颈上以后，练满 6 次道具与跑图', value: BREAK_VALUE.grind,
+    how: `卡在瓶颈上以后，练满 ${NEED.utility} 次道具与跑图`, value: BREAK_VALUE.grind,
     reason: '每个点位的道具都丢过上百遍，现在闭着眼也知道落在哪。',
-    prog: (s) => `已练 ${upTo(counted(s, 'utility'), 6)} 次`,
-    done: (s) => counted(s, 'utility') >= 6,
+    prog: (s) => tally(s, 'utility', '已练', '次', '本周还安排了 # 次道具与跑图'),
+    done: (s) => counted(s, 'utility') >= NEED.utility!,
   },
   clutch: {
-    how: '卡在瓶颈上以后，在正赛里赢下 5 个残局；或者拿一次冠军', value: BREAK_VALUE.path, key: 'clutch',
+    how: `卡在瓶颈上以后，在正赛里赢下 ${NEED.clutch} 个残局；或者拿一次冠军`, value: BREAK_VALUE.path, key: 'clutch',
     reason: '最后一个人交到你手上的时候，你已经不慌了。',
-    prog: (s) => `残局 ${upTo(counted(s, 'clutch'), 5)}`,
-    done: (s) => counted(s, 'clutch') >= 5 || s.me!.titles.some((t) => t.started),
+    prog: (s) => tally(s, 'clutch', '残局', '个', '这周比赛里又赢了 # 个'),
+    done: (s) => counted(s, 'clutch') >= NEED.clutch! || s.me!.titles.some((t) => t.started),
   },
   teamwork: {
-    how: '卡在瓶颈上以后，打满 4 次跟队训练赛', value: BREAK_VALUE.grind, pro: true,
+    how: `卡在瓶颈上以后，打满 ${NEED.teamwork} 次跟队训练赛`, value: BREAK_VALUE.grind, pro: true,
     reason: '一起打了这么多训练赛，你知道队友下一步会站在哪。',
-    prog: (s) => `已打 ${upTo(counted(s, 'teamwork'), 4)} 次`,
-    done: (s) => counted(s, 'teamwork') >= 4,
+    prog: (s) => tally(s, 'teamwork', '已打', '次', '本周还安排了 # 次训练赛'),
+    done: (s) => counted(s, 'teamwork') >= NEED.teamwork!,
   },
   communication: {
     how: `和 ${VET_AGE} 岁以上的老将同队、待在强队，或者打过国际赛`, value: BREAK_VALUE.path, pro: true, key: 'commenv',
@@ -327,11 +393,55 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
     done: (s) => !!veteranOf(s) || strongClub(s) || playedIntl(s),
   },
   igl: {
-    how: '卡在瓶颈上以后，以队里指挥的身份打满 8 张图', value: BREAK_VALUE.grind, pro: true,
+    how: `卡在瓶颈上以后，以队里指挥的身份打满 ${NEED.igl} 张图`, value: BREAK_VALUE.grind, pro: true,
     reason: '喊了这么多回合，你知道什么时候该开口、说到哪一句就够了。',
-    prog: (s) => (s.players[s.me!.id]?.isIgl ? `已打 ${upTo(counted(s, 'igl'), 8)} 张图` : '你现在不是队里的指挥'),
-    done: (s) => counted(s, 'igl') >= 8,
+    prog: (s) => (s.players[s.me!.id]?.isIgl ? tally(s, 'igl', '已打', '张图', '这周又打了 # 张图') : '你现在不是队里的指挥'),
+    done: (s) => counted(s, 'igl') >= NEED.igl!,
   },
+}
+
+/** What a break would open, laid out and not made: points by attribute, the 综合 they cost the pool, and what the pool could give. */
+interface BreakPlan { plan: Map<K, number>; paid: number; want: number }
+
+/**
+ * Lay out a break without making it. The pool of the attribute that broke opens
+ * less the fuller it is — 破晓's diminishing room, never under two fifths for a
+ * milestone — unless `flat`, for what an older build owed. The attribute that
+ * broke takes what its weight asks, up to BREAK_POINTS; the rest goes to the
+ * role's heaviest with room.
+ *
+ * A practice path's break (`mech`) always puts its first point on the attribute
+ * that broke, while the pool can carry half of one — 破晓's trialCanPay,
+ * 「付不出这一格就不开」. It asked for 0.05 of 综合 before anything: two breaks
+ * into a pool left it at 1.16 of 1.2, a third wanted 0.04, and it opened nothing
+ * while pathDead, reading 1.18, still called the path live — so the count filled
+ * and emptied for ever. And a heavy attribute's point costs more than a thin
+ * break's share: a sentinel's 意识 (0.22) broke, and only 枪法's ceiling moved.
+ */
+function planBreak(p: Player, bn: BottleneckState, k: K, value: number, kind: 'mech' | 'mile', flat = false): BreakPlan {
+  const w = weightsFor(p)
+  const caps = ceilingsOf(p)
+  const max = kind === 'mile' ? MILE_VALUE_MAX : MECH_VALUE_MAX
+  const used = usedOf(p, bn, kind, k)
+  const room = flat ? 1 : clamp(1 - used / max, kind === 'mile' ? 0.4 : 0.12, 1)
+  const want = Math.min(value * room, max - used)
+  const plan = new Map<K, number>()
+  const owed = kind === 'mech' && max - used >= w[k] / 2
+  if (want < 0.05 && !owed) return { plan, paid: 0, want }
+  let left = want
+  const put = (j: K, first: boolean) => {
+    let n = 0
+    while ((left >= w[j] / 2 || (first && n === 0)) && caps[j] + (plan.get(j) ?? 0) < CAP_HARD && n < BREAK_POINTS) {
+      plan.set(j, (plan.get(j) ?? 0) + 1)
+      left -= w[j]
+      n++
+    }
+  }
+  put(k, owed)
+  for (const j of byWeight(p)) if (j !== k && left >= 0.05) put(j, false)
+  // what the points are really worth, rounding included, is what the pool spends
+  const paid = [...plan.entries()].reduce((s, [j, n]) => s + n * w[j], 0)
+  return { plan, paid, want }
 }
 
 /** Why this attribute's own path can no longer open anything, or null — said on the card, never left to be found out. */
@@ -340,9 +450,10 @@ export function pathDead(state: GameState, k: K): string | null {
   const p = state.players[me.id]
   if (ceilingsOf(p)[k] >= CAP_HARD) return `已经到 ${CAP_HARD}，这是所有人的终点，没有再往上的路`
   const bn = me.bottleneck
-  if (bn && usedOf(p, bn, 'mech', k) >= MECH_VALUE_MAX - 0.02) return '练出来的那一截已经到头——再往上靠冠军、决赛 MVP，或者别的瓶颈破开时连带'
-  const key = BREAK_PATHS[k].key
-  if (key && bn?.seen.includes(key)) return '这条路已经走过一次——再往上靠冠军、决赛 MVP，或者别的瓶颈破开时连带'
+  const P = BREAK_PATHS[k]
+  if (P.key && bn?.seen.includes(P.key)) return '这条路已经走过一次——再往上靠冠军、决赛 MVP，或者别的瓶颈破开时连带'
+  // the question the break itself asks: can it still put a point on this attribute (planBreak)
+  if (bn && !planBreak(p, bn, k, P.value, 'mech').plan.get(k)) return '练出来的那一截已经到头——再往上靠冠军、决赛 MVP，或者别的瓶颈破开时连带'
   return null
 }
 
@@ -383,8 +494,7 @@ export function ceilingNote(state: GameState, action: string): string | null {
   if (!k || !me) return null
   const p = state.players[me.id]
   if (!p?.caps || !atCeiling(p, k)) return null
-  const banked = Math.min(BANK_POINTS, Math.floor((p.xp[k] ?? 0) / 100))
-  const head = `${ATTR_CN[k]}到瓶颈了：再练不涨，最多先存 ${BANK_POINTS} 点（已存 ${banked} 点），瓶颈一开就兑现；不练也不会掉。`
+  const head = `${ATTR_CN[k]}到瓶颈了：再练${ATTR_CN[k]}不涨，练的时间也不会存着；不练也不会掉。`
   const dead = pathDead(state, k)
   if (dead) return `${head}${dead}。`
   if (BREAK_PATHS[k].pro && me.phase !== 'pro') return `${head}冲击瓶颈要先签下一支队。`
@@ -393,14 +503,11 @@ export function ceilingNote(state: GameState, action: string): string | null {
 }
 
 /**
- * Open a ceiling by `value` of 综合. A keyed source counts once. The pool of
- * the attribute that broke opens less the fuller it is — 破晓's diminishing
- * room, never under two fifths for a milestone — unless `flat`, for what an
- * older build owed. The attribute that broke takes what its weight asks, up to
- * BREAK_POINTS; the rest goes to the role's heaviest with room. What banked at
- * a ceiling lands, and a milestone lifts half of what it opened at once. A
- * milestone that finds nothing left to open still says so: a trophy that moves
- * nothing in silence is worse than no line at all.
+ * Open a ceiling by `value` of 综合, as planBreak lays it out. A keyed source
+ * counts once. A milestone lifts half of what it opened at once; a practice
+ * break leaves the room for practice to fill, and says so. A milestone that
+ * finds nothing left to open still says so: a trophy that moves nothing in
+ * silence is worse than no line at all.
  */
 export function breakthrough(state: GameState, k: K, value: number, reason: string, kind: 'mech' | 'mile', key?: string, flat = false): number {
   const bn = ensureCeilings(state)
@@ -412,36 +519,18 @@ export function breakthrough(state: GameState, k: K, value: number, reason: stri
     if (bn.seen.includes(key)) return 0
     bn.seen.push(key)
   }
-  const w = weightsFor(p)
   const cn = ATTR_CN[k]
-  const book = kind === 'mile' ? bn.mileV! : bn.mechV!
-  const max = kind === 'mile' ? MILE_VALUE_MAX : MECH_VALUE_MAX
-  const used = book[k] ?? 0
-  const room = flat ? 1 : clamp(1 - used / max, kind === 'mile' ? 0.4 : 0.12, 1)
-  const want = Math.min(value * room, max - used)
-  if (want < 0.05) {
-    if (kind === 'mile') say(state, 'info', `${reason}——${cn}的瓶颈已经被经历顶到头了。`)
-    return 0
-  }
-  const plan = new Map<K, number>()
-  let left = want
-  const put = (j: K) => {
-    let n = 0
-    while (left >= w[j] / 2 && caps[j] + (plan.get(j) ?? 0) < CAP_HARD && n < BREAK_POINTS) {
-      plan.set(j, (plan.get(j) ?? 0) + 1)
-      left -= w[j]
-      n++
-    }
-  }
-  put(k)
-  for (const j of byWeight(p)) if (j !== k && left >= 0.05) put(j)
+  const { plan, paid, want } = planBreak(p, bn, k, value, kind, flat)
   if (!plan.size) {
-    if (kind === 'mile') say(state, 'info', `${reason}——${cn}和你位置最看重的几项都已经到 ${CAP_HARD}，没有再往上的空间了。`)
+    if (kind === 'mile') {
+      say(state, 'info', want < 0.05
+        ? `${reason}——${cn}的瓶颈已经被经历顶到头了。`
+        : `${reason}——${cn}和你位置最看重的几项都已经到 ${CAP_HARD}，没有再往上的空间了。`)
+    }
     return 0
   }
-  // what the points are really worth, rounding included, is what the pool has spent
-  const paid = [...plan.entries()].reduce((s, [j, n]) => s + n * w[j], 0)
-  book[k] = used + paid
+  const book = kind === 'mile' ? bn.mileV! : bn.mechV!
+  book[k] = (book[k] ?? 0) + paid
   const pts = kind === 'mile' ? bn.mile : bn.mech
   pts[k] = (pts[k] ?? 0) + (plan.get(k) ?? 0)
   const ovr0 = p.overall
@@ -450,18 +539,20 @@ export function breakthrough(state: GameState, k: K, value: number, reason: stri
   for (const [j, n] of plan) {
     const before = caps[j]
     caps[j] = Math.min(CAP_HARD, before + n)
-    rollBanked(p, j)
     // a trophy is the night itself: half of what it opens is his at once, under the new ceiling
     if (kind === 'mile') {
       const lift = Math.min(Math.ceil(n / 2), caps[j] - p.attrs[j])
       if (lift > 0) p.attrs[j] += lift
+      // a lift that reaches the ceiling keeps nothing over (no 存点数)
+      if (p.attrs[j] >= caps[j]) p.xp[j] = 0
     }
     parts.push(`${ATTR_CN[j]}的瓶颈 ${before} → ${caps[j]}`)
   }
   recomputeOverall(p)
   settle(state, p, bn)
   const moved = p.overall > ovr0 ? `，综合 ${ovr0} → ${p.overall}` : ''
-  say(state, 'good', `瓶颈松动 · ${reason}${parts[0]}${parts.length > 1 ? `，连带${parts.slice(1).join('、')}` : ''}。综合上限 ${pot0} → ${p.potential}${moved}。`)
+  const next = kind === 'mech' && plan.get(k) && p.attrs[k] < caps[k] ? `${cn}照常练就能涨上去。` : ''
+  say(state, 'good', `瓶颈松动 · ${reason}${parts[0]}${parts.length > 1 ? `，连带${parts.slice(1).join('、')}` : ''}。综合上限 ${pot0} → ${p.potential}${moved}。${next}`)
   return paid
 }
 
@@ -489,29 +580,34 @@ export function bottleneckWeek(state: GameState): void {
   if (chaseAim && aimed >= 2 && bn.aimStreak < 3) say(state, 'info', `冲击枪法瓶颈：这周练了 ${aimed} 次（每周要 2 次），已经连续 ${bn.aimStreak}/3 周。`)
   else if (chaseAim && aimed < 2 && was > 0) say(state, 'bad', `冲击枪法瓶颈的连续周数断了：这周只练了 ${aimed} 次，要每周至少 2 次、连着 3 周，从头算。枪法本身不会因为少练而掉。`)
 
-  // the rest count only while the ceiling is there: leave it and the count starts over
-  const add = (k: K, n: number) => {
-    if (!pinned(k)) { bn.count[k] = 0; return }
-    if (n > 0) bn.count[k] = (bn.count[k] ?? 0) + n
+  // The rest count while their path is live: at the ceiling, able to pay, possible where I am (chasing).
+  // What was counted stays when the ceiling moves out from under it — a break elsewhere that carried over,
+  // a season, the winter. It used to start over the week the attribute left its ceiling, and it emptied in
+  // silence; only hours at the ceiling are ever added, so nothing counts that was not earned there.
+  for (const k of ATTR_KEYS) {
+    const c = breakCount(state, k)
+    if (c && c.week > 0 && chasing(state, k)) bn.count[k] = c.have + c.week
   }
-  add('reaction', me.plan.ranked ?? 0)
-  add('awareness', me.plan.vod ?? 0)
-  add('utility', me.plan.util ?? 0)
-  add('teamwork', me.phase === 'pro' ? me.plan.scrim ?? 0 : 0)
-  add('clutch', Math.max(0, p.career.clutches - bn.clutchMark))
-  add('igl', me.phase === 'pro' && p.isIgl ? Math.max(0, p.career.maps - bn.mapsMark) : 0)
   bn.clutchMark = p.career.clutches
   bn.mapsMark = p.career.maps
 
   const fresh = ATTR_KEYS.filter((k) => pinned(k) && !bn.pinned.includes(k) && caps[k] < CAP_HARD)
-  if (fresh.length) say(state, 'info', `${fresh.map((k) => `${ATTR_CN[k]} ${p.attrs[k]}`).join('、')} 练到瓶颈了：再练不涨，最多先存 ${BANK_POINTS} 点，瓶颈一开就兑现。怎么破，「我的」页上写着。`)
+  if (fresh.length) {
+    const ended = fresh.filter((k) => pathDead(state, k))
+    say(state, 'info', `${fresh.map((k) => `${ATTR_CN[k]} ${p.attrs[k]}`).join('、')} 练到瓶颈了：属性先停在这里，练的时间也不会存着。${ended.length < fresh.length ? '照「我的」页上的「怎么破」做满，瓶颈当场破开。' : ''}${ended.length ? `${ended.map((k) => ATTR_CN[k]).join('、')}练出来的那一截已经到头，再往上靠冠军这样的时刻。` : ''}`)
+  }
 
   for (const k of ATTR_KEYS) {
     const P = BREAK_PATHS[k]
     if (!chasing(state, k) || !P.done(state)) continue
-    breakthrough(state, k, P.value, P.reason, 'mech', P.key)
-    if (k === 'aim') bn.aimStreak = 0
-    bn.count[k] = 0
+    const paid = breakthrough(state, k, P.value, P.reason, 'mech', P.key)
+    if (paid > 0) {
+      if (k === 'aim') bn.aimStreak = 0
+      bn.count[k] = 0
+    } else {
+      // chasing asked planBreak first, so this is not expected — said, and the count kept, never emptied in silence
+      say(state, 'info', `${ATTR_CN[k]}的「怎么破」做满了，但这次没能破开：${pathDead(state, k) ?? '瓶颈这回没有松动'}。计数留着。`)
+    }
   }
   bn.pinned = ATTR_KEYS.filter(pinned)
 }
@@ -543,17 +639,23 @@ export function bottleneckStage(state: GameState): void {
  */
 export const SEASON_LOOSENS: K[] = ['awareness', 'clutch', 'teamwork', 'communication', 'igl']
 
-/** A professional season behind you loosens the experience ceilings by one, up to CAP_EXP_MAX — 破晓's 经验顶瓶颈. */
+/**
+ * A professional season behind you loosens the experience ceilings by one, up to CAP_EXP_MAX — 破晓's 经验顶瓶颈.
+ * It names the ones that moved: it used to say all five loosened when some were already at 99.
+ */
 export function bottleneckSeason(state: GameState, played: boolean): void {
   const bn = ensureCeilings(state)
   const me = state.me
   if (!bn || !me || !played || bn.exp >= CAP_EXP_MAX) return
   const p = state.players[me.id]
   bn.exp++
-  for (const k of SEASON_LOOSENS) p.caps![k] = Math.min(CAP_HARD, p.caps![k] + 1)
-  for (const k of SEASON_LOOSENS) rollBanked(p, k)
+  const moved = SEASON_LOOSENS.filter((k) => p.caps![k] < CAP_HARD)
+  for (const k of moved) p.caps![k] += 1
   settle(state, p, bn)
-  say(state, 'good', `又打完一个职业赛季，越打越老练：${SEASON_LOOSENS.map((k) => ATTR_CN[k]).join('、')}的瓶颈各松了 1 点（第 ${bn.exp} 次，最多 ${CAP_EXP_MAX} 次）。枪法、反应和道具要靠练。`)
+  const top = SEASON_LOOSENS.filter((k) => !moved.includes(k)).map((k) => ATTR_CN[k])
+  say(state, 'good', moved.length
+    ? `又打完一个职业赛季，越打越老练：${moved.map((k) => ATTR_CN[k]).join('、')}的瓶颈各松了 1 点（第 ${bn.exp} 次，最多 ${CAP_EXP_MAX} 次）${top.length ? `；${top.join('、')}已经到 ${CAP_HARD}` : ''}。枪法、反应和道具要靠练。`
+    : `又打完一个职业赛季（第 ${bn.exp} 次，最多 ${CAP_EXP_MAX} 次）：${top.join('、')}的瓶颈都已经到 ${CAP_HARD}，没有再松的地方。`)
 }
 
 /** Did I start a match of this event? A title is judged by the event itself, not by the stage's running count. */

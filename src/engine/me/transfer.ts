@@ -16,7 +16,7 @@ import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
 import { leaguePool, seasonBar } from './nights'
 import type { Invite } from './types'
-import { clubOpen, periodKey, rollWeight, windowAt, windowBlock } from './window'
+import { clubOpen, listBlock, moveBlock, periodKey, rollWeight, signedThisPeriod, windowAt } from './window'
 import type { RollKind } from './window'
 
 /**
@@ -283,8 +283,10 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
  */
 export function vctApproach(state: GameState, rng: Rng, weight = 1): number {
   const me = state.me!
-  // once a transfer period, as once a window before (me/window.ts periodKey), and not with a move already agreed
-  if (me.moveAfter || me.flags.vctGot) return 0
+  // once a transfer period, as once a window before (me/window.ts periodKey), not with a move already agreed —
+  // and not in the period I signed in: the author's rule for a tryout invitation, and the terms this call brings
+  // instead of one would be the same move by another door (me/window.ts signedThisPeriod)
+  if (me.moveAfter || me.flags.vctGot || signedThisPeriod(state)) return 0
   const read = vctRead(state)
   if (!read?.by || read.starts < VCT_SEEN) return 0
   const needs = vctNeeds(state, read.league)
@@ -367,6 +369,8 @@ export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 
   const me = state.me!
   if (me.phase !== 'pro' || me.moveAfter) return 0
   syncPeriod(state)
+  // the period I signed in brings no offer — not on the bench, not listed (me/window.ts moveBlock) — and, no chance given, is not a dry one
+  if (moveBlock(state)) return 0
   if (!listed && me.flags.winGot) return 0
   const perf = proPerf(state)
   const team = state.teams[state.myTeam]
@@ -473,11 +477,10 @@ export function endTransferPeriod(state: GameState): void {
 /** Put myself on the market while the window is open. The manager remembers. */
 export function listSelf(state: GameState): string {
   const me = state.me!
-  if (me.phase !== 'pro') return '你现在没有合同可挂。'
-  if (me.moveAfter) return '已经谈妥了下一家，等名单锁定解除。'
-  const shut = windowBlock(state)
-  if (shut) return `${shut}。挂牌没人看。`
-  if (me.listedYear === state.year) return '今年已经挂过牌了。'
+  // why not, in the line the button can grey itself with (me/window.ts listBlock): no contract, a move agreed,
+  // the period I signed in (「这个转会期刚签约，下个转会期（…起）才能挂牌」), the window, once a year
+  const why = listBlock(state)
+  if (why) return `${why}。`
   me.listedYear = state.year
   me.gmTrust = clamp(me.gmTrust - 8, 0, 100)
   const n = rollOffers(state, new Rng(hashStr(`list:${state.seed}:${state.year}:${state.day}`)), true)

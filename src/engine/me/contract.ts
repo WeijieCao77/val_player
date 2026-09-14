@@ -13,7 +13,7 @@ import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
 import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
-import { absDay, dateCn, windowAt } from './window'
+import { absDay, dateCn, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
 
 /**
@@ -289,6 +289,9 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   me.flags.renewPending = 0
   me.pre.invites = []
   me.tryout = undefined
+  // the transfer period I signed in: no club asks me to a tryout again until the next (me/window.ts signedThisPeriod) —
+  // a career opening at its club (`quiet`) has signed nothing in play
+  if (!opts.quiet) me.flags.signedPeriod = periodKey(state.year, state.day)
   // and their cards with them: a tryout's card left behind could not be answered or closed (found 2026-09-14)
   me.pending = me.pending.filter((x) => x.kind !== 'invite' && x.kind !== 'tryout')
   me.benchedStages = 0
@@ -324,6 +327,8 @@ export function leaveClub(state: GameState, why: string): void {
   me.pre.year = 1
   me.pre.ladder = Math.max(me.pre.ladder, clamp(45 + (p.overall - 60) * 1.7 - 6, 0, 100))
   me.pre.invites = []
+  // nobody's man any more: no tryout in the period I signed in is a rule for a man under contract (me/window.ts signedThisPeriod)
+  me.flags.signedPeriod = 0
   me.tenure = 0
   me.trial = undefined
   me.benchLock = undefined

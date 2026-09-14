@@ -1,7 +1,7 @@
 import { Rng, clamp } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
-import { CEILING_BANK, ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
 import { duoBonded } from '../bonds'
@@ -59,8 +59,11 @@ export const roomMul = (p: Player, k: keyof Attrs): number =>
 
 /**
  * Progress toward a point; a full bar is a point while there is room under the
- * ceiling. At his own ceiling (me/bottleneck.ts) the hours bank — up to three
- * points (CEILING_BANK), the rest go nowhere — and land the moment the ceiling moves.
+ * ceiling. At his own ceiling (me/bottleneck.ts) the bar stays empty: the hours
+ * there count toward breaking it, and nothing is stored to land when it moves.
+ * Until 2026-09-14 they banked up to three points (300 xp), which filled
+ * the new ceiling the moment it opened, so a break could not be seen (reported:
+ * 「我都在突破瓶颈了有什么能存的，把这个存点数的功能去掉」).
  */
 export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   if (amount <= 0) return false
@@ -71,7 +74,7 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
     p.attrs[k] += 1
     rose = true
   }
-  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = Math.min(p.xp[k] ?? 0, CEILING_BANK)
+  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = 0
   if (rose) {
     recomputeOverall(p)
     refreshValue(p)

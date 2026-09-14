@@ -3,7 +3,7 @@ import { Crest, Panel, fmtDay, moneyIn } from './common'
 import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
-import { absDay, dateCn, windowBlock, windowLine } from '../../engine/me/window'
+import { absDay, dateCn, inviteBlock, signedThisPeriod, windowBlock, windowLine } from '../../engine/me/window'
 import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
@@ -89,6 +89,7 @@ export default function TransferScreen() {
             {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
             {/* the window as it stands, greyed with its reason and its date, never hidden (engine/me/window.ts) */}
             <p className="small"><b>{windowLine(game)}</b></p>
+            {signedThisPeriod(game) && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{inviteBlock(game)}。</p>}
             {me.moveAfter && (
               <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式转会。</p>
             )}
