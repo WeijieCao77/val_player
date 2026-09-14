@@ -1157,6 +1157,12 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   } else if (c.mode === 'sim') {
     // a club history has let go takes no place in a draw played here; the next side does
     c.seeds = c.seeds.map((t) => (t && t !== club && gone(state, t) ? null : t))
+    // one side, one way in: a club the event's own open qualifier really sent on is in by that road, and a
+    // seed that would seat it again is the next side's (fillGaps). 2023's third China Evolution Series act
+    // had Dragon Ranger Gaming in its main bracket twice — a Play-In group's winner, and in EDward Gaming's
+    // seed — playing two quarter-finals (reported 2026-09-14)
+    const through = openEntrants(state, ev)
+    c.seeds = c.seeds.map((t) => (t && through.has(t) ? null : t))
     fillGaps(state, comp, ev)
     offerPlayIn(state, comp, ev, club, notes)
   }
@@ -1282,16 +1288,27 @@ function openOutputs(ev: CEvent): { ui: number; rank: number }[] {
   return out
 }
 
+/** The clubs an event's open qualifiers really send on into its own matches (graphOf's `slot` reads them there): in by that road. */
+function openEntrants(state: GameState, ev: CEvent): Set<string> {
+  const out = new Set<string>()
+  for (const { ui, rank } of openOutputs(ev)) {
+    const t = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if (t && !gone(state, t)) out.add(t)
+  }
+  return out
+}
+
 /**
  * A place in the draw whose real side is not in this world — a club that
  * folded before the save's roster book was written, or never had five on it.
  * A simulated event cannot hand its opponent a walkover in every round, so
- * the best side in scope that is not already in stands in.
+ * the best side in scope that is not already in stands in — not already in
+ * by a seed, and not by the event's own open qualifier either.
  */
 function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const c = comp.circuit!
   const scope = scopeOf(ev)
-  const taken = new Set(c.seeds.filter((x): x is string => !!x))
+  const taken = new Set([...c.seeds.filter((x): x is string => !!x), ...openEntrants(state, ev)])
   const pool = Object.values(state.teams)
     .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && !gone(state, t.id) && (!scope || scope.includes(t.region))
       // no VCT league club stands in for a Challengers-tier side (leagueOut)
@@ -1330,7 +1347,7 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
  */
 function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: string | null, notes: string[]): void {
   const c = comp.circuit!
-  if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club)) return
+  if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club) || openEntrants(state, ev).has(club)) return
   if (!isHome(state, ev, state.teams[club], club)) return
   let best: { ui: number; rank: number } | undefined = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
   if (!best && state.year >= 2023) {
