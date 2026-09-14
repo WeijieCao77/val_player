@@ -40,23 +40,24 @@ export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.
  *  - EASE_ARGUE: how far above zero a bad loss can still turn into an argument,
  *    up to ARGUE_TOP.
  *
- * Measured with scripts/probe_igl.ts; checked by scripts/check_igl.ts. A first
- * cut (ease against 70, EASE_REST 0.6, EASE_ARGUE 0.8) put a 2+2 duelist into
- * fifty arguments in six seasons against eight before, and cooled every pair at
- * his club.
+ * Measured with scripts/probe_igl.ts; checked by scripts/check_igl.ts. The
+ * terms compound — a colder pair loses more on a loss, argues sooner, and so
+ * gets colder — so each is small: twice these (EASE_WIN 0.015, EASE_LOSS 0.02,
+ * EASE_ARGUE 0.4 up to 8) sank a 2+2 duelist's average bond from 24 to 6 and
+ * had him arguing seventy-three times in six seasons against eight before.
  *
  * Every other club keeps the old rule. Only our club's bonds are ever played
  * out (applyMatchBonds, weeklyBonds), so another club's chemistry is its
  * opening value and stays what it was. In the manager game there is no career
  * player, and none of this moves.
  */
-export const EASE_INIT = 0.25
-export const EASE_REST = 0.4
-export const EASE_RATE = 0.015
-export const EASE_WIN = 0.015
-export const EASE_LOSS = 0.02
-export const EASE_ARGUE = 0.4
-export const ARGUE_TOP = 8
+export const EASE_INIT = 0.2
+export const EASE_REST = 0.3
+export const EASE_RATE = 0.01
+export const EASE_WIN = 0.01
+export const EASE_LOSS = 0.012
+export const EASE_ARGUE = 0.2
+export const ARGUE_TOP = 4
 
 /** The pair's ease where the room is live — both at the career player's club — else null. */
 export function liveEase(state: GameState, a: Player, b: Player): number | null {
