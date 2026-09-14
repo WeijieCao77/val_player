@@ -1,14 +1,25 @@
 import { useGame } from './ctx'
-import { Crest, Panel, moneyIn } from './common'
+import { Crest, Panel, fmtDay, moneyIn } from './common'
+import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { absDay, dateCn, windowBlock, windowLine } from '../../engine/me/window'
 import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
+import { push } from '../../engine/me/pending'
+import type { PendingItem } from '../../engine/me/types'
 import { fansCn } from '../../engine/me/fans'
 import { attrWord, gapWord, useNumbers } from './words'
 
+/**
+ * 转会: the contract, how the market reads me, what is on the table, every
+ * transfer line of the season and the clubs I have played for. Reported
+ * 2026-09-14: 「转会的信息以及对方报价只在本周栏目出现，而转会栏目反而没有…
+ * 包括转会的历史应该也在转会栏目里有记录」 — the offers were one line of text,
+ * the season's transfer news lived only in the week's diary, and no history was
+ * kept anywhere on this page.
+ */
 export default function TransferScreen() {
   const { game, commit, toast } = useGame()
   const [nums] = useNumbers()
@@ -28,6 +39,30 @@ export default function TransferScreen() {
   // a Challengers man against his league's VCT starters: what brings the VCT clubs to the window (engine/me/transfer.ts vctApproach)
   const vct = pro ? vctRead(game) : null
   const top = game.year >= 2023 ? 'VCT' : '一线'
+
+  // the card of an offer or an invite, brought to the front now rather than waiting its turn in the list
+  const openCard = (kind: PendingItem['kind'], id: string) => {
+    push(game, { kind, id })
+    const i = me.pending.findIndex((x) => x.kind === kind && x.id === id)
+    if (i > 0) me.pending.unshift(...me.pending.splice(i, 1))
+    commit()
+  }
+
+  // every transfer line the career kept (me/log.ts, kind 'deal'): this season's first, the rest folded
+  const dealLog = me.log.filter((l) => l.kind === 'deal')
+  const seasonLines = dealLog.filter((l) => l.year === game.year).reverse()
+  const earlierLines = dealLog.filter((l) => l.year !== game.year).reverse()
+
+  // the clubs, from the player's own record — the log keeps its last 400 lines, this keeps every stint.
+  // A stint ends where the next begins: a record's own `to` is not always moved on when he leaves.
+  const stints = p.clubHist ?? []
+  const history = stints.map((h, i) => {
+    const next = stints[i + 1]
+    const current = !next && pro && h.team === game.myTeam
+    const end = next ? Math.max(h.to, next.from) : Math.max(h.to, h.from)
+    return { ...h, current, span: current ? `${h.from} 至今` : end > h.from ? `${h.from}–${end}` : `${h.from}` }
+  }).reverse()
+
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
@@ -69,25 +104,70 @@ export default function TransferScreen() {
             })()}
           </Panel>
         )}
-        {me.deals.length > 0 && (
-          <Panel title="桌上的报价">
-            {me.deals.map((d) => (
-              <p key={d.id} className="small">{game.teams[d.teamId]?.name} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · 到 {d.expires - game.day} 天后</p>
+        <Panel title="桌上的报价">
+          {me.deals.length === 0
+            ? <p className="muted small" style={{ margin: 0 }}>现在没有报价。来了会弹卡片，这里也会列着，过期之前随时可以回来谈。</p>
+            : me.deals.map((d) => (
+              <div key={d.id} className="tr-row">
+                <Crest id={d.teamId} size={22} />
+                <span className="tr-main">
+                  <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
+                  <small>{d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · {Math.max(0, d.expires - game.day)} 天内答复</small>
+                </span>
+                <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
+              </div>
             ))}
-          </Panel>
-        )}
+        </Panel>
         {!pro && (
           <Panel title="邀请">
             {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你。</p>
-              : me.pre.invites.map((i) => <p key={i.id} className="small">{game.teams[i.teamId]?.name} · {i.expires - game.day} 天内答复</p>)}
+              : me.pre.invites.map((i) => (
+                <div key={i.id} className="tr-row">
+                  <Crest id={i.teamId} size={22} />
+                  <span className="tr-main"><b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b><small>{i.direct ? '免试训，直接给合同' : '请你去试训'} · {Math.max(0, i.expires - game.day)} 天内答复</small></span>
+                  <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>
+                </div>
+              ))}
             {declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
             {me.moveAfter && (
               <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式签约。</p>
             )}
           </Panel>
         )}
+        <Panel title={`转会动态 · ${game.year} 赛季`}>
+          {seasonLines.length === 0
+            ? <p className="muted small" style={{ margin: 0 }}>这个赛季还没有转会消息。谁来找过你、谁开了价、试训怎么样、签了什么合同，都会记在这里。</p>
+            : (
+              <ul className="diary">
+                {seasonLines.map((l, i) => <li key={i} className="deal"><span className="when">{fmtDay(l.day, l.year)}</span><span><Rich text={l.text} /></span></li>)}
+              </ul>
+            )}
+          {earlierLines.length > 0 && (
+            <details className="tr-more">
+              <summary>更早的转会消息（{earlierLines.length} 条）</summary>
+              <ul className="diary">
+                {earlierLines.map((l, i) => <li key={i} className="deal"><span className="when">{l.year} {fmtDay(l.day, l.year)}</span><span><Rich text={l.text} /></span></li>)}
+              </ul>
+            </details>
+          )}
+        </Panel>
       </div>
       <div>
+        <Panel title="转会历史">
+          {history.length === 0
+            ? <p className="muted small" style={{ margin: 0 }}>还没有效力过俱乐部。</p>
+            : (
+              <ul className="tr-hist">
+                {history.map((h, i) => (
+                  <li key={`${h.team}:${h.from}:${i}`} className={h.current ? 'now' : ''}>
+                    <Crest id={h.team} size={22} />
+                    <span className="tr-main"><b>{game.teams[h.team]?.name ?? h.team}</b><small>{h.span}{h.current ? ' · 现在的俱乐部' : ''}</small></span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          {history.length > 0 && <p className="tiny faint" style={{ margin: '8px 0 0' }}>每次签约的年限、年薪和违约金，在左边「转会动态」里。</p>}
+        </Panel>
         {/* the whole ladder on one card: what each rung asks and how far short
             you are. A locked door has to say what the lock is — grinding
             without seeing the target is what made the pre-pro stretch drag. */}

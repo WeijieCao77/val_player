@@ -293,6 +293,17 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .talent-verdict { margin: 10px 0 0; font-size: var(--t-small); color: var(--muted); line-height: 1.6; }
 .talent-verdict b { color: var(--accent); margin-right: 6px; }
 
+/* ---- 转会: an offer or an invite with its button; a club of the history; the older transfer lines folded */
+.tr-row, .tr-hist li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.tr-row:last-of-type, .tr-hist li:last-child { border-bottom: 0; }
+.tr-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tr-main small { color: var(--muted); font-size: var(--t-small, 13.5px); overflow-wrap: anywhere; }
+.tr-hist { list-style: none; margin: 0; padding: 0; }
+.tr-hist li { grid-template-columns: 22px minmax(0, 1fr); }
+.tr-hist li.now b { color: var(--accent); }
+.tr-more { margin-top: 8px; }
+.tr-more summary { cursor: pointer; color: var(--muted); font-size: var(--t-small, 13.5px); }
+
 /* ---- 音效 under the theme switch at the rail's foot (ui/me/SoundToggle.tsx); `.nav button` would make it a block row */
 .app.career .nav .nav-foot .sound-toggle { display: flex; width: 100%; justify-content: center; margin-top: 6px; padding: 5px 0; }
 .app.career .nav .nav-foot .sound-toggle.on { color: var(--accent); border-color: var(--accent-line); }
