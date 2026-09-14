@@ -1602,21 +1602,42 @@ export type DrawStanding = 'seated' | 'entry' | 'maybe' | 'booked'
  * Null once the event cannot take it; mayStillDraw is any of the four.
  */
 export function drawStanding(state: GameState, comp: Competition, teamId: string, depth = 0): DrawStanding | null {
+  return drawOutlook(state, comp, teamId, depth)?.standing ?? null
+}
+
+/**
+ * drawStanding, and for an event not drawn yet whose draw as it stands seats
+ * the club, the day of the club's first tie there (`day`): its seat's first
+ * tie, or that of the place its open qualifier really sent it to. The day an
+ * event opens is not the club's: 2026's Challengers EMEA Last Chance Qualifier
+ * opens with a play-in on June 4, and a club seated into its groups first plays
+ * on July 7 — after its Stage 3 group, drawn later, on June 22. The week named
+ * the qualifier for a month as the club's next event, and then its group round
+ * over Stage 3's (engine/me/nextup.ts, scripts/check_nextup.ts seed 11).
+ */
+export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number } | null {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
   const team = state.teams[teamId]
   if (!c || !ev || !team || comp.champion || c.done) return null
   // a drawn field, or an event under way; before its draw `teams` is only history's booking
-  if (c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId) || (c.mode && comp.teams.includes(teamId))) return 'seated'
+  if (c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId) || (c.mode && comp.teams.includes(teamId))) return { standing: 'seated' }
   // drawn and under way without it
-  if (c.start <= state.day) return comp.teams.includes(teamId) ? 'seated' : null
+  if (c.start <= state.day) return comp.teams.includes(teamId) ? { standing: 'seated' } : null
   const at = leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)).indexOf(teamId)
   if (at >= 0) {
     // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play there
-    const through = openOutputs(ev).some(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
-    return mainSeedsOf(ev).has(at) || through ? 'seated' : 'booked'
+    const through = openOutputs(ev).filter(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
+    if (!mainSeedsOf(ev).has(at) && !through.length) return { standing: 'booked' }
+    // in by its qualifier's road, the seed is the next side's (begin)
+    const mine = (s: Slot): boolean =>
+      (through.length ? s[0] === 'g' && through.some((o) => o.ui === s[1] && o.rank === s[2]) : s[0] === 's' && s[1] === at)
+    let day: number | undefined
+    for (const n of flat(ev).nodes) if (!isOpen(ev.units[n.unit]) && (mine(n.a) || mine(n.b)) && (day == null || n.day < day)) day = n.day
+    return { standing: 'seated', day }
   }
-  return couldStillTake(state, comp, ev, team, depth) ?? (comp.teams.includes(teamId) ? 'booked' : null)
+  const more = couldStillTake(state, comp, ev, team, depth)
+  return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
 }
 
 /** The seed places an event's own matches are drawn from: its open qualifiers' entrants are not among them. */

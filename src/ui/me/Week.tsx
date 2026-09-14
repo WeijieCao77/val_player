@@ -322,9 +322,10 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   {up?.kind === 'event' ? (
                     <>
                       <p className="small" style={{ margin: 0 }}>
-                        {up.stage ? '下一个赛段' : '下一项赛事'}：<b>{up.name}</b> · {fmtDay(up.day, game.year)} {up.stage ? '开始' : '开打'}（{up.day - game.day} 天后）
+                        {up.stage ? '下一个赛段' : '下一项赛事'}：<b>{up.name}</b> · {fmtDay(up.day, game.year)} {up.stage ? '开始' : up.day > up.opens ? '打第一场' : '开打'}（{up.day - game.day} 天后）
                       </p>
-                      {!up.stage && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{up.sure ? '对阵开打前一天才排出来。' : '你们可以报名，名单开打前一天定。'}</p>}
+                      {/* my club's first tie there comes after the event opens: said when it opens (engine/me/nextup.ts) */}
+                      {!up.stage && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{up.sure ? `${up.day > up.opens ? `赛事 ${fmtDay(up.opens, game.year)} 开打，` : ''}对阵开打前一天才排出来。` : '你们可以报名，名单开打前一天定。'}</p>}
                     </>
                   ) : <p className="muted" style={{ margin: 0 }}>暂时没有排定的比赛。</p>}
                 </>

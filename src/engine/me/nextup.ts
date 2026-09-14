@@ -1,4 +1,4 @@
-import { drawStanding, eventOf, roundAheadOf } from '../circuit'
+import { drawOutlook, eventOf, roundAheadOf } from '../circuit'
 import type { DrawStanding, RoundAhead } from '../circuit'
 import { formatOf, onTimeline, stagesOf } from '../era'
 import { nextInEvent, upcomingInternational } from '../qualify'
@@ -45,8 +45,12 @@ export type NextUp =
   | { kind: 'round'; day: number; name: string; round: string; bo?: number; opponent: string | null; wait: Wait; comp?: Competition }
   /** in an event under way, whether there is a next round of mine waits on a phase still being played; `round` is where it would be */
   | { kind: 'waiting'; day: number; name: string; round: string; comp: Competition }
-  /** nothing under way for me: the next event, its draw as things stand seating my club (`sure`) or open for it to enter; `stage` is the old 2026 world's next stage */
-  | { kind: 'event'; day: number; name: string; sure: boolean; stage?: boolean; out?: string }
+  /**
+   * nothing of mine sooner: the next event, its draw as things stand seating my club (`sure`) or open for it to
+   * enter. `day` is my club's first tie there as the draw stands — later than the day the event `opens` for a seat
+   * in a later phase — or, open to enter, the day it opens; `stage` is the old 2026 world's next stage
+   */
+  | { kind: 'event'; day: number; opens: number; name: string; sure: boolean; stage?: boolean; out?: string }
   /** nothing known; `out` is the event under way that my club is out of */
   | { kind: 'none'; out?: string }
 
@@ -86,15 +90,26 @@ export function roundsAhead(state: GameState): Ahead[] {
 }
 
 /** My club's standing with each event, read once a day: each read draws the event's whole field. */
-const STANDING = new WeakMap<GameState, { at: string; of: Map<string, DrawStanding | null> }>()
+const STANDING = new WeakMap<GameState, { at: string; of: Map<string, { standing: DrawStanding; day?: number } | null> }>()
+
+/** An event not drawn yet that seats my club as its draw stands (`sure`), or is open for it to enter, and the day my club would first play there. */
+interface Soon { comp: Competition; sure: boolean; day: number }
 
 /**
  * The events not drawn yet whose first tie comes by `until`, read earliest
- * first until one seats my club: that one (`sure`), the first before it open
- * for the club to enter (`entry`), and the first the club has any standing
- * with — history's booking, or a place its results may still earn (`any`).
+ * first: of those whose draw as things stand seats my club, or that are open
+ * for it to enter, the one it would play first (`first`) — by its seat's first
+ * tie there, or by the day its decider is surely played — and the first the
+ * club has any standing with, history's booking or a place its results may
+ * still earn included (`any`).
+ *
+ * Read by the day each event opens, the first one seating the club was named,
+ * whenever its seat played: 2026's Challengers EMEA Last Chance Qualifier opens
+ * on June 4 with a play-in, and was named for a month over the club's Stage 3
+ * group of June 22, the club's own seat in its groups playing on July 7
+ * (scripts/check_nextup.ts, seed 11).
  */
-function eventsAhead(state: GameState, club: string, until: number): { sure?: Competition; entry?: Competition; any?: Competition } {
+function eventsAhead(state: GameState, club: string, until: number): { first?: Soon; any?: Competition } {
   const at = `${state.year}:${state.day}:${club}`
   let book = STANDING.get(state)
   if (book?.at !== at) {
@@ -106,19 +121,27 @@ function eventsAhead(state: GameState, club: string, until: number): { sure?: Co
   const future = Object.values(state.comps)
     .filter((c) => !!c.circuit && !c.circuit.mode && !c.champion && !c.circuit.done && c.circuit.start > state.day && c.circuit.start - 1 <= until)
     .sort((a, b) => a.circuit!.start - b.circuit!.start || a.key.localeCompare(b.key))
-  const out: { sure?: Competition; entry?: Competition; any?: Competition } = {}
+  const out: { first?: Soon; any?: Competition } = {}
   for (const c of future) {
-    let standing = known.get(c.key)
-    if (standing === undefined) {
-      standing = drawStanding(state, c, club)
-      known.set(c.key, standing)
+    // an event opening later has nothing of the club's sooner: not even a decider comes before its eve
+    if (out.first && c.circuit!.start - 1 >= out.first.day) break
+    let o = known.get(c.key)
+    if (o === undefined) {
+      o = drawOutlook(state, c, club)
+      known.set(c.key, o)
     }
-    if (standing && !out.any) out.any = c
-    if (standing === 'entry' && !out.entry) out.entry = c
-    if (standing === 'seated') { out.sure = c; break }
+    if (o && !out.any) out.any = c
+    if (o?.standing !== 'seated' && o?.standing !== 'entry') continue
+    const sure = o.standing === 'seated'
+    const day = sure ? Math.max(o.day ?? c.circuit!.start, state.day + 1) : deciderBy(c)
+    if (!out.first || day < out.first.day) out.first = { comp: c, sure, day }
   }
   return out
 }
+
+/** The panel's line for an event not drawn yet: my club's first tie there, or, open to enter, the day it opens. */
+const eventUp = (s: Soon): Extract<NextUp, { kind: 'event' }> =>
+  ({ kind: 'event', day: s.sure ? s.day : s.comp.circuit!.start, opens: s.comp.circuit!.start, name: s.comp.name, sure: s.sure })
 
 /** The event under way that my club is out of: a match of mine played in it, no tie and no round of mine left there. */
 function outOf(state: GameState, club: string, ahead: Ahead[]): string | undefined {
@@ -135,46 +158,46 @@ function outOf(state: GameState, club: string, ahead: Ahead[]): string | undefin
 }
 
 /**
- * What the week's 「下一场」 names: the earliest of my club's written tie and its
- * rounds with no tie yet; with neither, the event it is out of and the next
- * event whose draw as things stand seats it, or, before that, one open for it
- * to enter. A booking of history's, or a place results may still earn, is not
- * named: those were the wrong event more often than not. `none` only when
- * nothing is known.
+ * What the week's 「下一场」 names: the earliest of my club's written tie, its
+ * rounds with no tie yet, and, in an event not drawn yet, its first tie as the
+ * draw stands or its decider in one open for it to enter; with none of those
+ * known, the event it is out of as well. A booking of history's, or a place
+ * results may still earn, is not named: those were the wrong event more often
+ * than not. `none` only when nothing is known.
  */
 export function nextUp(state: GameState): NextUp {
   const club = state.myTeam
   if (state.me?.phase !== 'pro' || !club || !state.teams[club]) return { kind: 'none' }
   const fixture = nextRealFixtureFor(state, club)
   const ahead = roundsAhead(state)
-  if (fixture && (!ahead.length || fixture.day <= ahead[0].day)) return { kind: 'fixture', day: fixture.day, fixture }
-  if (ahead.length) {
-    // An event not drawn yet, open for the club to enter, whose decider is surely played before that round: the
-    // decider is written with the draw, on its open qualifier's last day or the draw's own (circuit.ts offerPlayIn,
-    // planPlayIn). Seen 2026-09-14 in a Challengers club booked into two leagues' third stages at once
-    // (scripts/check_nextup.ts, seed 11): the week named the round of one while the other's decider came four days
-    // sooner. A seated event is not put first: a bye there can come after the round.
-    const soon = onTimeline(state) ? eventsAhead(state, club, ahead[0].day - 1).entry : undefined
-    if (soon && deciderBy(soon) < ahead[0].day) return { kind: 'event', day: soon.circuit!.start, name: soon.name, sure: false }
-    return ahead[0]
+  const tie: NextUp | undefined = fixture && (!ahead.length || fixture.day <= ahead[0].day) ? { kind: 'fixture', day: fixture.day, fixture } : ahead[0]
+  if (tie) {
+    // An event not drawn yet where my club plays sooner: its seat's first tie as the draw stands, or a decider surely
+    // played before (circuit.ts offerPlayIn, planPlayIn). Seen 2026-09-14 (scripts/check_nextup.ts, seed 11): a
+    // Challengers club seated into both EMEA's Stage 3 and its Last Chance Qualifier had the qualifier's group round,
+    // and then its tie, named for eighteen days while its Stage 3 group, not drawn yet, came fifteen days sooner; and
+    // a club booked into two leagues' third stages at once, the round of one while the other's decider came four days
+    // sooner. A seat's first tie is read, not the day its event opens: a seat in a later phase plays after the round.
+    const soon = onTimeline(state) ? eventsAhead(state, club, tie.day - 1).first : undefined
+    return soon && soon.day < tie.day ? eventUp(soon) : tie
   }
   const out = outOf(state, club, ahead)
   if (!onTimeline(state)) {
     // the old 2026 world has no real events on its books: its next stage, from the calendar
     const s = stagesOf(state.year, false).find((x) => x.start > state.day && x.key !== 'offseason')
-    return s ? { kind: 'event', day: s.start, name: s.name, sure: false, stage: true, out } : { kind: 'none', out }
+    return s ? { kind: 'event', day: s.start, opens: s.start, name: s.name, sure: false, stage: true, out } : { kind: 'none', out }
   }
-  const ev = eventsAhead(state, club, state.day + EVENT_DAYS)
-  const pick = ev.entry ?? ev.sure
-  return pick ? { kind: 'event', day: pick.circuit!.start, name: pick.name, sure: pick === ev.sure, out } : { kind: 'none', out }
+  const first = eventsAhead(state, club, state.day + EVENT_DAYS).first
+  return first ? { ...eventUp(first), out } : { kind: 'none', out }
 }
 
 /**
  * Anything of my club's by `until` that no written tie shows: a round with no
  * tie yet, a phase of mine still being played, an event opening that holds the
- * club's place, is open to it, or may still take it. For me/auto.ts quietAhead,
- * which would rather keep a month's run off the menu than offer it with a
- * match inside the month.
+ * club's place, is open to it, or may still take it. An event counts by the
+ * day it opens, even where nextUp reads the club's first tie there later: its
+ * draw is made on its eve. For me/auto.ts quietAhead, which would rather keep a
+ * month's run off the menu than offer it with a match inside the month.
  */
 export function mineBy(state: GameState, until: number): boolean {
   const club = state.myTeam
