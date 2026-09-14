@@ -1,8 +1,8 @@
 import type { Competition, GameState, Team } from '../types'
-import { onTimeline, regionIn, stagesOf, vctWindowOf } from '../era'
-import { eventOf, eventsOf, roundAheadOf } from '../circuit'
+import { onTimeline, regionIn, stagesOf } from '../era'
+import { datesKnown, drawOutlook, eventOf, eventsOf, floorOf, gameOf, phaseOnlyOf, roundAheadOf } from '../circuit'
 import type { CEvent } from '../circuit'
-import { inVctLeague } from '../timeline'
+import { inVctLeague, sceneFor } from '../timeline'
 
 /**
  * 转会窗口: one function says whether a move can be made today (windowAt).
@@ -14,21 +14,50 @@ import { inVctLeague } from '../timeline'
  * no club called; the screen said 开着 in January and March while nothing came;
  * 6/16 fell inside Masters in 2023–2026; the real 2023 windows gave nothing.
  *
- * The author's direction: 「转会窗口开的时间要多一些，特别是完整的联赛成立之前，其实大家的转会
- * 都很随意，没有特定的时间，基本只要不是大赛比赛期间都是到处转的」. By year and club:
+ * The author's direction then: 「转会窗口开的时间要多一些，特别是完整的联赛成立之前，其实大家的转会
+ * 都很随意，没有特定的时间，基本只要不是大赛比赛期间都是到处转的」 — about the years before the
+ * leagues, and carried past them: from 2023 a VCT league club had Riot's windows, from after Champions
+ * to a week before its league's Stage 2 playoffs, shut only by internationals and stage playoffs, and a
+ * club below the leagues locked only for its own playoffs and its ways up. Reported the same day, off a
+ * screen reading 「转会窗口开放中 · 到 2026年8月7日（还剩 275 天）（暂定）」: 「转会窗口太长了，在有vct
+ * 联赛之后，联赛赛事期间都应该没办法转会，只有赛事间隔休息期才开转会窗口」. By year:
  *
  *  - 2021–2022, the open circuit: no set window. A club is closed only while it
  *    plays a major event — an international, a Last Chance Qualifier, 2021's
  *    regional Masters and Challengers Finals — from the event's first day to the
  *    day it is out, or the event's last.
- *  - 2023 on, a club outside the VCT leagues: no set window either. It locks only
- *    while it plays its own playoffs, or the whole of an Ascension or an open
- *    qualifier or play-off into a league event — not its whole split. Riot's
- *    Challengers rules closed more than that (vlr.gg/146151); this leans open on
- *    purpose, as the author asked. Majors lock it as they lock anyone.
- *  - 2023 on, a VCT league club: Riot's windows (engine/era.ts VCT_WINDOWS), and a
- *    roster lock while it plays an international, an LCQ or its league's stage
- *    playoffs — 2024's Kickoff and stage playoffs locks are 暂定.
+ *  - 2023 on, every club, VCT league or Challengers alike: closed from the first day
+ *    to the last day of every event it plays that season — its league's Kickoff,
+ *    Stage 1 and Stage 2 (from 2027 its Cups, Open Playoffs and open qualifiers), a
+ *    Challengers league's splits and stages, Masters and Champions, a Last Chance
+ *    Qualifier, an Ascension, an open qualifier or play-in it enters — and open only in
+ *    the gaps between them. The offseason is one: from the day after its last event of
+ *    the season to the day before its first of the next. Riot's published windows are
+ *    not read. Where it could go either way it leans closed (「赛事期间都应该没办法转会」):
+ *      · on an event's floor — seeded into its own matches, or sent on to them by its
+ *        qualifier (circuit.ts floorOf): from the event's first day, its qualifiers'
+ *        days included, to its last, whether it is out early or not — a Masters' Swiss
+ *        stage lost, a league stage whose playoffs it did not reach, an Ascension's
+ *        groups: a roster registered for it. The line says it is out;
+ *      · in a phase kept as its result — an open or closed qualifier, a regular season,
+ *        a promotion series, played as history had it — and no further (circuit.ts
+ *        phaseOnlyOf): from that phase's first day to its last, the day it went out not
+ *        being on record;
+ *      · the player's club in its decider for a place (circuit.ts offerPlayIn,
+ *        planPlayIn): from the first day of the qualifier it enters (a seat's decider:
+ *        the decider's own day) to the decider's day, lost; won, to the event's last
+ *        day. Before it is played the day it lifts is 暂定;
+ *      · an event opening before 1 January: from 1 January, the day its season goes on
+ *        the books — the days before it hold only its qualifiers, history's;
+ *      · an event not drawn yet holds nobody until its draw, the day before it opens.
+ *        The dates the screen gives — open until, open again from — read the club's
+ *        place in each such event as its draw stands today (circuit.ts drawOutlook): a
+ *        seat counts for the event's days, a phase history booked it into for that
+ *        phase's, an open qualifier the player's club will enter for its days up to the
+ *        decider, 暂定; a place it may still earn — a Masters, Champions, an LCQ — does
+ *        not, and makes a date after it 暂定. So do an event whose days nobody has
+ *        announced (circuit.ts datesKnown) and next season's first event, which is not
+ *        drawn until the season turns. Unknown future events are 暂定.
  *  - A world off the timeline (a save handed to the old 2026 world): a VCT club
  *    keeps that world's four spans; everyone locks for its internationals.
  *
@@ -46,10 +75,6 @@ const DAY_MS = 86_400_000
 /** A calendar day as one number: 1 January of `year` is its day 0 (engine/season.ts dateLabel, me/life.ts dayNo). */
 export const absDay = (year: number, day: number): number => Math.round(Date.UTC(year, 0, 1) / DAY_MS) + day
 export const todayAbs = (state: Pick<GameState, 'year' | 'day'>): number => absDay(state.year, state.day)
-const isoAbs = (iso: string): number => {
-  const [y, m, d] = iso.split('-').map(Number)
-  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS)
-}
 const ymdOf = (n: number): { y: number; m: number; d: number } => {
   const t = new Date(n * DAY_MS)
   return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }
@@ -139,6 +164,36 @@ export function ruleOf(state: GameState, team: Team | undefined): WindowRule {
   return onTimeline(state) ? 'vct' : 'legacy'
 }
 
+/** 2023 on, on the timeline: every event a club plays shuts its window, whatever its tier (see the header). */
+const byEvents = (state: GameState): boolean => state.year >= 2023 && onTimeline(state)
+
+/**
+ * The day as the books stand: its date, and how many events are on them, drawn and over — an event drawn,
+ * or one finished, since the morning changes who is held and what is ahead. The day's caches key on it.
+ */
+function dayKey(state: GameState): string {
+  let n = 0
+  let drawn = 0
+  let over = 0
+  for (const c of Object.values(state.comps)) {
+    n++
+    if (c.circuit?.mode) drawn++
+    if (c.champion || c.circuit?.done) over++
+  }
+  return `${state.year}:${state.day}:${n}:${drawn}:${over}`
+}
+
+/** A cache that lives for one day of one state (dayKey). */
+function daily<T>(book: WeakMap<GameState, { at: string; of: Map<string, T> }>, state: GameState, at: string, key: string, make: () => T): T {
+  let hit = book.get(state)
+  if (hit?.at !== at) {
+    hit = { at, of: new Map() }
+    book.set(state, hit)
+  }
+  if (!hit.of.has(key)) hit.of.set(key, make())
+  return hit.of.get(key) as T
+}
+
 /* ------------------------------------------------------------------ */
 /*  roster locks                                                       */
 /* ------------------------------------------------------------------ */
@@ -147,55 +202,35 @@ export interface RosterLock {
   /** the event, by the name the screens use */
   event: string
   comp: string
-  /** its last day this year: the lock lifts after it, or once the club is out */
+  /** its last day this year: the lock lifts after it — 2021–2022, or once the club is out */
   until: number
-  kind: 'major' | 'playoffs' | 'entry'
+  /**
+   * `major`: 2021–2022, and the old 2026 world. From 2023: `event`, an event the club is on the floor of;
+   * `phase`, a phase kept as its result the club played and went no further from; `decider`, the player's
+   * club's decider for a place, to play or lost
+   */
+  kind: 'major' | 'event' | 'phase' | 'decider'
+  /** 2023 on: out of it — knocked out, or its decider lost — and held to `until` all the same (windowOfClub reads it for the club asked about) */
+  out?: boolean
+  /** 2023 on: its decider still to play — lost, the lock lifts the day after it, so `until` is 暂定 */
+  pending?: boolean
 }
 
 /** 2021's regional events that fed an international (engine/circuit.ts TOP): its Masters and its Challengers Finals. */
 const OPEN_MAJORS = new Set<string>(['s1masters', 's2finals', 's3finals'])
-const LEAGUES = new Set<string>(['Americas', 'EMEA', 'Pacific', 'China'])
 
-/**
- * The first day of an event's playoffs, off its matches: the units named for them
- * (Playoffs, Finals, 季后赛, 决赛), not a play-in's own. Null for an event that is one
- * bracket from its first match — a Kickoff's Main Event — or has no playoffs.
- */
-export function playoffsFrom(ev: CEvent): number | null {
-  let first: number | null = null
-  for (const u of ev.units) {
-    if (u.type === 'open') continue
-    const name = `${(u.phase ?? '').split('|')[0]} ${u.label}`
-    if (!/Playoffs|Finals|季后赛|决赛/i.test(name) || /Play-?Ins?|附加赛/i.test(name)) continue
-    for (const n of u.nodes ?? []) if (first == null || n.day < first) first = n.day
-  }
-  return first
-}
-
-interface Span { from: number; until: number; kind: RosterLock['kind'] }
-
-/** The days an event locks a club playing it, by that club's rules. Null when it does not lock it. */
-function spanOf(state: GameState, comp: Competition, rule: WindowRule): Span | null {
+/** 2021–2022, and the old 2026 world: the days a major locks a club playing it. Null for any other event. */
+function majorSpan(state: GameState, comp: Competition): { from: number; until: number } | null {
   const c = comp.circuit
   if (!c) {
     // the old 2026 world: its internationals, on its own calendar
     if (comp.region || !['masters1', 'masters2', 'champions'].includes(comp.stage)) return null
     const s = stagesOf(state.year, false).find((x) => x.key === comp.stage)
-    return s ? { from: s.start, until: s.end, kind: 'major' } : null
+    return s ? { from: s.start, until: s.end } : null
   }
   const ev = eventOf(c.id)
   if (!ev) return null
-  if (ev.region === null || ev.stage === 'lcq' || (!!ev.stage && OPEN_MAJORS.has(ev.stage))) return { from: c.start, until: c.end, kind: 'major' }
-  if (state.year <= 2022) return null
-  if (rule === 'vct' || rule === 'legacy') {
-    const league = !ev.scene && LEAGUES.has(ev.region ?? '') && ['kickoff', 'stage1', 'stage2'].includes(ev.stage ?? '') && !/Open Playoffs/i.test(ev.name)
-    const from = league ? playoffsFrom(ev) : null
-    return from == null ? null : { from, until: c.end, kind: 'playoffs' }
-  }
-  // below the leagues: the whole of a way up — an Ascension, an open qualifier or play-off into a league event — and any other event's playoffs
-  if (ev.stage === 'ascension' || /Ascension|Promotion|Open Playoffs|Open Qualifier/i.test(ev.name)) return { from: c.start, until: c.end, kind: 'entry' }
-  const from = playoffsFrom(ev)
-  return from == null ? null : { from, until: c.end, kind: 'playoffs' }
+  return ev.region === null || ev.stage === 'lcq' || (!!ev.stage && OPEN_MAJORS.has(ev.stage)) ? { from: c.start, until: c.end } : null
 }
 
 /** Still in it: a match of its own to play, or a round of the event still its own (engine/circuit.ts roundAheadOf). */
@@ -220,19 +255,67 @@ const heldBy = (comp: Competition): string[] => {
   return c ? [...new Set([...comp.teams, ...c.seeds.filter((x): x is string => !!x), ...Object.values(c.fill ?? {})])] : comp.teams
 }
 
-function lockIn(state: GameState, comp: Competition, id: string): RosterLock | null {
-  const team = state.teams[id]
-  if (!team) return null
-  const span = spanOf(state, comp, ruleOf(state, team))
+function majorLock(state: GameState, comp: Competition, id: string): RosterLock | null {
+  if (!state.teams[id]) return null
+  const span = majorSpan(state, comp)
   if (!span || state.day < span.from || state.day > span.until || !stillIn(state, comp, id)) return null
-  return { event: comp.name, comp: comp.key, until: span.until, kind: span.kind }
+  return { event: comp.name, comp: comp.key, until: span.until, kind: 'major' }
 }
+
+interface Hold { from: number; until: number; kind: 'event' | 'phase' | 'decider'; pending?: boolean }
+
+const HOLDS = new WeakMap<GameState, { at: string; of: Map<string, Map<string, Hold>> }>()
+/**
+ * 2023 on: whom a drawn event holds, from which day to which (see the header), 1 January at the
+ * earliest: its floor for the event's days; a club in a phase kept as its result and no further, that
+ * phase's; the player's club in its decider, from the first day of its qualifier to the decider's
+ * day, or once it is won to the event's last. Read once a day, and again once the decider is played.
+ */
+function holdsOf(state: GameState, comp: Competition): Map<string, Hold> {
+  const c = comp.circuit!
+  const decider = c.playin ? state.fixtures.find((f) => f.id === c.playin!.fixture) : undefined
+  const key = `${comp.key}:${c.mode}:${decider ? (gameOf(decider)?.w ?? (decider.played ? '=' : '-')) : ''}:${c.seeds.join(',')}`
+  return daily(HOLDS, state, `${state.year}:${state.day}`, key, () => {
+    const out = new Map<string, Hold>()
+    for (const [id, [a, b]] of phaseOnlyOf(state, comp)) out.set(id, { from: Math.max(0, a), until: b, kind: 'phase' })
+    const from = Math.max(0, c.start)
+    for (const id of floorOf(state, comp)) out.set(id, { from, until: c.end, kind: 'event' })
+    if (decider) {
+      const club = decider.teamA
+      // an open qualifier's place: the club is in that qualifier from its first day; a seat's decider is its own day
+      const ui = /^(\d+):/.exec(c.playin!.key)
+      const first = ui ? eventOf(c.id)?.units[Number(ui[1])]?.first ?? c.start : decider.day
+      const start = Math.max(0, Math.min(first, decider.day))
+      if (!decider.played) out.set(club, { from: start, until: c.end, kind: 'decider', pending: true })
+      else if (gameOf(decider)?.w === club) out.set(club, { from: start, until: c.end, kind: 'event' })
+      else out.set(club, { from: start, until: decider.day, kind: 'decider' })
+    }
+    return out
+  })
+}
+
+/** 2023 on: the lock a drawn event puts on a club today, if it holds the club today. */
+function eventLock(state: GameState, comp: Competition, id: string): RosterLock | null {
+  const c = comp.circuit
+  if (!c || !c.mode || c.done || state.day > c.end || state.day < c.start - 1) return null
+  const h = holdsOf(state, comp).get(id)
+  if (!h || state.day < h.from || state.day > h.until) return null
+  return { event: comp.name, comp: comp.key, until: h.until, kind: h.kind, ...(h.pending ? { pending: true } : {}) }
+}
+
+/** Of two events holding a club at once, the one that holds it longer. */
+const longer = (a: RosterLock | null, b: RosterLock | null): RosterLock | null => (!a ? b : !b || b.until <= a.until ? a : b)
 
 /** A club's lock now, read fresh: my own match today may have been played since the morning. */
 export function lockNow(state: GameState, id: string): RosterLock | null {
+  if (byEvents(state)) {
+    let best: RosterLock | null = null
+    for (const comp of Object.values(state.comps)) best = longer(best, eventLock(state, comp, id))
+    return best
+  }
   for (const comp of Object.values(state.comps)) {
     if (!under(state, comp) || !heldBy(comp).includes(id)) continue
-    const l = lockIn(state, comp, id)
+    const l = majorLock(state, comp, id)
     if (l) return l
   }
   return null
@@ -241,15 +324,26 @@ export function lockNow(state: GameState, id: string): RosterLock | null {
 /** Every club under a lock today, read once a day: by the time anyone else is asked about, the day's matches are played. */
 const TODAY = new WeakMap<GameState, { at: string; locks: Map<string, RosterLock> }>()
 function locksToday(state: GameState): Map<string, RosterLock> {
-  const at = `${state.year}:${state.day}`
+  const events = byEvents(state)
+  // from 2023 an event drawn since the morning holds its field at once
+  const at = events ? dayKey(state) : `${state.year}:${state.day}`
   const hit = TODAY.get(state)
   if (hit?.at === at) return hit.locks
   const locks = new Map<string, RosterLock>()
   for (const comp of Object.values(state.comps)) {
+    if (events) {
+      const c = comp.circuit
+      if (!c || !c.mode || c.done || state.day > c.end || state.day < c.start - 1) continue
+      for (const id of holdsOf(state, comp).keys()) {
+        const l = longer(locks.get(id) ?? null, eventLock(state, comp, id))
+        if (l) locks.set(id, l)
+      }
+      continue
+    }
     if (!under(state, comp)) continue
     for (const id of heldBy(comp)) {
       if (locks.has(id)) continue
-      const l = lockIn(state, comp, id)
+      const l = majorLock(state, comp, id)
       if (l) locks.set(id, l)
     }
   }
@@ -257,51 +351,24 @@ function locksToday(state: GameState): Map<string, RosterLock> {
   return locks
 }
 
+/** 2023 on: out of the event that holds it — knocked out, or its decider lost. History's events, and a phase played as history, are not read for it. */
+function outOf(state: GameState, lock: RosterLock, id: string): boolean {
+  const comp = state.comps[lock.comp]
+  const c = comp?.circuit
+  if (!comp || !c || lock.kind === 'phase') return false
+  if (lock.kind === 'decider') {
+    const f = c.playin ? state.fixtures.find((x) => x.id === c.playin!.fixture) : undefined
+    return !!f?.played && gameOf(f)?.w !== id
+  }
+  if (comp.champion) return comp.champion !== id
+  return c.mode === 'sim' && !stillIn(state, comp, id)
+}
+
 /* ------------------------------------------------------------------ */
 /*  calendars                                                          */
 /* ------------------------------------------------------------------ */
 
 interface Cal { open: boolean; closesOn?: number; nextOpens?: number; tentative?: boolean }
-interface Open { from: number; to: number; tentative: boolean }
-
-const CLOSE = new Map<string, { at: number; tentative: boolean }>()
-/**
- * One week before a league's Stage 2 playoffs, off that league's event (暂定 by
- * league); with none on the books, three weeks before its Stage 2 ends.
- */
-function stage2Close(league: string, season: number): { at: number; tentative: boolean } {
-  const key = `${league}:${season}`
-  let hit = CLOSE.get(key)
-  if (!hit) {
-    let po: number | null = null
-    try {
-      const ev = eventsOf(season).find((e) => e.stage === 'stage2' && !e.scene && e.region === league && !/Open Playoffs/i.test(e.name))
-      po = ev ? playoffsFrom(ev) : null
-    } catch { po = null }
-    const s2 = stagesOf(season, true).find((s) => s.key === 'stage2')
-    hit = { at: absDay(season, po != null ? po - 7 : (s2?.end ?? 250) - 21), tentative: true }
-    CLOSE.set(key, hit)
-  }
-  return hit
-}
-
-function vctOpens(team: Team, season: number): Open[] {
-  const w = vctWindowOf(season)
-  if (!w) return []
-  const close = w.closes === 'stage2' ? stage2Close(regionIn(team.region, season), season) : { at: isoAbs(w.closes), tentative: false }
-  const out: Open[] = [{ from: isoAbs(w.opens), to: close.at, tentative: !!w.tentative || close.tentative }]
-  if (w.mid) out.push({ from: isoAbs(w.mid[0]), to: isoAbs(w.mid[1]), tentative: !!w.tentative })
-  return out
-}
-
-function vctCal(state: GameState, team: Team): Cal {
-  const T = todayAbs(state)
-  const spans = [state.year, state.year + 1, state.year + 2].flatMap((s) => vctOpens(team, s))
-  const inside = spans.filter((s) => T >= s.from && T <= s.to).sort((a, b) => b.to - a.to)[0]
-  if (inside) return { open: true, closesOn: inside.to, tentative: inside.tentative }
-  const ahead = spans.filter((s) => s.from > T).sort((a, b) => a.from - b.from)[0]
-  return { open: false, nextOpens: ahead?.from, tentative: ahead?.tentative }
-}
 
 /** The old 2026 world's four spans, the manager game's calendar. */
 const LEGACY: [number, number][] = [[0, 20], [63, 90], [165, 198], [323, 363]]
@@ -311,6 +378,135 @@ function legacyCal(state: GameState): Cal {
   if (at) return { open: true, closesOn: absDay(state.year, at[1]) }
   const next = LEGACY.find(([a]) => a > d)
   return { open: false, nextOpens: next ? absDay(state.year, next[0]) : absDay(state.year + 1, 0) }
+}
+
+/** 2023 on: days an event holds a club, absolute, by the event's name; `tentative` when a date here is 暂定. */
+interface Busy { from: number; until: number; name: string; tentative: boolean }
+
+const OUTLOOK = new WeakMap<GameState, { at: string; of: Map<string, ReturnType<typeof drawOutlook>> }>()
+const PHASES = new WeakMap<GameState, { at: string; of: Map<string, Map<string, [number, number]>> }>()
+const SCENES = new WeakMap<GameState, { at: string; of: Map<string, string | undefined> }>()
+
+/** The latest day an open qualifier not drawn yet plays the player's club's decider: its open phases' last day, or its draw's eve (me/nextup.ts deciderBy). */
+const deciderDay = (comp: Competition, ev: CEvent): number =>
+  Math.max(comp.circuit!.start - 1, ...ev.units.filter((u) => u.type === 'open').map((u) => u.last ?? 0))
+
+/**
+ * Whether an event not drawn yet can have anything of the club's, before its draw is read — each read
+ * draws the event's field, and from 2027 one read of an event of the new format can take tens of
+ * milliseconds: an international; one history booked the club into; its Challengers league's; one whose
+ * regions take in the club's.
+ */
+function concerns(state: GameState, ev: CEvent, comp: Competition, team: Team, at: string): boolean {
+  if (ev.region === null || comp.teams.includes(team.id)) return true
+  if (ev.scene) return daily(SCENES, state, at, team.id, () => sceneFor(state, team)) === ev.scene
+  const league = regionIn(team.region, state.year)
+  return (ev.layer ?? [ev.region]).some((r) => r === team.region || r === league)
+}
+
+/**
+ * 2023 on: the days an event of this season holds the club, or will as its draw stands today;
+ * `maybe` for a place it may still earn (see the header).
+ */
+function busyIn(state: GameState, comp: Competition, team: Team, at: string): Busy | 'maybe' | null {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev || c.done || comp.champion) return null
+  const y = state.year
+  const tentative = !datesKnown(ev)
+  if (c.mode) {
+    const h = holdsOf(state, comp).get(team.id)
+    return h ? { from: absDay(y, h.from), until: absDay(y, h.until), name: comp.name, tentative: tentative || !!h.pending } : null
+  }
+  if (!concerns(state, ev, comp, team, at)) return null
+  const o = daily(OUTLOOK, state, at, `${comp.key}:${team.id}`, () => drawOutlook(state, comp, team.id))
+  if (o?.standing === 'seated') return { from: absDay(y, Math.max(0, c.start)), until: absDay(y, c.end), name: comp.name, tentative }
+  // a phase history booked it into and no further (circuit.ts phaseOnlyOf)
+  const phase = daily(PHASES, state, at, comp.key, () => phaseOnlyOf(state, comp)).get(team.id)
+  if (phase) return { from: absDay(y, Math.max(0, phase[0])), until: absDay(y, phase[1]), name: comp.name, tentative }
+  // an open qualifier the player's club will enter (circuit.ts offerPlayIn, planPlayIn): its days up to the decider, the rest up to the result
+  if (o?.standing === 'entry' && state.me?.phase === 'pro' && team.id === state.myTeam) {
+    const last = deciderDay(comp, ev)
+    const first = Math.min(last, ...ev.units.filter((u) => u.type === 'open').map((u) => u.first ?? c.start))
+    return { from: absDay(y, Math.max(0, first)), until: absDay(y, last), name: comp.name, tentative: true }
+  }
+  return o?.standing === 'maybe' || o?.standing === 'entry' ? 'maybe' : null
+}
+
+const FIRST_OF = new Map<string, CEvent | null>()
+/** A season's first event that `pick` takes, read once for each `key`. */
+function firstOf(y: number, key: string, pick: (ev: CEvent) => boolean): CEvent | null {
+  const at = `${y}:${key}`
+  if (!FIRST_OF.has(at)) {
+    const evs = eventsOf(y).filter((ev) => ev.start != null && ev.end != null && pick(ev)).sort((a, b) => a.start! - b.start!)
+    FIRST_OF.set(at, evs[0] ?? null)
+  }
+  return FIRST_OF.get(at)!
+}
+
+/**
+ * Next season's first event for the club, not drawn until the season turns (暂定): the earlier of its
+ * league's Kickoff and the first event history books it into; for a club outside the leagues with no
+ * booking — a year nobody has played — the first event of its Challengers league with matches of its own.
+ */
+function firstNextSeason(state: GameState, team: Team): Busy | null {
+  const y = state.year + 1
+  const league = inVctLeague(state, team) ? regionIn(team.region, y) : null
+  const vlr = team.id.startsWith('V21T') ? team.id.slice(4) : null
+  const heirs = Object.entries(state.heirs ?? {}).filter(([, to]) => to === team.id).map(([from]) => from.slice(4))
+  const own = new Set([...(vlr ? [vlr] : []), ...heirs])
+  const booked = own.size ? firstOf(y, `booked:${[...own].sort().join('+')}`, (ev) => !ev.projected && ev.seeds.some((v) => own.has(v))) : null
+  const kickoff = league ? firstOf(y, `kickoff:${league}`, (ev) => !ev.scene && ev.region === league && ev.stage === 'kickoff') : null
+  let best: CEvent | undefined = [booked, kickoff].filter((ev): ev is CEvent => !!ev).sort((a, b) => a.start! - b.start!)[0]
+  if (!best && !league) {
+    const scene = sceneFor(state, team)
+    best = (scene ? firstOf(y, `scene:${scene}`, (ev) => ev.scene === scene && ev.units.some((u) => u.type !== 'open')) : null) ?? undefined
+  }
+  return best ? { from: absDay(y, Math.max(0, best.start!)), until: absDay(y, best.end!), name: best.cn, tentative: true } : null
+}
+
+const BUSY = new WeakMap<GameState, { at: string; of: Map<string, Busy | null> }>()
+/**
+ * 2023 on: the first days on or after `from` (absolute) that an event holds the club, as known
+ * today, clipped to start there — this season's events, and past its last, next season's first.
+ * 暂定 when a place the club may still earn opens before them.
+ */
+function busyFrom(state: GameState, team: Team, from: number, at: string): Busy | null {
+  return daily(BUSY, state, at, `${team.id}:${from}`, () => {
+    const y = state.year
+    const comps = Object.values(state.comps)
+      .filter((x) => !!x.circuit && !x.circuit.done && !x.champion && absDay(y, x.circuit.end) >= from)
+      .sort((a, b) => a.circuit!.start - b.circuit!.start || a.key.localeCompare(b.key))
+    let best: Busy | null = null
+    const maybes: number[] = []
+    for (const comp of comps) {
+      // an event opening after the days found holds nothing sooner: a decider comes on its eve at the earliest
+      if (best && absDay(y, comp.circuit!.start - 1) > best.from) break
+      const b = busyIn(state, comp, team, at)
+      if (b === 'maybe') { maybes.push(absDay(y, Math.max(0, comp.circuit!.start - 1))); continue }
+      if (!b || b.until < from) continue
+      const start = Math.max(b.from, from)
+      if (!best || start < best.from) best = { ...b, from: start }
+    }
+    if (best) return maybes.some((d) => d <= best!.from) ? { ...best, tentative: true } : best
+    const next = firstNextSeason(state, team)
+    return next && next.until >= from ? { ...next, from: Math.max(next.from, from) } : null
+  })
+}
+
+/** 2023 on: the first day after `until` (absolute) that no event holds the club, as known today, and the events that follow with no day between. */
+function freeAfter(state: GameState, team: Team, until: number, at: string): { at: number; tentative: boolean; then: string[] } {
+  let day = until + 1
+  let tentative = false
+  const then: string[] = []
+  for (let i = 0; i < 16; i++) {
+    const b = busyFrom(state, team, day, at)
+    if (!b || b.from > day) break
+    day = b.until + 1
+    tentative ||= b.tentative
+    if (!then.includes(b.name)) then.push(b.name)
+  }
+  return { at: day, tentative, then }
 }
 
 /* ------------------------------------------------------------------ */
@@ -326,18 +522,43 @@ export interface WindowState {
   club?: string
   /** open: its last day, when it has one (absolute) */
   closesOn?: number
+  /** open, 2023 on: the event that shuts it after `closesOn` */
+  closer?: string
   /** shut: the day it opens again, or the day after the lock (absolute) */
   nextOpens?: number
   lock?: RosterLock
+  /** shut, 2023 on: the events after the lock's that hold the club with no day between */
+  then?: string[]
   /** a date here nobody has published */
   tentative?: boolean
 }
 
-/** One club's window. `fresh` reads its lock now rather than off the day's list. */
-export function windowOfClub(state: GameState, team: Team, fresh = false): WindowState {
+/**
+ * One club's window. `fresh` reads its lock now rather than off the day's list; `dates` works out,
+ * from 2023, how long it stays open or when it opens again — a read of the events ahead that
+ * clubOpen, which only asks open or shut, goes without.
+ */
+export function windowOfClub(state: GameState, team: Team, fresh = false, dates = true): WindowState {
   const rule = ruleOf(state, team)
   const lock = fresh ? lockNow(state, team.id) : locksToday(state).get(team.id) ?? null
-  const cal: Cal = rule === 'vct' ? vctCal(state, team) : rule === 'legacy' ? legacyCal(state) : { open: true }
+  if (byEvents(state)) {
+    if (!dates) return lock ? { open: false, rule, club: team.id, lock } : { open: true, rule, club: team.id }
+    const T = todayAbs(state)
+    const at = dayKey(state)
+    if (lock) {
+      const ev = eventOf(state.comps[lock.comp]?.circuit?.id ?? '')
+      const free = freeAfter(state, team, absDay(state.year, lock.until), at)
+      return {
+        open: false, rule, club: team.id, lock: { ...lock, out: outOf(state, lock, team.id) }, nextOpens: free.at,
+        then: free.then.length ? free.then : undefined, tentative: free.tentative || !!lock.pending || (!!ev && !datesKnown(ev)),
+      }
+    }
+    const next = busyFrom(state, team, T, at)
+    return next
+      ? { open: true, rule, club: team.id, closesOn: Math.max(T, next.from - 1), closer: next.name, tentative: next.tentative }
+      : { open: true, rule, club: team.id }
+  }
+  const cal: Cal = rule === 'legacy' ? legacyCal(state) : { open: true }
   if (lock) {
     const after = absDay(state.year, lock.until + 1)
     const next = cal.open ? after : Math.max(after, cal.nextOpens ?? after)
@@ -348,19 +569,20 @@ export function windowOfClub(state: GameState, team: Team, fresh = false): Windo
 
 /**
  * Can a move be made today: my club's window, when I have a club, and the other
- * club's, when there is one. The first that is shut is the answer.
+ * club's, when there is one. The first that is shut is the answer. `dates`: as
+ * windowOfClub — a caller that only asks open or shut goes without.
  */
-export function windowAt(state: GameState, teamId?: string): WindowState {
+export function windowAt(state: GameState, teamId?: string, dates = true): WindowState {
   const me = state.me
   const mine = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
   const other = teamId && teamId !== mine?.id ? state.teams[teamId] : undefined
-  const a = mine ? windowOfClub(state, mine, true) : null
+  const a = mine ? windowOfClub(state, mine, true, dates) : null
   if (a && !a.open) return { ...a, side: 'mine' }
-  const b = other ? windowOfClub(state, other) : null
+  const b = other ? windowOfClub(state, other, false, dates) : null
   if (b && !b.open) return { ...b, side: 'other' }
   if (a && b) {
-    const closes = [a.closesOn, b.closesOn].filter((x): x is number => x != null)
-    return { ...a, closesOn: closes.length ? Math.min(...closes) : undefined, tentative: a.tentative || b.tentative }
+    const first = [a, b].filter((x) => x.closesOn != null).sort((x, y) => x.closesOn! - y.closesOn!)[0]
+    return { ...a, closesOn: first?.closesOn, closer: first?.closer, tentative: first ? first.tentative : a.tentative || b.tentative }
   }
   return a ?? b ?? { open: true, rule: ruleOf(state, undefined) }
 }
@@ -368,7 +590,7 @@ export function windowAt(state: GameState, teamId?: string): WindowState {
 /** One club's window alone — a buyer's, a seller's — read off the day's list. */
 export function clubOpen(state: GameState, teamId: string | null | undefined): boolean {
   const t = teamId ? state.teams[teamId] : undefined
-  return !t || windowOfClub(state, t).open
+  return !t || windowOfClub(state, t, false, false).open
 }
 
 /** Weeks until a move can be made: 0 while it can. */
@@ -383,31 +605,38 @@ export function weeksToWindow(state: GameState, teamId?: string): number {
 /*  words                                                              */
 /* ------------------------------------------------------------------ */
 
-const OPEN_WHY: Record<WindowRule, string> = {
-  open: '这两年没有固定窗口，不打大赛的日子都能转',
-  chal: 'Challengers 俱乐部只在打季后赛、晋级赛时锁名单',
-  vct: '',
-  legacy: '',
+function openWhy(state: GameState, w: WindowState): string {
+  if (w.rule === 'open') return '这两年没有固定窗口，不打大赛的日子都能转'
+  if (byEvents(state)) return '眼下没有要打的赛事'
+  return w.rule === 'chal' ? 'Challengers 俱乐部不设窗口' : ''
 }
 
-function shutWhy(state: GameState, w: WindowState): string {
-  const club = w.club ? state.teams[w.club] : undefined
-  const who = w.side === 'other' && club ? `${club.name}：` : ''
-  if (w.rule === 'legacy') return `${who}赛季进行中`
-  const T = todayAbs(state)
-  const win = vctWindowOf(state.year)
-  const champs = stagesOf(state.year, onTimeline(state)).find((s) => s.key === 'champions')
-  if (win?.championsLock && win.closes !== 'stage2' && T > isoAbs(win.closes) && T <= absDay(state.year, champs?.end ?? 363)) {
-    return `${who}${state.year} 赛季窗口 ${dateCn(isoAbs(win.closes), state.year)}已关，进冠军赛的队伍 ${dateCn(isoAbs(win.championsLock), state.year)}锁定最终名单`
-  }
-  return `${who}${champs && state.day > champs.end ? 'VCT 休赛期窗口还没开' : 'VCT 联赛赛季中'}`
+/** What a locked club is doing, in the screens' words: 「正在打 X」, or out of it and held all the same. */
+export function lockDoing(lock: RosterLock): string {
+  if (!lock.out) return `正在打 ${lock.event}`
+  return lock.kind === 'decider' ? `在 ${lock.event} 的决胜局出局` : `已在 ${lock.event} 出局，名单锁到赛事结束`
+}
+
+/** The last day of a lock (absolute): its event's, or, from 2023, that of the last event after it with no day between. */
+export function lockLifts(state: GameState, w: WindowState): number {
+  return w.then?.length && w.nextOpens != null ? w.nextOpens - 1 : absDay(state.year, w.lock?.until ?? state.day)
+}
+
+/** The last day of the lock a move agreed under it waits for (absolute), read now (me/contract.ts settleMove makes it the day after). */
+export function moveLifts(state: GameState): number | null {
+  const m = state.me?.moveAfter
+  if (!m) return null
+  const w = windowAt(state, m.deal.teamId)
+  return w.lock ? lockLifts(state, w) : absDay(m.year ?? state.year, m.until)
 }
 
 /**
  * The window in one line, for the transfer screen and the week page:
- * 「转会窗口开放中 · 到 3月25日（还剩 12 天）」
- * 「转会窗口关闭 · VCT 联赛赛季中 · 下次开启：2023年9月11日（约 24 周后）」
+ * 「转会窗口开放中 · 到 3月25日（还剩 12 天） · 之后打 美洲联赛 · 第一赛段」
  * 「名单锁定 · 你的俱乐部正在打 LOCK//IN 圣保罗 · 3月4日后解除」
+ * 「名单锁定 · 你的俱乐部已在 马德里大师赛 出局，名单锁到赛事结束 · 3月24日后解除」
+ * 「名单锁定 · 你的俱乐部正在打 EMEA 联赛 · 揭幕赛，接着打 曼谷大师赛 · 3月1日后解除（暂定）」
+ * 「转会窗口关闭 · 赛季进行中 · 下次开启：6月15日（约 9 周后）」（the old 2026 world）
  */
 export function windowLine(state: GameState, teamId?: string): string {
   const w = windowAt(state, teamId)
@@ -415,15 +644,18 @@ export function windowLine(state: GameState, teamId?: string): string {
   const soft = w.tentative ? '（暂定）' : ''
   if (w.lock) {
     const who = w.side === 'other' ? (state.teams[w.club ?? '']?.name ?? '对方俱乐部') : '你的俱乐部'
-    return `名单锁定 · ${who}正在打 ${w.lock.event} · ${dateCn(absDay(state.year, w.lock.until), state.year)}后解除`
+    const then = w.then?.length ? `，接着打 ${w.then.join('、')}` : ''
+    return `名单锁定 · ${who}${lockDoing(w.lock)}${then} · ${dateCn(lockLifts(state, w), state.year)}后解除${soft}`
   }
   if (w.open) {
-    if (w.closesOn != null) return `转会窗口开放中 · 到 ${dateCn(w.closesOn, state.year)}（还剩 ${w.closesOn - T} 天）${soft}`
-    const why = OPEN_WHY[w.rule]
+    if (w.closesOn != null) return `转会窗口开放中 · 到 ${dateCn(w.closesOn, state.year)}（还剩 ${w.closesOn - T} 天）${soft}${w.closer ? ` · 之后打 ${w.closer}` : ''}`
+    const why = openWhy(state, w)
     return `转会窗口开放中${why ? ` · ${why}` : ''}`
   }
+  const club = w.club ? state.teams[w.club] : undefined
+  const who = w.side === 'other' && club ? `${club.name}：` : ''
   const next = w.nextOpens != null ? ` · 下次开启：${dateCn(w.nextOpens)}（约 ${Math.max(1, Math.round((w.nextOpens - T) / 7))} 周后）${soft}` : ''
-  return `转会窗口关闭 · ${shutWhy(state, w)}${next}`
+  return `转会窗口关闭 · ${who}赛季进行中${next}`
 }
 
 /** Why a move cannot be made today, for a greyed button; null while it can. */
@@ -489,34 +721,20 @@ export function listBlock(state: GameState): string | null {
   return null
 }
 
-/** This season's VCT windows in dates. */
-function vctWindowsCn(state: GameState): string {
-  const y = state.year
-  const w = vctWindowOf(y)
-  const next = vctWindowOf(y + 1)
-  if (!w) return ''
-  const mine = state.me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
-  const closes = w.closes === 'stage2'
-    ? (mine && inVctLeague(state, mine) ? `${dateCn(stage2Close(regionIn(mine.region, y), y).at, y)}（你所在联赛第二赛段季后赛前一周，暂定）` : '各联赛第二赛段季后赛开打前一周（暂定）')
-    : dateCn(isoAbs(w.closes), y)
-  const mid = w.mid ? `、${dateCn(isoAbs(w.mid[0]), y)}–${dateCn(isoAbs(w.mid[1]), y)}` : ''
-  const lock = w.championsLock ? `，进冠军赛的队伍 ${dateCn(isoAbs(w.championsLock), y)}锁定最终名单` : ''
-  const after = next ? `；下个赛季的窗口 ${dateCn(isoAbs(next.opens), y)}开${next.tentative ? '（暂定）' : ''}` : ''
-  return `${dateCn(isoAbs(w.opens), y)}–${closes}${mid}${w.tentative ? '（暂定）' : ''}${lock}${after}`
-}
-
 /** The year's rule in plain words, for the help page and the tour. */
 export function windowRuleLines(state: GameState): string[] {
   const y = state.year
   const out: string[] = []
   if (y <= 2022) {
     out.push(`${y} 年还没有联盟，也没有固定的转会窗口：俱乐部只要不在打大赛——国际赛、最后机会资格赛${y === 2021 ? '、赛区大师赛和挑战者决赛' : ''}——随时能签人。大赛开打那天锁名单，出局或打完就解除。`)
+  } else if (onTimeline(state)) {
+    out.push('有了 VCT 联赛以后，VCT 联赛俱乐部和 Challengers 俱乐部一个规矩：俱乐部打的每一项赛事，从第一天到最后一天都锁名单——联赛的揭幕赛、第一赛段、第二赛段（2027 年起是杯赛、公开季后赛和公开资格赛），Challengers 联赛的各个赛段，大师赛、冠军赛、最后机会资格赛、晋升赛，打的海选、资格赛和升降级赛也算。提前出局、没打进季后赛，也要等这项赛事结束才解锁；只打了海选或资格赛、没打进正赛的，那一轮结束解锁。你的俱乐部报名打决胜局的，从那轮海选第一天锁，输了第二天解锁，赢了锁到赛事结束。')
+    out.push('转会窗口只在两项赛事之间的空档开。休赛期也是空档：从这个赛季最后一项赛事的第二天，到下个赛季第一项赛事的前一天。还没抽签的赛事按眼下的形势算；大师赛、冠军赛这类还要看打不打得进的，还有没公布日期的赛事，窗口的日期标「暂定」。')
   } else {
-    out.push(`VCT 联赛俱乐部照 Riot 的转会窗口：${vctWindowsCn(state)}。打国际赛、最后机会资格赛和本联赛季后赛期间名单锁定。`)
-    out.push('Challengers 和其他联赛外的俱乐部不设固定窗口，只在打季后赛、晋级赛这类升级赛时锁名单——比 Riot 的规定宽，是有意的。')
+    out.push(`VCT 联赛俱乐部每年四段转会窗口：${LEGACY.map(([a, b]) => `${dateCn(absDay(y, a), y)}–${dateCn(absDay(y, b), y)}`).join('、')}；Challengers 俱乐部不设窗口。打国际赛期间名单锁定。`)
   }
   out.push('一笔转会要两边俱乐部的窗口都开着。开着的时候，赛段结束、6 月中和 11 月下旬的两个转会日、平常的每周都可能来报价，每半个赛季最多来一轮。')
   out.push('试训邀请也只在窗口开着时来。在一个转会期里刚签约的，这个转会期不会再有俱乐部来请你试训或报价，外区的邀约顺延，自己也不能挂牌，要等下个转会期；自己俱乐部的续约不受影响。')
-  out.push('谈妥时有一边名单锁定的，比赛打完才正式转会。')
+  out.push('谈妥时有一边名单锁定的，锁定解除才正式转会。')
   return out
 }

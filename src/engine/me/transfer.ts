@@ -72,7 +72,7 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   const seen = me.intents.find((i) => i.teamId === t.id)
   if (seen) seen.day = state.day
   else me.intents.push({ teamId: t.id, day: state.day })
-  pushLog(state, 'info', windowAt(state, t.id).open
+  pushLog(state, 'info', windowAt(state, t.id, false).open
     ? (seen ? `${t.name} 的教练又来看了你的比赛，你的名字早就在他们的名单上。` : `${t.name} 的教练来看了你的比赛，记下了你的名字。`)
     : `${t.name} 的教练${seen ? '又' : ''}来看了你的比赛。转会窗口开了再说。`)
 }
@@ -451,7 +451,7 @@ function syncPeriod(state: GameState): void {
  */
 export function windowRoll(state: GameState, rng: Rng, kind: RollKind, part: 'vct' | 'rest' | 'both' = 'both'): number {
   const me = state.me!
-  if (me.phase !== 'pro' || me.moveAfter || !state.teams[state.myTeam] || !windowAt(state).open) return 0
+  if (me.phase !== 'pro' || me.moveAfter || !state.teams[state.myTeam] || !windowAt(state, undefined, false).open) return 0
   syncPeriod(state)
   const w = rollWeight(state, kind)
   let n = part === 'rest' ? 0 : vctApproach(state, rng, w)

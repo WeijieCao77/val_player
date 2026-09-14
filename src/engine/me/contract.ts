@@ -15,7 +15,7 @@ import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
 import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
-import { absDay, dateCn, periodKey, windowAt } from './window'
+import { dateCn, lockDoing, lockLifts, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
 
 /**
@@ -176,14 +176,15 @@ export function acceptDeal(state: GameState, dealId: string): string {
     me.flags.refusedRenew = 0
     return '已续约。'
   }
-  // a club under a roster lock registers nobody until its event is over: agreed now, made then (me/window.ts)
+  // a club under a roster lock registers nobody until its event is over — from 2023, and any event after it with no
+  // day between (me/window.ts lockLifts): agreed now, made then
   const w = windowAt(state, d.teamId)
   if (w.lock) {
     me.moveAfter = { deal: d, event: w.lock.event, until: w.lock.until, year: state.year }
     const to = state.teams[d.teamId]?.name ?? '对方'
-    const when = dateCn(absDay(state.year, w.lock.until), state.year)
-    pushLog(state, 'deal', `和 ${to} 谈妥了。${w.side === 'other' ? `${to} ` : '你的俱乐部'}正在打 ${w.lock.event}，名单锁定到 ${when}，打完再正式转会。`)
-    return `谈妥了：${w.lock.event} 打完（${when}后）正式去 ${to}。`
+    const when = dateCn(lockLifts(state, w), state.year)
+    pushLog(state, 'deal', `和 ${to} 谈妥了。${w.side === 'other' ? `${to} ` : '你的俱乐部'}${lockDoing(w.lock)}，名单锁定到 ${when}，锁定解除再正式转会。`)
+    return `谈妥了：名单锁定解除（${when}后）正式去 ${to}。`
   }
   joinClub(state, d)
   return `你签进了 ${state.teams[d.teamId]?.name}。`
@@ -211,7 +212,7 @@ export function settleMove(state: GameState, now = false): void {
     return
   }
   me.moveAfter = undefined
-  pushLog(state, 'deal', `${m.event} 打完了，名单锁定解除，转会正式生效。`)
+  pushLog(state, 'deal', `${m.event} 的名单锁定解除了，转会正式生效。`)
   joinClub(state, m.deal)
 }
 

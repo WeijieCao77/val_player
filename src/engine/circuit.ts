@@ -223,6 +223,13 @@ function projectedOf(year: number): CEvent[] {
 
 export const eventsOf = (year: number): CEvent[] => [...(CIRCUIT[String(year)] ?? []), ...projectedOf(year)]
 
+/**
+ * Whether an event's days are ones anybody has announced (engine/me/window.ts marks the rest 暂定):
+ * every event played, and of what the last real year still owes, Champions (OWED_DATES).
+ */
+export const datesKnown = (ev: CEvent): boolean =>
+  !ev.projected || (ev.projected.year === LAST_REAL_YEAR && !ev.plan && !!ev.stage && !!OWED_DATES[ev.stage])
+
 export const eventOf = (id: string): CEvent | undefined => {
   const hit = BY_ID.get(id)
   if (hit) return hit
@@ -1668,6 +1675,68 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
   }
   const more = couldStillTake(state, comp, ev, team, depth)
   return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
+}
+
+/**
+ * The clubs on a drawn event's own floor (engine/me/window.ts: each is held from its first day to its
+ * last): a seed its own matches are drawn from, the club its open qualifier really sent on to a place
+ * or the stand-in for it, and a decider's winner — its rival while the decider is to play. A side
+ * booked only for an open qualifier, history's to replay, is not on it. Empty before the draw.
+ */
+export function floorOf(state: GameState, comp: Competition): Set<string> {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  const out = new Set<string>()
+  if (!c || !ev || !c.mode) return out
+  const decider = c.playin ? state.fixtures.find((f) => f.id === c.playin!.fixture) : undefined
+  const won = decider ? gameOf(decider)?.w ?? null : null
+  const main = mainSeedsOf(ev)
+  c.seeds.forEach((t, i) => {
+    // a seat the decider's winner took from its holder (slot 's')
+    if (t && main.has(i) && !(won && c.playin?.key === `s:${i}` && won !== t)) out.add(t)
+  })
+  for (const { ui, rank } of openOutputs(ev)) {
+    const key = `${ui}:${rank}`
+    if (won && c.playin?.key === key) continue
+    // as the graph seats it (graphOf's `slot`)
+    const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    const t = real && gone(state, real) ? c.fill?.[key] ?? real : real ?? c.fill?.[key]
+    if (t) out.add(t)
+  }
+  if (won) out.add(won)
+  return out
+}
+
+/**
+ * The clubs a real event holds only in a phase kept as its result — an open or closed qualifier, a
+ * regular season, a promotion series, played as history had it (isOpen) — that did not go on into the
+ * event's own matches, each with that phase's first and last day (engine/me/window.ts holds it for
+ * those days: the day it went out is not on record). Drawn, off its field; before the draw, as history
+ * booked it. A projected event's phases have no results and hold nobody.
+ */
+export function phaseOnlyOf(state: GameState, comp: Competition): Map<string, [number, number]> {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  const out = new Map<string, [number, number]>()
+  if (!c || !ev || ev.projected) return out
+  const main = mainSeedsOf(ev)
+  const sent = new Set(openOutputs(ev).map(({ ui, rank }) => ev.units[ui].ranked?.[rank - 1]))
+  const field = c.mode ? c.seeds : leagueOut(state, ev, ev.seeds.map((v) => teamOf(state, ev, v)))
+  ev.seeds.forEach((v, i) => {
+    const t = field[i]
+    if (!t || main.has(i) || sent.has(v)) return
+    let from = Infinity
+    let until = -Infinity
+    for (const u of ev.units) {
+      if (!isOpen(u) || !u.ranked?.includes(v)) continue
+      from = Math.min(from, u.first ?? c.start)
+      until = Math.max(until, u.last ?? c.end)
+    }
+    if (until < from) return
+    const had = out.get(t)
+    out.set(t, had ? [Math.min(had[0], from), Math.max(had[1], until)] : [from, until])
+  })
+  return out
 }
 
 /** The seed places an event's own matches are drawn from: its open qualifiers' entrants are not among them. */

@@ -3,7 +3,7 @@ import { Crest, Panel, fmtDay, moneyIn } from './common'
 import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
-import { absDay, dateCn, inviteBlock, listBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
+import { absDay, dateCn, inviteBlock, listBlock, moveLifts, signedThisPeriod, windowLine } from '../../engine/me/window'
 import { abroadClub, clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
@@ -95,7 +95,7 @@ export default function TransferScreen() {
             <p className="small"><b>{windowLine(game)}</b></p>
             {signedThisPeriod(game) && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{inviteBlock(game)}。</p>}
             {me.moveAfter && (
-              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式转会。</p>
+              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 期间名单锁定，{dateCn(moveLifts(game) ?? absDay(game.year, me.moveAfter.until), game.year)}后正式转会。</p>
             )}
             {(() => {
               // the engine's own gate, greyed with its line: an agreed move, the period I signed in, the window, this year's listing
@@ -135,7 +135,7 @@ export default function TransferScreen() {
               ))}
             {declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
             {me.moveAfter && (
-              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 打完（{dateCn(absDay(game.year, me.moveAfter.until), game.year)}后）正式签约。</p>
+              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 期间名单锁定，{dateCn(moveLifts(game) ?? absDay(game.year, me.moveAfter.until), game.year)}后正式签约。</p>
             )}
           </Panel>
         )}

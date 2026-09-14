@@ -202,7 +202,7 @@ function seasonSteps(g: GameState): TourStep[] {
     {
       screen: 'transfer', at: [panel('市场怎么看你')], title: '转会窗',
       // the year's own rule and today's state (engine/me/window.ts); the full rule is on the help page
-      body: `${windowLine(g)}。${g.year <= 2022 ? '这两年没有固定窗口，俱乐部不打大赛就能转' : 'VCT 联赛照 Riot 的窗口，Challengers 只在打季后赛、晋级赛时锁名单'}（详见「帮助」）。赛段里打得好，别队教练会记下你，窗口开着就可能来报价。`,
+      body: `${windowLine(g)}。${g.year <= 2022 ? '这两年没有固定窗口，俱乐部不打大赛就能转' : '俱乐部打赛事期间整段锁名单，只有两项赛事之间的空档和休赛期开窗'}（详见「帮助」）。赛段里打得好，别队教练会记下你，窗口开着就可能来报价。`,
     },
   ]
 }

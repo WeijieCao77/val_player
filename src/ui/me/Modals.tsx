@@ -10,7 +10,7 @@ import { doorsOf, formatOf } from '../../engine/era'
 import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
-import { absDay, dateCn, windowAt } from '../../engine/me/window'
+import { dateCn, lockDoing, lockLifts, windowAt } from '../../engine/me/window'
 import { Rng, hashStr } from '../../engine/rng'
 import { CLAUSE_FINE, answerStreamOffer } from '../../engine/me/stream'
 import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
@@ -277,7 +277,7 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
         // signed under a roster lock, the move is made once the event is over (engine/me/contract.ts settleMove)
         const w = d.kind === 'renew' ? null : windowAt(game, d.teamId)
         return w?.lock
-          ? <p className="tiny warn" style={{ margin: '6px 0' }}>{w.side === 'other' ? team.name : '你的俱乐部'}正在打 {w.lock.event}，名单锁定：签了要等 {dateCn(absDay(game.year, w.lock.until), game.year)}后才正式转会。</p>
+          ? <p className="tiny warn" style={{ margin: '6px 0' }}>{w.side === 'other' ? team.name : '你的俱乐部'}{lockDoing(w.lock)}，名单锁定：签了要等 {dateCn(lockLifts(game, w), game.year)}后才正式转会。</p>
           : null
       })()}
       <p className="tiny faint" style={{ margin: '6px 0' }}>每还一次价都更难，第二次被拒就撤回。</p>
