@@ -31,15 +31,23 @@
  * 2029, and each season is held to that format as written — and the partners
  * are chosen again for 2029.
  *
- *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet|entry2026|ahead]
+ * And throughout, from 2023, one league at a time (oneLeague): no club is in two leagues' stages that run on the
+ * same days unless history had it there — held on every run above, and on the sixth man in Europe that
+ * scripts/check_nextup.ts plays first, to the end of 2025.
+ *
+ *   npx tsx scripts/check_circuit.ts [seed=11] [only: careers|bystander|lineage|quiet|entry2026|ahead|leagues]
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
-import { advanceUntil, autoWeek, quietAhead } from '../src/engine/me/auto'
+import { advanceUntil, autoResolve, autoWeek, quietAhead } from '../src/engine/me/auto'
+import { MeMatch } from '../src/engine/me/matchplay'
+import { pop } from '../src/engine/me/pending'
+import { advanceTurn } from '../src/engine/me/week'
 import { advanceDay, dateLabel, setupSeason } from '../src/engine/season'
 import { createNewGame } from '../src/engine/world'
-import { eventOf, eventsOf, worldIdOf } from '../src/engine/circuit'
+import { eventOf, eventsOf, isLeagueEvent, worldIdOf } from '../src/engine/circuit'
+import type { CEvent } from '../src/engine/circuit'
 import { MAX_NEW_PARTNERS } from '../src/engine/leagues'
 import { historyNames } from '../src/engine/names'
 import { bookClubsAt } from '../src/engine/timeline'
@@ -71,6 +79,95 @@ function internationals(year: number): { id: string; vlr: string; real: string }
 
 const championIs = (state: GameState, c: Competition | undefined, x: { vlr: string; real: string }): boolean =>
   !!c?.champion && (c.champion === worldIdOf(x.vlr) || (state.teams[c.champion]?.name ?? '').toLowerCase() === x.real.toLowerCase())
+
+/**
+ * One league at a time (reported 2026-09-14, scripts/check_nextup.ts seed 11). From 2023 no club holds a seat or a
+ * stand-in's place, or plays a tie, in two events of different leagues whose days overlap — two Challengers leagues'
+ * stages, or one of them and a partnered league's — unless history itself had that very club in both of those real
+ * events. An event that draws on several leagues' clubs is no league's: a combining layer's (EMEA's Challengers
+ * stages, SEA's splits, the Americas' Last Chance Qualifier), LATAM's finals over LATAM North and South, an
+ * international, an Ascension, an event of the new format. 2025's EMEA Challengers Stage 1, played here, reseated the
+ * European leagues' Stage 2s off its own placings: Spain Rising's UCAM took NORTH//EAST's Stage 2 place too, and played
+ * both leagues' Stage 2 at once.
+ *
+ * Read after every turn or week: each drawn event's seats, stand-ins, field and ties, gathered over the season.
+ */
+interface LeagueWatch { year: number; held: Map<string, Set<string>>; said: Set<string> }
+const LEAGUE_WATCH = new WeakMap<GameState, LeagueWatch>()
+const leagueStats = { pairs: 0, own: 0, told: 0 }
+const GATHERS = new Map<number, Set<string>>()
+
+/** An event's league, 2023 on, or null for an event that draws on several leagues' clubs (see oneLeague). */
+function leagueOf(year: number, ev: CEvent): string | null {
+  if (year < 2023 || ev.plan) return null
+  if (ev.scene) {
+    let gathers = GATHERS.get(year)
+    if (!gathers) {
+      const scenes = [...new Set(eventsOf(year).map((e) => e.scene).filter((s): s is string => !!s))]
+      gathers = new Set(scenes.filter((s) => scenes.some((o) => o !== s && o.startsWith(`${s} `))))
+      GATHERS.set(year, gathers)
+    }
+    return (ev.layer?.length ?? 0) > 1 || gathers.has(ev.scene) ? null : `挑战者联赛 ${ev.scene}`
+  }
+  return isLeagueEvent(year, ev) ? `VCT ${ev.region}` : null
+}
+
+function oneLeague(state: GameState, label: string): void {
+  let w = LEAGUE_WATCH.get(state)
+  if (!w || w.year !== state.year) {
+    w = { year: state.year, held: new Map(), said: new Set() }
+    LEAGUE_WATCH.set(state, w)
+  }
+  const drawn = Object.values(state.comps).filter((c) => !!c.circuit?.mode && !c.circuit.done)
+  for (const c of drawn) {
+    const h = w.held.get(c.key) ?? new Set<string>()
+    w.held.set(c.key, h)
+    for (const t of [...c.circuit!.seeds, ...Object.values(c.circuit!.fill ?? {}), ...c.teams]) if (t) h.add(t)
+  }
+  for (const f of state.fixtures) if (!f.scrim) w.held.get(f.comp)?.add(f.teamA).add(f.teamB)
+  // history's own: the sides a real event really had, as this world names them
+  const real = new Map<string, Set<string>>()
+  const realOf = (ev: CEvent): Set<string> => {
+    let hit = real.get(ev.id)
+    if (!hit) {
+      hit = new Set<string>()
+      if (!ev.projected) {
+        for (const v of new Set([...ev.seeds, ...ev.units.flatMap((u) => (u.nodes ?? []).flatMap((n) => n.teams))])) {
+          const id = v ? worldIdOf(v) : null
+          if (id) hit.add(state.heirs?.[id] ?? id)
+        }
+      }
+      real.set(ev.id, hit)
+    }
+    return hit
+  }
+  const named = drawn.map((c) => {
+    const ev = eventOf(c.circuit!.id)
+    return { c, ev, league: ev ? leagueOf(state.year, ev) : null }
+  }).filter((x): x is { c: Competition; ev: CEvent; league: string } => !!x.ev && !!x.league)
+  const how = (c: Competition, t: string): string =>
+    (c.circuit!.seeds.includes(t) ? '种子席位' : Object.values(c.circuit!.fill ?? {}).includes(t) ? '顶替名额' : '赛程里有它')
+  for (let i = 0; i < named.length; i++) {
+    for (let j = i + 1; j < named.length; j++) {
+      const [a, b] = [named[i], named[j]]
+      const [ca, cb] = [a.c.circuit!, b.c.circuit!]
+      if (a.league === b.league || ca.start > cb.end || cb.start > ca.end || (ca.mode === 'history' && cb.mode === 'history')) continue
+      const hb = w.held.get(b.c.key)!
+      for (const t of w.held.get(a.c.key)!) {
+        const key = `${a.c.key}|${b.c.key}|${t}`
+        if (!hb.has(t) || w.said.has(key)) continue
+        w.said.add(key)
+        leagueStats.pairs++
+        if (realOf(a.ev).has(t) && realOf(b.ev).has(t)) { leagueStats.own++; continue }
+        leagueStats.told++
+        const line = `${label}：${state.year} ${state.teams[t]?.name ?? t} 同时在 ${a.c.name}（${a.league}，第 ${ca.start}–${ca.end} 天，${how(a.c, t)}）`
+          + `和 ${b.c.name}（${b.league}，第 ${cb.start}–${cb.end} 天，${how(b.c, t)}）——两个联赛撞期的赛段排了同一队`
+        if (leagueStats.told <= 12) fail(line)
+        else bad++
+      }
+    }
+  }
+}
 
 /** A season's books: finished on time, nobody placed twice, and what the internationals did. */
 function season(state: GameState, label: string, year: number, strict: boolean): void {
@@ -140,7 +237,7 @@ function run(label: string, region: Region, start: StartPoint): void {
   if (state.year !== 2021) fail(`${label}：开局是 ${state.year} 年`)
   const onBooks = Object.values(state.comps).filter((c) => c.format === 'circuit').length
   if (onBooks < 100) fail(`${label}：日历上只有 ${onBooks} 场赛事，2021 真实有 121 场`)
-  const week = () => { autoWeek(state); qualifyHolds(state, label, fail) }
+  const week = () => { autoWeek(state); qualifyHolds(state, label, fail); oneLeague(state, label) }
   for (const year of [2021, 2022, 2023]) {
     if (!playYear(state, label, year, week, 60)) return
     season(state, label, year, false)
@@ -251,6 +348,7 @@ function bystander(): void {
     quietNow = q
     const t = state.teams.V21T8185
     if (t && (state.day === 150 || (state.year === 2026 && (state.day === 76 || state.day === 77)))) drx.push([state.year, state.day, t.name])
+    if (state.day % 7 === 0) oneLeague(state, '旁观者')
   }
   let was = snap(state)
   const turns: Turn[] = []
@@ -400,7 +498,7 @@ function entry2026(): void {
   const drxOpen = state.teams.V21T8185?.name
   let guard = 0
   try {
-    while (state.year === 2026 && state.day < 340 && !state.gameOver && guard++ < 60) autoWeek(state)
+    while (state.year === 2026 && state.day < 340 && !state.gameOver && guard++ < 60) { autoWeek(state); oneLeague(state, '2026 入口') }
   } catch (e) {
     fail(`2026 入口：第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
     return
@@ -500,7 +598,7 @@ function ahead(): void {
   try {
     while (state.year < 2029 && !state.gameOver && guard++ < 1300) {
       advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
-      if (state.day % 7 === 0) qualifyHolds(state, '新赛制', fail)
+      if (state.day % 7 === 0) { qualifyHolds(state, '新赛制', fail); oneLeague(state, '新赛制') }
       if (state.day === 345) check(state.year)
     }
   } catch (e) {
@@ -521,10 +619,46 @@ function ahead(): void {
   console.log(`  2029 重选合作队（每个联赛最多换 ${MAX_NEW_PARTNERS} 支）：${changed} · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 }
 
+/**
+ * One league at a time (oneLeague), on the career scripts/check_nextup.ts plays first — a sixth man in Europe from
+ * 2021, played the way the week's buttons play it — to the end of 2025, when the European Challengers leagues run
+ * their stages alongside EMEA's and each other's.
+ */
+function leagueCareer(): void {
+  const t0 = Date.now()
+  const label = '一队一联赛 · 2021 欧洲强队第六人'
+  const state = createCareer({ name: 'Check', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed, year: 2021 })
+  const me = state.me!
+  console.log(`\n== ${label}，打到 2025 年底：两个联赛撞期的赛段不排同一队`)
+  const told = leagueStats.told
+  let guard = 0
+  try {
+    while (state.year < 2026 && !state.gameOver && me.phase !== 'retired' && guard++ < 5000) {
+      let g = 0
+      while (me.pending.length && g++ < 30) {
+        const it = me.pending[0]
+        autoResolve(state, it)
+        if (me.pending[0] === it) pop(state, it.kind, it.id)
+      }
+      if (me.phase === 'retired' || state.gameOver) break
+      const stop = advanceTurn(state)
+      if (stop.kind === 'match') new MeMatch(state, stop.fixture).runOut()
+      oneLeague(state, label)
+    }
+  } catch (e) {
+    fail(`${label}：${state.year} 年第 ${state.day} 天崩了 —— ${String((e as Error).stack ?? e).split('\n').slice(0, 5).join(' | ')}`)
+    return
+  }
+  if (state.year < 2026) fail(`${label}：没有打到 2025 年底（${state.year} 年第 ${state.day} 天，${state.gameOver ?? me.phase}）`)
+  console.log(`  走到 ${state.year} 年 · 你在 ${state.teams[state.myTeam]?.name ?? '—'} · 两个联赛撞期的赛段排了同一队 ${leagueStats.told - told} 处 · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+}
+
 if (!only || only === 'quiet') quiet()
 if (!only || only === 'entry2026') entry2026()
 if (!only || only === 'ahead') ahead()
+if (!only || only === 'leagues') leagueCareer()
 console.log(`\n资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛 · ${qualifyStats.ties} 场淘汰赛对阵等前一场打完才排、坐的是那场的胜者或负者`)
+console.log(`一队一联赛：两个联赛撞期的赛段里有同一队 ${leagueStats.pairs} 处，${leagueStats.own} 处是真实历史里就这样，其余 ${leagueStats.told} 处不该有`)
 
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；队名按真实改名的日期换（DRX 2026-03-19 才叫 KIWOOM DRX）；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)

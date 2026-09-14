@@ -1245,13 +1245,15 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
     if (feeder?.circuit?.mode === 'sim') groups.set(feeder, [...(groups.get(feeder) ?? []), { i, k }])
   })
   const swaps: Swap[] = []
+  // a feeder that gathered several leagues' clubs sends none of them into a league whose stage clashes with their own (playsElsewhere)
+  const elsewhere = groups.size ? playsElsewhere(state, ev) : NOBODY
   for (const [feeder, list] of groups) {
     list.sort((x, y) => x.k - y.k)
     // the sides that came out of this feeder trade places among themselves;
     // only a side that is in by some other road blocks a place
     const own = new Set(list.map((x) => x.i))
     const taken = new Set<string>()
-    const blocked = (t: string | undefined) => !!t && (taken.has(t) || out.some((o, at) => !own.has(at) && o === t))
+    const blocked = (t: string | undefined) => !!t && (taken.has(t) || elsewhere.has(t) || out.some((o, at) => !own.has(at) && o === t))
     const next = list.map(({ i, k }) => {
       let j = k
       while (j < feeder.finished.length && blocked(feeder.finished[j])) j++
@@ -1333,8 +1335,11 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
   const baseYear = YEAR_OF.get(baseId) ?? year
   const out: (string | null)[] = ev.seeds.map(() => null)
   const used = new Set<string>()
+  // a club another league's stage has on these days takes no place here (playsElsewhere)
+  let elsewhere: ReadonlySet<string> | undefined
   const take = (i: number, t: string | null | undefined): boolean => {
     if (!t || out[i] || used.has(t) || !state.teams[t] || state.teams[t].dormant) return false
+    if ((elsewhere ??= playsElsewhere(state, ev)).has(t)) return false
     out[i] = t
     used.add(t)
     return true
@@ -1558,6 +1563,104 @@ function leagueOut(state: GameState, ev: CEvent, seeds: (string | null)[]): (str
   })
 }
 
+/* ------------------------------------------------------------------ */
+/*  one league at a time                                               */
+/* ------------------------------------------------------------------ */
+
+const GATHERS = new Map<number, Set<string>>()
+
+/** A year's Challengers scenes that gather others under them with no combining layer of regions: LATAM's finals, over LATAM North and South. */
+function gathersOf(year: number): Set<string> {
+  let hit = GATHERS.get(year)
+  if (!hit) {
+    const scenes = uniq(eventsOf(year).map((e) => e.scene).filter((s): s is string => !!s))
+    hit = new Set(scenes.filter((s) => scenes.some((o) => o !== s && o.startsWith(`${s} `))))
+    GATHERS.set(year, hit)
+  }
+  return hit
+}
+
+/**
+ * The league an event is a stage of, from 2023: a Challengers league's own event (`scene:`), or a partnered league's
+ * (`vct:`). An event that draws on several leagues' clubs is no league's — a combining layer's (EMEA's Challengers
+ * stages, SEA's splits, the Americas' Last Chance Qualifier), LATAM's finals, an international, an Ascension — and
+ * neither is an event of the new format (engine/ahead.ts).
+ */
+function leagueOfEvent(year: number, ev: CEvent): string | null {
+  if (year < 2023 || ev.plan) return null
+  if (ev.scene) return (ev.layer?.length ?? 0) > 1 || gathersOf(year).has(ev.scene) ? null : `scene:${ev.scene}`
+  return isLeagueEvent(year, ev) ? `vct:${ev.region}` : null
+}
+
+const NOBODY: ReadonlySet<string> = new Set()
+const ELSEWHERE = new WeakMap<GameState, { at: string; of: Map<string, ReadonlySet<string>> }>()
+
+/**
+ * The clubs another league's stage has on some day of `ev`'s, for a Challengers league's own event from 2023. None
+ * of them takes a place there that history did not give it — a placing read off a feeder (legacySeeds), a seat of a
+ * season nobody has played (projectedSeeds), a stand-in's (fillGaps): the place is the next side's, by the rule that
+ * draws it.
+ *
+ * Reported 2026-09-14 (scripts/check_nextup.ts, seed 11): 2025's EMEA Challengers Stage 1, played here, reseated every
+ * European league's Stage 2 off its own placings — legacySeeds follows a seed to the latest event it placed in, and
+ * for France's Mandatory, NORTH//EAST's GoNext and Spain's UCAM that was the EMEA stage. Spain Rising's UCAM took
+ * GoNext's place in NORTH//EAST's Stage 2 and played both leagues' Stage 2 at once, DACH's FOKUS took Mandatory's in
+ * France's while its own league's ran, and fillGaps, reading only the region, stood GoNext in for the missing sides of
+ * France's and NORTH//EAST's Stage 2 on one day, with its Turkish place already taken (scripts/check_circuit.ts leagues).
+ *
+ * Another league's event holds a club once its draw has put it in; before that, where history booked it there — in a
+ * season nobody has played, where it is a club of that event's scene — and the player's club wherever its own
+ * scene's draw would take it (isHome). A side history really had in `ev` is not counted: history's own place stays
+ * its own, and a club history itself had in two leagues' stages at once keeps both.
+ */
+function playsElsewhere(state: GameState, ev: CEvent): ReadonlySet<string> {
+  const league = leagueOfEvent(state.year, ev)
+  if (!league?.startsWith('scene:') || ev.start == null || ev.end == null) return NOBODY
+  const club = playerClub(state)
+  const comps = Object.values(state.comps)
+  // the week reads each event's draw several times a day: the answer changes only with a draw, a new day, or the player's club
+  const at = `${state.year}:${state.day}:${club ?? ''}:${comps.filter((c) => !!c.circuit?.mode).length}`
+  let memo = ELSEWHERE.get(state)
+  if (memo?.at !== at) {
+    memo = { at, of: new Map() }
+    ELSEWHERE.set(state, memo)
+  }
+  const hit = memo.of.get(ev.id)
+  if (hit) return hit
+  const out = new Set<string>()
+  memo.of.set(ev.id, out)
+  for (const comp of comps) {
+    const c = comp.circuit
+    if (!c || c.id === ev.id || c.done || c.start > ev.end || c.end < ev.start) continue
+    const other = eventOf(c.id)
+    const theirs = other && leagueOfEvent(state.year, other)
+    if (!other || !theirs || theirs === league) continue
+    if (c.mode) {
+      // its open qualifier's sides are on its floor from the draw, though their ties wait for the qualifier's last day
+      for (const t of [...c.seeds, ...Object.values(c.fill ?? {}), ...comp.teams, ...openEntrants(state, other)]) if (t) out.add(t)
+      const playIn = c.playin && state.fixtures.find((f) => f.id === c.playin!.fixture)
+      if (playIn) { out.add(playIn.teamA); out.add(playIn.teamB) }
+      continue
+    }
+    if (!other.projected) {
+      for (const v of other.seeds) {
+        const t = teamOf(state, other, v)
+        if (t) out.add(t)
+      }
+    } else if (other.scene) {
+      for (const t of Object.values(state.teams)) if (t.scene === other.scene && !t.dormant) out.add(t.id)
+    }
+    if (club && isHome(state, other, state.teams[club], club)) out.add(club)
+  }
+  if (!ev.projected) {
+    for (const v of ev.seeds) {
+      const t = teamOf(state, ev, v)
+      if (t) out.delete(t)
+    }
+  }
+  return out
+}
+
 function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[]): void {
   const c = comp.circuit!
   // out of the player's reach, each side takes the field with the people it really brought
@@ -1661,7 +1764,9 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
   if (c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId) || (c.mode && comp.teams.includes(teamId))) return { standing: 'seated' }
   // drawn and under way without it
   if (c.start <= state.day) return comp.teams.includes(teamId) ? { standing: 'seated' } : null
-  const at = leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)).indexOf(teamId)
+  const drawn = seedsFor(state, ev)
+  const seats = leagueOut(state, ev, takeSeat(state, ev, drawn.seeds))
+  const at = seats.indexOf(teamId)
   if (at >= 0) {
     // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play there
     const through = openOutputs(ev).filter(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
@@ -1673,7 +1778,7 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
     for (const n of flat(ev).nodes) if (!isOpen(ev.units[n.unit]) && (mine(n.a) || mine(n.b)) && (day == null || n.day < day)) day = n.day
     return { standing: 'seated', day }
   }
-  const more = couldStillTake(state, comp, ev, team, depth)
+  const more = couldStillTake(state, comp, ev, team, depth, { seats, moved: drawn.swaps.length > 0 })
   return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
 }
 
@@ -1755,7 +1860,9 @@ function mainSeedsOf(ev: CEvent): Set<number> {
 }
 
 /** An event not drawn yet whose draw as it stands leaves the club out: could anything still put it in? See drawStanding. */
-function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number): 'entry' | 'maybe' | null {
+function couldStillTake(
+  state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number, draw: { seats: (string | null)[]; moved: boolean },
+): 'entry' | 'maybe' | null {
   const teamId = team.id
   const deeper = (id: string): boolean => {
     const f = state.comps[`ev:${id}`]
@@ -1771,6 +1878,8 @@ function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: T
     const decider = openOutputs(ev).length > 0 || (state.year >= 2023 && ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0))
     return decider ? 'entry' : 'maybe'
   }
+  // a side's place the draw as it stands would stand the player's club in for (fillGaps), wherever its home is
+  if (teamId === playerClub(state) && standsIn(state, comp, ev, team, draw)) return 'maybe'
   const book = rulesOf(ev.id)?.routes
   if (!book) return null
   for (const r of Object.values(book)) {
@@ -1821,14 +1930,8 @@ function openEntrants(state: GameState, ev: CEvent): Set<string> {
  */
 function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const c = comp.circuit!
-  const scope = scopeOf(ev)
   const taken = new Set([...c.seeds.filter((x): x is string => !!x), ...openEntrants(state, ev)])
-  const pool = Object.values(state.teams)
-    .filter((t) => !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && !gone(state, t.id) && (!scope || scope.includes(t.region))
-      // no VCT league club stands in for a Challengers-tier side (leagueOut)
-      && !(comp.tier === 2 && inVctLeague(state, t)))
-    .sort((x, y) => (ev.projected && ev.scene ? Number(y.scene === ev.scene) - Number(x.scene === ev.scene) : 0)
-      || Number(y.tier === comp.tier) - Number(x.tier === comp.tier) || y.rating - x.rating)
+  const pool = standInPool(state, comp, ev, taken)
   const next = (): string | null => {
     const t = pool.shift()
     if (t) taken.add(t.id)
@@ -1850,6 +1953,58 @@ function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
       if (t) c.fill = { ...(c.fill ?? {}), [key]: t }
     }
   }
+}
+
+/**
+ * Can fillGaps stand `t` in: in scope, five on the roster, not in by any road, not let go, no VCT league club for a
+ * Challengers-tier side (leagueOut), and no club another league's stage has on these days (`elsewhere`, playsElsewhere).
+ */
+function canStandIn(state: GameState, comp: Competition, ev: CEvent, taken: Set<string>, elsewhere: () => ReadonlySet<string>, t: Team): boolean {
+  const scope = scopeOf(ev)
+  return !taken.has(t.id) && t.roster.length >= 5 && !t.id.startsWith('CUP_') && !gone(state, t.id) && (!scope || scope.includes(t.region))
+    && !(comp.tier === 2 && inVctLeague(state, t)) && !elsewhere().has(t.id)
+}
+
+/** Who fillGaps stands in, best first (canStandIn). */
+function standInPool(state: GameState, comp: Competition, ev: CEvent, taken: Set<string>): Team[] {
+  let busy: ReadonlySet<string> | undefined
+  const elsewhere = (): ReadonlySet<string> => (busy ??= playsElsewhere(state, ev))
+  return Object.values(state.teams)
+    .filter((t) => canStandIn(state, comp, ev, taken, elsewhere, t))
+    .sort((x, y) => (ev.projected && ev.scene ? Number(y.scene === ev.scene) - Number(x.scene === ev.scene) : 0)
+      || Number(y.tier === comp.tier) - Number(x.tier === comp.tier) || y.rating - x.rating)
+}
+
+/**
+ * Could the draw stand `team` in for a side it is missing (fillGaps)? Only a played event fills its gaps — one nobody
+ * has played yet, or one whose field has moved — and only where the draw as it stands (`seats`) leaves one, reading
+ * seeds as begin does: a club history has let go, or one in by its own open qualifier, leaves its seed empty. Who is
+ * stood in is not read off today's order: the events drawn before it take their own stand-ins first.
+ *
+ * Reported 2026-09-14 (scripts/check_nextup.ts seeds 7 and 13): 2027's Spain Stage 1 has two Spanish clubs for eight
+ * seats. The draw used to stand in the best European clubs whatever else they played — Gentle Mates took places in
+ * France's Stage 1, Turkey's Kickoff and Spain's at once — and once no club another league's stage has on those days
+ * could stand in, Team Liquid Academy, which no league of 2027 holds, was among the next, in Spain's Stage 1 or, once
+ * Spain's draw had taken the clubs above it, in NORTH//EAST's Kickoff; the week, reading only the seats and the club's
+ * home scene, said nothing was coming for four weeks and offered to run a month.
+ */
+function standsIn(state: GameState, comp: Competition, ev: CEvent, team: Team, draw: { seats: (string | null)[]; moved: boolean }): boolean {
+  if (!ev.projected && !draw.moved) return false
+  const scope = scopeOf(ev)
+  if (scope && !scope.includes(team.region)) return false
+  const club = playerClub(state)
+  const through = openEntrants(state, ev)
+  const seats = draw.seats.map((t) => (t && t !== club && gone(state, t) ? null : t)).map((t) => (t && through.has(t) ? null : t))
+  let gaps = [...mainSeedsOf(ev)].filter((i) => !seats[i]).length
+  const open = new Set<string>()
+  for (const { ui, rank } of openOutputs(ev)) {
+    const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if (!real || gone(state, real)) open.add(`${ui}:${rank}`)
+  }
+  gaps += open.size
+  if (!gaps) return false
+  const taken = new Set([...seats.filter((x): x is string => !!x), ...through])
+  return canStandIn(state, comp, ev, taken, () => playsElsewhere(state, ev), team)
 }
 
 /**
