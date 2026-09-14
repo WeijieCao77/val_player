@@ -54,3 +54,10 @@ const RETIRED_ORIGINS: Origin[] = [
 ]
 
 export const originOf = (key: string): Origin => ORIGINS.find((o) => o.key === key) ?? RETIRED_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]
+
+/**
+ * A card's name on the server the career queues on (me/rank.ts serverAt): 「国服榜一路人王」
+ * from Korea is 韩服榜一路人王, and from China before 国服 opened it is 亚服's. The key
+ * and what the card does are the same everywhere, so a save reads its own card.
+ */
+export const originName = (o: Origin, server: { name: string }): string => o.name.replace('国服', server.name)

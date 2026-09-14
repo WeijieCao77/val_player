@@ -4,6 +4,7 @@ import { traitOf } from '../../engine/me/traits'
 import { bondCardLines } from '../../engine/me/bond'
 import { compCn } from '../../engine/me/compname'
 import { hallLine } from '../../engine/me/hall'
+import { rankAt, rankShort } from '../../engine/me/rank'
 
 /** The career on one card, made to be screenshotted. */
 export default function Poster() {
@@ -34,7 +35,7 @@ export default function Poster() {
         <tbody>
           {me.seasons.map((s) => (
             <tr key={s.year}>
-              <td>{s.year}</td><td>{s.team}</td><td className="num">{s.tier ? `${s.starts}/${s.matches}` : `天梯 ${Math.round(me.pre.ladderPeak)}`}</td>
+              <td>{s.year}</td><td>{s.team}</td><td className="num">{s.tier ? `${s.starts}/${s.matches}` : `天梯 ${rankShort(rankAt(game, me.pre.ladderPeak))}`}</td>
               <td className="num">{s.acs || ''}</td><td className="num">{s.overallTo}</td>
             </tr>
           ))}

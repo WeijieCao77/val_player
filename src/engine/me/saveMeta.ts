@@ -102,7 +102,7 @@ export function buildSaveMeta(state: GameState): SaveMeta | null {
       id: t.id, crest: crestOf(state, t.id), name: t.name, tag: t.tag, tier: t.tier === 1 ? 1 : 2, league: t.league ?? '',
       seat: me.trial ? 'trial' : t.starters.includes(me.id) ? 'starter' : 'bench',
     } : null,
-    ladder: me.phase === 'pre' ? ladderLabel(me.pre.ladder) : '',
+    ladder: me.phase === 'pre' ? ladderLabel(state) : '',
     date: dateLabel(state),
     stage: stageNameIn(state.year, state.stage, onTimeline(state)),
     overall: Math.round(p.overall),

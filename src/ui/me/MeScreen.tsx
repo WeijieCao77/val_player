@@ -5,7 +5,8 @@ import { ratingOf, statLine } from '../../engine/player'
 import { trustLabel } from './words'
 import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
 import { fanTier } from '../../engine/me/fans'
-import { originOf } from '../../engine/me/origins'
+import { originName, originOf } from '../../engine/me/origins'
+import { serverAt } from '../../engine/me/rank'
 import { cupOf, cupView } from '../../engine/me/cups'
 import { BANK_POINTS, CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { ageNote } from '../../engine/me/growth'
@@ -50,7 +51,7 @@ export default function MeScreen() {
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
         <Panel
-          title={`能力 · ${origin.name}`}
+          title={`能力 · ${originName(origin, serverAt(me.region, me.entryYear ?? me.seasons[0]?.year ?? game.year, 0))}`}
           actions={(
             <>
               {worn && <span className="tag win" style={{ marginRight: 6 }} title="称号，在「成就」里换">{worn}</span>}

@@ -109,7 +109,7 @@ export const EVENTS: EventDef[] = [
     q: '直播间有人刷了一个大的，要你连麦。', ctx: '看起来是真粉，也可能是想蹭。',
     a: [{ t: '连', g: 'show', e: { heat: 20, money: 800 } }, { t: '感谢，不连', g: 'warm', e: { heat: 5, money: 800 } }] },
   { id: 'stream_ladder', w: 4, max: 5, when: (s) => streams(s) && pre(s), rec: 0,
-    q: '粉丝起哄让你直播冲国服前十。', ctx: '冲分内容永远有人看。',
+    q: '粉丝起哄让你直播冲本服前十。', ctx: '冲分内容永远有人看。',
     a: [{ t: '冲', g: 'show', e: { quest: 'ladder' } }, { t: '不冲，练该练的', g: 'grind', e: { xp: { awareness: 8 } } }] },
   // ---- the ladder years
   { id: 'cafe_coach', w: 6, max: 1, when: pre, rec: 0,
