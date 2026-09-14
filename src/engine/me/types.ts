@@ -283,6 +283,8 @@ export interface Invite {
   expires: number
   /** seen enough to skip the tryout */
   direct: boolean
+  /** a club of another region that called on top of another club's call because I speak the language (me/prepro.ts LANG_EXTRA): it holds no place in the queue */
+  lang?: boolean
 }
 
 export interface TryoutDayLog { day: number; pick: string; dim: string; p: number; ok: boolean }

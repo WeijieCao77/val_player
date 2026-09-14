@@ -169,10 +169,34 @@ function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng):
   return { id: `inv:${state.year}:${state.day}:${team.id}`, teamId: team.id, via, day: state.day, expires: state.day + INVITE_DAYS, direct }
 }
 
-function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0): Team | null {
+/**
+ * 外语 — the 语言课, or the 留学生 background — is an advantage, never a door shut (the author, 2026-09-14:
+ * 「外语学习只是优势，即使会外语国内的俱乐部也应该要来邀请」). Reported that day: a player who took the
+ * language by accident had every tryout invitation from another region since, and no club of his own asked.
+ *
+ * The language used to raise every foreign club's weight inside the one draw a call is made from — 0.5 to 0.8
+ * in 2021–2022, 0.04 to 0.2 from 2023 — and a round of offers' the same way (me/transfer.ts pickBuyer, 0.015 to
+ * 0.12). One club a call, so a foreign club drawn was a home club not drawn. The same draws with the language off
+ * and on (scripts/probe_lang.ts: a cup run's end, two careers from the ladder over two years): home invitations
+ * 246 → 112 for a 2026 North American player, 66 → 19 for a 2026 Chinese one, 143 → 90 for a 2021 European one;
+ * a listed round's home offers 3,456 → 2,731 and 1,661 → 804.
+ *
+ * Now every draw is the same with the language or without it, and the language comes on top: when a club calls,
+ * with this chance a club of another region calls as well, drawn among those clubs alone on a stream of its own.
+ * The home call is exactly the one a man without the language has, and the extra call holds no place in the
+ * queue (waiting). A round of offers that came takes the same chance of one club of another league (rollOffers).
+ */
+export const LANG_EXTRA = 0.3
+
+/** A club's own call still waiting holds the channel shut; one that came for the language does not. */
+const waiting = (state: GameState): boolean => state.me!.pre.invites.some((i) => !i.lang)
+
+/** The draw a call is made from. `abroad`: the language's own call (callFrom) — clubs of other regions only, weighed among themselves. */
+function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0, abroad = false): Team | null {
   const me = state.me!
   // a club whose window is shut or whose roster is locked is not holding tryouts (me/window.ts): with no club of my own, only its window counts
-  const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(state, t.id))
+  const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(state, t.id)
+    && (!abroad || t.region !== me.region))
   if (!pool.length) return null
   const w = pool.map((t) => {
     let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
@@ -181,21 +205,37 @@ function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0): Team | null {
     // 2021–2022: no import limits and no franchise, and the author's rule —
     // every region's clubs can write, each to its own bar. The bar is the
     // club's own level (expectOf), so a Thai side asks less than Sentinels.
-    if (t.region !== me.region) {
-      v *= formatOf(state.year) === 'open' ? (me.flags.lang ? 0.8 : 0.5) : (me.flags.lang ? 0.2 : 0.04)
-    }
+    // The same with the language or without it: what the language brings comes on top (LANG_EXTRA).
+    if (!abroad && t.region !== me.region) v *= formatOf(state.year) === 'open' ? 0.5 : 0.04
     return v
   })
   return rng.weighted(pool, w)
 }
+
+const HOW: Record<Invite['via'], string> = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', free: '知道你在找队', scout: '教练组推荐' }
 
 function offerInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): void {
   const me = state.me!
   const inv = makeInvite(state, team, via, rng)
   me.pre.invites.push(inv)
   push(state, { kind: 'invite', id: inv.id })
-  const how = via === 'cup' ? '看了你的杯赛' : via === 'rank' ? '在天梯上注意到你' : via === 'fans' ? '看了你的直播' : via === 'free' ? '知道你在找队' : '教练组推荐'
-  pushLog(state, 'good', `${team.name} 的人${how}，${inv.direct ? '直接给了报价' : '邀请你去试训'}。${INVITE_DAYS} 天内答复。`)
+  pushLog(state, 'good', `${team.name} 的人${HOW[via]}，${inv.direct ? '直接给了报价' : '邀请你去试训'}。${INVITE_DAYS} 天内答复。`)
+}
+
+/** A club calls — and with the language, now and then a club of another region as well (LANG_EXTRA), after it in the queue. */
+function callFrom(state: GameState, team: Team, via: Invite['via'], rng: Rng, prefer: 1 | 2 | 0): void {
+  offerInvite(state, team, via, rng)
+  const me = state.me!
+  if (!me.flags.lang) return
+  // a stream of its own: whether it comes, and who, moves no roll the call above or anything after it reads
+  const lang = new Rng(hashStr(`lang:${via}:${state.seed}:${state.year}:${state.day}`))
+  if (!lang.chance(LANG_EXTRA)) return
+  const abroad = pickClub(state, lang, prefer, true)
+  if (!abroad) return
+  const inv: Invite = { ...makeInvite(state, abroad, via, lang), lang: true }
+  me.pre.invites.push(inv)
+  push(state, { kind: 'invite', id: inv.id })
+  pushLog(state, 'good', `${abroad.name} 的人也${HOW[via]}：你会外语，这家外赛区俱乐部也${inv.direct ? '直接给了报价' : '邀请你去试训'}。${INVITE_DAYS} 天内答复。`)
 }
 
 /**
@@ -211,12 +251,14 @@ export function cupInvite(state: GameState, run: CupRun, rng: Rng): void {
   const depth = run.rounds ? run.reached / run.rounds : 0
   me.pre.scoutSeen += depth >= 0.5 ? 1 : 0
   // the run is still remembered; a call waits for a transfer period that can bring one (me/window.ts inviteBlock):
-  // a run that ended after a signing — agreed under a roster lock, or made that day — used to bring a tryout to a signed man
-  if (me.pre.invites.length || inviteBlock(state)) return
+  // a run that ended after a signing — agreed under a roster lock, or made that day — used to bring a tryout to a signed man.
+  // A club's own call still waiting holds the channel; one that came for the language does not (LANG_EXTRA)
+  if (waiting(state) || inviteBlock(state)) return
   const p = clamp(0.08 + depth * 0.45 + (run.won ? 0.30 : 0) + me.pre.scoutSeen * 0.04, 0.05, 0.96)
   if (!rng.chance(p)) return
-  const team = pickClub(state, rng, run.won ? 0 : 2)
-  if (team) offerInvite(state, team, 'cup', rng)
+  const prefer = run.won ? 0 : 2
+  const team = pickClub(state, rng, prefer)
+  if (team) callFrom(state, team, 'cup', rng, prefer)
 }
 
 /**
@@ -231,8 +273,9 @@ export const INVITE_FANS_T1 = 400
 /** The weekly channels: the ladder, the following, and being a known free agent. */
 export function rollInvites(state: GameState, rng: Rng): void {
   const me = state.me!
-  // a signing already agreed (me/contract.ts settleMove), one made this transfer period, or my window shut: no calls (me/window.ts inviteBlock)
-  if (me.pre.invites.length || inviteBlock(state)) return
+  // a signing already agreed (me/contract.ts settleMove), one made this transfer period, or my window shut: no calls (me/window.ts inviteBlock);
+  // a club's own call still waiting holds the channel, one that came for the language does not (LANG_EXTRA)
+  if (waiting(state) || inviteBlock(state)) return
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
   const l = me.pre.ladder
@@ -241,16 +284,18 @@ export function rollInvites(state: GameState, rng: Rng): void {
   // board, and the week's page says the line on his own), 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
   // with 120 fans got no call in a year, in every region — the channels began at ladder 74 and 180 fans.
   if (l >= INVITE_LADDER && rng.chance(0.02 + (l - INVITE_LADDER) * 0.005)) {
-    const team = pickClub(state, rng, l >= INVITE_LADDER_T1 ? 1 : 2)
-    if (team) { offerInvite(state, team, 'rank', rng); return }
+    const prefer = l >= INVITE_LADDER_T1 ? 1 : 2
+    const team = pickClub(state, rng, prefer)
+    if (team) { callFrom(state, team, 'rank', rng, prefer); return }
   }
   if (me.fans >= INVITE_FANS && rng.chance(0.03 + (Math.min(me.fans, 900) - INVITE_FANS) / 780 * 0.07)) {
-    const team = pickClub(state, rng, me.fans >= INVITE_FANS_T1 ? 1 : 2)
-    if (team) { offerInvite(state, team, 'fans', rng); return }
+    const prefer = me.fans >= INVITE_FANS_T1 ? 1 : 2
+    const team = pickClub(state, rng, prefer)
+    if (team) { callFrom(state, team, 'fans', rng, prefer); return }
   }
   if (me.pre.wasPro && rng.chance(0.12)) {
     const team = pickClub(state, rng, 0)
-    if (team) { offerInvite(state, team, 'free', rng); return }
+    if (team) { callFrom(state, team, 'free', rng, 0); return }
   }
 }
 
