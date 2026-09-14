@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { CHANGELOG_ME, LATEST_ME } from '../../data/changelog_me'
 import Rich from './rich'
 
-/** the date of the newest entry this browser has opened */
+/** the newest entry this browser has opened, by date and title: a second build on one day lights the dot too */
 const SEEN = 'valplayer.changelog.seen'
 
 const readSeen = (): string => {

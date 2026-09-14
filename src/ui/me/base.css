@@ -2413,24 +2413,31 @@ tr.other td .club span { color: var(--faint); }
 
 /* ---------------------------------------------------------------- update nudge
 
-   A deploy under an open tab. Top centre, above the page but under modals'
-   scrims, and it asks rather than reloads. */
+   A new build under an open tab (ui/me/UpdateNudge.tsx), placed the way 破晓's
+   .updbar is: top right, above the page and the cards, and it asks rather than
+   reloads. A phone gets the top edge, clear of the tab bar and 更多 at the bottom. */
 .update-nudge {
-  position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-  z-index: 85; max-width: min(560px, calc(100vw - 20px));
-  display: flex; align-items: center; gap: 10px;
+  position: fixed; top: 14px; right: 14px;
+  z-index: 85; width: min(520px, calc(100vw - 28px));
+  display: flex; align-items: center; gap: 14px;
   background: var(--panel); border: 1px solid var(--accent-line);
   border-left: 3px solid var(--accent); border-radius: var(--radius);
-  padding: 9px 12px; box-shadow: var(--shadow-card);
-  animation: unlock-in .26s cubic-bezier(.2, .8, .3, 1);
+  padding: 11px 14px; box-shadow: var(--shadow-card);
+  animation: update-in .26s cubic-bezier(.2, .8, .3, 1);
 }
-.update-body { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.update-body b { font-size: var(--t-body); }
+@keyframes update-in {
+  from { transform: translateY(-10px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.update-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.update-body b { font-size: var(--t-body); color: var(--accent); }
 .update-body span { font-size: var(--t-small); color: var(--muted); line-height: 1.5; }
+.update-acts { display: flex; gap: 8px; flex: none; }
 @media (max-width: 720px) {
-  .update-nudge { top: 6px; flex-wrap: wrap; }
-  .update-body { flex-basis: 100%; }
+  .update-nudge { top: calc(8px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto; flex-wrap: wrap; gap: 8px; }
+  .update-acts { width: 100%; justify-content: flex-end; }
 }
+@media (prefers-reduced-motion: reduce) { .update-nudge { animation: none; } }
 
 /* ---------------------------------------------------------------- qualification poster
 

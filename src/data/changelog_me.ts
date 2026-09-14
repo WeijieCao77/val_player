@@ -17,6 +17,14 @@ export interface ChangeEntry {
 export const CHANGELOG_ME: ChangeEntry[] = [
   {
     date: '2026-09-14',
+    title: '游戏更新了会提示刷新',
+    changes: [
+      { kind: '新增', text: '<b>页面开着的时候上线了新版本，右上角会弹「游戏更新了」</b>（手机上在页顶）。点「刷新」先存档再刷新；点「稍后」这一版不再提示，再有新版本才提。比赛打到一半、导览正在走的时候先不弹，打完再说。每 5 分钟看一次，切回这个标签页时也看一次。' },
+      { kind: '修复', text: '同一天第二次更新，右下角「更新日志」也会亮点；以前按日期记，当天点开过就不再亮。' },
+    ],
+  },
+  {
+    date: '2026-09-14',
     title: '钱按人民币记、工资照真实报道；积分榜和「下一场」看得懂了；老存档换新标尺；网吧赛一周一轮；段位照真实规则',
     changes: [
       { kind: '调整', text: '<b>钱按人民币记。</b>钱包、账本、所有价格都是人民币；中国俱乐部发人民币，美洲发美元、欧洲发欧元、太平洋发韩元，外币后面都写「约 ¥」多少，比如「€80,000（约 ¥64 万）」。汇率按真实年均，2026 年起暂定按 2025 年。老存档读档时换算一次。' },
@@ -332,4 +340,5 @@ export const CHANGELOG_ME: ChangeEntry[] = [
   },
 ]
 
-export const LATEST_ME = CHANGELOG_ME[0]?.date ?? ''
+/** the newest entry as the 更新日志 dot remembers it: date and title, so a second build on one day still lights it */
+export const LATEST_ME = CHANGELOG_ME[0] ? `${CHANGELOG_ME[0].date} ${CHANGELOG_ME[0].title}` : ''

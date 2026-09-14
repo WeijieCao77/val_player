@@ -12,6 +12,7 @@ import { advanceUntil, leftToMe, runAutoPilot, stopLine } from './engine/me/auto
 import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
 import Changelog from './ui/me/Changelog'
+import UpdateNudge from './ui/me/UpdateNudge'
 import { ladderLabel } from './engine/me/prepro'
 import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
@@ -213,6 +214,9 @@ export default function PlayerGame() {
   const game = gameRef.current
   if (!game || !game.me) {
     return (
+      <>
+      {/* a build that went live while this page was open: 刷新 / 稍后 (ui/me/UpdateNudge.tsx); nothing to save before it here */}
+      <UpdateNudge />
       <NewCareer
         onStart={start}
         // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
@@ -229,6 +233,7 @@ export default function PlayerGame() {
           return true
         }}
       />
+      </>
     )
   }
 
@@ -425,6 +430,8 @@ export default function PlayerGame() {
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
         <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture} />
         <AchPop />
+        {/* a build that went live under this tab: 刷新 saves first; a match being played lives only in memory, so the bar waits for it */}
+        <UpdateNudge busy={!!live} onBeforeReload={commit} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>
