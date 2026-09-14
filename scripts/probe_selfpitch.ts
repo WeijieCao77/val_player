@@ -212,7 +212,12 @@ if (part === 'pro') {
   for (let i = 0; i < N; i++) {
     const start: StartPoint = i % 2 ? 't1' : 'chal'
     const run = (contact: boolean): { moves: number; periods: number; moved: Set<number> } => {
-      const s = make(i, start)
+      // 2026's China has no second-tier club on New Year's Day to start at (me/career.ts pickClub): those starts go to EMEA
+      const region = start === 'chal' && REGIONS[i % 4] === 'China' ? (YEAR <= 2021 ? 'Europe' : 'EMEA') : REGIONS[i % 4]
+      const s = createCareer({
+        name: `Pitch${i}`, region, role: ROLES[Math.floor(i / 4) % 4], talents: emptyTalents(),
+        originKey: ORIGINS[i % ORIGINS.length].key, start, seed: 7100 + i * 41, year: YEAR,
+      })
       const me = s.me!
       let rec: Sent | null = null
       let g = 0
