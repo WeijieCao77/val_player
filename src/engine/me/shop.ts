@@ -67,7 +67,7 @@ export const GEAR_EFFECT = '外设不加训练收益，比赛里的判断也不�
 export interface Course { key: string; name: string; price: number; blurb: string }
 export const COURSES: Course[] = [
   // RMB, 暂定: no published price to anchor a course to
-  { key: 'lang', name: '语言课', price: 9000, blurb: '去外赛区不再是问题。本赛区的试训邀请和报价照常来；有俱乐部来找你时，外赛区的俱乐部还可能另外多来一家。' },
+  { key: 'lang', name: '语言课', price: 9000, blurb: '去外赛区不再是问题。本赛区的试训邀请和报价照常来；有俱乐部来找你时，外赛区的俱乐部还可能另外多来一家（2023 年起按 VCT 联赛分赛区）。' },
   { key: 'psych', name: '运动心理', price: 12000, blurb: '输球后气压涨得少两成，气压对临场判断的拖累也少两成。' },
   { key: 'review', name: '复盘方法', price: 8000, blurb: '复盘有了章法，不再对着录像熬眼睛：复盘不再添眼疲劳和偏头痛的几率，每次复盘气压消 2 点。' },
   { key: 'talk', name: '沟通表达', price: 6000, blurb: '羁绊涨得快三成，教练信任涨得快两成。' },

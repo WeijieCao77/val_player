@@ -1,5 +1,5 @@
 /**
- * 外语 is an advantage, never a door shut.
+ * 外语 is an advantage, never a door shut; and without it, 外赛区 is held under half.
  *
  * Reported 2026-09-14: a player who took the language by accident had every tryout invitation from another region
  * since, and no club of his own region asked. The author: 「外语学习只是优势，即使会外语国内的俱乐部也应该要来邀请」.
@@ -7,26 +7,41 @@
  * call is made from, so the same draws gave a 2026 North American ladder player 246 home invitations without it
  * and 112 with it, and a listed round of offers 3,456 home offers and 2,731.
  *
+ * The same day, on what that measured without the language — most calls came from abroad, 92% of a 2021 Chinese
+ * player's cup calls: 「控制外赛区邀请，在不会外语的时候外赛区邀请占比不要超过一半」 and 「统一按联赛算」
+ * (me/prepro.ts ABROAD_CAP, abroadClub).
+ *
  * 一 the same draws of a call — a cup run's end and the weekly channel — with the language off and on, 2021 and
  *    2026: every call brings the same club; not one home invitation is lost; foreign ones come on top, at most one
  *    a call, at about LANG_EXTRA of the calls; without the language none comes for it
  * 二 an invitation that came for the language, waiting, does not hold the channel shut; a club's own call does
  * 三 a listed round of offers, the same way: the same home offers, at most one foreign offer more, none added
  *    without the language; a gold agent adds and never takes
- * 四 the words: the 语言课 and the help say what is true
+ * 四 the words: the 语言课, the help and the transfer screen say what is true
+ * 五 without the language, every channel that calls (a cup won, a cup final lost, the ladder, the ladder's top, a
+ *    following, a large one, a former professional), 2021 and 2026, six places: 外赛区 no more than half of the calls,
+ *    no draw weighing it past ABROAD_CAP of home; the same draws under the rule before 2026-09-14 — not one home
+ *    invitation fewer; 2021–2022 read by a club's own region as before, home weights untouched, the clubs abroad
+ *    only pressed down together
+ * 六 from 2023 by the league: a club of my league based in another country is home, and calls without the language
+ * 七 no club of my own within reach: a club from abroad still calls
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
-import { LANG_EXTRA, cupInvite, reachableClubs, rollInvites } from '../src/engine/me/prepro'
-import { foreignLeague, rollOffers } from '../src/engine/me/transfer'
+import {
+  ABROAD_CAP, INVITE_FANS, INVITE_FANS_T1, INVITE_LADDER, INVITE_LADDER_T1, LANG_EXTRA,
+  abroadClub, cupInvite, foreignLeague, inviteWeight, markDeclined, reachableClubs, rollInvites,
+} from '../src/engine/me/prepro'
+import { rollOffers } from '../src/engine/me/transfer'
 import { COURSES } from '../src/engine/me/shop'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
 import { recomputeOverall } from '../src/engine/player'
+import { regionIn } from '../src/engine/era'
 import { ATTR_KEYS } from '../src/engine/types'
-import type { GameState, Region } from '../src/engine/types'
+import type { GameState, Region, Team } from '../src/engine/types'
 import type { Invite } from '../src/engine/me/types'
 import { Rng, hashStr } from '../src/engine/rng'
 
@@ -44,10 +59,13 @@ const mem: Record<string, string> = {}
 let fails = 0
 const fail = (m: string): void => { fails++; console.log(`  ✗ ${m}`) }
 const pass = (m: string): void => { console.log(`  ✓ ${m}`) }
+const info = (m: string): void => { console.log(`    ${m}`) }
 const t0 = Date.now()
 const DRAWS = Number(process.argv[2] ?? 120)
 const pct = (x: number, n: number): string => (n ? `${Math.round((x / n) * 100)}%` : '—')
 const rateOk = (x: number, n: number): boolean => { const r = x / Math.max(1, n); return r >= LANG_EXTRA / 2 && r <= LANG_EXTRA + 0.08 }
+/** the most of a draw 外赛区 may weigh: ABROAD_CAP of home, out of home and it together */
+const CAP_SHARE = ABROAD_CAP / (1 + ABROAD_CAP)
 
 function setLang(s: GameState, on: boolean): void {
   const me = s.me!
@@ -75,7 +93,8 @@ function invitations(region: Region, year: 2021 | 2026, seed: number): void {
   me.week = 30
   me.pre.ladder = 80
   const label = `${year} ${me.region} 天梯`
-  const home = (id: string): boolean => s.teams[id]?.region === me.region
+  // 本赛区 as a call reads it (me/prepro.ts abroadClub): from 2023 the league
+  const home = (id: string): boolean => { const t = s.teams[id]; return !!t && !abroadClub(s, t) }
   const pool = reachableClubs(s).filter((t) => clubOpen(s, t.id))
   const poolHome = pool.filter((t) => home(t.id)).length
   const block = inviteBlock(s)
@@ -134,7 +153,7 @@ function invitations(region: Region, year: 2021 | 2026, seed: number): void {
   else pass(`本赛区邀请：没外语 ${c.homeOff} 份，有外语 ${c.homeOn} 份；${c.calls} 次来电，有没有外语都是同一家`)
   if (!c.extra || c.forOn <= c.forOff) fail(`有外语，外赛区邀请没有多出来：${c.forOff} → ${c.forOn}`)
   else if (!rateOk(c.extra, c.calls)) fail(`会外语另外来的邀请是来电的 ${pct(c.extra, c.calls)}，应该在 ${Math.round(LANG_EXTRA * 100)}% 上下`)
-  else pass(`有外语，外赛区邀请 ${c.forOff} → ${c.forOn}：会外语另外来了 ${c.extra} 份，是来电的 ${pct(c.extra, c.calls)}`)
+  else pass(`有外语，外赛区邀请 ${c.forOff} → ${c.forOn}：会外语另外来了 ${c.extra} 份，是来电的 ${pct(c.extra, c.calls)}；外赛区占 ${pct(c.forOff, c.homeOff + c.forOff)} → ${pct(c.forOn, c.homeOn + c.forOn)}`)
   if (c.over || c.extraHome) fail(`会外语多出来的邀请不对：${c.over} 次一次多了不止一家或没人来电也来了，${c.extraHome} 份是本赛区的`)
   if (c.noLang) fail(`没外语也来了凭外语的邀请，或一次来了两家：${c.noLang} 次`)
   else pass(`没外语：一次来电一家，没有一份凭外语来；外赛区的 ${c.forOff} 份是抽签本来就有的${year <= 2022 ? '（2021–2022 年各赛区的俱乐部都能来）' : ''}`)
@@ -234,6 +253,198 @@ function offers(region: Region, year: 2021 | 2026, start: StartPoint, seed: numb
   else pass(`金牌经纪人：本赛区报价 ${c.homeOff} → ${c.agentHome}，外赛区 ${c.forOff} → ${c.agentFor}，本赛区一份没少`)
 }
 
+/* ---- 五、六、七 外赛区 without the language ---- */
+
+/** a seed's bits spread over the word: xorshift's first draws from seeds a hash apart are not independent of each other */
+function spread(x: number): number {
+  let h = x >>> 0
+  h ^= h >>> 16
+  h = Math.imul(h, 0x85ebca6b)
+  h ^= h >>> 13
+  h = Math.imul(h, 0xc2b2ae35)
+  h ^= h >>> 16
+  return h >>> 0
+}
+
+/**
+ * A call's stream with its gate held open — whether a club calls is not what changed, only who calls — and the draw
+ * read as it is made: the clubs in the order drawn, their weights, and the stream just before it.
+ */
+class Spy extends Rng {
+  pool: Team[] = []
+  w: number[] = []
+  before = 0
+  constructor(seed: number) { super(spread(seed)) }
+  chance(p: number): boolean { void p; this.next(); return true }
+  weighted<T>(xs: readonly T[], ws: readonly number[]): T {
+    this.before = this.state
+    this.pool = xs.slice() as unknown as Team[]
+    this.w = ws.slice()
+    return super.weighted(xs, ws)
+  }
+}
+
+/**
+ * The rule before 2026-09-14 (me/prepro.ts pickClub at 61c0220), on the pool a draw was made from: home by a club's
+ * own region, home clubs first, each club of another region at 0.5 of its weight in 2021–2022 and 0.04 from 2023, and
+ * nothing holding them together. Read against draws recorded at that commit on the same streams, 2026-09-14: 25,200
+ * of 25,200 the same club.
+ */
+function weightsBefore(s: GameState, pool: Team[], prefer: 0 | 1 | 2, order: Map<string, number>): { pool: Team[]; w: number[] } {
+  const me = s.me!
+  const home = (t: Team): boolean => t.region === me.region
+  const sorted = pool.slice().sort((a, b) => (Number(home(b)) - Number(home(a))) || b.rating - a.rating || order.get(a.id)! - order.get(b.id)!)
+  const per = s.year <= 2022 ? 0.5 : 0.04
+  return { pool: sorted, w: sorted.map((t) => inviteWeight(s, t, prefer) * (home(t) ? 1 : per)) }
+}
+
+interface Channel { name: string; via: Invite['via']; ladder: number; fans: number; wasPro: boolean; prefer: 0 | 1 | 2; call: (s: GameState, rng: Rng) => void }
+const cupRun = (won: boolean) => (s: GameState, rng: Rng): void => cupInvite(s, { key: 'check', year: s.year, reached: 3, rounds: 3, won, prize: 0 }, rng)
+/** every road a call comes by (me/prepro.ts cupInvite, rollInvites), each asking the tier it asks first */
+const CHANNELS: Channel[] = [
+  { name: '杯赛夺冠', via: 'cup', ladder: INVITE_LADDER - 1, fans: 0, wasPro: false, prefer: 0, call: cupRun(true) },
+  { name: '杯赛亚军', via: 'cup', ladder: INVITE_LADDER - 1, fans: 0, wasPro: false, prefer: 2, call: cupRun(false) },
+  { name: '天梯', via: 'rank', ladder: INVITE_LADDER + 18, fans: 0, wasPro: false, prefer: 2, call: rollInvites },
+  { name: '天梯前列', via: 'rank', ladder: INVITE_LADDER_T1 + 2, fans: 0, wasPro: false, prefer: 1, call: rollInvites },
+  { name: '粉丝', via: 'fans', ladder: INVITE_LADDER - 1, fans: INVITE_FANS + 80, wasPro: false, prefer: 2, call: rollInvites },
+  { name: '粉丝多', via: 'fans', ladder: INVITE_LADDER - 1, fans: INVITE_FANS_T1 + 100, wasPro: false, prefer: 1, call: rollInvites },
+  { name: '前职业', via: 'free', ladder: INVITE_LADDER - 1, fans: 0, wasPro: true, prefer: 0, call: rollInvites },
+]
+
+function held(region: Region, year: 2021 | 2026, seed: number): void {
+  const s = createCareer({ name: 'Abroad', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year })
+  const me = s.me!
+  lift(s, 70)
+  me.week = 30
+  setLang(s, false)
+  const away = (t: Team): boolean => abroadClub(s, t)
+  const league = regionIn(me.region, s.year)
+  const order = new Map(Object.keys(s.teams).map((id, i) => [id, i]))
+  const snap = { log: me.log.slice(), pending: me.pending.slice(), scout: me.pre.scoutSeen, ladder: me.pre.ladder, fans: me.fans, wasPro: me.pre.wasPro }
+  const reset = (ch?: Channel): void => {
+    me.pre.invites = []
+    me.log = snap.log.slice()
+    me.pending = snap.pending.slice()
+    me.pre.scoutSeen = snap.scout
+    me.pre.ladder = ch?.ladder ?? snap.ladder
+    me.fans = ch?.fans ?? snap.fans
+    me.pre.wasPro = ch?.wasPro ?? snap.wasPro
+  }
+  const pool0 = reachableClubs(s).filter((t) => clubOpen(s, t.id))
+  const block = inviteBlock(s)
+  console.log(`\n${year} ${me.region}，综合 ${Math.round(s.players[me.id].overall)}：能去试训的本赛区 ${pool0.filter((t) => !away(t)).length} 家、外赛区 ${pool0.filter(away).length} 家；${CHANNELS.length} 条来电的路各 ${DRAWS} 次，同样的抽签按改之前和现在的规矩各读一遍`)
+  if (block || !pool0.length) { fail(`探针设置不对：${block ?? '没有俱乐部能去试训'}`); return }
+
+  const T = { calls: 0, home: 0, far: 0, homeWas: 0, farWas: 0, lost: 0, lostSplit: 0, worst: 0, noHome: 0, wrongVia: 0, noCall: 0, moved: 0, nat: 0, natWas: 0, mate: 0, mateWas: 0 }
+  const lines: string[] = []
+  for (const ch of CHANNELS) {
+    const c = { calls: 0, far: 0, farWas: 0 }
+    for (let i = 0; i < DRAWS; i++) {
+      reset(ch)
+      // a stream of each place's own: held to the same share, the same streams would bring home and abroad in the same draws everywhere
+      const spy = new Spy(hashStr(`check:abroad:${year}:${region}:${ch.via}:${ch.prefer}:${ch.name}:${seed}:${i}`))
+      ch.call(s, spy)
+      const inv = me.pre.invites.find((x) => !x.lang)
+      if (!inv || !spy.pool.length) { T.noCall++; continue }
+      if (inv.via !== ch.via) T.wrongVia++
+      const t = s.teams[inv.teamId]
+      const was = weightsBefore(s, spy.pool, ch.prefer, order)
+      const w0 = new Rng(spy.before).weighted(was.pool, was.w)
+      c.calls++
+      T.calls++
+      if (away(t)) { c.far++; T.far++ } else T.home++
+      if (away(w0)) { c.farWas++; T.farWas++ } else T.homeWas++
+      if (t.region === me.region) T.nat++
+      if (w0.region === me.region) T.natWas++
+      if (t.region !== me.region && !away(t)) T.mate++
+      if (w0.region !== me.region && !away(w0)) T.mateWas++
+      // the rule's own split the same as the old one for every club of this draw: 2021–2022, or no club of my league abroad in it
+      const split = spy.pool.every((x) => away(x) === (x.region !== me.region))
+      if (!away(w0) && away(t)) { T.lost++; if (split) T.lostSplit++ }
+      // what 外赛区 weighs of this draw
+      let far = 0
+      let tot = 0
+      spy.w.forEach((v, j) => { tot += v; if (away(spy.pool[j])) far += v })
+      if (tot - far <= 0) T.noHome++
+      else T.worst = Math.max(T.worst, far / tot)
+      // where the split is the old one: the same clubs in the same order, home weights as they were, the clubs abroad pressed down by one share
+      if (split) {
+        const sameOrder = was.pool.every((x, j) => x.id === spy.pool[j].id)
+        let k = -1
+        let ok = sameOrder
+        spy.w.forEach((v, j) => {
+          const old = was.w[j]
+          if (!away(spy.pool[j])) { if (Math.abs(v - old) > 1e-9 * Math.max(1, old)) ok = false; return }
+          const r = v / old
+          if (k < 0) k = r
+          else if (Math.abs(r - k) > 1e-9) ok = false
+        })
+        if (!ok || k > 1 + 1e-9) T.moved++
+      }
+    }
+    lines.push(`${ch.name} ${pct(c.far, c.calls)}（改之前 ${pct(c.farWas, c.calls)}）`)
+    if (c.calls > DRAWS / 2 && c.far / c.calls > 0.5) fail(`${ch.name}：不会外语，外赛区的邀请 ${c.far}/${c.calls}，过了一半`)
+  }
+  reset()
+  if (T.noCall > (DRAWS * CHANNELS.length) / 2 || T.wrongVia) { fail(`探针设置不对：${T.noCall} 次没来电，${T.wrongVia} 次来电走的不是设好的那条路`); return }
+  const farShare = T.far / T.calls
+  if (farShare > 0.5 || T.worst > CAP_SHARE + 1e-9) fail(`不会外语，外赛区邀请 ${T.far}/${T.calls}（${pct(T.far, T.calls)}），单次抽签外赛区最多占了 ${pct(T.worst, 1)}：上限是一半，抽签里是 ${Math.round(CAP_SHARE * 100)}%`)
+  else pass(`不会外语，外赛区邀请 ${T.farWas} → ${T.far} 份，占 ${pct(T.farWas, T.calls)} → ${pct(T.far, T.calls)}；单次抽签里外赛区最多占 ${pct(T.worst, 1)}（上限 ${Math.round(CAP_SHARE * 100)}%）`)
+  info(lines.join(' · '))
+  if (T.home < T.homeWas || T.lostSplit) fail(`本赛区邀请 ${T.homeWas} → ${T.home}：${T.lostSplit} 次同样的抽签本来来的是本赛区的，现在成了外赛区的`)
+  else pass(`本赛区邀请 ${T.homeWas} → ${T.home} 份，${T.calls} 次同样的抽签${T.lost ? `（${T.lost} 次换成了外赛区的：同联赛别国的俱乐部排进了本赛区，抽签顺序跟着变了；总数照样多了）` : '里本来是本赛区的一次也没换成外赛区的'}`)
+  if (T.moved) fail(`${T.moved} 次抽签本赛区俱乐部的分量被动了，或外赛区的不是按同一个比例一起压下来`)
+  info(`本赛区一家都够不着的抽签：${T.noHome} 次`)
+
+  if (s.year <= 2022) {
+    // 六 before 2023: a club's own region, as before
+    const clubs = Object.values(s.teams)
+    const changed = clubs.filter((t) => away(t) !== (t.region !== me.region))
+    const future = clubs.filter((t) => t.region !== me.region && regionIn(t.region, 2023) === regionIn(me.region, 2023))
+    if (changed.length) fail(`${year} 年有 ${changed.length} 家俱乐部不按所在赛区算本赛区、外赛区了：${changed.slice(0, 4).map((t) => t.name).join('、')}`)
+    else if (T.moved) fail('2021–2022 年的抽签不只是外赛区一起压下来')
+    else pass(`${year} 年照旧按俱乐部所在赛区算：${clubs.length} 家俱乐部一家没变${future.length ? `（2023 年同联赛的 ${future.length} 家这时还算外赛区）` : ''}；本赛区的分量没动，外赛区的只是按同一个比例一起压下来`)
+  } else {
+    // 六 from 2023: the league
+    const clubs = Object.values(s.teams).filter((t) => !t.dormant)
+    const mates = clubs.filter((t) => t.region !== me.region && regionIn(t.region, s.year) === league)
+    const wrongMates = mates.filter((t) => away(t) || foreignLeague(s, t))
+    const wrongOthers = clubs.filter((t) => regionIn(t.region, s.year) !== league && !away(t))
+    if (wrongMates.length || wrongOthers.length) fail(`${year} 年按联赛算不对：同联赛别国的 ${wrongMates.length} 家算了外赛区，别的联赛的 ${wrongOthers.length} 家算了本赛区`)
+    else if (mates.length && !T.mate) fail(`${league} 联赛里别的国家的俱乐部有 ${mates.length} 家，不会外语一份邀请也没来`)
+    else if (mates.length) {
+      const where = [...new Set(mates.map((t) => t.region))].join('、')
+      pass(`${year} 年按联赛算：${league} 里 ${where} 的 ${mates.length} 家俱乐部（Challengers ${mates.filter((t) => t.tier === 2).length} 家）算本赛区，别的联赛的都算外赛区；不会外语，同样的抽签它们来了 ${T.mateWas} → ${T.mate} 份，本国俱乐部 ${T.natWas} → ${T.nat} 份`)
+    } else pass(`${year} 年按联赛算：${league} 联赛里没有别的国家的俱乐部，本赛区就是本国的；别的联赛的都算外赛区`)
+  }
+
+  // 七 no club of my own within reach: turned down, every one, this year — a club from abroad still calls, weighed as it is
+  if (year === 2021) {
+    const keep = me.declined
+    const homes = reachableClubs(s, 99).filter((t) => !away(t))
+    for (const t of homes) markDeclined(s, t.id)
+    const ch = CHANNELS[0]
+    let calls = 0
+    let far = 0
+    let pressed = 0
+    for (let i = 0; i < 40; i++) {
+      reset(ch)
+      const spy = new Spy(hashStr(`check:abroad:nohome:${year}:${region}:${seed}:${i}`))
+      ch.call(s, spy)
+      const inv = me.pre.invites.find((x) => !x.lang)
+      if (!inv) continue
+      calls++
+      if (away(s.teams[inv.teamId])) far++
+      const was = weightsBefore(s, spy.pool, ch.prefer, order)
+      if (spy.w.some((v, j) => Math.abs(v - was.w[j]) > 1e-9 * Math.max(1, was.w[j]))) pressed++
+    }
+    me.declined = keep
+    reset()
+    if (calls < 40 || far < calls || pressed) fail(`本赛区一家都够不着（${homes.length} 家都回绝了）：40 次杯赛夺冠来了 ${calls} 次，外赛区的 ${far} 次，${pressed} 次外赛区的分量还被压了`)
+    else pass(`本赛区一家都够不着（${homes.length} 家都回绝了）：40 次杯赛夺冠照样来了 ${calls} 次，都是外赛区的，分量没压`)
+  }
+}
+
 console.log('一、二 试训邀请')
 invitations('North America', 2026, 31)
 invitations('China', 2021, 17)
@@ -245,11 +456,24 @@ console.log('\n四 字面')
 {
   const course = COURSES.find((x) => x.key === 'lang')
   const help = readFileSync(new URL('../src/ui/me/HelpScreen.tsx', import.meta.url), 'utf8')
-  if (!course || /权重/.test(course.blurb) || !/本赛区/.test(course.blurb) || !/照常/.test(course.blurb)) fail(`语言课的说明「${course?.blurb ?? ''}」：应该说本赛区照常来、外赛区另外多来`)
+  const transfer = readFileSync(new URL('../src/ui/me/TransferScreen.tsx', import.meta.url), 'utf8')
+  if (!course || /权重/.test(course.blurb) || !/本赛区/.test(course.blurb) || !/照常/.test(course.blurb) || !/联赛/.test(course.blurb)) fail(`语言课的说明「${course?.blurb ?? ''}」：应该说本赛区照常来、外赛区另外多来，2023 年起按联赛分赛区`)
   else pass(`语言课：「${course.blurb}」`)
   if (/会外语的多一些/.test(help) || !/LANG_EXTRA/.test(help)) fail('帮助「俱乐部怎么注意到你」还是旧说法，或者几成没从 LANG_EXTRA 读')
   else pass('帮助「俱乐部怎么注意到你」：本赛区照常来，外赛区另外多来的几成从 LANG_EXTRA 读')
+  if (/来找你的不一定少/.test(help) || !/ABROAD_CAP/.test(help) || !/联赛/.test(help)) fail('帮助没说不会外语时外赛区邀请的上限（从 ABROAD_CAP 读），或没说 2023 年起按联赛分赛区')
+  else pass('帮助：不会外语时外赛区邀请的上限从 ABROAD_CAP 读，2023 年起按 VCT 联赛分赛区')
+  if (!/abroadClub\(/.test(transfer) || /t\.region [!=]== me\.region/.test(transfer)) fail('转会页的门槛表还按俱乐部所在国家分本赛区、外赛区')
+  else pass('转会页的门槛表：本赛区、外赛区和来电用同一条规矩（abroadClub）')
 }
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+console.log(`\n五、六、七 不会外语：外赛区的邀请不过半；2023 年起按联赛算`)
+held('China', 2021, 31)
+held('Europe', 2021, 31)
+held('North America', 2021, 31)
+held('China', 2026, 31)
+held('North America', 2026, 31)
+held('Europe', 2026, 31)
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

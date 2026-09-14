@@ -4,7 +4,7 @@ import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { absDay, dateCn, inviteBlock, listBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
-import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
+import { abroadClub, clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
 import { push } from '../../engine/me/pending'
@@ -30,10 +30,12 @@ export default function TransferScreen() {
   // my contract as signed, in its club's league currency (engine/me/paytable.ts)
   const pay = payOf(game)
   const skill = tryoutSkill(game)
-  // my own region's clubs first: with the language the rest of the world is listed below them, never in among them
+  // my own 赛区's clubs first, as a call reads them (engine/me/prepro.ts abroadClub: from 2023 the whole VCT league):
+  // with the language the rest of the world is listed below them, never in among them
+  const away = new Set(Object.values(game.teams).filter((t) => abroadClub(game, t)).map((t) => t.id))
   const clubs = Object.values(game.teams)
-    .filter((t) => t.id !== game.myTeam && (t.region === me.region || me.flags.lang))
-    .sort((a, b) => Number(b.region === me.region) - Number(a.region === me.region) || expectOf(a) - expectOf(b))
+    .filter((t) => t.id !== game.myTeam && (!away.has(t.id) || me.flags.lang))
+    .sort((a, b) => Number(away.has(a.id)) - Number(away.has(b.id)) || expectOf(a) - expectOf(b))
   const reach = new Set(reachableClubs(game).map((t) => t.id))
   const declined = [...declinedNow(game)]
   const perf = pro ? proPerf(game) : 0
@@ -200,7 +202,7 @@ export default function TransferScreen() {
               return (
                 <tr key={t.id} style={{ opacity: reach.has(t.id) ? 1 : 0.55 }}>
                   <td><span className="club"><Crest id={t.id} size={18} />{t.tag}</span></td>
-                  <td className="tiny">{CLUB_TIER_CN(t)}{t.region !== me.region ? ' · 外赛区' : ''}</td>
+                  <td className="tiny">{CLUB_TIER_CN(t)}{away.has(t.id) ? ' · 外赛区' : ''}</td>
                   {nums && <><td className="num">{t.rating}</td><td className="num">{Math.round(e)}</td></>}
                   <td className="num" style={{ color: d >= 0 ? 'var(--win)' : d >= -6 ? 'var(--warn)' : 'var(--loss)' }}>{nums ? `${d >= 0 ? '+' : ''}${Math.round(d)}` : gapWord(-d)}</td>
                 </tr>

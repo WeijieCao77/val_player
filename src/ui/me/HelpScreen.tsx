@@ -3,7 +3,7 @@ import { Panel } from './common'
 import { openTour, setToursOff, useToursOff, weekTourOf } from './guide'
 import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'
-import { AP_PRE, LANG_EXTRA } from '../../engine/me/prepro'
+import { ABROAD_CAP, AP_PRE, LANG_EXTRA } from '../../engine/me/prepro'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
 import { RELIEF_FLOOR } from '../../engine/me/shop'
 import { windowRuleLines } from '../../engine/me/window'
@@ -44,7 +44,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
       '没有队伍时有三条路：杯赛走得远、天梯打进辐能战魂前 500（国服的名次；人少的服务器要排得更靠前）、粉丝到「有固定观众」。越往上，来找你的越勤。',
       '天梯段位和游戏里一样：每个小段 100 RR；神话起胜点不封顶，按名次上本服排行榜；辐能战魂只有每个服务器排行榜的前 500 名。你在「来自」的服务器打排位。',
       '第一年的前三个月，天梯和粉丝还不会带来电话，只有杯赛会。',
-      `本赛区和外赛区的俱乐部都可能来找你，各看各的门槛；外赛区的俱乐部多，来找你的不一定少。会外语的，本赛区的邀请和报价照常来，有俱乐部来找你时另有 ${Math.round(LANG_EXTRA * 10)} 成机会多来一家外赛区的。回绝过的俱乐部，今年不会再来。`,
+      `本赛区和外赛区的俱乐部都可能来找你，各看各的门槛；不会外语时，外赛区的邀请加起来平均不超过本赛区的 ${Math.round(ABROAD_CAP * 10)} 成（本赛区一家都够不着的时候除外）。2023 年起按 VCT 联赛分赛区：同一个联赛里别的国家的俱乐部也算本赛区，比如北美选手看巴西、拉美的俱乐部。会外语的，本赛区的邀请和报价照常来，有俱乐部来找你时另有 ${Math.round(LANG_EXTRA * 10)} 成机会多来一家外赛区的。回绝过的俱乐部，今年不会再来。`,
       '签约以后，赛段里打得好，别队教练会来看你的比赛。',
     ],
   },

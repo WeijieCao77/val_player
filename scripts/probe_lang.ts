@@ -9,14 +9,17 @@
  * 二 in the no-language career, at every third week the invitation channel is open: the same draws of
  *    rollInvites with the language off and on, and the pool the draw is made from
  * 三 careers from a club, the same way, with rollOffers' draws (a listed round) at open windows
+ *
+ * Invitations are read by the rule a call is drawn by (me/prepro.ts abroadClub: from 2023 the league), and the pool by
+ * the weights it is drawn with, 外赛区 held to ABROAD_CAP of home (holdAbroad) — and how often no home club is in it.
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { INVITE_FANS, INVITE_LADDER, cupInvite, expectOf, reachableClubs, rollInvites, tryoutSkill } from '../src/engine/me/prepro'
+import { INVITE_FANS, INVITE_LADDER, abroadClub, cupInvite, foreignLeague, holdAbroad, inviteWeight, reachableClubs, rollInvites } from '../src/engine/me/prepro'
 import { rollOffers } from '../src/engine/me/transfer'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
-import { formatOf, regionIn } from '../src/engine/era'
+import { formatOf } from '../src/engine/era'
 import { Rng, hashStr } from '../src/engine/rng'
 import type { GameState, Region, Team } from '../src/engine/types'
 
@@ -48,14 +51,6 @@ function setLang(s: GameState, on: boolean): void {
   }
 }
 
-/** me/transfer.ts foreignLeague, read the same way */
-function foreignLeague(s: GameState, t: Team): boolean {
-  const league = regionIn(t.region, s.year)
-  const mine = s.teams[s.myTeam]
-  if (mine && regionIn(mine.region, s.year) === league) return false
-  return regionIn(s.me!.region, s.year) !== league
-}
-
 const named = (s: GameState, name: string): Team | undefined => Object.values(s.teams).find((t) => t.name === name)
 
 interface Tally { invDom: number; invFor: number; offDom: number; offFor: number; unknown: number }
@@ -68,15 +63,14 @@ const VCT_OFFER = /^转会窗：(.+?)（[^）]*） 来找你/
 const RUT = /^(?:你的俱乐部今年没有联赛可打。)?(.+?)（[^）]*）来问了：那边给首发/
 const STORY = /^外区邀约：转会窗开了，(.+?) 按之前谈的开出了报价/
 
-/** invitations by the region field pickClub weighs (me/prepro.ts); offers by league, as the offer's own line says */
+/** invitations by the rule pickClub draws by (me/prepro.ts abroadClub); offers by league, as the offer's own line says */
 function scan(s: GameState, lines: { text: string }[], t: Tally): void {
-  const me = s.me!
   for (const l of lines) {
     const inv = INV.exec(l.text) ?? VCT_INV.exec(l.text)
     if (inv) {
       const team = named(s, inv[1])
       if (!team) t.unknown++
-      else if (team.region === me.region) t.invDom++
+      else if (!abroadClub(s, team)) t.invDom++
       else t.invFor++
       continue
     }
@@ -101,29 +95,31 @@ interface Acc {
   invOff: Draws; invOn: Draws; cupOff: Draws; cupOn: Draws; offerOff: Draws; offerOn: Draws
   inviteMoments: number; offerMoments: number
   poolDom: number; poolFor: number; wDomOff: number; wForOff: number; wForOn: number
+  /** moments at which clubs abroad could call and no club of my own 赛区 could */
+  noHome: number
   /** home-region invitations the language took away from the same draw, or added to it */
   homeLost: number; homeGained: number
 }
 const acc = (): Acc => ({
   off: tally(), on: tally(), invOff: draws(), invOn: draws(), cupOff: draws(), cupOn: draws(), offerOff: draws(), offerOn: draws(),
-  inviteMoments: 0, offerMoments: 0, poolDom: 0, poolFor: 0, wDomOff: 0, wForOff: 0, wForOn: 0, homeLost: 0, homeGained: 0,
+  inviteMoments: 0, offerMoments: 0, poolDom: 0, poolFor: 0, wDomOff: 0, wForOff: 0, wForOn: 0, noHome: 0, homeLost: 0, homeGained: 0,
 })
 
-/** pickClub's weights, off and on, for the pool as it stands (me/prepro.ts) — for reading the draw, not deciding it */
+/** pickClub's weights for the pool as it stands, a call that asks no tier first (me/prepro.ts) — for reading the draw, not deciding it */
 function poolRead(s: GameState, a: Acc): void {
   const me = s.me!
   const pool = reachableClubs(s).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(s, t.id))
-  const skill = tryoutSkill(s)
-  const open = formatOf(s.year) === 'open'
-  for (const t of pool) {
-    const v = 10 + Math.max(0, skill - expectOf(t)) * 2
-    if (t.region === me.region) { a.poolDom++; a.wDomOff += v } else {
-      a.poolFor++
-      a.wForOff += v * (open ? 0.5 : 0.04)
-      // the same with the language since 2026-09-14; before, 0.8 / 0.2
-      a.wForOn += v * (open ? 0.5 : 0.04)
-    }
-  }
+  const away = pool.map((t) => abroadClub(s, t))
+  const per = formatOf(s.year) === 'open' ? 0.5 : 0.04
+  // the same with the language since 2026-09-14 (before, 0.8 / 0.2 a club); 外赛区 held to ABROAD_CAP of home since that day too
+  const w = holdAbroad(pool.map((t, i) => inviteWeight(s, t, 0) * (away[i] ? per : 1)), away)
+  pool.forEach((_, i) => {
+    if (!away[i]) { a.poolDom++; a.wDomOff += w[i]; return }
+    a.poolFor++
+    a.wForOff += w[i]
+    a.wForOn += w[i]
+  })
+  if (pool.length && away.every(Boolean)) a.noHome++
 }
 
 /**
@@ -156,9 +152,9 @@ function drawInvites(s: GameState, seed: number, a: Acc): void {
       got.push(ts)
       const d = on ? onD : off
       if (!ts.length) d.none++
-      for (const t of ts) { if (t.region === me.region) d.dom++; else d.for++ }
+      for (const t of ts) { if (!abroadClub(s, t)) d.dom++; else d.for++ }
     }
-    const home = (ts: Team[]): number => ts.filter((t) => t.region === me.region).length
+    const home = (ts: Team[]): number => ts.filter((t) => !abroadClub(s, t)).length
     const [x, y] = got
     if (home(y) < home(x)) a.homeLost += home(x) - home(y)
     if (home(y) > home(x)) a.homeGained += home(y) - home(x)
@@ -235,7 +231,7 @@ function report(label: string, a: Acc): void {
   if (a.inviteMoments) {
     const m = a.inviteMoments
     console.log(`  同一时刻同样的抽签（邀请）：${m} 个时刻 × ${DRAWS} 次`)
-    console.log(`    可去试训的俱乐部平均：本赛区 ${(a.poolDom / m).toFixed(1)} 家 · 外赛区 ${(a.poolFor / m).toFixed(1)} 家；权重和 本赛区 ${(a.wDomOff / m).toFixed(0)} · 外赛区 没外语 ${(a.wForOff / m).toFixed(0)} / 有外语 ${(a.wForOn / m).toFixed(0)}`)
+    console.log(`    可去试训的俱乐部平均：本赛区 ${(a.poolDom / m).toFixed(1)} 家 · 外赛区 ${(a.poolFor / m).toFixed(1)} 家；权重和 本赛区 ${(a.wDomOff / m).toFixed(0)} · 外赛区 没外语 ${(a.wForOff / m).toFixed(0)} / 有外语 ${(a.wForOn / m).toFixed(0)}；本赛区一家都够不着、外赛区够得着 ${a.noHome} 个时刻`)
     for (const [k, d] of [['天梯/粉丝 没外语', a.invOff], ['天梯/粉丝 有外语', a.invOn], ['杯赛 没外语', a.cupOff], ['杯赛 有外语', a.cupOn]] as const) {
       const n = d.dom + d.for
       console.log(`    ${k}：邀请 ${n}（本赛区 ${d.dom} · 外赛区 ${d.for}，外 ${pct(d.for, n)}）`)

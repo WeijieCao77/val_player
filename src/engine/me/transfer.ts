@@ -10,7 +10,7 @@ import { offerUsd, payOf } from './paytable'
 import { roundPay } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { gradeOf } from './tryout'
-import { INVITE_DAYS, LANG_EXTRA, declinedNow, expectOf, tryoutSkill } from './prepro'
+import { INVITE_DAYS, LANG_EXTRA, declinedNow, expectOf, foreignLeague, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
 import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
@@ -107,25 +107,6 @@ function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false, a
     return v
   })
   return rng.weighted(fit, w)
-}
-
-/**
- * A club in another league from mine: not my club's league and not my home
- * region's. A 赛区 is a league — VCT EMEA is Europe, Türkiye, CIS and MENA
- * alike, VCT Americas North America, Brazil and LATAM — so a club in the league
- * I play in is never foreign to me, nor one in the league I come from. It used
- * to be read off the club's home country (the author, 2026-09-13: a bug): a
- * Turkish club in a French player's own league weighed 0.015 of a French one,
- * and a man playing outside his home league had every club of it weighed so —
- * 53 of 185 windows at a Challengers club, in sixteen careers, found every VCT
- * club of his league 「foreign」.
- */
-export function foreignLeague(state: GameState, t: Team): boolean {
-  const me = state.me!
-  const league = regionIn(t.region, state.year)
-  const mine = state.teams[state.myTeam]
-  if (mine && regionIn(mine.region, state.year) === league) return false
-  return regionIn(me.region, state.year) !== league
 }
 
 /* ------------------------------------------------------------------ */

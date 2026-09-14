@@ -5,7 +5,7 @@ import { pushLog } from './log'
 import { rankAt, rankText } from './rank'
 import { push } from './pending'
 import { CUPS } from './cups'
-import { formatOf } from '../era'
+import { formatOf, regionIn } from '../era'
 import { hasPlace } from '../timeline'
 import { clubOpen, inviteBlock } from './window'
 import { noteRankPeak } from './moments'
@@ -103,7 +103,6 @@ export const CLUB_TIER_CN = (team: Team): string =>
 export interface ClubBar { key: string; name: string; expect: number; gap: number; ok: boolean; example: string }
 
 export function clubBars(state: GameState): ClubBar[] {
-  const me = state.me!
   const skill = tryoutSkill(state)
   const groups: { key: string; name: string; pick: (t: Team) => boolean }[] = [
     { key: 't1top', name: '豪门', pick: (t) => t.tier === 1 && t.rating >= 86 },
@@ -112,7 +111,8 @@ export function clubBars(state: GameState): ClubBar[] {
     { key: 't1low', name: '弱队', pick: (t) => t.tier === 1 && t.rating < 82 },
     { key: 't2', name: '挑战者联赛', pick: (t) => t.tier === 2 },
   ]
-  const home = Object.values(state.teams).filter((t) => t.region === me.region && !t.id.startsWith('CUP_') && !t.dormant)
+  // my own 赛区's clubs, as a call reads them (abroadClub): from 2023 the whole league
+  const home = Object.values(state.teams).filter((t) => !abroadClub(state, t) && !t.id.startsWith('CUP_') && !t.dormant)
   const pool = home.length ? home : Object.values(state.teams).filter((t) => !t.id.startsWith('CUP_') && !t.dormant)
   const out: ClubBar[] = []
   for (const g of groups) {
@@ -149,16 +149,54 @@ export function markDeclined(state: GameState, teamId: string): void {
   me.declined.push({ team: teamId, year: state.year })
 }
 
-/** Clubs whose bar I am within reach of, my own region first. */
+/** Clubs whose bar I am within reach of, my own 赛区 first (abroadClub). */
 export function reachableClubs(state: GameState, slack = 6): Team[] {
-  const me = state.me!
   const skill = tryoutSkill(state)
   const no = declinedNow(state)
-  return Object.values(state.teams)
+  const clubs = Object.values(state.teams)
     // a club with nowhere to play this year is not holding tryouts
     .filter((t) => t.roster.length <= 7 && !no.has(t.id) && !t.dormant && hasPlace(state, t))
     .filter((t) => expectOf(t) <= skill + slack)
-    .sort((a, b) => (Number(b.region === me.region) - Number(a.region === me.region)) || b.rating - a.rating)
+  const away = new Set(clubs.filter((t) => abroadClub(state, t)).map((t) => t.id))
+  return clubs.sort((a, b) => (Number(away.has(a.id)) - Number(away.has(b.id))) || b.rating - a.rating)
+}
+
+/**
+ * A club in another league from mine: not my club's league and not my home
+ * region's. A 赛区 is a league — VCT EMEA is Europe, Türkiye, CIS and MENA
+ * alike, VCT Americas North America, Brazil and LATAM — so a club in the league
+ * I play in is never foreign to me, nor one in the league I come from. It used
+ * to be read off the club's home country (the author, 2026-09-13: a bug): a
+ * Turkish club in a French player's own league weighed 0.015 of a French one,
+ * and a man playing outside his home league had every club of it weighed so —
+ * 53 of 185 windows at a Challengers club, in sixteen careers, found every VCT
+ * club of his league 「foreign」.
+ *
+ * A round of offers reads it (me/transfer.ts pickBuyer), and from 2023 a call does (abroadClub).
+ */
+export function foreignLeague(state: GameState, t: Team): boolean {
+  const me = state.me!
+  const league = regionIn(t.region, state.year)
+  const mine = state.teams[state.myTeam]
+  if (mine && regionIn(mine.region, state.year) === league) return false
+  return regionIn(me.region, state.year) !== league
+}
+
+/**
+ * 外赛区, for a tryout invitation and the screens that sort clubs for one (the transfer screen's bars and table).
+ *
+ * From 2023, when the partnered leagues closed, by the VCT league, as an offer reads it (foreignLeague): a club in
+ * my league's territory is home whatever country it is based in — a Brazilian or LATAM club for a North American
+ * in VCT Americas, a Challengers Brazil club with it, since Challengers Brazil feeds Americas (engine/era.ts
+ * regionIn). The author, 2026-09-14: 「统一按联赛算」. Until then a call read the club's own country while an
+ * offer read the league, and a North American's Brazilian club was 外赛区 on a call and 本赛区 on an offer.
+ * The same 1,400 calls of a 2026 North American of 70 (ABROAD_CAP): Brazil's and LATAM's clubs 44 → 559, his own
+ * country's 1,071 → 654, 外赛区 285 → 187; a European's Türkiye, CIS and MENA clubs 15 → 373, 外赛区 96 → 70.
+ *
+ * 2021–2022 are as they were: sixteen circuits and then eight, no leagues, a club's own region.
+ */
+export function abroadClub(state: GameState, t: Team): boolean {
+  return formatOf(state.year) === 'open' ? t.region !== state.me!.region : foreignLeague(state, t)
 }
 
 function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): Invite {
@@ -191,25 +229,67 @@ export const LANG_EXTRA = 0.3
 /** A club's own call still waiting holds the channel shut; one that came for the language does not. */
 const waiting = (state: GameState): boolean => state.me!.pre.invites.some((i) => !i.lang)
 
-/** The draw a call is made from. `abroad`: the language's own call (callFrom) — clubs of other regions only, weighed among themselves. */
+/**
+ * 外赛区 on a call without the language: the clubs of other 赛区 in a draw, all of them together, weigh at most this
+ * much of what the clubs of mine weigh — half, so a third of the calls at most (the author, 2026-09-14:
+ * 「控制外赛区邀请，在不会外语的时候外赛区邀请占比不要超过一半」).
+ *
+ * Each club of another region weighed 0.5 of one of mine in 2021–2022 and 0.04 from 2023, and nothing held them
+ * together: the more of them in reach, the more of the calls were theirs, and most of the world is another region.
+ * A player of 70 had 10–16 clubs of his own region in reach in 2021 against 181–197 elsewhere, and 3 or 4 in 2026's
+ * China against 166–171. The same draws before and after, seven channels of 200 calls each (a cup won, a cup final
+ * lost, the ladder, the ladder's top, a following, a large one, a former professional), a player of 70: 外赛区 90.6%
+ * → 33.4% of a 2021 Chinese player's calls, 88.1% → 34.7% of a European's, 92.6% → 33.1% of a North American's,
+ * 69.7% → 33.0% of a 2026 Chinese player's; home calls 131 → 933, 167 → 914, 104 → 937, 424 → 938 of 1,400, and
+ * not one draw that brought a home club brings one from abroad now. Where few clubs abroad are in reach nothing is
+ * held back — 2026's North American and European players, 20.4% → 13.4% and 6.9% → 5.0%, lower for the league
+ * (abroadClub), not for this. scripts/check_language.ts 五 holds it.
+ *
+ * Half, and not a hair under it: a career hears from a handful of clubs, and at a third a man with eight calls has
+ * five or more from abroad about one career in eleven — at 40% one in six. With the language a call brings a club
+ * from abroad LANG_EXTRA of the time on top, and about half of his calls are from abroad: the language's advantage.
+ */
+export const ABROAD_CAP = 0.5
+
+/** A club's pull in a call's draw before any 赛区 rule: how far I clear its bar, and the tier the channel asks first. */
+export function inviteWeight(state: GameState, t: Team, prefer: 1 | 2 | 0): number {
+  let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
+  if (prefer && t.tier === prefer) v *= 4
+  if (!prefer && t.tier === 1) v *= 0.5
+  return v
+}
+
+/**
+ * A draw's 外赛区 clubs, all of them together, held to ABROAD_CAP of what its home clubs weigh — each club pressed
+ * down by the same share, so who among them is likelier stays as it was. Under the line, or with no club of my own
+ * 赛区 in the draw at all, the weights are left as they are: a man no home club would ask still gets his call.
+ */
+export function holdAbroad(w: readonly number[], away: readonly boolean[]): number[] {
+  let home = 0
+  let far = 0
+  w.forEach((v, i) => { if (away[i]) far += v; else home += v })
+  if (!home || far <= home * ABROAD_CAP) return w.slice()
+  const k = (home * ABROAD_CAP) / far
+  return w.map((v, i) => (away[i] ? v * k : v))
+}
+
+/** The draw a call is made from. `abroad`: the language's own call (callFrom) — clubs of other 赛区 only, weighed among themselves. */
 function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0, abroad = false): Team | null {
   const me = state.me!
   // a club whose window is shut or whose roster is locked is not holding tryouts (me/window.ts): with no club of my own, only its window counts
   const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(state, t.id)
-    && (!abroad || t.region !== me.region))
+    && (!abroad || abroadClub(state, t)))
   if (!pool.length) return null
-  const w = pool.map((t) => {
-    let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
-    if (prefer && t.tier === prefer) v *= 4
-    if (!prefer && t.tier === 1) v *= 0.5
-    // 2021–2022: no import limits and no franchise, and the author's rule —
-    // every region's clubs can write, each to its own bar. The bar is the
-    // club's own level (expectOf), so a Thai side asks less than Sentinels.
-    // The same with the language or without it: what the language brings comes on top (LANG_EXTRA).
-    if (!abroad && t.region !== me.region) v *= formatOf(state.year) === 'open' ? 0.5 : 0.04
-    return v
-  })
-  return rng.weighted(pool, w)
+  if (abroad) return rng.weighted(pool, pool.map((t) => inviteWeight(state, t, prefer)))
+  const away = pool.map((t) => abroadClub(state, t))
+  // 2021–2022: no import limits and no franchise, and the author's rule —
+  // every region's clubs can write, each to its own bar. The bar is the
+  // club's own level (expectOf), so a Thai side asks less than Sentinels.
+  // Each club of another 赛区 weighs less than one of mine, and all of them together no more than ABROAD_CAP of mine.
+  // The same with the language or without it: what the language brings comes on top (LANG_EXTRA).
+  const per = formatOf(state.year) === 'open' ? 0.5 : 0.04
+  const w = pool.map((t, i) => inviteWeight(state, t, prefer) * (away[i] ? per : 1))
+  return rng.weighted(pool, holdAbroad(w, away))
 }
 
 const HOW: Record<Invite['via'], string> = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', free: '知道你在找队', scout: '教练组推荐' }
