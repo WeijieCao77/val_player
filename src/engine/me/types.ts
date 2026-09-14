@@ -266,6 +266,8 @@ export interface CupRun {
   rounds: number
   won: boolean
   prize: number
+  /** given up on a round's day instead of played (me/cups.ts forfeitCup) */
+  forfeit?: boolean
 }
 
 export interface Invite {
@@ -330,8 +332,12 @@ export interface PreState {
   /** 战术素养 0-60: what playing with a five teaches that ranked cannot */
   tac: number
   mates: PickupMate[]
-  /** the cup in progress, if any */
-  cup?: { key: string; round: number; alive: boolean; mates: PickupMate[]; results: string[] }
+  /**
+   * the cup in progress, if any: the round to play, and the day it is played on
+   * — a round a week (me/cups.ts). `next` and `year` are absent in a save from
+   * before the rounds had days; resumeCup gives them today.
+   */
+  cup?: { key: string; round: number; alive: boolean; mates: PickupMate[]; results: string[]; next?: number; year?: number }
   /** a former pro on the market keeps his record but starts here again */
   wasPro: boolean
 }

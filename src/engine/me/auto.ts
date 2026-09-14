@@ -7,11 +7,11 @@ import { traitMul } from './traits'
 import { ACTION_BY_KEY } from './actions'
 import { advanceWeek, doDuel, setPlan } from './week'
 import type { WeekStop } from './week'
-import { MeMatch } from './matchplay'
+import { FRIENDLY_MAP_FATIGUE, MeMatch } from './matchplay'
 import { EDGE_NEED } from './coach'
 import type { PendingItem } from './types'
 import { pop } from './pending'
-import { cupFor, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng } from './cups'
+import { cupFor, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng, forfeitCup, isCupRound } from './cups'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
@@ -31,18 +31,26 @@ import { storyPlan } from './storyweek'
 /** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
 export const WEEK_END_FATIGUE = 40
 
-/** The fatigue my club's matches still to come this week will book (matchplay.ts: a map on the floor 5, on the bench 1.5). */
+/**
+ * The fatigue my matches still to come this week will book: my club's
+ * (matchplay.ts: a map on the floor 5, on the bench 1.5) — or, without a club,
+ * the round of my cup this week holds (a map of it FRIENDLY_MAP_FATIGUE).
+ */
 export function matchLoad(state: GameState): number {
   const me = state.me!
-  if (me.phase !== 'pro') return 0
+  const last = state.day - me.weekDay + 7
+  const maps = (bo: number) => bo === 1 ? 1 : bo === 2 ? 2 : bo === 5 ? 4 : 2.5
+  if (me.phase !== 'pro') {
+    const run = me.pre.cup
+    const r = run && cupFor(state, run.key)?.rounds[run.round]
+    return run && r && run.next != null && run.next <= last ? maps(r.bo) * FRIENDLY_MAP_FATIGUE : 0
+  }
   const club = state.myTeam
   const starter = !!state.teams[club]?.starters.includes(me.id)
-  const last = state.day - me.weekDay + 7
   let load = 0
   for (const f of state.fixtures) {
     if (f.played || f.comp === 'scrim' || f.day > last || (f.teamA !== club && f.teamB !== club)) continue
-    const maps = f.bo === 1 ? 1 : f.bo === 2 ? 2 : f.bo === 5 ? 4 : 2.5
-    load += maps * (starter ? 5 : 1.5)
+    load += maps(f.bo) * (starter ? 5 : 1.5)
   }
   return load
 }
@@ -155,22 +163,25 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     case 'cup': {
       const cup = cupFor(state, item.id!)
       if (!cup) { skipCup(state, item.id!); return '' }
-      // a run already entered is played out — entering it again failed, and skipping it left it hanging
-      if (me.pre.cup?.key !== item.id) {
-        if (me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup.name}` }
-        // a cup is several matches back to back: not entered on anything serious or anything that can leave a mark
-        if (autoSitsOut(state)) { skipCup(state, item.id!); return `带伤，没报${cup.name}` }
-        const why = enterCup(state, item.id!, rng)
-        if (why) { skipCup(state, item.id!); return why }
-      }
-      let guard = 0
-      while (me.pre.cup && guard++ < 8) {
-        const run = me.pre.cup
+      // a round of the run I am in: today's match (me/cups.ts, a round a week)
+      if (isCupRound(state, item)) {
+        const run = me.pre.cup!
+        const label = cup.rounds[run.round]?.label ?? ''
+        // a round's card on a day that is not its own has nothing to play (resumeCup puts it back on the day)
+        if (run.next != null && run.next > state.day) { pop(state, 'cup', item.id); return '' }
+        // hurt on the day, the way a match day of my club's goes (me/hurtplay.ts autoHurt): anything that can leave a mark sits out — in a cup, a forfeit
+        if (autoSitsOut(state)) { forfeitCup(state, rng); return `带伤，${cup.name}${label}弃权` }
         const m = mountCupMatch(state, cup, run.round, cupRng(state, `r${run.round}`))
         const rec = new MeMatch(state, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }).runOut()
         afterCupMatch(state, rec.won, rec.score, rng)
+        return `${cup.name}${label} ${rec.won ? '胜' : '负'} ${rec.score}`
       }
-      return `打完了${cup.name}`
+      if (me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup.name}` }
+      // not entered on anything serious or anything that can leave a mark: the first round is only a week or so away
+      if (autoSitsOut(state)) { skipCup(state, item.id!); return `带伤，没报${cup.name}` }
+      const why = enterCup(state, item.id!, rng)
+      if (why) { skipCup(state, item.id!); return why }
+      return `报名了${cup.name}`
     }
     case 'invite': {
       const inv = me.pre.invites.find((i) => i.id === item.id)
@@ -238,7 +249,8 @@ export function runAutoPilot(state: GameState): string[] {
   const on = (item: PendingItem): boolean => {
     if (item.kind === 'event' || item.kind === 'trait') return me.auto.daily
     if (item.kind === 'stream') return me.auto.biz
-    if (item.kind === 'cup') return me.auto.biz
+    // a cup's entry is the dial's; its rounds are matches, and a press hands them to me as it does my club's
+    if (item.kind === 'cup') return me.auto.biz && !isCupRound(state, item)
     if (item.kind === 'invite' || item.kind === 'tryout' || item.kind === 'deal' || item.kind === 'released') return me.auto.career
     return false
   }
@@ -294,6 +306,9 @@ export function quietAhead(state: GameState, days = 28): boolean {
   if (!me) return false
   const club = me.phase === 'pro' ? state.myTeam : null
   const until = state.day + days
+  // a round of my cup inside the stretch (me/cups.ts, a round a week)
+  const run = club ? undefined : me.pre.cup
+  if (run?.next != null && run.next <= until) return false
   if (club && state.fixtures.some((f) => !f.played && f.day >= state.day && f.day <= until && (f.teamA === club || f.teamB === club))) return false
   const region = club ? state.teams[club]?.region : state.players[me.id]?.region
   const scene = club ? state.teams[club]?.scene : undefined
@@ -334,6 +349,8 @@ export const RUN_DIAL: Partial<Record<PendingItem['kind'], 'career' | 'biz'>> = 
 export function leftToMe(state: GameState, item: PendingItem): boolean {
   const me = state.me!
   if (item.kind === 'season') return !me.auto.career && !!me.retireAsk && (state.players[me.id]?.age ?? 0) >= 31
+  // a round of my cup is a match, not a decision: a run hands it to me or plays it, as it does my club's (advanceUntil)
+  if (isCupRound(state, item)) return false
   const dial = RUN_DIAL[item.kind]
   return !!dial && !me.auto[dial]
 }
@@ -346,6 +363,11 @@ export function runBlocked(state: GameState): PendingItem | undefined {
 /** Why a run stopped, or would not start, in the card's words: 「Suning Gaming 的续约等你拿主意（托管「生涯」没开）」. */
 export function stopLine(state: GameState, item: PendingItem): string {
   const me = state.me!
+  if (isCupRound(state, item)) {
+    const run = me.pre.cup!
+    const cup = cupFor(state, run.key)
+    return `${cup?.name ?? '杯赛'}${cup?.rounds[run.round]?.label ?? ''}今天开打`
+  }
   const club = (id?: string) => (id && state.teams[id]?.name) || '俱乐部'
   const dial = item.kind === 'season' ? 'career' : RUN_DIAL[item.kind]
   let what = '有件事等你拿主意'
@@ -385,6 +407,8 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     let g = 0
     while (me.pending.length && g++ < 20) {
       if (leftToMe(state, me.pending[0])) return me.pending[0]
+      // a round of my cup: 到下一场比赛 and a month hand it to me, as they do my club's match; the longer runs play it
+      if (isCupRound(state, me.pending[0]) && (until === 'match' || until === 'month')) return me.pending[0]
       const line = autoResolve(state, me.pending[0])
       notes.push(line || '替你处理了一件等着的事。')
     }

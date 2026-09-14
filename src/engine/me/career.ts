@@ -395,7 +395,7 @@ export function createCareer(o: CareerOpts): GameState {
   pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${originName(origin, serverOf(state))}：${origin.needsClub && club ? origin.blurb.replace('这家俱乐部', club.name) : origin.blurb}${placed}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。${ladderLabel(state)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
+    pushLog(state, 'info', `没有队伍。${ladderLabel(state)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}第 7 周报名、之后一周打一轮，${cupFor(state, 'premier')?.name}第 15 周报名，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON

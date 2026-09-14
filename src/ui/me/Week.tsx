@@ -17,7 +17,8 @@ import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
 import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText } from '../../engine/me/rank'
-import { CUPS, cupView } from '../../engine/me/cups'
+import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupView } from '../../engine/me/cups'
+import { FRIENDLY_MAP_FATIGUE } from '../../engine/me/matchplay'
 import { fansCn } from '../../engine/me/fans'
 import { useNumbers } from './words'
 import { chainLine } from '../../engine/me/story'
@@ -34,6 +35,8 @@ import type { GameState } from '../../engine/types'
  * say different things.
  */
 export function advanceOf(game: GameState): { label: string; title?: string } {
+  // a round of my cup is today's and its card is up: the press opens it, as it would my club's match (engine/me/cups.ts)
+  if (cupRoundToday(game)) return { label: '打今天的比赛 →', title: '今天是杯赛的比赛日，打完回到这里' }
   if (weekInDays(game)) {
     return {
       label: weekCalendar(game).some((d) => d.next && d.day === game.day) ? '打今天的比赛 →' : '推进一天 →',
@@ -332,6 +335,44 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           </>
         ) : (
           <>
+            {(() => {
+              // the run under way, a round a week: where it stands, the next round's day, and that the days before it are mine (engine/me/cups.ts)
+              const run = me.pre.cup
+              const raw = run && CUPS.find((x) => x.key === run.key)
+              if (!run || !raw) return null
+              const c = cupView(raw, game.year, p.region)
+              const next = run.next ?? game.day
+              const left = next - game.day
+              const on = (d: number) => `${fmtDay(d, game.year)} 周${'日一二三四五六'[new Date(Date.UTC(game.year, 0, 1 + d)).getUTCDay()]}`
+              const bo = c.rounds[run.round]?.bo ?? 3
+              return (
+                <Panel title={`杯赛 · ${c.name}`} className="own">
+                  <div role="list" aria-label="赛程" style={{ marginBottom: 8 }}>
+                    {c.rounds.map((r, i) => {
+                      const past = i < run.round
+                      const now = i === run.round
+                      return (
+                        <div key={i} role="listitem" className={`small${past ? ' muted' : now ? '' : ' faint'}`} style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', alignItems: 'baseline', margin: '0 0 4px' }}>
+                          <b>{r.label}</b>
+                          <span className="tiny">BO{r.bo}</span>
+                          <span style={{ marginLeft: 'auto' }}>
+                            {past ? (run.results[i]?.slice(r.label.length + 1) || '胜')
+                              : now ? <b style={{ color: 'var(--accent)' }}>{on(next)} · {left <= 0 ? '今天' : `还有 ${left} 天`}</b>
+                                : `约 ${on(next + (i - run.round) * CUP_ROUND_GAP)} · 赢下${c.rounds[i - 1].label}才打`}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="tiny muted" style={{ margin: '0 0 4px' }}>车队：{run.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}</p>
+                  <p className="tiny" style={{ margin: 0 }}>
+                    体力 {Math.round(100 - p.fatigue)}{nums ? `，这一轮约耗 ${Math.round((bo === 1 ? 1 : 2.5) * FRIENDLY_MAP_FATIGUE)}` : ''}。
+                    {left > 0 ? '比赛日之前是平常的日子：休息在周结算时回体力，理疗和外设在「经济」页，买了当场生效。' : '今天开打。'}
+                  </p>
+                  <p className="tiny faint" style={{ margin: '4px 0 0' }}>比赛日弹卡开打；打不了可以在卡上弃权，奖金按已赢的轮次算。</p>
+                </Panel>
+              )
+            })()}
             <Panel title="天梯" className="own">
               {/* as the client shows it (engine/me/rank.ts): division, RR with 数值, and from 神话 up the place on my server's board */}
               <p style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>{nums ? rankFull(rankAt(game)) : rankText(rankAt(game))}</p>
@@ -358,7 +399,10 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 return (
                   <p key={c.key} className="small" style={{ margin: '0 0 4px' }}>
                     <b>{c.name}</b>{when ? ` · ${when}` : ''}{c.minFans ? ` · 邀请制（粉丝过 ${fansCn(c.minFans)}）` : ''}
-                    {done ? ` · ${done.won ? '冠军' : `止步${c.rounds[Math.min(done.reached, c.rounds.length - 1)].label}`}` : running ? ' · 已报名，正在打' : seen ? ' · 没参加' : week > c.week ? ' · 错过了' : ''}
+                    {done
+                      ? ` · ${done.won ? '冠军' : done.forfeit ? `${c.rounds[Math.min(done.reached, c.rounds.length - 1)].label}弃权` : `止步${c.rounds[Math.min(done.reached, c.rounds.length - 1)].label}`}`
+                      : running ? ` · 已报名 · ${c.rounds[me.pre.cup!.round]?.label ?? ''}${me.pre.cup!.next != null ? ` ${fmtDay(me.pre.cup!.next, game.year)}` : ''}`
+                        : seen ? ' · 没参加' : week > c.week ? ' · 错过了' : ''}
                   </p>
                 )
               })}

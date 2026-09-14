@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useGame } from './ctx'
 import { Crest, Modal, money } from './common'
 import type { PendingItem } from '../../engine/me/types'
-import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng } from '../../engine/me/cups'
-import { MeMatch } from '../../engine/me/matchplay'
+import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
+import { FRIENDLY_MAP_FATIGUE, MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { doorsOf, formatOf } from '../../engine/era'
@@ -48,37 +48,68 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
 }
 
 // ------------------------------------------------------------------ cup
+/**
+ * A cup's card: its entry, or — a round a week (engine/me/cups.ts) — the round
+ * whose day it is. The round's card stops the clock the way a match day of my
+ * club's does, and is answered by playing it or by giving it up, asked twice.
+ */
 function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
   const { game, commit, toast } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
+  const p = game.players[me.id]
   const cup = cupFor(game, cupKey)!
   const [live, setLive] = useState<MeMatch | null>(null)
+  const [quit, setQuit] = useState(false)
   const run = me.pre.cup
+  const inj = injuryStatus(game)
   if (live) {
     return <MatchPlay mm={live} onDone={() => {
       const rec = live.record!
       const done = afterCupMatch(game, rec.won, rec.score, cupRng(game, 'x'))
       setLive(null)
       commit()
-      if (done) onDone()
+      const on = game.me!.pre.cup
+      if (!done && on?.next != null) toast(`晋级${cup.rounds[on.round].label}，${cupDateCn(game, on.next)}开打。`)
+      // the round's card is down either way: the week goes on from here
+      onDone()
     }} />
   }
   if (run && run.key === cupKey) {
     const r = cup.rounds[run.round]
+    const prize = cup.prize[Math.min(run.round, cup.prize.length - 1)] ?? 0
     return (
       <Modal title={`${cup.name} · ${r.label}`} onClose={() => {}} onBgClose={() => {}}>
         <p className="small muted" style={{ marginTop: 0 }}>你的车队：{run.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}，还有你。</p>
         {run.results.length > 0 && <p className="small">{run.results.join(' · ')}</p>}
-        <p className="small">第 {run.round + 1} 轮，BO{r.bo}。对手一轮比一轮强。</p>
-        <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
-          <button className="primary" onClick={() => {
-            const m = mountCupMatch(game, cup, run.round, cupRng(game, `r${run.round}`))
-            setLive(new MeMatch(game, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }))
-          }}>打这一轮</button>
-        </div>
+        <p className="small">今天是比赛日：第 {run.round + 1}/{cup.rounds.length} 轮，BO{r.bo}。对手一轮比一轮强。</p>
+        <p className="small">体力 <b>{Math.round(100 - p.fatigue)}</b>{nums ? `，这一轮大约耗 ${Math.round((r.bo === 1 ? 1 : 2.5) * FRIENDLY_MAP_FATIGUE)}` : ''}{p.fatigue >= 60 ? '。累着上，发挥要打折扣。' : '。'}</p>
+        {inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
+        {quit ? (
+          <>
+            <p className="small" style={{ color: 'var(--loss)' }}>弃权就是这一轮不上场：{cup.name}到此为止，奖金按已经赢下的 {run.round} 轮算{prize ? `（$${prize.toLocaleString()}）` : '，没有奖金'}。</p>
+            <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
+              <button className="primary" onClick={() => setQuit(false)}>还是去打</button>
+              <button onClick={() => { forfeitCup(game, cupRng(game, 'forfeit')); commit(); onDone() }}>确认弃权</button>
+            </div>
+          </>
+        ) : (
+          <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
+            <button className="primary" onClick={() => {
+              const m = mountCupMatch(game, cup, run.round, cupRng(game, `r${run.round}`))
+              setLive(new MeMatch(game, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }))
+            }}>打这一轮</button>
+            <button onClick={() => setQuit(true)}>弃权…</button>
+          </div>
+        )}
       </Modal>
     )
   }
+  // 报名 greyed with the reason under it: a run still going, the fee, the invitation
+  const why = run
+    ? `还在打${cupFor(game, run.key)?.name ?? '另一项赛事'}，打完才能报名`
+    : me.money < cup.fee ? `报名费 $${cup.fee.toLocaleString()}，你只有 $${Math.max(0, me.money).toLocaleString()}`
+      : me.fans < cup.minFans ? `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}` : null
   return (
     <Modal title={cup.name} onClose={() => { skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
       <p className="small" style={{ marginTop: 0 }}>{cup.blurb}</p>
@@ -86,16 +117,23 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
         {cup.rounds.length} 轮 · 报名费 {cup.fee ? `$${cup.fee}` : '免费'} · 奖金最高 ${cup.prize[cup.prize.length - 1].toLocaleString()}
         {cup.minFans ? ` · 邀请制（粉丝过 ${fansCn(cup.minFans)}）` : ''}
       </p>
-      <p className="small muted">走得越远，越可能有俱乐部的人记下你的名字。你会抽到四个路人队友。</p>
-      {injuryStatus(game) && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{injuryStatus(game)!.line}。硬打发挥打折扣，伤可能加重。</p>}
+      <p className="small muted">
+        {cup.rounds.length > 1 ? `一周一轮：${cup.rounds.map((x) => x.label).join(' → ')}，` : ''}{cup.rounds[0].label}在 {cupDateCn(game, cupRoundDay(game))}。报名这周和两轮之间照常训练、休息、买东西。
+        走得越远，越可能有俱乐部的人记下你的名字。你会抽到四个路人队友。
+      </p>
+      {inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
       <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
         <button className="primary" onClick={() => {
-          const why = enterCup(game, cupKey, cupRng(game, 'enter'))
-          if (why) toast(why)
+          const w = enterCup(game, cupKey, cupRng(game, 'enter'))
+          if (w) { toast(w); commit(); return }
+          const r0 = game.me!.pre.cup
+          if (r0?.next != null) toast(`报名成功：${cup.rounds[0].label}在 ${cupDateCn(game, r0.next)}。`)
           commit()
-        }} disabled={me.money < cup.fee || me.fans < cup.minFans}>报名</button>
+          onDone()
+        }} disabled={!!why}>报名</button>
         <button onClick={() => { skipCup(game, cupKey); commit(); onDone() }}>不打</button>
       </div>
+      {why && <p className="tiny" style={{ textAlign: 'center', color: 'var(--loss)', margin: '6px 0 0' }}>{why}</p>}
     </Modal>
   )
 }

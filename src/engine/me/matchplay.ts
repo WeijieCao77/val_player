@@ -43,6 +43,9 @@ export interface Friendly {
   mineSecond?: boolean
 }
 
+/** what a map of a cup round takes out of me; a league map on the floor takes 5 (me/auto.ts matchLoad) */
+export const FRIENDLY_MAP_FATIGUE = 4
+
 /** how many matches back keep the full all-ten table; older ones keep only the words */
 const BOX_KEEP = 12
 
@@ -514,7 +517,7 @@ export class MeMatch {
       // ten rows a match adds up; only the recent ones keep the full table
       for (let i = 0; i < me.matches.length - BOX_KEEP; i++) delete me.matches[i].box
       me.heat += won ? 4 : 1
-      this.me.fatigue = clamp(this.me.fatigue + 4 * result.maps.length, 0, 100)
+      this.me.fatigue = clamp(this.me.fatigue + FRIENDLY_MAP_FATIGUE * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
       pushLog(state, 'cup', `${compCn(rec.comp)} ${rec.label} vs ${rec.opp} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs}${rec.mvp ? ' · MVP' : ''}`)
       // a cup played hurt: what it did, after the result (me/hurtplay.ts)

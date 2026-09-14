@@ -295,7 +295,7 @@ export function advanceTurn(state: GameState): WeekStop {
 function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   const me = state.me!
   const p = state.players[me.id]
-  // a cup entered on a save from before its card stayed up: back in front, to be played out
+  // a cup of mine: its round's card on its day, and a run from a save before the rounds had days carried on (me/cups.ts)
   resumeCup(state)
   if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
   if (me.phase === 'retired' || state.gameOver) return { kind: 'game-over' }
@@ -345,6 +345,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // a team-mate's birthday, a year at the club, my age at the year's turn (me/life.ts)
     lifeDay(state, state.year !== yearBefore)
     if (state.gameOver) return { kind: 'game-over' }
+    // a round of my cup is today's: its card comes up and stops the clock, as my club's match does
+    resumeCup(state)
     // A final is worth stopping for before the doors open. This has to be
     // queued *before* the generic pending check, not after: anything else
     // raised the same day would return first and the fixture would slip past
