@@ -11,9 +11,11 @@
  * 破晓's rules, kept: 刷新 saves before it reloads; 稍后 quiets this build and
  * only a newer one asks again; it waits while the tour is walking. One more of
  * ours: a match being played lives only in memory, so the bar waits for the
- * match to end rather than offer a reload that would lose it.
+ * match to end rather than offer a reload that would lose it. The save is
+ * written after the commit (engine/me/save.ts), so 刷新 waits for it to land,
+ * and does not reload at all when it did not go in: the save notice says so.
  */
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useOpenTour } from './guide'
 
 const ENTRY = /assets\/index-[^"'/\s]+\.js/
@@ -56,14 +58,23 @@ function start() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void check() })
 }
 
-export default function UpdateNudge({ busy = false, onBeforeReload }: { busy?: boolean; onBeforeReload?: () => void }) {
+export default function UpdateNudge({ busy = false, onBeforeReload }: {
+  busy?: boolean
+  /** save before the reload and wait for the write to land (PlayerGame saveNow); false when it did not go in */
+  onBeforeReload?: () => boolean | Promise<boolean>
+}) {
   useEffect(() => { start() }, [])
   const v = useSyncExternalStore(subscribe, readFound, readFound)
   const touring = !!useOpenTour().kind
+  const [saving, setSaving] = useState(false)
   if (!v || busy || touring) return null
 
-  const reload = () => {
-    try { onBeforeReload?.() } catch { /* the reload goes ahead on the last autosave */ }
+  const reload = async () => {
+    setSaving(true)
+    let saved = true
+    try { saved = (await onBeforeReload?.()) ?? true } catch { /* the reload goes ahead on the last autosave */ }
+    // the latest progress did not go in: no reload to lose it on; the save notice takes this corner and says what to do (ui/me/SaveNotice.tsx)
+    if (!saved) { setSaving(false); return }
     location.reload()
   }
   const later = () => {
@@ -78,7 +89,7 @@ export default function UpdateNudge({ busy = false, onBeforeReload }: { busy?: b
         <span>刷新一下就能用上新版本，刷新前会先存档。改了什么，刷新后点右下角「更新日志」看。</span>
       </div>
       <div className="update-acts">
-        <button className="primary sm" onClick={reload}>刷新</button>
+        <button className="primary sm" onClick={reload} disabled={saving}>{saving ? '存档中…' : '刷新'}</button>
         <button className="sm ghost" onClick={later}>稍后</button>
       </div>
     </div>

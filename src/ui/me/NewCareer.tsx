@@ -187,7 +187,7 @@ export default function NewCareer({
   /** the career to continue, drawn from its summary without reading it; null when there is none */
   save: AutosaveInfo | null
   /** read the save and open it; false when it cannot be read */
-  onContinue: () => boolean
+  onContinue: () => Promise<boolean>
 }) {
   // with a save the page opens on its card; without one, straight into making a career
   const [view, setView] = useState<'home' | 'form' | 'hall'>(save ? 'home' : 'form')
@@ -245,15 +245,16 @@ export default function NewCareer({
   const cont = () => {
     setBusy(true)
     setBad(false)
-    // a frame for 「读取中…」 to show: reading the save holds the page for a moment
-    window.setTimeout(() => { if (!onContinue()) { setBusy(false); setBad(true) } }, 30)
+    // a frame for 「读取中…」 to show: reading the save holds the page for a moment (a packed one is unzipped first, engine/me/save.ts)
+    const failed = () => { setBusy(false); setBad(true) }
+    window.setTimeout(() => { onContinue().then((ok) => { if (!ok) failed() }, failed) }, 30)
   }
   const askNew = () => (confirmed ? setView('form') : setAsking(true))
-  const confirmNew = () => {
+  const confirmNew = async () => {
     // a save from before the summary may never have been opened by a build with the hall: what it unlocked goes in
     // before a new career overwrites it (破晓 seeds its hall from the save on its cover, save.ts hallSeedFrom)
     if (save && !save.meta) {
-      try { const g = loadAutosave(); if (g?.me) noteHall(g, true) } catch { /* unreadable: nothing to note */ }
+      try { const g = await loadAutosave(); if (g?.me) noteHall(g, true) } catch { /* unreadable: nothing to note */ }
     }
     setAsking(false)
     setConfirmed(true)
