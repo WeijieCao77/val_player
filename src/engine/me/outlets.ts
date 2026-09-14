@@ -5,6 +5,8 @@ import { pushLog } from './log'
 import { addMoney } from './money'
 import { addHeat, fansCn } from './fans'
 import type { MeState } from './types'
+import { cny } from './moneyfmt'
+import { wageCny } from './paytable'
 
 /**
  * 钱的出口，第二批. Reported 2026-09-12: 「能用钱的地方太少了，导致后来钱都花不完
@@ -67,11 +69,11 @@ function book(state: GameState): OutletBook {
   return me.out
 }
 
-const wage = (state: GameState): number =>
-  (state.me?.phase === 'pro' ? state.players[state.me.id]?.salary ?? 0 : 0)
+/** a year of my wage, in RMB (me/paytable.ts); every price below is RMB too */
+const wage = (state: GameState): number => wageCny(state)
 const round1k = (n: number): number => Math.round(n / 1000) * 1000
-const usd = (n: number): string => `$${Math.round(n).toLocaleString('en-US')}`
-const big = (n: number): string => (n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${Math.round(n / 1000)}K`)
+const usd = cny
+const big = cny
 const short = (me: MeState, price: number): string | null => (me.money < price ? `还差 ${usd(price - me.money)}` : null)
 
 /* ------------------------------------------------------------------ */
@@ -81,8 +83,8 @@ const short = (me: MeState, price: number): string | null => (me.money < price ?
 export interface FamilyTier { tier: number; name: string; share: number; floor: number }
 export const FAMILY_TIERS: FamilyTier[] = [
   { tier: 0, name: '不寄', share: 0, floor: 0 },
-  { tier: 1, name: '按月打点钱', share: 0.06, floor: 60 },
-  { tier: 2, name: '让家里宽裕些', share: 0.15, floor: 150 },
+  { tier: 1, name: '按月打点钱', share: 0.06, floor: 400 },
+  { tier: 2, name: '让家里宽裕些', share: 0.15, floor: 1000 },
 ]
 
 /** What a week of this tier sends home, on the wage I am on now. */
@@ -126,9 +128,10 @@ export function outletWeek(state: GameState): void {
 
 export interface Meet { key: MeetKey; name: string; blurb: string; price: number; minFans: number; heat: number; fans: number }
 export const MEETS: Meet[] = [
-  { key: 'small', name: '网咖包场', blurb: '签名、合影，和粉丝打几把自定义。', price: 2500, minFans: 120, heat: 12, fans: 6 },
-  { key: 'mid', name: '小剧场', blurb: '放一段你的比赛集锦，台上答粉丝的提问。', price: 12000, minFans: 900, heat: 30, fans: 15 },
-  { key: 'big', name: '粉丝节', blurb: '场馆、舞台、安保、周边，账单都寄给你。', price: 40000, minFans: 2000, heat: 60, fans: 30 },
+  // RMB, 暂定
+  { key: 'small', name: '网咖包场', blurb: '签名、合影，和粉丝打几把自定义。', price: 5000, minFans: 120, heat: 12, fans: 6 },
+  { key: 'mid', name: '小剧场', blurb: '放一段你的比赛集锦，台上答粉丝的提问。', price: 40000, minFans: 900, heat: 30, fans: 15 },
+  { key: 'big', name: '粉丝节', blurb: '场馆、舞台、安保、周边，账单都寄给你。', price: 200000, minFans: 2000, heat: 60, fans: 30 },
 ]
 /** fatigue at or over this (体力 30 or under) and half the time it shows on stage */
 export const MEET_TIRED = 70
@@ -163,7 +166,7 @@ export function holdMeet(state: GameState, key: MeetKey): string | null {
 }
 
 /** a year's training camp and travel for a few kids whose families cannot pay: a share of the wage */
-export const scholarPrice = (state: GameState): number => clamp(round1k(wage(state) * 0.08), 5000, 40000)
+export const scholarPrice = (state: GameState): number => clamp(round1k(wage(state) * 0.08), 30000, 300000)
 
 export function scholarLocked(state: GameState): string | null {
   const me = state.me!
@@ -185,8 +188,8 @@ export function fundScholar(state: GameState): string | null {
 export interface Break { key: BreakKey; name: string; blurb: string; share: number; floor: number; cap: number; heat: number; fans: number }
 export const BREAKS: Break[] = [
   { key: 'home', name: '回家住三周', blurb: '手机静音，天天吃家里的饭。', share: 0, floor: 0, cap: 0, heat: 2, fans: 0 },
-  { key: 'trip', name: '出国走走', blurb: '去一个没人认得你的地方，照片发出来，评论区很热闹。', share: 0.05, floor: 3000, cap: 25000, heat: 10, fans: 4 },
-  { key: 'family', name: '带爸妈出去玩', blurb: '他们第一次坐这么久的飞机，一路上拍个不停。', share: 0.1, floor: 6000, cap: 50000, heat: 4, fans: 0 },
+  { key: 'trip', name: '出国走走', blurb: '去一个没人认得你的地方，照片发出来，评论区很热闹。', share: 0.05, floor: 20000, cap: 180000, heat: 10, fans: 4 },
+  { key: 'family', name: '带爸妈出去玩', blurb: '他们第一次坐这么久的飞机，一路上拍个不停。', share: 0.1, floor: 40000, cap: 350000, heat: 4, fans: 0 },
 ]
 export const breakPrice = (state: GameState, b: Break): number =>
   (b.share ? clamp(round1k(wage(state) * b.share), b.floor, b.cap) : 0)
@@ -256,8 +259,9 @@ export interface StudioTier { tier: number; name: string; price: number; capMul:
 /** kit streamers really buy; what it does is raise the weekly settlement cap of me/stream.ts, nothing else */
 export const STUDIO: StudioTier[] = [
   { tier: 0, name: '卧室里一个摄像头', price: 0, capMul: 1 },
-  { tier: 1, name: 'Elgato Wave:3 和补光灯', price: 4000, capMul: 1.15 },
-  { tier: 2, name: '独立直播间（Shure SM7B）', price: 20000, capMul: 1.3 },
+  // RMB, 暂定: the microphone and a light, then a room built around an SM7B
+  { tier: 1, name: 'Elgato Wave:3 和补光灯', price: 2500, capMul: 1.15 },
+  { tier: 2, name: '独立直播间（Shure SM7B）', price: 25000, capMul: 1.3 },
 ]
 export const studioCapMul = (me: MeState | undefined): number => STUDIO[readOut(me).studio]?.capMul ?? 1
 
@@ -280,11 +284,12 @@ export function buyStudio(state: GameState): string | null {
   return null
 }
 
-export const CAFE_PRICE = 60000
+/** RMB, 暂定: a share in a small-town net café */
+export const CAFE_PRICE = 400000
 /** a year's odds, rolled at the winter: it closes, it loses and asks for money, or it pays */
 export const CAFE_CLOSE = 0.1
 export const CAFE_LOSS = 0.2
-export const CAFE_TOPUP = 3000
+export const CAFE_TOPUP = 20000
 /** a paying year returns this share of the stake, drawn evenly */
 export const CAFE_YIELD: [number, number] = [0.03, 0.12]
 
@@ -358,8 +363,8 @@ export function autoOutlets(state: GameState): string[] {
   const out: string[] = []
   if (me.phase === 'retired') return out
   const pro = me.phase === 'pro'
-  if (pro && readOut(me).family < 1 && me.money >= 30000 && !setFamily(state, 1)) out.push('开始每月往家里打钱')
-  if (pro && readOut(me).family < 2 && me.money >= 250000 && wage(state) >= 100000 && !setFamily(state, 2)) out.push('往家里寄的钱多了一些')
+  if (pro && readOut(me).family < 1 && me.money >= 200_000 && !setFamily(state, 1)) out.push('开始每月往家里打钱')
+  if (pro && readOut(me).family < 2 && me.money >= 1_800_000 && wage(state) >= 700_000 && !setFamily(state, 2)) out.push('往家里寄的钱多了一些')
   // not on legs that would show on stage
   const fresh = (state.players[me.id]?.fatigue ?? 0) < MEET_TIRED
   const meet = fresh ? [...MEETS].reverse().find((m) => !meetLocked(state, m) && me.money >= m.price * 8) : undefined
@@ -379,7 +384,7 @@ export function autoOutlets(state: GameState): string[] {
 export function outletLines(state: GameState): string[] {
   const o = readOut(state.me)
   const lines: string[] = []
-  if (o.familySent >= 20000) lines.push(`这些年你一共往家里寄了 ${big(o.familySent)}。`)
+  if (o.familySent >= 150_000) lines.push(`这些年你一共往家里寄了 ${big(o.familySent)}。`)
   const n = o.scholar.length
   if (n >= 3) lines.push(`你出钱的青训奖学金办了 ${n} 年，收到过孩子手写的信。`)
   else if (n) lines.push(`你出过 ${n} 年青训奖学金。`)

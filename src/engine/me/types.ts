@@ -1,4 +1,5 @@
 import type { Attrs, Region, SquadRole } from '../types'
+import type { Cur } from './currency'
 
 /** What a week's action points can be spent on. */
 export type MeAction =
@@ -299,6 +300,8 @@ export interface Deal {
   kind: 'sign' | 'transfer' | 'renew'
   tier: 1 | 2
   role: SquadRole
+  /** the club's league currency (me/currency.ts): salary, signing fee and buyout are all written in it */
+  cur: Cur
   salary: number
   signBonus: number
   years: number
@@ -313,6 +316,18 @@ export interface Deal {
   expires: number
   /** a move abroad — language and distance come with it */
   abroad: boolean
+}
+
+/** The contract I am on, as signed, in its club's league currency (me/paytable.ts payOf). */
+export interface PayTerms {
+  cur: Cur
+  salary: number
+  sign: number
+  buyout: number
+  /** the year it was signed, whose rate the world's dollar books were written at */
+  year: number
+  /** the club's tier when it signed me: its band (me/paytable.ts), even if the club has moved since */
+  tier?: 1 | 2
 }
 
 export interface PreState {
@@ -496,7 +511,10 @@ export interface MeState {
   gmTrust: number
   fans: number
   heat: number
+  /** the wallet, in RMB (me/currency.ts) */
   money: number
+  /** my contract as signed, in its league's currency; the world's copy (player.salary) is in dollars */
+  pay?: PayTerms
   /** 话语权的两个动作各自的冷却，按赛段计 — see me/clout.ts */
   cloutCd?: { list: number; sign: number }
   /** the eight ceilings' book; absent in saves from before them, filled at the next settlement */

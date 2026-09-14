@@ -1,6 +1,9 @@
 import { useGame } from './ctx'
-import { Panel, money, moneyFull } from './common'
+import { Panel, money, moneyFull, moneyIn } from './common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizeRows } from '../../engine/me/money'
+import { payOf } from '../../engine/me/paytable'
+import { rateLine } from '../../engine/me/moneyfmt'
+import { CUR_CN } from '../../engine/me/currency'
 import { prizeNote } from '../../engine/me/prizes'
 import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'
@@ -16,14 +19,18 @@ export default function EconomyScreen() {
   const p = game.players[me.id]
   const act = (why: string | null) => { if (why) toast(why); commit() }
   const cap = fanCap(game)
+  // my contract as signed, in its club's currency; the wallet is RMB
+  const pay = payOf(game)
+  void p
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
         <Panel title="账本" actions={<span className="tag t1">{moneyFull(me.money)}</span>}>
           <p className="small" style={{ marginTop: 0 }}>
-            {me.phase === 'pro' ? `年薪 ${moneyFull(p.salary)}` : '没有薪水'}{me.upkeep ? ` · 每周固定支出 $${me.upkeep}` : ''}
+            {pay ? `年薪 ${moneyIn(pay.salary, pay.cur, game.year)}` : '没有薪水'}{me.upkeep ? ` · 每周固定支出 ${money(me.upkeep)}` : ''}
           </p>
           <LedgerTable me={me} />
+          <p className="tiny faint" style={{ margin: '6px 0 0' }}>{pay && pay.cur !== 'CNY' ? `工资按${CUR_CN[pay.cur]}发，每周折成人民币到账。` : ''}{rateLine(game.year)}</p>
         </Panel>
         <Panel title="赛事奖金">
           {me.phase === 'pro' && (p.contract?.bonusShare ?? 0) > 0 ? (
@@ -105,7 +112,7 @@ export default function EconomyScreen() {
   )
 }
 
-/** Four columns on a phone: thousands as $47K, a smaller prize to the dollar. */
+/** Four columns on a phone: RMB, big amounts in 万, a smaller prize to the yuan. */
 const prizeAmount = (x: number): string => (x >= 10_000 ? money(x) : moneyFull(x))
 
 /**
@@ -132,7 +139,7 @@ function PrizeList({ game }: { game: GameState }) {
             <thead><tr><th>赛事</th><th className="num">冠军</th><th className="num">亚军</th><th className="num">季军</th></tr></thead>
             <tbody>
               {rows.map((r) => {
-                const note = [r.now ? '进行中' : '', prizeNote(r.table)].filter(Boolean).join(' · ')
+                const note = [r.now ? '进行中' : '', r.table.cur !== 'CNY' ? `按${CUR_CN[r.table.cur]}发` : '', prizeNote(r.table)].filter(Boolean).join(' · ')
                 return (
                   <tr key={r.key}>
                     {/* cells keep to one line; the note under the name wraps, so a phone does not scroll sideways for it */}
@@ -149,7 +156,7 @@ function PrizeList({ game }: { game: GameState }) {
       ) : (
         <p className="small muted" style={{ margin: 0 }}>眼下没有你的队伍够得着的赛事。</p>
       )}
-      <p className="tiny faint" style={{ margin: '6px 0 0' }}>金额取自各赛事 Liquipedia 奖金表，本地货币按页面给出的美元计；标「估算」的没公布过奖金，按同类真实赛事推算。</p>
+      <p className="tiny faint" style={{ margin: '6px 0 0' }}>金额取自各赛事 Liquipedia 奖金表，折成人民币是你到手的部分。美元、欧元、韩元、人民币公布的表按原币发；其他本地货币先折成所在联赛的货币。标「估算」的没公布过奖金，按同类真实赛事推算。</p>
     </>
   )
 }

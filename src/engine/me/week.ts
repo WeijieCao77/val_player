@@ -16,6 +16,7 @@ import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from '.
 import { injuryTick } from './injury'
 import { hurtBeforeMatch, mateInjuryWeek } from './hurtplay'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
+import { wageCny } from './paytable'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
 import { refreshMyRounds, runDuel, weeklyLineup } from './coach'
@@ -481,9 +482,11 @@ export function settleWeek(state: GameState): void {
   // player can see where a third of the wage goes.
   if (pro) {
     const cut = AGENTS[me.agentTier]?.cut ?? 0
-    const gross = Math.round(p.salary / 52)
-    const net = Math.round((p.salary / 52) * (1 - cut - LIVING))
-    const agentFee = Math.round((p.salary / 52) * cut)
+    // the contract's currency into the RMB wallet at this year's rate (me/paytable.ts)
+    const week = wageCny(state) / 52
+    const gross = Math.round(week)
+    const net = Math.round(week * (1 - cut - LIVING))
+    const agentFee = Math.round(week * cut)
     // living takes the rounding, so gross − agent − living is exactly the old net
     addMoney(state, 'salary', gross)
     if (agentFee) addMoney(state, 'agent', -agentFee)

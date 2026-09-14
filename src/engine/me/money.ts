@@ -6,6 +6,8 @@ import type { Competition, GameState, Team } from '../types'
 import { pushLog } from './log'
 import type { LedgerBook, MoneyKind } from './types'
 import { compCn } from './compname'
+import { toCny } from './currency'
+import { money as fmtMoney } from './moneyfmt'
 
 /**
  * Every dollar goes through one door.
@@ -163,11 +165,13 @@ export function prizeWeek(state: GameState): void {
     const key = `${state.year}:${comp.key}`
     if (me.prizePaid.includes(key)) continue
     me.prizePaid.push(key)
+    const table = prizeTableOf(comp, state.year)
     const cut = prizeShare(state, comp, place)
     if (!cut) continue
-    addMoney(state, 'prize', cut)
-    const est = prizeTableOf(comp, state.year).status === 'est' ? '（估算）' : ''
-    pushLog(state, 'money', `${compCn(comp.name)} 第 ${placeAt(comp, place).place} 名，奖金分成到账 $${cut.toLocaleString()}${est}。`)
+    // paid in the table's currency, into the RMB wallet at this year's rate
+    addMoney(state, 'prize', toCny(cut, table.cur, state.year))
+    const est = table.status === 'est' ? '（估算）' : ''
+    pushLog(state, 'money', `${compCn(comp.name)} 第 ${placeAt(comp, place).place} 名，奖金分成到账 ${fmtMoney(cut, table.cur, state.year)}${est}。`)
   }
   if (me.prizePaid.length > 60) me.prizePaid.splice(0, me.prizePaid.length - 60)
 }
@@ -186,9 +190,10 @@ export interface PrizeLine {
   now: boolean
 }
 
-/** What 1st, 2nd and 3rd at a competition would come to for me, on my contract. */
+/** What 1st, 2nd and 3rd at a competition would come to for me, on my contract — in RMB at this year's rate. */
 export function prizePreview(state: GameState, comp: Competition): number[] {
-  return [1, 2, 3].map((place) => myCut(state, prizeFor(comp, place, state.year)))
+  const cur = prizeTableOf(comp, state.year).cur
+  return [1, 2, 3].map((place) => toCny(myCut(state, prizeFor(comp, place, state.year)), cur, state.year))
 }
 
 /**

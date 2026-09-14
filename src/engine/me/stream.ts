@@ -4,6 +4,15 @@ import { pushLog } from './log'
 import { push, pop } from './pending'
 import { addMoney } from './money'
 import { studioCapMul } from './outlets'
+import { cny } from './moneyfmt'
+import { wageCny } from './paytable'
+
+/**
+ * Chinese platforms pay in RMB (me/currency.ts). The income formulas below were
+ * tuned in dollars; STREAM_CNY carries them over at about seven to the dollar,
+ * a fixed design number, so a stream's pay does not move with a year's rate.
+ */
+export const STREAM_CNY = 7
 
 /** the platform's share climbs with the following; each step is announced */
 export const STREAM_CUTS: { at: number; cut: number }[] = [
@@ -11,11 +20,11 @@ export const STREAM_CUTS: { at: number; cut: number }[] = [
 ]
 /** a contract's guarantee sits a little above what a free channel of that size makes (streamIncome) */
 export const STREAM_TIERS = {
-  B: { minFans: 95, sign: 2000, guarantee: 160 },
-  S: { minFans: 260, sign: 12000, guarantee: 700 },
+  B: { minFans: 95, sign: 15000, guarantee: 1000 },
+  S: { minFans: 260, sign: 80000, guarantee: 5000 },
 }
 export const MIN_STREAMS_PER_STAGE = 2
-export const CLAUSE_FINE = 2000
+export const CLAUSE_FINE = 10000
 const PLATFORMS = ['虎牙', '斗鱼', 'B 站', '快手', 'Twitch']
 
 export const clubPlatform = (team: Team | undefined): string =>
@@ -47,7 +56,7 @@ export function streamIncome(state: GameState, mul = 1): number {
   const heatMul = clamp(0.45 + me.heat / 730, 0.45, 1.7)
   const gift = Math.pow(f / 40, 1.5) * 60 * streamCut(me.fans) * heatMul
   const base = f * 0.4
-  const free = (base + gift) * mul
+  const free = (base + gift) * mul * STREAM_CNY
   const streamer = me.originKey === 'streamer' ? 1.5 : 1
   if (me.stream.deal) {
     const d = me.stream.deal
@@ -68,7 +77,7 @@ export function streamWeek(state: GameState, n: number): number {
 }
 
 /** 做内容: paid by the following, which stops adding views past a point. It used to pay $80 a video to a channel of nobody. */
-export const contentGross = (state: GameState, n: number): number => Math.round(Math.min(state.me!.fans, 1200) * n)
+export const contentGross = (state: GameState, n: number): number => Math.round(Math.min(state.me!.fans, 1200) * n * STREAM_CNY)
 
 /**
  * The platform settles side income against the job. In one week, stream and
@@ -82,13 +91,13 @@ export const contentGross = (state: GameState, n: number): number => Math.round(
  * $3–4M by his eighth season. The target is side income worth about one and a
  * half Challengers wages, or two thirds of a VCT one, for the same habit.
  */
-export const MEDIA_FLOOR = 500
+export const MEDIA_FLOOR = 3500
 export const MEDIA_WAGE_SHARE = 0.6
 export const MEDIA_OVER = 0.1
 
 export function mediaCapWeek(state: GameState): number {
   const me = state.me!
-  const wage = me.phase === 'pro' ? (state.players[me.id]?.salary ?? 0) / 52 : 0
+  const wage = wageCny(state) / 52
   // a better studio is settled against a higher cap (me/outlets.ts STUDIO): money only
   return Math.max(MEDIA_FLOOR, wage * MEDIA_WAGE_SHARE) * studioCapMul(me)
 }
@@ -149,7 +158,7 @@ export function answerStreamOffer(state: GameState, choice: 'club' | 'rival' | '
   }
   addMoney(state, 'sign', sign)
   if (pro) me.gmTrust = clamp(me.gmTrust + (club ? 6 : -12), 0, 100)
-  pushLog(state, 'money', `签了 ${me.stream.deal.platform} 的独家：签字费 $${sign.toLocaleString()}，每场保底 $${guarantee.toLocaleString()}${pro ? `，俱乐部抽 ${Math.round(me.stream.deal.clubCut * 100)}%` : ''}。每个赛段至少播 ${MIN_STREAMS_PER_STAGE} 次。`)
+  pushLog(state, 'money', `签了 ${me.stream.deal.platform} 的独家：签字费 ${cny(sign)}，每场保底 ${cny(guarantee)}${pro ? `，俱乐部抽 ${Math.round(me.stream.deal.clubCut * 100)}%` : ''}。每个赛段至少播 ${MIN_STREAMS_PER_STAGE} 次。`)
   return '签了。'
 }
 
@@ -159,7 +168,7 @@ export function streamClauseCheck(state: GameState): void {
   const d = me.stream.deal
   if (d && me.phase === 'pro' && me.stream.thisStage < d.minPerStage) {
     addMoney(state, 'fine', -CLAUSE_FINE)
-    pushLog(state, 'bad', `这个赛段只播了 ${me.stream.thisStage} 次，不到合同要求的 ${d.minPerStage} 次，平台扣了 $${CLAUSE_FINE}。`)
+    pushLog(state, 'bad', `这个赛段只播了 ${me.stream.thisStage} 次，不到合同要求的 ${d.minPerStage} 次，平台扣了 ${cny(CLAUSE_FINE)}。`)
   }
   me.stream.thisStage = 0
   if (d && state.year > d.untilYear) {

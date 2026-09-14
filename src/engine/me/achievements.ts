@@ -10,6 +10,8 @@ import type { MeMatchRecord, MeSeason, MeState } from './types'
 import { compClass, isIntlComp } from './compclass'
 import type { CompClass } from './compclass'
 import { rankAt } from './rank'
+import { cny } from './moneyfmt'
+import { wageCny } from './paytable'
 
 /**
  * Achievements, laid out along the roads a career actually takes.
@@ -179,13 +181,14 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'cup_streamer', route: 'ladder', name: '镜头前夺冠', desc: '拿下主播杯', reward: { fans: 30 }, cond: (s) => cupWon(s, 'streamer') },
 
   // ---- 试训与签约
-  { key: 'signed_first', route: 'sign', name: '名字进了名单', desc: '从天梯走到第一份职业合同', reward: { money: 2000 }, cond: (s) => fromLadder(s) && everPro(s) },
+  { key: 'signed_first', route: 'sign', name: '名字进了名单', desc: '从天梯走到第一份职业合同', reward: { money: 15000 }, cond: (s) => fromLadder(s) && everPro(s) },
   { key: 'signed_t1', route: 'sign', name: '一步登天', desc: '从天梯直接签进一线俱乐部', reward: { title: '直通一线' }, cond: (s) => fromLadder(s) && firstTier(s) === 1 },
-  { key: 'sign_year1', route: 'sign', name: '当年就有人要', desc: '天梯出发，第一年就签约', reward: { money: 1000 }, cond: (s) => fromLadder(s) && !M(s).pre.wasPro && M(s).pre.year === 1 && M(s).phase === 'pro' },
+  { key: 'sign_year1', route: 'sign', name: '当年就有人要', desc: '天梯出发，第一年就签约', reward: { money: 8000 }, cond: (s) => fromLadder(s) && !M(s).pre.wasPro && M(s).pre.year === 1 && M(s).phase === 'pro' },
   { key: 'sign_grind', route: 'sign', name: '第三个冬天', desc: '天梯上熬到第三年才签约', reward: { heat: 15 }, cond: (s) => fromLadder(s) && !M(s).pre.wasPro && M(s).pre.year >= 3 && M(s).phase === 'pro' },
   { key: 't1_starter_deal', route: 'sign', name: '写进合同的首发', desc: '和一线俱乐部签下首发合同', reward: { heat: 15 },
     cond: (s) => { const role = P(s).contract?.promisedRole; return M(s).phase === 'pro' && s.teams[s.myTeam]?.tier === 1 && (role === 'starter' || role === 'star') } },
-  { key: 'salary500k', route: 'sign', name: '顶薪', desc: '年薪 $500,000', reward: { heat: 20 }, cond: (s) => P(s).salary >= 500000 },
+  // the key is what saves hold; the bar is the leagues' caps, about ¥300 万 in every currency (me/paytable.ts)
+  { key: 'salary500k', route: 'sign', name: '顶薪', desc: `年薪折合 ${cny(3_000_000)}`, reward: { heat: 20 }, cond: (s) => wageCny(s) >= 3_000_000 },
 
   // ---- 替补到首发
   { key: 'first_start', route: 'bench', name: '第一次首发', desc: '打上一场正赛的首发', reward: { heat: 10 }, cond: (s) => starts(s).length >= 1 },
@@ -251,8 +254,8 @@ export const ACHIEVEMENTS: AchDef[] = [
   // on a club: signed with the rival platform, the one the manager does not like (stream.ts answerStreamOffer)
   { key: 'stream_rival', route: 'fans', name: '另起炉灶', desc: '有队时签下对家平台的独家', reward: { heat: 20 },
     cond: (s) => { const d = M(s).stream.deal; return !!d && !d.club && d.clubCut > 0 } },
-  { key: 'fans350', route: 'fans', name: '平台头部', desc: '粉丝到「平台头部」', reward: { money: 1000 }, cond: (s) => M(s).fans >= 350 },
-  { key: 'fans900', route: 'fans', name: '全网知名', desc: '粉丝到「全网知名」', reward: { money: 2500 }, cond: (s) => M(s).fans >= 900 },
+  { key: 'fans350', route: 'fans', name: '平台头部', desc: '粉丝到「平台头部」', reward: { money: 8000 }, cond: (s) => M(s).fans >= 350 },
+  { key: 'fans900', route: 'fans', name: '全网知名', desc: '粉丝到「全网知名」', reward: { money: 18000 }, cond: (s) => M(s).fans >= 900 },
   { key: 'fans2000', route: 'fans', name: '出圈', desc: '粉丝到「出圈了」', reward: { title: '出圈选手' }, cond: (s) => M(s).fans >= 2000 },
   { key: 'fans3500', route: 'fans', name: '项目的门面', desc: '粉丝到「这个项目的门面」', reward: { title: '门面' }, cond: (s) => M(s).fans >= 3500 },
 
@@ -330,8 +333,9 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'trait', route: 'life', name: '有了性格', desc: '获得第一个特质', reward: { heat: 10 }, cond: (s) => M(s).traits.length >= 1 },
   { key: 'traits2', route: 'life', name: '立体的人', desc: '两个特质', reward: { heat: 10 }, cond: (s) => M(s).traits.length >= 2 },
   { key: 'events20', route: 'life', name: '人生不止比赛', desc: '经历 20 个事件', reward: { fans: 10 }, cond: (s) => M(s).eventsSeen >= 20 },
-  { key: 'money100k', route: 'life', name: '第一桶金', desc: '存款 $100,000', reward: { heat: 10 }, cond: (s) => M(s).money >= 100000 },
-  { key: 'money1m', route: 'life', name: '财务自由', desc: '存款 $1,000,000', reward: { heat: 20 }, cond: (s) => M(s).money >= 1000000 },
+  // keys kept for saves; the wallet is in RMB now
+  { key: 'money100k', route: 'life', name: '第一桶金', desc: `存款 ${cny(1_000_000)}`, reward: { heat: 10 }, cond: (s) => M(s).money >= 1_000_000 },
+  { key: 'money1m', route: 'life', name: '财务自由', desc: `存款 ${cny(10_000_000)}`, reward: { heat: 20 }, cond: (s) => M(s).money >= 10_000_000 },
 ]
 
 export const ACH_BY_KEY: Record<string, AchDef> = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.key, a]))
@@ -349,7 +353,7 @@ export function rewardText(r?: AchReward): string {
   if (r.body) out.push(`体质 +${r.body}`)
   if (r.fans) out.push(`粉丝 +${r.fans}`)
   if (r.heat) out.push(`热度 +${r.heat}`)
-  if (r.money) out.push(`$${r.money.toLocaleString()}`)
+  if (r.money) out.push(cny(r.money))
   return out.join(' · ')
 }
 

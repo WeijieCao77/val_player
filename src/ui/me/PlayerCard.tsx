@@ -1,5 +1,7 @@
 import { natName } from '../../engine/nat'
-import { AgentIcon, Bar, Modal, OvrBadge, Radar, Roles, Traits, money } from './common'
+import { AgentIcon, Bar, Modal, OvrBadge, Radar, Roles, Traits, moneyIn, worldMoney } from './common'
+import { payOf } from '../../engine/me/paytable'
+import { leagueCurOf } from '../../engine/me/currency'
 import { useGame } from './ctx'
 import { callerOf } from '../../engine/roster'
 import { ratingOf } from '../../engine/match'
@@ -29,6 +31,9 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
   const teamCaller = p.teamId ? callerOf(game, p.teamId) : undefined
   const isMain = p.isIgl && teamCaller?.id === p.id
   const isDeputy = p.isIgl && !!teamCaller && teamCaller.id !== p.id
+  // mine as signed; anyone else's is the world's dollar wage, written in his club's currency with RMB beside it
+  const mine = game.me?.id === p.id ? payOf(game) : null
+  const wageLine = mine ? moneyIn(mine.salary, mine.cur, game.year) : worldMoney(p.salary, leagueCurOf(team?.region), game.year)
 
   return (
     <Modal
@@ -124,7 +129,7 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
         <div className="panel-head"><h2>合同</h2></div>
         <div className="panel-body">
           <div className="grid c4" style={{ gap: 12 }}>
-            <div className="stat"><span className="k">年薪</span><span className="v sm">{money(p.salary)}</span></div>
+            <div className="stat"><span className="k">年薪</span><span className="v sm">{wageLine}</span></div>
             <div className="stat">
               <span className="k">剩余年限</span>
               <span className="v sm">{p.contractYears > 0 ? `${p.contractYears} 年` : '已到期'}</span>

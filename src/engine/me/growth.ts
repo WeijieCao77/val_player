@@ -14,6 +14,7 @@ import { ladderLabel, playRanked } from './prepro'
 import { contentGross, mediaAfterCap, streamWeek } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
+import { cny } from './moneyfmt'
 import { cerRestMul } from './ceremony'
 import { injuryTrainMul } from './injury'
 
@@ -234,7 +235,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         const income = payMedia(contentGross(state, n))
         addMoney(state, 'media', income)
         me.heat += 6 * n
-        notes.push(`做了 ${n} 期内容，热度涨了，收入 $${income.toLocaleString()}。`)
+        notes.push(`做了 ${n} 期内容，热度涨了，收入 ${cny(income)}。`)
         break
       }
       case 'scrim':
@@ -258,7 +259,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         me.heat += 9 * n
         me.stream.total += n
         me.stream.thisStage += n
-        notes.push(`直播 ${n} 次，收入 $${income.toLocaleString()}${n > 1 ? '（同一周里看的是同一批人，后几场礼物少一些）' : ''}。`)
+        notes.push(`直播 ${n} 次，收入 ${cny(income)}${n > 1 ? '（同一周里看的是同一批人，后几场礼物少一些）' : ''}。`)
         questProgress(state, 'stream', n)
         break
       }

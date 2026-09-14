@@ -10,6 +10,7 @@ import { addQuest } from './quests'
 import { storyChoice } from './story'
 import type { ChainOp } from './story'
 import { MORE_EVENTS } from './events_more'
+import { cnySigned } from './moneyfmt'
 
 export interface EventOpt {
   t: string
@@ -60,7 +61,7 @@ export const EVENTS: EventDef[] = [
     q: '妈妈打电话来，问你什么时候回家一趟。', ctx: '你已经三个月没回去了。',
     a: [{ t: '这周回去两天', g: 'warm', e: { fatigue: -10, mental: 2, tilt: -8, note: '这周少两个行动点的时间，但人轻了' }, seed: 'home:went' },
       { t: '等打完这个赛段', g: 'grind', e: { mental: -1, xp: { awareness: 8 } }, seed: 'home:later' },
-      { t: '寄点钱回去', g: 'warm', e: { money: -1500, mental: 1 } }] },
+      { t: '寄点钱回去', g: 'warm', e: { money: -10000, mental: 1 } }] },
   { id: 'old_friend', w: 6, max: 3, when: () => true, rec: 1,
     q: '一个初中同学突然找你，说想借五千。', ctx: '他知道你现在有收入。',
     a: [{ t: '借', g: 'warm', e: { money: -5000, mental: 1 } }, { t: '借一千，别的免谈', g: 'hard', e: { money: -1000 } }, { t: '不借', g: 'hard', e: { mental: -1, note: '他把你拉黑了' } }] },
@@ -70,9 +71,9 @@ export const EVENTS: EventDef[] = [
   { id: 'insomnia', w: 7, max: 8, when: (s) => s.players[s.me!.id].fatigue >= 55, rec: 0,
     q: '连着几天睡不着，早上手是麻的。', ctx: '疲劳已经写在脸上。',
     a: [{ t: '这周多休息', g: 'grind', e: { fatigue: -15, form: -2 } }, { t: '吃褪黑素扛过去', g: 'grind', e: { body: -1, fatigue: -5 } }, { t: '去看医生', g: 'warm', e: { money: -800, fatigue: -12, body: 1 } }] },
-  { id: 'car', w: 3, max: 1, when: (s) => s.me!.money >= 40000 && pro(s), rec: 1,
+  { id: 'car', w: 3, max: 1, when: (s) => s.me!.money >= 300000 && pro(s), rec: 1,
     q: '存款够买人生第一辆车了。', ctx: '队友都说不用买，俱乐部有班车。',
-    a: [{ t: '买', g: 'show', e: { money: -35000, heat: 20, mental: 2 } }, { t: '再存存', g: 'grind', e: { mental: 1 } }] },
+    a: [{ t: '买', g: 'show', e: { money: -250000, heat: 20, mental: 2 } }, { t: '再存存', g: 'grind', e: { mental: 1 } }] },
   // ---- the room
   { id: 'locker_blame', w: 0, max: 6, when: pro, rec: 1,
     q: '输掉比赛之后，一个队友在语音里把责任推给了你。', ctx: '所有人都听见了。',
@@ -92,7 +93,7 @@ export const EVENTS: EventDef[] = [
   // ---- the trade
   { id: 'ad', w: 5, max: 5, when: (s) => famous(s, 120), rec: 0,
     q: '一个外设品牌找你拍广告，先付一半。', ctx: '尾款要求三周内直播两次。',
-    a: [{ t: '接', g: 'show', e: { money: 4000, quest: 'ad' } }, { t: '不接，专心打比赛', g: 'grind', e: { mental: 1 } }] },
+    a: [{ t: '接', g: 'show', e: { money: 30000, quest: 'ad' } }, { t: '不接，专心打比赛', g: 'grind', e: { mental: 1 } }] },
   { id: 'bible', w: 4, max: 1, when: (s) => pro(s) && famous(s, 200), rec: 1,
     q: '有人把你的语录做成了「圣经」，全网在传。', ctx: '有些话确实是你说的。',
     a: [{ t: '亲自下场玩梗', g: 'show', e: { heat: 60, coachTrust: -3 } }, { t: '当没看见，闷头训练', g: 'grind', e: { quest: 'bible' } }, { t: '发文澄清', g: 'hard', e: { heat: 15, fans: -10 } }] },
@@ -104,10 +105,10 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '认了，改成 ID 后缀', g: 'show', e: { heat: 45, fans: 20 } }, { t: '不理', g: 'grind', e: { heat: 10 } }] },
   { id: 'variety', w: 3, max: 4, when: (s) => famous(s, 400) && pro(s), rec: 1,
     q: '一档综艺邀请你录一期，要三天。', ctx: '教练不会高兴。',
-    a: [{ t: '去', g: 'show', e: { heat: 80, money: 6000, coachTrust: -5, fatigue: 8 } }, { t: '推了', g: 'grind', e: { coachTrust: 2 } }] },
+    a: [{ t: '去', g: 'show', e: { heat: 80, money: 50000, coachTrust: -5, fatigue: 8 } }, { t: '推了', g: 'grind', e: { coachTrust: 2 } }] },
   { id: 'stream_gift', w: 0, max: 4, when: streams, rec: 1,
     q: '直播间有人刷了一个大的，要你连麦。', ctx: '看起来是真粉，也可能是想蹭。',
-    a: [{ t: '连', g: 'show', e: { heat: 20, money: 800 } }, { t: '感谢，不连', g: 'warm', e: { heat: 5, money: 800 } }] },
+    a: [{ t: '连', g: 'show', e: { heat: 20, money: 5000 } }, { t: '感谢，不连', g: 'warm', e: { heat: 5, money: 5000 } }] },
   { id: 'stream_ladder', w: 4, max: 5, when: (s) => streams(s) && pre(s), rec: 0,
     q: '粉丝起哄让你直播冲本服前十。', ctx: '冲分内容永远有人看。',
     a: [{ t: '冲', g: 'show', e: { quest: 'ladder' } }, { t: '不冲，练该练的', g: 'grind', e: { xp: { awareness: 8 } } }] },
@@ -126,7 +127,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '再给我一年', g: 'hard', e: { mental: 2, tilt: 5 } }, { t: '答应边打边找工作', g: 'warm', e: { mental: -1, fatigue: 4 } }] },
   { id: 'gear_deal', w: 4, max: 1, when: (s) => famous(s, 60), rec: 0,
     q: '一个小外设品牌想送你一套设备，条件是直播时用。', ctx: '东西不算顶级。',
-    a: [{ t: '收', g: 'show', e: { money: 1500, heat: 10 } }, { t: '不收', g: 'hard', e: { mental: 1 } }] },
+    a: [{ t: '收', g: 'show', e: { money: 10000, heat: 10 } }, { t: '不收', g: 'hard', e: { mental: 1 } }] },
   // ---- form
   { id: 'hot_week', w: 0, max: 6, when: pro, rec: 1,
     q: '这周训练赛你怎么打怎么有，教练在边上笑。', ctx: '手感好的时候要多打。',
@@ -152,7 +153,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '回一句「打给你看」', g: 'hard', e: { heat: 15, mental: 1 } }, { t: '不回', g: 'grind', e: { tilt: -4, mental: 1, heat: -5, note: '评论区自己吵去，你关了手机' } }, { t: '发一段训练视频', g: 'show', e: { heat: 25 } }] },
   { id: 'abroad', w: 0, max: 2, when: (s) => s.me!.abroad, rec: 0,
     q: '外赛区的第一周，队友的玩笑你一个都没听懂。', ctx: '语言课不是白报的。',
-    a: [{ t: '硬着头皮多说', g: 'hard', e: { xp: { communication: 14 }, bond: 3, mental: -1 } }, { t: '找翻译软件先撑着', g: 'grind', e: { bond: -2 } }, { t: '请全队吃饭', g: 'warm', e: { money: -800, bond: 8 } }] },
+    a: [{ t: '硬着头皮多说', g: 'hard', e: { xp: { communication: 14 }, bond: 3, mental: -1 } }, { t: '找翻译软件先撑着', g: 'grind', e: { bond: -2 } }, { t: '请全队吃饭', g: 'warm', e: { money: -2000, bond: 8 } }] },
   { id: 'injury_scare', w: 0, max: 3, when: pro, rec: 0,
     q: '手腕疼了一周，队医说要么休要么打封闭。', ctx: '下周有比赛。',
     a: [{ t: '休一周', g: 'warm', e: { fatigue: -20, coachTrust: -2, body: 1 } }, { t: '打封闭上', g: 'hard', e: { body: -3, coachTrust: 3, mental: 1 } }] },
@@ -171,7 +172,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '当场怼', g: 'hard', e: { heat: 30, tilt: 4 } }, { t: '拉黑，不理', g: 'grind', e: { tilt: -2 } }, { t: '开个玩笑带过', g: 'show', e: { heat: 15, mental: 1 } }] },
   { id: 'gear_broke', w: 5, max: 4, when: () => true, rec: 0,
     q: '鼠标坏了，比赛在三天后。', ctx: '临时换设备手会生。',
-    a: [{ t: '买同款', g: 'grind', e: { money: -600 } }, { t: '趁机升级', g: 'show', e: { money: -1500, mental: 1 } }, { t: '借队友的先用', g: 'warm', e: { form: -2, bond: 2 } }] },
+    a: [{ t: '买同款', g: 'grind', e: { money: -700 } }, { t: '趁机升级', g: 'show', e: { money: -1300, mental: 1 } }, { t: '借队友的先用', g: 'warm', e: { form: -2, bond: 2 } }] },
   { id: 'interview', w: 5, max: 5, when: (s) => pro(s) && famous(s, 100), rec: 1,
     q: '赛后采访，记者问你怎么看对面的指挥。', ctx: '镜头对着你。',
     a: [{ t: '说他今天没打好', g: 'hard', e: { heat: 30, gmTrust: -3 } }, { t: '夸一句', g: 'warm', e: { heat: 10, gmTrust: 2 } }, { t: '「我们只看自己」', g: 'grind', e: { heat: 5 } }] },
@@ -205,7 +206,7 @@ export function describeEffect(e: EffectSpec): string {
   const out: string[] = []
   // money the way every other screen writes it; followers, heat, nerve and the
   // room in words — none of their numbers are on a screen any more (fx.ts says the same)
-  if (e.money) out.push(`${e.money > 0 ? '+' : '−'}$${Math.abs(Math.round(e.money)).toLocaleString('en-US')}`)
+  if (e.money) out.push(cnySigned(e.money))
   if (e.heat) out.push(e.heat > 0 ? '涨热度' : '热度降')
   if (e.fans) out.push(e.fans > 0 ? '涨粉' : '掉粉')
   if (e.fatigue) out.push(`体力 ${num(-e.fatigue)}`)

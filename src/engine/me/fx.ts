@@ -3,6 +3,7 @@ import type { GameState } from '../types'
 import { duoBonded } from '../bonds'
 import { addXp } from './growth'
 import { addMoney } from './money'
+import { cnySigned } from './moneyfmt'
 import type { EffectSpec } from './types'
 import { ATTR_CN } from '../types'
 
@@ -19,7 +20,7 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
   const r = rng ?? new Rng((state.seed ^ state.day ^ 0x9e37) >>> 0)
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
   // the lines read the way the option said it would (events.ts describeEffect)
-  if (e.money) { addMoney(state, e.money > 0 ? 'inother' : 'outother', e.money); out.push(`${e.money > 0 ? '+' : '−'}$${Math.abs(Math.round(e.money)).toLocaleString('en-US')}`) }
+  if (e.money) { addMoney(state, e.money > 0 ? 'inother' : 'outother', e.money); out.push(cnySigned(e.money)) }
   if (e.heat) { me.heat = Math.max(0, me.heat + e.heat); out.push(e.heat > 0 ? '涨热度' : '热度降') }
   if (e.fans) { me.fans = Math.max(0, me.fans + e.fans); out.push(e.fans > 0 ? '涨粉' : '掉粉') }
   if (e.tilt) { me.tilt = clamp(me.tilt + e.tilt, 0, 100); out.push(e.tilt < 0 ? '放松' : '上火') }

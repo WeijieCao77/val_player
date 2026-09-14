@@ -7,7 +7,7 @@ import {
   meetLocked, openCafe, readOut, scholarLocked, scholarPrice, setFamily, studioLocked, takeBreak,
 } from '../../engine/me/outlets'
 
-/** Four columns on a phone: thousands as $12K, a smaller price to the dollar. */
+/** Four columns on a phone: RMB, big prices in 万, a smaller price to the yuan. */
 const price = (x: number): string => (x >= 10_000 ? money(x) : moneyFull(x))
 /** a button's label wraps inside a narrow card instead of pushing the page sideways, as .shop-row's do */
 const wrapBtn = { whiteSpace: 'normal', textAlign: 'left' } as const

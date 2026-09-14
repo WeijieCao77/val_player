@@ -73,7 +73,9 @@ const OUT = join(DATA, 'prize_estimates_me.json')
 const VERBOSE = process.argv.includes('--verbose')
 
 type Row = [number, number, number]
-interface Real { y: number; lp: string; status?: 'none' | 'unpublished'; cur?: string; pay?: Row[] }
+/** `nat`: the table in the career's currency (scripts/build_prize_currency.ts, run before this); the rules below work in dollars */
+interface Nat { cur: string; pay: Row[]; src?: string }
+interface Real { y: number; lp: string; status?: 'none' | 'unpublished'; cur?: string; pay?: Row[]; nat?: Nat }
 const BOOK = (JSON.parse(readFileSync(join(DATA, 'prizes_me.json'), 'utf8')) as { events: Record<string, Real> }).events
 
 interface Ev { id: string; y: number; ev: CEvent; real?: Real }
@@ -264,6 +266,8 @@ interface Estimate {
   y: number; lp: string | null; name: string
   rule: string; from: string; fromId: string; fromCn: string; k: number
   playoffs: number; ext?: [number, number]; pay: Row[]
+  /** the same estimate in its base table's own currency, at that table's own rate */
+  nat?: Nat
 }
 interface Unestimated { y: number; lp: string | null; name: string; why: string }
 
@@ -283,13 +287,27 @@ const estimates: Record<string, Estimate> = {}
 const unestimated: Record<string, Unestimated> = {}
 const failures: string[] = []
 
+/**
+ * An estimate in the currency its base table pays in: every row at the base
+ * table's own rate — its amounts in that currency over its amounts in dollars —
+ * so a euro stage scaled by k is k of its euros, not a new conversion.
+ */
+function natOf(base: Real, pay: Row[]): Nat | undefined {
+  const bn = base.nat
+  if (!bn || !base.pay?.length) return undefined
+  const rate = total(bn.pay) / Math.max(1, total(base.pay))
+  const round = (v: number) => (bn.cur === 'KRW' ? Math.round(v / 1000) * 1000 : Math.round(v))
+  return { cur: bn.cur, pay: pay.map(([a, b, v]) => [a, b, round(v * rate)] as Row), ...(bn.src ? { src: bn.src } : {}) }
+}
+
 function estimate(key: string, t: { y: number; lp: string | null; name: string; ev: CEvent }, rule: RuleKey, base: Ev, k: number): void {
   const { size } = playoffsOf(t.ev)
   const { pay, ext } = extend(scale(base.real!.pay!, k), size)
   if (!ordered(pay, size)) failures.push(`${key} ${t.name}：按 ${base.real!.lp} 推出的表季后赛名次没排好`)
+  const nat = natOf(base.real!, pay)
   estimates[key] = {
     y: t.y, lp: t.lp, name: t.name, rule, from: base.real!.lp, fromId: base.id, fromCn: shortCn(base), k,
-    playoffs: size, ...(ext ? { ext } : {}), pay,
+    playoffs: size, ...(ext ? { ext } : {}), pay, ...(nat ? { nat } : {}),
   }
 }
 
