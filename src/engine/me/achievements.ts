@@ -357,6 +357,17 @@ export function rewardText(r?: AchReward): string {
   return out.join(' · ')
 }
 
+/**
+ * Unlocks the save has not shown yet (achState.seen), known ones only: what the
+ * unlock card still has to show, and what the cards behind it wait on — so a key
+ * an old save kept for an achievement since renamed can never hold them back.
+ */
+export function unseenAch(me: MeState): AchDef[] {
+  const book = me.achState
+  if (!book) return []
+  return me.achievements.slice(book.seen).map((k) => ACH_BY_KEY[k]).filter((a): a is AchDef => !!a)
+}
+
 /** The save's own book of rewards; an older save gets an empty one, so what it already holds is paid once. */
 export function achBook(me: MeState): NonNullable<MeState['achState']> {
   if (!me.achState) me.achState = { paid: [], seen: me.achievements.length }

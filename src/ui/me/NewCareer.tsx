@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
-import { careerRegions, ceilingLines, ceilingPreview, createCareer, emptyTalents, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
+import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, talentShape, zeroTalents } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
@@ -205,7 +205,8 @@ export default function NewCareer({
   const [originKey, setOriginKey] = useState('')
   // dealt once a visit, so a change of role or talents does not deal again
   const [offer, setOffer] = useState<string[]>(() => dealOrigins('pre'))
-  const [talents, setTalents] = useState(emptyTalents())
+  // nothing spent: the player spends all twenty (asked 2026-09-14); a build to start from is one press away (TALENT_PRESETS)
+  const [talents, setTalents] = useState(zeroTalents())
   // the 成就殿堂 opens from here, and its newest 称号 rides on the button
   const [hallName] = useState(() => hallTitle(readHall()))
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
@@ -308,6 +309,18 @@ export default function NewCareer({
     if (d > 0 && left <= 0) return
     setTalents({ ...talents, [k]: v })
   }
+  // 破晓's 一键随机分配: all twenty, scattered, none over the cap
+  const scatter = () => {
+    const t = zeroTalents()
+    for (let n = TALENT_POINTS; n > 0; n--) {
+      const room = ATTR_KEYS.filter((k) => t[k] < TALENT_MAX)
+      if (!room.length) break
+      t[room[Math.floor(Math.random() * room.length)]]++
+    }
+    setTalents(t)
+  }
+  const shape = talentShape(talents)
+  const presetOn = TALENT_PRESETS.find((x) => ATTR_KEYS.every((k) => x.t[k] === talents[k]))?.key
   const go = () => {
     if (blocked) return
     const ign = name.trim() || 'Rookie'
@@ -400,6 +413,19 @@ export default function NewCareer({
 
       <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">{capLine.tag}</span>}>
         <p className="tiny faint" style={{ marginTop: 0 }}>{capLine.hint}</p>
+        {/* a build to start from, then tuned point by point (破晓's 天赋预设) */}
+        <div className="talent-presets">
+          {TALENT_PRESETS.map((x) => (
+            <button key={x.key} className={`start-card${presetOn === x.key ? ' on' : ''}`} aria-pressed={presetOn === x.key} onClick={() => setTalents({ ...x.t })}>
+              <b>{x.name}</b>
+              <span>{x.blurb}</span>
+            </button>
+          ))}
+        </div>
+        <div className="talent-tools">
+          <button className="sm ghost" onClick={scatter}>一键随机分配</button>
+          <button className="sm ghost" onClick={() => setTalents(zeroTalents())} disabled={used === 0}>清空</button>
+        </div>
         <div className="talent-grid">
           {ATTR_KEYS.map((k) => (
             <div key={k} className="talent-row">
@@ -413,6 +439,8 @@ export default function NewCareer({
             </div>
           ))}
         </div>
+        {/* what this spread means, in the engine's own terms (career.ts talentShape) — 破晓's 「当前加点路线」 */}
+        {shape && <p className="talent-verdict"><b>{shape.label}</b>{shape.line}</p>}
       </Panel>
 
       <div className="row nc-go" style={{ gap: 10, justifyContent: 'flex-end' }}>

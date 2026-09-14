@@ -286,6 +286,12 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .talent-row .pips { display: flex; gap: 3px; min-width: 0; }
 .talent-row .pips i { flex: 0 1 12px; min-width: 0; height: 12px; border-radius: 3px; background: var(--well); display: block; }
 .talent-row .pips i.on { background: var(--accent); }
+/* the builds to start from and the tools over the eight (破晓's 天赋预设 and 一键随机分配); a phone stacks the five */
+.talent-presets { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+@media (max-width: 720px) { .talent-presets { grid-template-columns: 1fr; } }
+.talent-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+.talent-verdict { margin: 10px 0 0; font-size: var(--t-small); color: var(--muted); line-height: 1.6; }
+.talent-verdict b { color: var(--accent); margin-right: 6px; }
 
 /* ---- new career: start points and origins ---- */
 .start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }

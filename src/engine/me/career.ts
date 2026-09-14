@@ -261,6 +261,47 @@ export function emptyTalents(): Record<keyof Attrs, number> {
   return { aim: 3, reaction: 3, awareness: 3, utility: 3, clutch: 2, teamwork: 2, communication: 2, igl: 2 }
 }
 
+/** Nothing spent: the new-career screen opens here and the player spends all twenty (asked 2026-09-14: 「要把这个留给玩家去自己点天赋」). */
+export function zeroTalents(): Record<keyof Attrs, number> {
+  return { aim: 0, reaction: 0, awareness: 0, utility: 0, clutch: 0, teamwork: 0, communication: 0, igl: 0 }
+}
+
+/**
+ * The new-career screen's starting builds, 破晓's 天赋预设: pick what kind of
+ * player first, then tune. Each spends all twenty under TALENT_MAX. 均衡型 is
+ * emptyTalents, the spread every script's career is built on.
+ */
+export const TALENT_PRESETS: { key: string; name: string; blurb: string; t: Record<keyof Attrs, number> }[] = [
+  { key: 'gun', name: '枪法型', blurb: '对枪赢下来，这回合就是你的', t: { aim: 7, reaction: 6, awareness: 2, utility: 1, clutch: 3, teamwork: 1, communication: 0, igl: 0 } },
+  { key: 'util', name: '道具型', blurb: '道具交得准，队友才打得进去', t: { aim: 3, reaction: 0, awareness: 5, utility: 7, clutch: 0, teamwork: 3, communication: 2, igl: 0 } },
+  { key: 'clutch', name: '残局型', blurb: '一打多的时候比谁都冷静', t: { aim: 5, reaction: 3, awareness: 4, utility: 1, clutch: 7, teamwork: 0, communication: 0, igl: 0 } },
+  { key: 'igl', name: '指挥型', blurb: '开麦报点、拿主意，全队跟着你的节奏', t: { aim: 2, reaction: 0, awareness: 4, utility: 1, clutch: 0, teamwork: 3, communication: 4, igl: 6 } },
+  { key: 'even', name: '均衡型', blurb: '哪一项都不短，也没有一项特别突出', t: emptyTalents() },
+]
+
+/**
+ * What a spread of talent means, in the screen's words (破晓's 「当前加点路线」):
+ * judged by the share of the points spent that sit in the two biggest. Only
+ * what the engine does is said: 综合 is the role's weighted sum with no penalty
+ * for a short board, a key round and a practice duel score the option's own
+ * attribute against the other side's (me/nodes.ts, me/duel.ts), and 协同 and 沟通
+ * are what teammates get along on (engine/bonds.ts).
+ */
+export function talentShape(talents: Record<keyof Attrs, number>): { label: string; line: string } | null {
+  const spent = ATTR_KEYS.reduce((s, k) => s + (talents[k] ?? 0), 0)
+  if (!spent) return null
+  const share = ATTR_KEYS.map((k) => talents[k] ?? 0).sort((a, b) => b - a).slice(0, 2).reduce((s, v) => s + v, 0) / spent
+  const lowSocial = (talents.teamwork ?? 0) + (talents.communication ?? 0) <= 1
+  if (share >= 0.7) {
+    return {
+      label: '高度专精',
+      line: `综合冲得最快；但关键回合和对位练习赛里，用到短板那一项的选项很难成功${lowSocial ? '；协同、沟通几乎没点，和队友也难处好关系' : ''}。`,
+    }
+  }
+  if (share >= 0.45) return { label: '有侧重', line: `长项撑住综合，短板也不至于太短，关键回合里多数选项都能用${lowSocial ? '；协同、沟通几乎没点，和队友难处一些' : ''}。` }
+  return { label: '很均衡', line: '哪一项都不拖后腿，关键回合里哪个选项都能用；代价是综合比专精的路线低一些。' }
+}
+
 /** The eight, the way the new-career screen previews them. */
 export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, originKey: string, rng?: Rng): Attrs {
   const w = weightsFor({ role })

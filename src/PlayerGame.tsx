@@ -11,6 +11,7 @@ import { isCupRound } from './engine/me/cups'
 import { advanceUntil, leftToMe, runAutoPilot, stopLine } from './engine/me/auto'
 import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
+import { unseenAch } from './engine/me/achievements'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
 import { ladderLabel } from './engine/me/prepro'
@@ -243,8 +244,10 @@ export default function PlayerGame() {
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
-  // a run's summary first, then the card it stopped on
-  const pending = !live && !summary ? me.pending[0] : undefined
+  // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
+  // under a card's scrim could not be pressed (z45 against z50), and the tour's veil covered it too
+  const unlocks = !live && !summary ? unseenAch(me).length : 0
+  const pending = !live && !summary && !unlocks ? me.pending[0] : undefined
 
   const Screen = screen === 'me' ? MeScreen
     : screen === 'team' && pro ? TeamScreen
@@ -428,8 +431,9 @@ export default function PlayerGame() {
           />
         )}
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
-        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture} />
-        <AchPop />
+        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || unlocks > 0} />
+        {/* what just unlocked waits for the match and the run's summary, and goes before any card (unlocks above) */}
+        {!live && !summary && <AchPop />}
         {/* a build that went live under this tab: 刷新 saves first; a match being played lives only in memory, so the bar waits for it */}
         <UpdateNudge busy={!!live} onBeforeReload={commit} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
