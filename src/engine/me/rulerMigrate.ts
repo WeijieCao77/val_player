@@ -87,6 +87,8 @@ export function migrateRuler(state: GameState): RulerMove | null {
   if (me.seasonStart.year === state.year) me.seasonStart.overall += p.overall - from
   me.flags.rulerMoved = state.year
   const d = p.overall - from
+  // unread until the load notice is closed (PlayerGame.tsx): how far his 综合 moved, the notice says it
+  me.flags.rulerNotice = d
   const text = `能力标尺更新：老存档里整个圈子一年比一年涨，国际赛几乎人人 90 以上。这次读档，所有人按新标尺一起重读了一遍，你也在内${d < 0 ? `，综合往下挪了 ${-d} 点` : d > 0 ? `，综合往上挪了 ${d} 点` : ''}；你在世界里的位置没变，拿到的荣誉和破开的瓶颈都在。以后每个冬天都按这把尺子读，世界不会再越涨越高。`
   me.weekNotes.push(text)
   pushLog(state, 'info', text)

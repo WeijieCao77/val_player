@@ -369,6 +369,23 @@ export default function PlayerGame() {
 
         {playerId && <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} />}
         {fixture && <MatchModal fixture={fixture} onClose={() => setFixture(null)} />}
+        {/* an old save just read onto the new ruler (me/rulerMigrate.ts): said once, as asked 2026-09-14, then the flag goes */}
+        {me.flags.rulerNotice !== undefined && !live && (
+          <Modal
+            title="能力标尺更新"
+            onClose={() => { delete me.flags.rulerNotice; commit() }}
+            onBgClose={() => { delete me.flags.rulerNotice; commit() }}
+          >
+            <p style={{ marginTop: 0 }}>
+              老存档里整个圈子一年比一年涨，到后来国际赛几乎人人 90 以上。这次读档，所有人按新标尺一起重读了一遍，你也在内
+              {me.flags.rulerNotice < 0 ? `，综合往下挪了 ${-me.flags.rulerNotice} 点` : me.flags.rulerNotice > 0 ? `，综合往上挪了 ${me.flags.rulerNotice} 点` : ''}。
+            </p>
+            <p className="small muted">你在世界里的位置没变，拿到的荣誉、成就和破开的瓶颈都在。以后每个冬天都按这把尺子读，世界不会再越涨越高。</p>
+            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+              <button className="primary" onClick={() => { delete me.flags.rulerNotice; commit() }}>知道了</button>
+            </div>
+          </Modal>
+        )}
         {summary && (
           <Modal title={`推进总结 · ${summary.weeks} 周 · ${summary.why ? '停在这里' : `到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             {/* why the run stopped short: a decision it leaves to me, whose card opens when this closes */}
