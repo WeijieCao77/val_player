@@ -87,7 +87,8 @@ export default function TransferScreen() {
                   : <>综合够到{nums ? ` ${vct.bar}` : '这条线附近'}、打出联赛里最好的赛季数据，或者作为主力拿下 Challengers 冠军，转会窗口开着时位置上用得着你的 {top} 俱乐部就会来找你。</>}
               </p>
             )}
-            {me.intents.length > 0 && <p className="small">记下你名字的：{me.intents.map((i) => game.teams[i.teamId]?.tag).join('、')}</p>}
+            {/* each club once: a save from before could hold one twice */}
+            {me.intents.length > 0 && <p className="small">记下你名字的：{[...new Set(me.intents.map((i) => i.teamId))].map((id) => game.teams[id]?.tag).join('、')}</p>}
             {/* the window as it stands, greyed with its reason and its date, never hidden (engine/me/window.ts) */}
             <p className="small"><b>{windowLine(game)}</b></p>
             {signedThisPeriod(game) && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{inviteBlock(game)}。</p>}

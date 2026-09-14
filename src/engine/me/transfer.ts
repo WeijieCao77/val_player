@@ -66,10 +66,15 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   if (!rng.chance(clamp(0.25 + (perf - 6) * 0.05, 0.25, 0.9))) return
   const t = pickBuyer(state, rng, false, true)
   if (!t) return
-  me.intents.push({ teamId: t.id, day: state.day })
+  // a club already watching me is still one club (2026-09-14: 「记下你的名字的jdg显示了两个jdg」), and a save
+  // from before, holding it twice, is set right here
+  me.intents = me.intents.filter((x, i, all) => all.findIndex((y) => y.teamId === x.teamId) === i)
+  const seen = me.intents.find((i) => i.teamId === t.id)
+  if (seen) seen.day = state.day
+  else me.intents.push({ teamId: t.id, day: state.day })
   pushLog(state, 'info', windowAt(state, t.id).open
-    ? `${t.name} 的教练来看了你的比赛，记下了你的名字。`
-    : `${t.name} 的教练来看了你的比赛。转会窗口开了再说。`)
+    ? (seen ? `${t.name} 的教练又来看了你的比赛，你的名字早就在他们的名单上。` : `${t.name} 的教练来看了你的比赛，记下了你的名字。`)
+    : `${t.name} 的教练${seen ? '又' : ''}来看了你的比赛。转会窗口开了再说。`)
 }
 
 /** Where a buyer plays, in the words an offer uses. */
@@ -386,7 +391,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 
   me.flags.winRolled = 1
   // this moment's share of the period's chance; a certainty stays one
   const hit = (q: number): boolean => rng.chance(listed || q >= 1 ? q : 1 - Math.pow(1 - q, weight))
-  let p = clamp(0.10 + perf * 0.03 + me.heat / 1500 + Math.min(me.intents.length, 3) * 0.12, 0.02, 0.85)
+  let p = clamp(0.10 + perf * 0.03 + me.heat / 1500 + Math.min(new Set(me.intents.map((i) => i.teamId)).size, 3) * 0.12, 0.02, 0.85)
   if (me.titles.some((t) => t.year === state.year && isIntlComp(t.title))) p = 1
   else if (me.titles.some((t) => t.year === state.year)) p = Math.max(p, 0.96)
   if (perf >= 13 && (me.flags.dryWindows ?? 0) >= 2) p = Math.max(p, 0.92)
