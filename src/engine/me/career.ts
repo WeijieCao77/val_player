@@ -16,7 +16,8 @@ import { fansCn } from './fans'
 import type { MeState } from './types'
 import { beginWeek } from './week'
 import { pushLog } from './log'
-import { originOf } from './origins'
+import { originName, originOf } from './origins'
+import { serverOf } from './rank'
 import { makeDeal, joinClub } from './contract'
 import { onTimeline, regionIn, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
@@ -391,10 +392,10 @@ export function createCareer(o: CareerOpts): GameState {
   const placed = club && !origin.needsClub
     ? ` 开局分到 ${club.name}${isAcademy(club, year) ? '（二队）' : ''}，${o.start === 't1' ? '一线队的第六人' : '首发'}。`
     : ''
-  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${origin.name}：${origin.needsClub && club ? origin.blurb.replace('这家俱乐部', club.name) : origin.blurb}${placed}`)
+  pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${originName(origin, serverOf(state))}：${origin.needsClub && club ? origin.blurb.replace('这家俱乐部', club.name) : origin.blurb}${placed}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。${ladderLabel(me.pre.ladder)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
+    pushLog(state, 'info', `没有队伍。${ladderLabel(state)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}在第 7 周开打，${cupFor(state, 'premier')?.name}在第 15 周，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON

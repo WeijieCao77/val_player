@@ -1,7 +1,8 @@
 import type { GameState } from '../../engine/types'
 import { bondCardLines } from '../../engine/me/bond'
 import { fanTier, fansCn } from '../../engine/me/fans'
-import { originOf } from '../../engine/me/origins'
+import { originName, originOf } from '../../engine/me/origins'
+import { rankAt, rankShort, serverAt } from '../../engine/me/rank'
 import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
 import { compCn } from '../../engine/me/compname'
 
@@ -166,7 +167,8 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
   g.font = FONT(600, 30)
   g.fillStyle = CO.gold
   const clubs = Array.from(new Set((p.clubHist ?? []).map((h) => state.teams[h.team]?.tag ?? h.team)))
-  fitText(g, [p.ign, p.role, originOf(me.originKey).name, `${p.age} 岁`, `综合 ${p.overall}`].join(' · '),
+  const origin = originName(originOf(me.originKey), serverAt(me.region, me.entryYear ?? me.seasons[0]?.year ?? state.year, 0))
+  fitText(g, [p.ign, p.role, origin, `${p.age} 岁`, `综合 ${p.overall}`].join(' · '),
     PAD, y, W - PAD * 2, 30, 600)
 
   // trophies
@@ -227,7 +229,7 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
     g.font = FONT(400, rowFs)
     g.fillStyle = CO.ink2
     const right = s.tier ? `${s.starts}/${s.matches} 首发 · ACS ${s.acs || '—'} · ${s.overallTo}`
-      : `天梯 ${Math.round(me.pre.ladderPeak)} · ${s.overallTo}`
+      : `天梯 ${rankShort(rankAt(state, me.pre.ladderPeak))} · ${s.overallTo}`
     g.fillText(right, W - PAD - 24 - g.measureText(right).width, mid)
   })
   y += rows.length * rh + 30

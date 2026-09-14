@@ -568,7 +568,7 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
     pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}${quals.length ? `，出线：${quals.join('、')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1
   } else {
-    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
+    pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(state, me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
     me.pre.year++
     if (me.phase === 'free') me.freeYears++
   }

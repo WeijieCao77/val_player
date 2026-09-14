@@ -226,7 +226,7 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         me.body = clamp(me.body + 0.1 * n, 0, 100)
         let w = 0, l = 0
         for (let i = 0; i < n; i++) { const r = playRanked(state, rng); w += r.wins; l += r.losses }
-        notes.push(`排位 ${w} 胜 ${l} 负，${ladderLabel(me.pre.ladder)}。`)
+        notes.push(`排位 ${w} 胜 ${l} 负，${ladderLabel(state)}。`)
         questProgress(state, 'ranked', n)
         break
       }

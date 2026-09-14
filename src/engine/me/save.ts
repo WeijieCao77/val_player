@@ -72,6 +72,14 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me && state.me.phase !== 'pro') state.myTeam = ''
   // 「今年不再来」 keeps its year now (me/prepro.ts declinedNow): a save from before kept the clubs alone, and those have lapsed
   if (state.me) state.me.declined = (state.me.declined ?? []).filter((d) => typeof d === 'object' && d !== null && typeof d.year === 'number')
+  // The ladder is still the one score; its division, RR and board place are worked out on the day
+  // (me/rank.ts), so a save from before reads the new ladder as it stands — a 「辐能战魂」 outside the
+  // top 500 is 神话 3 with its place. All it needs is a score that is a score.
+  const pre = state.me?.pre
+  if (pre) {
+    pre.ladder = Math.min(100, Math.max(0, Number.isFinite(pre.ladder) ? pre.ladder : 0))
+    pre.ladderPeak = Math.max(pre.ladder, Math.min(100, Number.isFinite(pre.ladderPeak) ? pre.ladderPeak : 0))
+  }
   return state
 }
 

@@ -9,6 +9,7 @@ import { CAP_EXP_MAX } from './bottleneck'
 import type { MeMatchRecord, MeSeason, MeState } from './types'
 import { compClass, isIntlComp } from './compclass'
 import type { CompClass } from './compclass'
+import { rankAt } from './rank'
 
 /**
  * Achievements, laid out along the roads a career actually takes.
@@ -170,8 +171,9 @@ function skidTitle(s: GameState): boolean {
 
 export const ACHIEVEMENTS: AchDef[] = [
   // ---- 天梯与杯赛
-  { key: 'ladder_100', route: 'ladder', name: '前一百', desc: '天梯打进辐能战魂前 100', reward: { fans: 20 }, cond: (s) => M(s).pre.ladderPeak >= 72 },
-  { key: 'ladder_top', route: 'ladder', name: '登顶', desc: '天梯打到国服第一', reward: { title: '天梯之巅' }, cond: (s) => M(s).pre.ladderPeak >= 96 },
+  // the place on my own server's board at my best, as the ladder page shows it (me/rank.ts): on 国服 the same score as before
+  { key: 'ladder_100', route: 'ladder', name: '前一百', desc: '天梯打进辐能战魂前 100', reward: { fans: 20 }, cond: (s) => { const r = rankAt(s, M(s).pre.ladderPeak); return r.radiant && (r.pos ?? Infinity) <= 100 } },
+  { key: 'ladder_top', route: 'ladder', name: '登顶', desc: '天梯打到本服第一', reward: { title: '天梯之巅' }, cond: (s) => rankAt(s, M(s).pre.ladderPeak).pos === 1 },
   { key: 'cup_city', route: 'ladder', name: '网吧之王', desc: '拿下一次网吧赛或本地线下赛', reward: { heat: 15 }, cond: (s) => cupWon(s, 'city') },
   { key: 'cup_premier', route: 'ladder', name: '业余联赛冠军', desc: '拿下官方业余联赛或开放海选', reward: { fans: 30 }, cond: (s) => cupWon(s, 'premier') },
   { key: 'cup_streamer', route: 'ladder', name: '镜头前夺冠', desc: '拿下主播杯', reward: { fans: 30 }, cond: (s) => cupWon(s, 'streamer') },

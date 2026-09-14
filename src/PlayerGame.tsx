@@ -12,6 +12,7 @@ import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
 import Changelog from './ui/me/Changelog'
 import { ladderLabel } from './engine/me/prepro'
+import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, Modal, money } from './ui/me/common'
 import NewCareer from './ui/me/NewCareer'
@@ -272,7 +273,7 @@ export default function PlayerGame() {
           </div>
           <div className="tiles">
             <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
-            <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(me.pre?.ladder ?? 0)}</b></div>
+            <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(game)}{nums && me.phase !== 'retired' && <em>{rankAt(game).rr} RR</em>}</b></div>
             <div className="tile" title={`${fanTier(me.fans).name} · ${fansCn(me.fans)}`}><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
             <div className="tile"><small>资金</small><b>{money(me.money)}</b></div>
             <div className={`tile ${p.fatigue >= 60 ? 'dn' : ''}`}><small>体力</small><b>{Math.round(100 - p.fatigue)}</b></div>

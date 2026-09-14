@@ -15,7 +15,8 @@ import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
 import { trustLabel } from './words'
-import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, ladderLabel, ladderTier, skillToLadder } from '../../engine/me/prepro'
+import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
+import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText } from '../../engine/me/rank'
 import { CUPS, cupView } from '../../engine/me/cups'
 import { fansCn } from '../../engine/me/fans'
 import { useNumbers } from './words'
@@ -332,13 +333,18 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         ) : (
           <>
             <Panel title="天梯" className="own">
-              <p style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>{ladderLabel(me.pre.ladder)}</p>
+              {/* as the client shows it (engine/me/rank.ts): division, RR with 数值, and from 神话 up the place on my server's board */}
+              <p style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>{nums ? rankFull(rankAt(game)) : rankText(rankAt(game))}</p>
               <p className="small" style={{ margin: '0 0 6px' }}>
-                {climb} · 最高 {ladderLabel(me.pre.ladderPeak)}{nums ? `（天梯分 ${Math.round(me.pre.ladder)}，水平对应约 ${Math.round(aim)}）` : ''}
+                {climb} · 最高 {rankText(rankAt(game, me.pre.ladderPeak))}{nums ? `（实力对应 ${rankAt(game, aim).name}）` : ''}
+              </p>
+              <p className="tiny faint" style={{ margin: '0 0 4px' }}>
+                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR` : ''}才是辐能战魂。
+                {me.region === 'China' && rankAt(game).server.key === 'AP' ? '国服 2023 年 7 月开服以前，都在亚服打。' : ''}
               </p>
               <p className="tiny faint" style={{ margin: 0 }}>
-                {/* the lines rollInvites actually opens at (prepro.ts INVITE_*) */}
-                进{ladderTier(INVITE_LADDER).name} 有俱乐部来看，进{ladderTier(INVITE_LADDER_T1).name} 一级俱乐部会看。
+                {/* the lines rollInvites actually opens at (prepro.ts INVITE_*), said on my server */}
+                打到{rankBar(game, INVITE_LADDER)}有俱乐部来看，打到{rankBar(game, INVITE_LADDER_T1)}一级俱乐部会看。
               </p>
             </Panel>
             <Panel title="今年的赛事">
@@ -360,7 +366,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </Panel>
             <Panel title="怎么被看见">
               <p className="tiny faint" style={{ margin: 0 }}>
-                三条路：杯赛走得远、天梯进{ladderTier(INVITE_LADDER).name}、粉丝过 {fansCn(INVITE_FANS)}。
+                三条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}。
                 {me.pre.year >= 3 ? ` 这是第 ${me.pre.year} 年。四年没签到合同，就该想想别的了。` : ''}
               </p>
             </Panel>

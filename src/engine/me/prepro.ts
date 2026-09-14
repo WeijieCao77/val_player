@@ -2,6 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
 import type { CupRun, Invite } from './types'
 import { pushLog } from './log'
+import { rankAt, rankText } from './rank'
 import { push } from './pending'
 import { CUPS } from './cups'
 import { formatOf } from '../era'
@@ -16,39 +17,16 @@ export const INVITE_DAYS = 21
 export const skillToLadder = (overall: number): number => clamp(45 + (overall - 60) * 1.7, 0, 100)
 
 /**
- * The real ladder, in the names the CN client uses: 铂金 / 钻石 / 超凡 / 神话
- * each split into 1–3, then 辐能战魂 with a leaderboard rank once inside the top
- * 500. Bands below 辐能战魂 carry `sub: 3`; the tier function turns 44.5 into 神话1.
+ * The ladder in words: 「超凡入圣 2」, and from 神话 up the place on my server's
+ * board, 「神话 3 · 国服第 2,431 名」 — 辐能战魂 only inside its top 500. What the
+ * score is on the ladder is me/rank.ts's to say; everything that decides reads the score.
+ *
+ * It used to be a table on the score itself, and 52–62 read 「辐能战魂」 with no
+ * place: a 辐能战魂 outside the 500 there are (reported 2026-09-14). That band is
+ * 神话 3 now, with its place.
  */
-export const LADDER_TIERS: { at: number; name: string; k: string; sub?: number }[] = [
-  { at: 92, name: '辐能战魂第一梯队', k: 'top' },
-  { at: 82, name: '辐能战魂前 10', k: 'top10' },
-  { at: 72, name: '辐能战魂前 100', k: 'top100' },
-  { at: 62, name: '辐能战魂前 500', k: 'top500' },
-  { at: 52, name: '辐能战魂', k: 'radiant' },
-  { at: 42, name: '神话', k: 'immortal', sub: 3 },
-  { at: 30, name: '超凡入圣', k: 'ascendant', sub: 3 },
-  { at: 16, name: '钻石', k: 'diamond', sub: 3 },
-  { at: 0, name: '铂金', k: 'platinum', sub: 3 },
-]
-
-export function ladderTier(l: number): { name: string; k: string } {
-  const i = LADDER_TIERS.findIndex((t) => l >= t.at)
-  const t = LADDER_TIERS[i < 0 ? LADDER_TIERS.length - 1 : i]
-  if (!t.sub) return { name: t.name, k: t.k }
-  const top = i > 0 ? LADDER_TIERS[i - 1].at : 100
-  const n = clamp(1 + Math.floor((t.sub * (l - t.at)) / (top - t.at)), 1, t.sub)
-  return { name: `${t.name}${n}`, k: t.k }
-}
-
-/** The line the HUD shows: tier, and a rank number once inside the top 500. */
-export function ladderLabel(l: number): string {
-  if (l >= 96) return '国服第一'
-  if (l >= 62) {
-    const rank = Math.max(2, Math.round(500 * Math.pow((100 - l) / 38, 2.2)))
-    return `辐能战魂 第 ${rank}`
-  }
-  return ladderTier(l).name
+export function ladderLabel(state: GameState, l: number = state.me?.pre?.ladder ?? 0): string {
+  return rankText(rankAt(state, l))
 }
 
 /** One action point of ranked: six games against the ladder's own pull. */
@@ -238,8 +216,9 @@ export function rollInvites(state: GameState, rng: Rng): void {
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
   const l = me.pre.ladder
-  // Both channels open where the screen already tells the player he is somebody: 辐能战魂前 500 on the
-  // ladder, 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
+  // Both channels open where the screen already tells the player he is somebody: 辐能战魂前 500 on
+  // 国服's ladder (me/rank.ts sets its places on it; a smaller server shows the same score further up the
+  // board, and the week's page says the line on his own), 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
   // with 120 fans got no call in a year, in every region — the channels began at ladder 74 and 180 fans.
   if (l >= INVITE_LADDER && rng.chance(0.02 + (l - INVITE_LADDER) * 0.005)) {
     const team = pickClub(state, rng, l >= INVITE_LADDER_T1 ? 1 : 2)
