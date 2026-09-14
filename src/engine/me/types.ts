@@ -277,14 +277,63 @@ export interface CupRun {
 export interface Invite {
   id: string
   teamId: string
-  /** how they heard of me */
-  via: 'cup' | 'rank' | 'fans' | 'scout' | 'free'
+  /** how they heard of me — 'self': I wrote to them (me/selfpitch.ts) */
+  via: 'cup' | 'rank' | 'fans' | 'scout' | 'free' | 'self'
   day: number
   expires: number
   /** seen enough to skip the tryout */
   direct: boolean
   /** a club of another region that called on top of another club's call because I speak the language (me/prepro.ts LANG_EXTRA): it holds no place in the queue */
   lang?: boolean
+}
+
+/** A 自荐, or with a contract a 主动接触, waiting on its answer (me/selfpitch.ts). */
+export interface PitchOut {
+  id: string
+  teamId: string
+  /** 'pitch' sent without a contract, 'contact' made under one */
+  kind: 'pitch' | 'contact'
+  /** the day it went out */
+  year: number
+  day: number
+  /** the absolute day the answer comes (me/window.ts absDay) */
+  due: number
+  /** the chance, percent, as the button said it: the answer is drawn on exactly this */
+  odds: number
+}
+
+/** Why a club said no, by the one real factor that weighed most against me (me/selfpitch.ts pitchWhy). */
+export type PitchWhy = 'full' | 'import' | 'nevpro' | 'buyout' | 'gap' | 'starter' | 'luck'
+
+/** A no, kept for its card. */
+export interface PitchReply {
+  id: string
+  teamId: string
+  kind: 'pitch' | 'contact'
+  odds: number
+  why: PitchWhy
+  /** 'gap': the points short of their bar; 'starter': the man in my job */
+  gap?: number
+  mate?: string
+  year: number
+  day: number
+}
+
+/** 自荐 and 主动接触 over a career (me/selfpitch.ts, me/pitchbook.ts). Absent in older saves. */
+export interface PitchBook {
+  /** the transfer period `sent` and `contacted` count in (me/window.ts periodKey) */
+  period: number
+  /** clubs pitched this period, without a contract */
+  sent: string[]
+  /** the club contacted this period, under a contract */
+  contacted: string[]
+  /** clubs that answered no, each with its season: no more from me that season */
+  rejected: { team: string; year: number }[]
+  out?: PitchOut
+  /** the noes waiting on their cards */
+  replies: PitchReply[]
+  /** the career's count: sent, answered, answered yes, called off by a signing, and the chances the answered ones carried (percent, summed) */
+  tally?: { sent: number; replied: number; ok: number; cancelled: number; odds: number }
 }
 
 export interface TryoutDayLog { day: number; pick: string; dim: string; p: number; ok: boolean }
@@ -323,6 +372,8 @@ export interface Deal {
   expires: number
   /** a move abroad — language and distance come with it */
   abroad: boolean
+  /** terms a club brought after I contacted it (me/selfpitch.ts) */
+  via?: 'contact'
 }
 
 /** The contract I am on, as signed, in its club's league currency (me/paytable.ts payOf). */
@@ -504,7 +555,8 @@ export interface IglBook {
 }
 
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt' | 'igl'
+  /** 'pitch': a club's no to a 自荐 or a contact (me/selfpitch.ts) */
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt' | 'igl' | 'pitch'
   id?: string
   day: number
 }
@@ -662,6 +714,8 @@ export interface MeState {
   intents: { teamId: string; day: number }[]
   /** clubs turned down this year, or that turned me down, each with its year: it stays away until the year turns (me/prepro.ts declinedNow) */
   declined: { team: string; year: number }[]
+  /** 自荐 and 主动接触 — see me/selfpitch.ts; absent until the first is sent, and in older saves */
+  pitch?: PitchBook
   /** the year I asked to be listed */
   listedYear?: number
   /** seasons at the current club */

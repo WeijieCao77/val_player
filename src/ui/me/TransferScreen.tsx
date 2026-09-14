@@ -10,6 +10,12 @@ import { ROLE_CN } from '../../engine/me/contract'
 import { push } from '../../engine/me/pending'
 import type { PendingItem } from '../../engine/me/types'
 import { fansCn } from '../../engine/me/fans'
+import {
+  CONTACT_TRUST, PITCH_AP, PITCH_LEAD, PITCH_MAX, PITCH_SQUAD, REPLY_MAX, REPLY_MIN, ROSTER_FULL,
+  groupCn, oddsLine, oddsWord, periodEndAbs, pitchBlock, pitchTargets, sendPitch,
+} from '../../engine/me/selfpitch'
+import type { PitchGroup, PitchRow } from '../../engine/me/selfpitch'
+import { pitchBook } from '../../engine/me/pitchbook'
 import { attrWord, gapWord, useNumbers } from './words'
 
 /**
@@ -19,6 +25,11 @@ import { attrWord, gapWord, useNumbers } from './words'
  * 包括转会的历史应该也在转会栏目里有记录」 — the offers were one line of text,
  * the season's transfer news lived only in the week's diary, and no history was
  * kept anywhere on this page.
+ *
+ * And 自荐 (the same day: 「不只是被动的等待试训邀请而是加入自荐的机制」): without a
+ * contract a panel at the top to write to a club; under one, 主动接触 beside 主动挂牌
+ * (engine/me/selfpitch.ts). Every club says its chance, and a club that cannot be
+ * written to today says why.
  */
 export default function TransferScreen() {
   const { game, commit, toast } = useGame()
@@ -69,6 +80,7 @@ export default function TransferScreen() {
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
+        {!pro && me.phase !== 'retired' && <PitchPanel />}
         {pro && team && pay && (
           <Panel title="合同">
             <p className="small" style={{ margin: 0 }}>
@@ -107,6 +119,7 @@ export default function TransferScreen() {
                 </>
               )
             })()}
+            <ContactBlock />
           </Panel>
         )}
         <Panel title="桌上的报价">
@@ -117,7 +130,7 @@ export default function TransferScreen() {
                 <Crest id={d.teamId} size={22} />
                 <span className="tr-main">
                   <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
-                  <small>{d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · {Math.max(0, d.expires - game.day)} 天内答复</small>
+                  <small>{d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · {Math.max(0, d.expires - game.day)} 天内答复</small>
                 </span>
                 <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
               </div>
@@ -125,11 +138,11 @@ export default function TransferScreen() {
         </Panel>
         {!pro && (
           <Panel title="邀请">
-            {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你。</p>
+            {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你；也可以在上面挑一家发自荐。</p>
               : me.pre.invites.map((i) => (
                 <div key={i.id} className="tr-row">
                   <Crest id={i.teamId} size={22} />
-                  <span className="tr-main"><b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b><small>{i.direct ? '免试训，直接给合同' : '请你去试训'} · {Math.max(0, i.expires - game.day)} 天内答复</small></span>
+                  <span className="tr-main"><b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b><small>{i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} · {Math.max(0, i.expires - game.day)} 天内答复</small></span>
                   <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>
                 </div>
               ))}
@@ -215,6 +228,154 @@ export default function TransferScreen() {
         </div>
       </Panel>
       </div>
+    </div>
+  )
+}
+
+const GROUPS: PitchGroup[] = ['vct', 'strong', 'mid', 'weak', 'academy']
+
+/** The pitch or contact on its way, in one line: 「已发给 CGN Esports，6月17日前回复。」 */
+function PitchSent() {
+  const { game } = useGame()
+  const out = pitchBook(game).out
+  if (!out) return null
+  return (
+    <div className="sp-sent">
+      {out.kind === 'contact' ? '已经接触了' : '已发给'} <b>{game.teams[out.teamId]?.name ?? '俱乐部'}</b>，{dateCn(out.due, game.year)}前回复。
+    </div>
+  )
+}
+
+/**
+ * The clubs a 自荐 or a contact can go to, in their groups (engine/me/selfpitch.ts pitchTargets): each with
+ * its roster, its need, its bar against mine, the chance and the button, or why not. The group holding
+ * the best chance that can be sent today opens by itself; the rest fold.
+ */
+function PitchList({ contract }: { contract: boolean }) {
+  const { game, commit, toast } = useGame()
+  const [nums] = useNumbers()
+  const me = game.me!
+  const role = game.players[me.id].role
+  const book = pitchBook(game)
+  const block = pitchBlock(game)
+  const { rows, abroadShut } = pitchTargets(game)
+  const home = rows.filter((r) => !r.abroad)
+  const far = rows.filter((r) => r.abroad)
+  const best = home.filter((r) => !r.why).sort((a, b) => b.odds.pct - a.odds.pct)[0]
+  const send = (id: string) => {
+    const why = sendPitch(game, id)
+    if (why) { toast(`${why}。`); return }
+    toast(contract ? `托人联系了 ${game.teams[id]?.name}。` : `自荐发给了 ${game.teams[id]?.name}。`)
+    commit()
+  }
+  const need = (r: PitchRow): string => {
+    const n = r.odds.need
+    if (n.kind === 'hole') return ` · 缺${role}`
+    if (n.kind === 'beat') return ` · 你比首发 ${n.mate?.ign} 强`
+    if (n.kind === 'place') return ` · 名单不到 ${PITCH_SQUAD} 人`
+    return n.mate ? ` · ${role}首发 ${n.mate.ign}` : ''
+  }
+  const row = (r: PitchRow) => {
+    const o = r.odds
+    const off = !!r.why
+    const sent = book.out?.teamId === r.team.id || book.sent.includes(r.team.id) || book.contacted.includes(r.team.id)
+    return (
+      <div key={r.team.id} className={`sp-row${off ? ' off' : ''}`}>
+        <Crest id={r.team.id} size={22} />
+        <span className="tr-main">
+          <b>{r.team.name}</b>
+          <small>
+            {groupCn(game, r.group)}{r.abroad ? ' · 外赛区' : ''} · 名单 {r.team.roster.length}/{ROSTER_FULL}{need(r)} · {nums ? `要 ${o.expect}，你 ${o.skill}` : gapWord(-o.gap)}
+            {contract && o.fee > 0 ? (o.short ? ' · 预算付不起你的违约金' : ' · 付得起你的违约金') : ''}
+          </small>
+        </span>
+        <span className={`sp-odds${off ? '' : o.pct >= 50 ? ' hi' : o.pct < 10 ? ' lo' : ''}`}>
+          {off ? '—' : nums ? `${o.pct}%` : null}
+          {!off && <small>{oddsWord(o.pct)}</small>}
+        </span>
+        <button className="sm" disabled={off || !!block} title={r.why ?? block ?? undefined} onClick={() => send(r.team.id)}>
+          {sent ? '已发' : contract ? '去接触' : '发自荐'}
+        </button>
+        {/* a greyed club says why; an open one, with 数值, the sum its chance is (the number the answer is drawn on) */}
+        {off ? <span className="sp-why">{r.why}。</span>
+          : nums ? <span className="sp-why faint">{oddsLine(game, o)}</span>
+            : o.nevpro ? <span className="sp-why faint">{groupCn(game, 'vct')} 俱乐部基本只从打过职业比赛的人里挑。</span> : null}
+      </div>
+    )
+  }
+  return (
+    <>
+      {GROUPS.map((g) => {
+        const list = home.filter((r) => r.group === g)
+        if (!list.length) return null
+        const top = list.find((r) => !r.why)
+        return (
+          <details key={g} className="sp-group" open={best?.group === g}>
+            <summary>{groupCn(game, g)} · {list.length} 家{top ? ` · 最好的一家${nums ? ` ${top.odds.pct}%` : oddsWord(top.odds.pct)}` : ' · 现在都投不了'}</summary>
+            {list.map(row)}
+          </details>
+        )
+      })}
+      {far.length > 0 && (
+        <details className="sp-group">
+          <summary>外赛区（你会外语）· {far.length} 家</summary>
+          {far.map(row)}
+        </details>
+      )}
+      {abroadShut > 0 && (
+        <p className="tiny faint" style={{ margin: '6px 0 0' }}>外赛区的 {abroadShut} 家俱乐部：要会外语才投得了（「经济」页的语言课）。外语只多开外区，本赛区照常。</p>
+      )}
+    </>
+  )
+}
+
+/** 自荐, without a contract: at the top of the page. */
+function PitchPanel() {
+  const { game } = useGame()
+  const me = game.me!
+  const book = pitchBook(game)
+  const block = pitchBlock(game)
+  const left = Math.max(0, PITCH_MAX - book.sent.length)
+  const tally = me.pitch?.tally
+  return (
+    <Panel title="自荐" actions={<span className="tag">还能投 {left}/{PITCH_MAX}</span>}>
+      <p className="small" style={{ marginTop: 0 }}>
+        不想干等邀请，就挑一家发自荐：每次 {PITCH_AP} 行动点（本周剩 {me.ap}），这个转会期还能投 <b>{left}</b> 次，转会期到 {dateCn(periodEndAbs(game), game.year)}。
+      </p>
+      <PitchSent />
+      {block && !book.out && <p className="tiny warn" style={{ margin: '4px 0' }}>{block}。</p>}
+      <PitchList contract={false} />
+      <p className="tiny faint" style={{ margin: '8px 0 0' }}>
+        {REPLY_MIN}–{REPLY_MAX} 天后回复：成了是一份试训邀请（水平高出他们一截的免试训），没成写明原因，那家本赛季不再收你的自荐。
+        同一家一个转会期只能投一次；俱乐部的窗口至少还要开 {PITCH_LEAD} 天；今年没有联赛可打的俱乐部不收人。托管不会替你发。
+      </p>
+      {tally && tally.sent > 0 && <p className="tiny faint" style={{ margin: '4px 0 0' }}>一共投过 {tally.sent} 次，回复 {tally.replied} 次，成了 {tally.ok} 次。</p>}
+    </Panel>
+  )
+}
+
+/** 主动接触, under a contract: beside 主动挂牌. */
+function ContactBlock() {
+  const { game } = useGame()
+  const me = game.me!
+  const team = game.teams[game.myTeam]
+  const pay = payOf(game)
+  const book = pitchBook(game)
+  const block = pitchBlock(game)
+  return (
+    <div className="sp-contact">
+      <p className="small" style={{ margin: '12px 0 4px' }}>
+        <b>主动接触</b> · 这个转会期还能接触 {book.contacted.length ? 0 : 1} 家 · 每次 {PITCH_AP} 行动点（本周剩 {me.ap}）
+      </p>
+      <p className="tiny faint" style={{ margin: '0 0 4px' }}>
+        点名一家托人联系。你的经理会知道你在找下家，信任 −{CONTACT_TRUST}。成了由他们和 {team?.tag ?? '你的俱乐部'} 谈转会{pay ? `，违约金 ${moneyIn(pay.buyout, pay.cur, game.year)} 他们来付` : ''}；离他们的要求近的，先请你去试训。{REPLY_MIN}–{REPLY_MAX} 天后回复，两边的窗口都要开着、名单没锁。
+      </p>
+      <PitchSent />
+      {block && !book.out && <p className="tiny warn" style={{ margin: '4px 0' }}>{block}。</p>}
+      <details className="sp-group">
+        <summary>挑一家接触</summary>
+        <PitchList contract />
+      </details>
     </div>
   )
 }

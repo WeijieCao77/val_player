@@ -275,7 +275,8 @@ export function awayWord(state: GameState, t: Team): '外赛区' | '国外俱乐
   return t.region !== state.me!.region ? '国外俱乐部' : ''
 }
 
-function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): Invite {
+/** An invitation as a club writes it: it skips the tryout when I clear its bar by ten (me/selfpitch.ts writes one for a 自荐 that came good). */
+export function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): Invite {
   void rng
   const me = state.me!
   const skill = tryoutSkill(state)
@@ -369,7 +370,7 @@ function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0, abroad = false)
   return rng.weighted(pool, holdAbroad(w, away))
 }
 
-const HOW: Record<Invite['via'], string> = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', free: '知道你在找队', scout: '教练组推荐' }
+const HOW: Record<Invite['via'], string> = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', free: '知道你在找队', scout: '教练组推荐', self: '看了你的自荐' }
 
 function offerInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): void {
   const me = state.me!

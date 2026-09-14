@@ -7,6 +7,7 @@ import { migrateStaff } from './staffMigrate'
 import type { SaveMeta } from './saveMeta'
 import { migrateToCny } from './cnyMigrate'
 import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
+import { normalizePitch } from './pitchbook'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -115,6 +116,8 @@ export function migratePlayerSave(state: GameState): GameState {
     // board which climbed past me reads further down — in a save from before, where I stand is the score, as it was
     pre.ladderPeak = Math.max(standingOf(state), Math.min(100, Number.isFinite(pre.ladderPeak) ? pre.ladderPeak : 0))
   }
+  // 自荐's book (me/pitchbook.ts): a save from before has none and reads as a blank one; a book missing a list gets an empty one
+  normalizePitch(state)
   // a coach the roster book once had as a player leaves the player pool, once per change of the data (me/staffMigrate.ts)
   if (state.me) migrateStaff(state)
   // a career from before the rating ruler is read onto it once, the player by his rank (me/rulerMigrate.ts)

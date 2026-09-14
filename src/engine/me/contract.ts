@@ -18,6 +18,7 @@ import { money as fmtMoney } from './moneyfmt'
 import { dateCn, lockDoing, lockLifts, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
 import { standAtLeast, standingOf } from './rank'
+import { dropPitch } from './pitchbook'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -183,6 +184,8 @@ export function acceptDeal(state: GameState, dealId: string): string {
   const w = windowAt(state, d.teamId)
   if (w.lock) {
     me.moveAfter = { deal: d, event: w.lock.event, until: w.lock.until, year: state.year }
+    // agreed is as good as signed for a 自荐 still waiting on its answer (me/pitchbook.ts)
+    dropPitch(state, d.teamId, '谈妥了')
     const to = state.teams[d.teamId]?.name ?? '对方'
     const when = dateCn(lockLifts(state, w), state.year)
     pushLog(state, 'deal', `和 ${to} 谈妥了。${w.side === 'other' ? `${to} ` : '你的俱乐部'}${lockDoing(w.lock)}，名单锁定到 ${when}，锁定解除再正式转会。`)
@@ -303,6 +306,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   // the transfer period I signed in: no club asks me to a tryout again until the next (me/window.ts signedThisPeriod) —
   // a career opening at its club (`quiet`) has signed nothing in play
   if (!opts.quiet) me.flags.signedPeriod = periodKey(state.year, state.day)
+  // a 自荐 or a contact still waiting on its answer is called off, with a line unless it was to this club (me/pitchbook.ts)
+  dropPitch(state, to.id)
   // and their cards with them: a tryout's card left behind could not be answered or closed (found 2026-09-14)
   me.pending = me.pending.filter((x) => x.kind !== 'invite' && x.kind !== 'tryout')
   me.benchedStages = 0

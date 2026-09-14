@@ -179,7 +179,7 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
     : [
       { screen: WEEK, at: [panel('天梯')], title: '天梯', body: '一点行动打六把排位，分数朝你的真实水平走，越高越难爬。不打分数不掉，但神话起别人还在涨分，名次会往后掉。' },
       { screen: WEEK, at: [panel('今年的赛事')], title: '今年的赛事', body: '到了开打那一周，会弹卡片问你报不报名。四个路人队友，走得越远越容易被俱乐部记住。' },
-      { screen: WEEK, at: [panel('怎么被看见')], title: '怎么被看见', body: '俱乐部从杯赛、天梯、粉丝三处发现你。邀请来了去试训，拿到合同就进了职业。' },
+      { screen: WEEK, at: [panel('怎么被看见')], title: '怎么被看见', body: '俱乐部从杯赛、天梯、粉丝三处发现你；不想干等，也可以在「转会」页挑一家发自荐。邀请来了去试训，拿到合同就进了职业。' },
     ]
   return [...week, ...side]
 }

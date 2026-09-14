@@ -29,6 +29,7 @@ import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
 import { storyPlan } from './storyweek'
 import { mineBy } from './nextup'
+import { closePitchReply } from './selfpitch'
 
 /** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
 export const WEEK_END_FATIGUE = 40
@@ -237,6 +238,12 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       resolveEvent(state, ev.id, Math.max(0, pick))
       return `${ev.q.slice(0, 18)}… → ${ev.a[Math.max(0, pick)].t}`
     }
+    // a club's no to a 自荐 (me/selfpitch.ts): read and closed — 托管 never sends one, it only answers what comes back
+    case 'pitch': {
+      const r = me.pitch?.replies.find((x) => x.id === item.id)
+      closePitchReply(state, item.id ?? '')
+      return r ? `${state.teams[r.teamId]?.name ?? '俱乐部'} 回绝了你的${r.kind === 'contact' ? '接触' : '自荐'}` : ''
+    }
     case 'trait': pop(state, 'trait', item.id); return ''
     case 'released': pop(state, 'released'); return ''
     // never on autopilot: the clock stops on it (see runAutoPilot's on())
@@ -266,7 +273,7 @@ export function runAutoPilot(state: GameState): string[] {
     if (item.kind === 'stream') return me.auto.biz
     // a cup's entry is the dial's; its rounds are matches, and a press hands them to me as it does my club's
     if (item.kind === 'cup') return me.auto.biz && !isCupRound(state, item)
-    if (item.kind === 'invite' || item.kind === 'tryout' || item.kind === 'deal' || item.kind === 'released') return me.auto.career
+    if (item.kind === 'invite' || item.kind === 'tryout' || item.kind === 'deal' || item.kind === 'released' || item.kind === 'pitch') return me.auto.career
     return false
   }
   let guard = 0
@@ -403,6 +410,7 @@ export function stopLine(state: GameState, item: PendingItem): string {
   else if (item.kind === 'released') what = '你成了自由人'
   else if (item.kind === 'folding') what = '俱乐部要解散了'
   else if (item.kind === 'igl') what = '教练想让你来当指挥'
+  else if (item.kind === 'pitch') what = `${club(me.pitch?.replies.find((r) => r.id === item.id)?.teamId)} 回复了你的自荐`
   else if (item.kind === 'stream') what = '直播独家等你答复'
   else if (item.kind === 'cup') what = `${(item.id && cupFor(state, item.id)?.name) || '杯赛'}等你决定报不报名`
   else if (item.kind === 'season') what = '要不要退役，等你决定'

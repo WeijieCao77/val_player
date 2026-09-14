@@ -20,7 +20,9 @@ import { pop } from '../../engine/me/pending'
 import { retire } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
 import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
-import { attrWord } from './words'
+import { PITCH_MAX, closePitchReply, oddsWord, whyText } from '../../engine/me/selfpitch'
+import { pitchBook } from '../../engine/me/pitchbook'
+import { attrWord, gapWord } from './words'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
 import { useNumbers } from './words'
@@ -51,8 +53,43 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'ceremony': return <CeremonyModal onDone={onDone} />
     case 'hurt': return <HurtModal fixtureId={item.id!} onDone={onDone} />
     case 'igl': return <IglModal onDone={onDone} />
+    case 'pitch': return <PitchModal replyId={item.id!} onDone={onDone} />
   }
   return null
+}
+
+// ------------------------------------------------------------------ pitch
+/**
+ * A club's no to a 自荐 or a contact (engine/me/selfpitch.ts): the one real reason that weighed most,
+ * in figures or in words as the 数值 switch says. A yes needs no card of its own: it is the invitation's
+ * card, or the terms'.
+ */
+function PitchModal({ replyId, onDone }: { replyId: string; onDone: () => void }) {
+  const { game, commit } = useGame()
+  const [nums] = useNumbers()
+  const me = game.me!
+  const r = me.pitch?.replies.find((x) => x.id === replyId)
+  if (!r) { pop(game, 'pitch', replyId); onDone(); return null }
+  const team = game.teams[r.teamId]
+  const what = r.kind === 'contact' ? '接触' : '自荐'
+  const close = () => { closePitchReply(game, replyId); commit(); onDone() }
+  const left = Math.max(0, PITCH_MAX - pitchBook(game).sent.length)
+  return (
+    <Modal title={`${team?.name ?? '俱乐部'} 的回复`} onClose={close} onBgClose={close}>
+      <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <Crest id={r.teamId} size={40} />
+        <div>
+          <b>{team?.name ?? '俱乐部'}</b> <span className="tag">{what} · 没成</span>
+          <div className="tiny muted">发出时的把握：{nums ? `${r.odds}%` : oddsWord(r.odds)}</div>
+        </div>
+      </div>
+      <p className="small" style={{ margin: '12px 0 4px' }}>{whyText(game, r, nums ? undefined : { gap: gapWord, odds: oddsWord })}。</p>
+      <p className="tiny faint">
+        这家本赛季不再收你的{what}，别家不受影响。{me.phase === 'pro' ? '' : `这个转会期还能投 ${left} 次。`}
+      </p>
+      <div className="row" style={{ justifyContent: 'center' }}><button className="primary" onClick={close}>知道了</button></div>
+    </Modal>
+  )
 }
 
 // ------------------------------------------------------------------ cup
@@ -160,7 +197,9 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
   const expect = expectOf(team)
   // 「外赛区」 by league, 「国外俱乐部」 by country: the word the offer's card and the transfer screen put on it (engine/me/prepro.ts awayWord)
   const away = awayWord(game, team)
-  const via = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '教练组推荐', free: '知道你在找队' }[inv.via]
+  // 'self': a 自荐 that came good, or under a contract a contact answered with a tryout (engine/me/selfpitch.ts)
+  const via = inv.via === 'self' && me.phase === 'pro' ? '回应了你的主动接触'
+    : { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '教练组推荐', free: '知道你在找队', self: '看了你的自荐' }[inv.via]
   return (
     <Modal title={inv.direct ? `${team.name} 的报价` : `${team.name} 的试训邀请`} onClose={() => {}} onBgClose={() => {}}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
@@ -285,6 +324,7 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
           ? <p className="tiny warn" style={{ margin: '6px 0' }}>{w.side === 'other' ? team.name : '你的俱乐部'}{lockDoing(w.lock)}，名单锁定：签了要等 {dateCn(lockLifts(game, w), game.year)}后才正式转会。</p>
           : null
       })()}
+      {d.via === 'contact' && <p className="tiny muted" style={{ margin: '6px 0' }}>这是你主动接触换来的：他们来和你的俱乐部谈转会，违约金他们付。</p>}
       <p className="tiny faint" style={{ margin: '6px 0' }}>每还一次价都更难，第二次被拒就撤回。</p>
       <div className="row wrap" style={{ gap: 6 }}>
         {ASKS.filter((a) => a.can(d) && !d.asks.includes(a.key)).map((a) => (

@@ -15,7 +15,9 @@ import { EDGE_NEED, duelTarget, standingLine } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { fixturesFor } from '../../engine/season'
 import { WAIT_CN, nextUp } from '../../engine/me/nextup'
-import { inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
+import { dateCn, inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
+import { PITCH_AP, PITCH_MAX } from '../../engine/me/selfpitch'
+import { pitchBook } from '../../engine/me/pitchbook'
 import { iglLine } from '../../engine/me/igl'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
@@ -345,6 +347,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               })()}
               {/* the transfer window in one line, in the transfer screen's own words (engine/me/window.ts) */}
               <p className="tiny faint" style={{ margin: '8px 0 0' }}>{windowLine(game)}{signedThisPeriod(game) ? ` · ${inviteBlock(game)}` : ''}</p>
+              {(() => {
+                // a contact on its way, as the transfer page says it (engine/me/selfpitch.ts)
+                const out = pitchBook(game).out
+                return out ? <p className="tiny" style={{ margin: '4px 0 0' }}>已经接触了 <b>{game.teams[out.teamId]?.name ?? '俱乐部'}</b>，{dateCn(out.due, game.year)}前回复。</p> : null
+              })()}
             </Panel>
             <Panel title="教练怎么看你">
               <p className="small" style={{ margin: '0 0 6px' }}>
@@ -461,9 +468,14 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </Panel>
             <Panel title="怎么被看见">
               <p className="tiny faint" style={{ margin: 0 }}>
-                三条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}。天梯看的是现在的名次，停排会被别人超过。
+                四条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，或者在「转会」页挑一家发自荐（每次 {PITCH_AP} 行动点，一个转会期最多 {PITCH_MAX} 次）。天梯看的是现在的名次，停排会被别人超过。
                 {me.pre.year >= 3 ? ` 这是第 ${me.pre.year} 年。四年没签到合同，就该想想别的了。` : ''}
               </p>
+              {(() => {
+                // the 自荐 on its way, as the transfer page says it (engine/me/selfpitch.ts)
+                const out = pitchBook(game).out
+                return out ? <p className="tiny" style={{ margin: '4px 0 0' }}>已发给 <b>{game.teams[out.teamId]?.name ?? '俱乐部'}</b>，{dateCn(out.due, game.year)}前回复。</p> : null
+              })()}
             </Panel>
           </>
         )}

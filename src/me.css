@@ -304,6 +304,26 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .tr-more { margin-top: 8px; }
 .tr-more summary { cursor: pointer; color: var(--muted); font-size: var(--t-small, 13.5px); }
 
+/* ---- 自荐 / 主动接触 (ui/me/TransferScreen.tsx PitchList): a club, its chance, its button; a greyed club's reason under it */
+.sp-group { margin: 6px 0 0; border-top: 1px solid var(--line); }
+.sp-group > summary { cursor: pointer; padding: 6px 0; font-size: var(--t-small, 13.5px); color: var(--muted); }
+.sp-group[open] > summary { color: var(--text); }
+.sp-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sp-row:last-child { border-bottom: 0; }
+.sp-row.off .tr-main b { color: var(--faint); }
+.sp-odds { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; line-height: 1.1; text-align: right; white-space: nowrap; }
+.sp-odds small { display: block; font-weight: 400; font-size: var(--t-tiny, 12px); color: var(--muted); }
+.sp-odds.hi { color: var(--win); }
+.sp-odds.lo { color: var(--loss); }
+.sp-why { grid-column: 2 / -1; font-size: var(--t-tiny, 12px); color: var(--warn); overflow-wrap: anywhere; }
+.sp-why.faint { color: var(--faint); }
+.sp-sent { margin: 6px 0; padding: 6px 10px; border-radius: var(--radius); background: var(--well); font-size: var(--t-small, 13.5px); }
+.sp-contact { margin-top: 4px; }
+@media (max-width: 560px) {
+  .sp-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .sp-row > button { grid-column: 2 / -1; justify-self: start; }
+}
+
 /* ---- 音效 under the theme switch at the rail's foot (ui/me/SoundToggle.tsx); `.nav button` would make it a block row */
 .app.career .nav .nav-foot .sound-toggle { display: flex; width: 100%; justify-content: center; margin-top: 6px; padding: 5px 0; }
 .app.career .nav .nav-foot .sound-toggle.on { color: var(--accent); border-color: var(--accent-line); }

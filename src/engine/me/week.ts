@@ -46,6 +46,7 @@ import { lifeDay, lifeWeek } from './life'
 import { noteQualify, pushMoment } from './moments'
 import { iglWeek } from './igl'
 import { roomWeek } from './room'
+import { pitchDay } from './selfpitch'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -348,6 +349,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     if (market) endTransferPeriod(state)
     // a move agreed under a roster lock, made the day it lifts (me/contract.ts)
     settleMove(state)
+    // a 自荐 or a contact answered on its day (me/selfpitch.ts): a no is a card, a yes an invitation or terms
+    pitchDay(state)
     syncTitles(state)
     // my club in a Masters', Champions' or LOCK//IN's field, the day it is drawn: a big moment's card (me/moments.ts)
     noteQualify(state)
