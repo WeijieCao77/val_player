@@ -1012,6 +1012,15 @@ export function circuitAward(comp: Competition, place: number): number | null {
 const poolRegions = (year: number, pool: string): string[] => poolOf(year, pool)?.regions ?? []
 
 /**
+ * Does an event pay into a points table: a prize table for its placings, or — 2024 and 2025 — a point a match won,
+ * a group topped, a playoff bye (circuitBonus). 2024's Stage 2 had no prize table and paid by its wins and byes alone.
+ */
+function paysPoints(id: string): boolean {
+  const r = rulesOf(id)
+  return !!(r?.award || r?.wins || r?.groupWin || r?.bye)
+}
+
+/**
  * Has anything this world played reached into a points pool? Until it has,
  * the pool's standings are history's, and so is every seat drawn from them.
  */
@@ -1020,9 +1029,13 @@ function poolTouched(state: GameState, pool: string): boolean {
   if (!poolOf(state.year, pool)?.real) return true
   const regions = new Set(poolRegions(state.year, pool))
   // only an event that pays points can move a points table: a Taiwanese club
-  // playing the Huya cups changes nothing about SEA's standings
+  // playing the Huya cups changes nothing about SEA's standings. Counted by its
+  // prize table alone, a 2024 EMEA Stage 2 played here left the pool history's:
+  // its points seat went to history's FUT Esports, already through on its Stage 2
+  // placing, and the seat left empty went to a side the table had below Natus
+  // Vincere, first on points of those not through (scripts/check_standings.ts)
   return Object.values(state.comps).some((c) => c.circuit?.mode === 'sim' && !!c.champion
-    && !!rulesOf(c.circuit.id)?.award
+    && paysPoints(c.circuit.id)
     && c.teams.some((t) => regions.has(state.teams[t]?.region ?? '')))
 }
 
