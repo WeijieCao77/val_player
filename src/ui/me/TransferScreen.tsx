@@ -30,9 +30,10 @@ export default function TransferScreen() {
   // my contract as signed, in its club's league currency (engine/me/paytable.ts)
   const pay = payOf(game)
   const skill = tryoutSkill(game)
+  // my own region's clubs first: with the language the rest of the world is listed below them, never in among them
   const clubs = Object.values(game.teams)
     .filter((t) => t.id !== game.myTeam && (t.region === me.region || me.flags.lang))
-    .sort((a, b) => expectOf(a) - expectOf(b))
+    .sort((a, b) => Number(b.region === me.region) - Number(a.region === me.region) || expectOf(a) - expectOf(b))
   const reach = new Set(reachableClubs(game).map((t) => t.id))
   const declined = [...declinedNow(game)]
   const perf = pro ? proPerf(game) : 0

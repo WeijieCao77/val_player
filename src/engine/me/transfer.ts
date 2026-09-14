@@ -10,7 +10,7 @@ import { offerUsd, payOf } from './paytable'
 import { roundPay } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { gradeOf } from './tryout'
-import { INVITE_DAYS, declinedNow, expectOf, tryoutSkill } from './prepro'
+import { INVITE_DAYS, LANG_EXTRA, declinedNow, expectOf, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
 import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
@@ -75,23 +75,29 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
 /** Where a buyer plays, in the words an offer uses. */
 const leagueWord = (t: Team): string => t.league ?? (t.tier === 1 ? '一线' : '二线')
 
-/** `anyWindow`: a scout in the stands writes a name down whatever his club's window says; an offer waits for it. */
-function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false): Team | null {
+/**
+ * `anyWindow`: a scout in the stands writes a name down whatever his club's window says; an offer waits for it.
+ * `abroad`: the offer a language or a gold agent brings on top of a round (rollOffers) — clubs of another league
+ * only, none already offering, weighed among themselves.
+ */
+function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false, abroad = false): Team | null {
   const me = state.me!
   const p = state.players[me.id]
   const mine = state.teams[state.myTeam]
   // a club with nowhere to play this year is not hiring, nor one whose window is shut or roster locked (me/window.ts)
   const no = declinedNow(state)
   const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !no.has(t.id)
-    && !t.dormant && hasPlace(state, t) && (anyWindow || clubOpen(state, t.id)))
+    && !t.dormant && hasPlace(state, t) && (anyWindow || clubOpen(state, t.id))
+    && (!abroad || (foreignLeague(state, t) && !me.deals.some((d) => d.teamId === t.id))))
   const fit = rut
     ? pool.filter((t) => t.tier === 2 || t.rating <= mine.rating - 4)
     : pool.filter((t) => expectOf(t) <= p.overall + 4 && (t.tier === 1 || mine.tier === 2))
   if (!fit.length) return null
   const w = fit.map((t) => {
     let v = 10 + Math.max(0, t.rating - mine.rating) * (rut ? 0 : 3) + (t.tier === 1 ? 6 : 0)
-    if (foreignLeague(state, t)) v *= me.flags.lang || me.agentTier >= 2 ? 0.12 : 0.015
-    else v *= 1.5
+    // another league's club weighs the same with a language or a gold agent as without them: what they bring
+    // abroad comes on top of the round (rollOffers, me/prepro.ts LANG_EXTRA), never in place of a home club
+    if (!abroad) v *= foreignLeague(state, t) ? 0.015 : 1.5
     if (me.intents.some((i) => i.teamId === t.id)) v *= 4
     return v
   })
@@ -109,7 +115,7 @@ function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false): 
  * 53 of 185 windows at a Challengers club, in sixteen careers, found every VCT
  * club of his league 「foreign」.
  */
-function foreignLeague(state: GameState, t: Team): boolean {
+export function foreignLeague(state: GameState, t: Team): boolean {
   const me = state.me!
   const league = regionIn(t.region, state.year)
   const mine = state.teams[state.myTeam]
@@ -400,6 +406,19 @@ export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 
     push(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${foreignLeague(state, t) ? '（外赛区）' : ''} 开价了。`)
     n++
+  }
+  // a language or a gold agent: with LANG_EXTRA's chance a club of another league comes on top of a round that came,
+  // on a stream of its own — the round's own offers are exactly those of a man without them (me/prepro.ts LANG_EXTRA)
+  if (n && (me.flags.lang || me.agentTier >= 2)) {
+    const lang = new Rng(hashStr(`lang:offer:${state.seed}:${state.year}:${state.day}:${listed ? 'listed' : 'round'}`))
+    const t = lang.chance(LANG_EXTRA) ? pickBuyer(state, lang, false, false, true) : null
+    if (t) {
+      const deal = makeDeal(state, t.id, 'transfer', gradeOf(tryoutSkill(state) - expectOf(t) + 4), lang)
+      me.deals.push(deal)
+      push(state, { kind: 'deal', id: deal.id })
+      pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）（外赛区） 开价了——${me.flags.lang ? '你会外语' : '金牌经纪人牵的线'}。`)
+      n++
+    }
   }
   if (!n && rut && hit(0.26)) {
     const t = pickBuyer(state, rng, true)
