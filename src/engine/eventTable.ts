@@ -127,14 +127,62 @@ export interface PlaceTable {
 
 export type EventTable = GroupTable | PlaceTable
 
-/** The phases the event graph names in English, in the words a Chinese broadcast uses. */
+/**
+ * The phases the event graph names in English, in the words a Chinese broadcast uses. Every
+ * English part the data carries is covered (listed off circuit.json 2026-09-14, after 「Weekly #4」
+ * and 「前 8 名进Weekly #4」 showed on the standings page); a club's or circuit's own name
+ * (ACE, ECLIPSE, Vikings, GameHome) stays as it is.
+ */
 const PHASE_CN: Record<string, string> = {
-  'Swiss Stage': '瑞士轮', 'Swiss Phase': '瑞士轮', 'Upper Swiss Phase': '瑞士轮',
-  'Group Stage': '小组赛', 'Groups Phase': '小组赛',
+  'Swiss Stage': '瑞士轮', 'Swiss Phase': '瑞士轮', 'Upper Swiss Phase': '瑞士轮', 'Lower Swiss Phase': '下半区瑞士轮',
+  'Group Stage': '小组赛', 'Groups Phase': '小组赛', 'Group Stage (Main)': '小组赛', 'Group Stage (Seeding)': '种子排位小组赛',
   'Play-In Stage': '附加赛', 'Play-Ins': '附加赛', 'Play-In': '附加赛',
-  Playoffs: '季后赛', 'Playoffs Phase': '季后赛',
-  'Regular Season': '常规赛', 'Regular Phase': '常规赛', 'League Phase': '常规赛', 'League Stage': '常规赛',
-  'Promotion/Relegation': '升降级赛',
+  'Premier Play-Ins': '顶级组附加赛', 'Premier Play-ins': '顶级组附加赛', 'Promotion Play-ins': '晋级附加赛', 'Play-In Relegation': '附加赛降级战',
+  Playoffs: '季后赛', 'Playoffs Phase': '季后赛', 'Zone Playoffs': '分区季后赛',
+  'LATAM Playoffs': '拉美季后赛', 'LAS Playoffs': '拉美南区季后赛', 'LAN Playoffs': '拉美北区季后赛', 'LAN Finals': '拉美北区决赛',
+  'Regular Season': '常规赛', 'Regular Phase': '常规赛', 'League Phase': '常规赛', 'League Stage': '常规赛', 'Regular League': '常规赛', 'League Play': '常规赛',
+  'Promotion/Relegation': '升降级赛', 'Promotion/Relegation Series': '升降级赛', 'Promo/Rele': '升降级赛', 'Up and Down': '升降级赛',
+  Relegation: '升降级赛', Relegations: '升降级赛', 'Promotion/Relegation - Last Chance': '升降级赛 · 最后机会',
+  'Promotion Cup': '晋级杯', 'Promotion Match': '升级战', 'ECLIPSE (Pro/Rel)': 'ECLIPSE 升降级赛',
+  'Round Robin': '循环赛', Knockout: '淘汰赛', Knockouts: '淘汰赛', Brackets: '淘汰赛', 'Bracket Stage': '淘汰赛', '(Elimination)': '（淘汰赛）',
+  Final: '决赛', Finals: '决赛', 'Regional Finals': '赛区决赛', Regionals: '赛区赛',
+  'Last Chance Qualifier': '最后机会资格赛', 'Last Chance': '最后机会资格赛', 'NORTH LCQ': '北区最后机会资格赛',
+  Tiebreaker: '加赛', Decider: '加赛', Seeding: '种子排位赛', 'Preliminary Stage': '预选赛',
+  'Second Chance': '复活赛', Repechage: '复活赛', Repescagem: '复活赛', 'Ranking Match': '排位赛', 'Last Battle': '最终决战',
+  Online: '线上赛', Tournament: '正赛', Replacement: '补位赛', Preseason: '季前赛',
+  Premier: '顶级组', 'Premier Qualification': '顶级组资格赛', 'First Division': '甲级联赛', 'Access Series': '晋级系列赛',
+  'Mid-Season Face Off': '季中对决', 'Mid Season Cup': '季中杯', 'Advance Stage': '进阶赛',
+  North: '北区', East: '东区', EAST: '东区', 'Levant and North Africa': '黎凡特与北非', 'GCC and Iraq': '海湾国家与伊拉克',
+}
+
+/** One part of a unit's label, in Chinese: a name from the table, else a numbered or compound phase read by its shape. */
+function phaseCn(p: string): string {
+  const s = p.trim()
+  if (PHASE_CN[s]) return PHASE_CN[s]
+  let m: RegExpMatchArray | null
+  if ((m = s.match(/^Round of (\d+)$/))) return `${m[1]} 强赛`
+  if ((m = s.match(/^Round (\d+)$/))) return `第 ${m[1]} 轮`
+  if ((m = s.match(/^Playoffs Phase (\d+)$/))) return `季后赛第 ${m[1]} 阶段`
+  if ((m = s.match(/^(?:Phase|Split) (\d+)$/))) return `第 ${m[1]} 阶段`
+  if ((m = s.match(/^Stage (\d+) Tiebreaker$/))) return `第 ${m[1]} 赛段加赛`
+  if ((m = s.match(/^Stage (\d+)$/))) return `第 ${m[1]} 赛段`
+  if ((m = s.match(/^Weekly #(\d+)$/))) return `第 ${m[1]} 周周赛`
+  if ((m = s.match(/^Week (\d+)$/))) return `第 ${m[1]} 周`
+  if ((m = s.match(/^Top (\d+)$/))) return `${m[1]} 强`
+  if ((m = s.match(/^Last Chance (\d+)$/))) return `最后机会资格赛 ${m[1]}`
+  if ((m = s.match(/^Cup #(\d+) - (.+)$/))) return `第 ${m[1]} 杯 · ${phaseCn(m[2])}`
+  if ((m = s.match(/^Série de Acesso - Fase (\d+)$/))) return `晋级系列赛第 ${m[1]} 阶段`
+  if ((m = s.match(/^(.+?) Promotion\/Relegations?$/))) return `${phaseCn(m[1])} 升降级赛`
+  if ((m = s.match(/^Advance Stage (?:- Group |\()([A-H])\)?$/))) return `进阶赛 · ${m[1]}组`
+  return s
+}
+
+/** 「Group A」 and 「Group 2」 are groups, as 「A组」 already is. */
+const groupCn = (p: string): string | null => {
+  const s = p.trim()
+  if (/组$/.test(s)) return s
+  const m = s.match(/^Group ([A-H]|\d+)$/)
+  return m ? `${m[1]}组` : null
 }
 
 /** A round the graph names in English: a Swiss round with its record, Kickoff's middle bracket, a bronze match. */
@@ -152,10 +200,14 @@ export function roundCn(round: string): string {
 /** A unit's phase and group: 「小组赛 · A组」 is the A组 of 小组赛. */
 export function labelOf(u: CUnit): { phase: string; group: string } {
   const parts = u.label.split(' · ')
-  const last = parts[parts.length - 1]
-  const grouped = parts.length > 1 && /组$/.test(last)
-  const phase = (grouped ? parts.slice(0, -1) : parts).map((p) => PHASE_CN[p] ?? p).join(' · ')
-  return { phase, group: grouped ? last : '' }
+  // a label that is only a group (「Group A」) is that group of the group stage
+  if (parts.length === 1) {
+    const lone = groupCn(parts[0])
+    if (lone && !/组$/.test(parts[0])) return { phase: '小组赛', group: lone }
+  }
+  const group = parts.length > 1 ? groupCn(parts[parts.length - 1]) : null
+  const phase = (group ? parts.slice(0, -1) : parts).map(phaseCn).join(' · ')
+  return { phase, group: group ?? '' }
 }
 
 const uniq = <T>(xs: T[]): T[] => [...new Set(xs)]
