@@ -8,6 +8,11 @@
  *  - no level knockout: outside a table (engine/circuit.ts PhaseSeats, a round robin's fixed schedule) no
  *    tie ends level, which would send neither side on (a Bo2 semi-final of 2021's Indonesian Challengers 1
  *    did, and its final went to a walkover)
+ *  - a knockout plays its own results: in a bracket — a unit whose ties name a semi-final, a final, a match for
+ *    third, a group's opening match, winners' match or decider — a tie that takes an earlier tie's winner or loser
+ *    is drawn only once that tie is decided, and seats exactly that side. 2024 France Revolution's playoffs drew
+ *    their final and their match for third along with the semi-finals, off the seats history's finalists had come
+ *    from: a side that won its semi-final played for third, and the side it beat played the final
  *  - a table's seats: once a table phase is over and the phases after it have seated its places, the sides
  *    sent to the best phase it feeds are no worse on record than any side of their group that went nowhere
  *    (2026 Americas Stage 1 sent Cloud9 on at 1-4 and LOUD out at 3-2)
@@ -17,23 +22,31 @@
  */
 import routesRaw from '../src/data/routes.json'
 import { eventOf, gameOf, worldIdOf } from '../src/engine/circuit'
-import type { CEvent } from '../src/engine/circuit'
+import type { CEvent, CNode, CUnit } from '../src/engine/circuit'
 import type { Competition, Fixture, GameState } from '../src/engine/types'
 
 type Route = { kind: string; pool?: string }
 const BOOK = (routesRaw as unknown as { events: Record<string, { routes?: Record<string, Route> }> }).events
 
-interface Watch { seen: Set<string>; shutOut: Map<string, { year: number; lcq: string }> }
+/** `ties`: the fixtures themselves, not their ids — ids start again each season (engine/league.ts resetFixtureSeq) */
+interface Watch { seen: Set<string>; ties: WeakSet<Fixture>; shutOut: Map<string, { year: number; lcq: string }> }
 const WATCH = new WeakMap<GameState, Watch>()
 
 /** How much each rule has looked at, for a check's summary line. */
-export const qualifyStats = { tables: 0, entries: 0, lcqs: 0 }
+export const qualifyStats = { tables: 0, entries: 0, lcqs: 0, ties: 0 }
 
 const nameOf = (state: GameState, t: string | null | undefined): string => (t ? state.teams[t]?.name ?? t : '—')
 
+/**
+ * A tie a bracket names: not a table's round — a numbered round, a Swiss round and its record, a seeding match — nor
+ * only a group's name (FGC 2022 Act 3's 「Stage组」), read after its group's own tag (「A组 决胜赛」).
+ */
+const bracketRound = (round: string): boolean =>
+  !/^(第 \d+ 轮|Round \d+( \(\d+-\d+\))?( High| Low)?|Seeding( Match)?|\S*组)$/.test(round.replace(/^\S+组 /, ''))
+
 export function qualifyHolds(state: GameState, label: string, fail: (msg: string) => void): void {
   let w = WATCH.get(state)
-  if (!w) { w = { seen: new Set(), shutOut: new Map() }; WATCH.set(state, w) }
+  if (!w) { w = { seen: new Set(), ties: new WeakSet(), shutOut: new Map() }; WATCH.set(state, w) }
   const byComp = new Map<string, Fixture[]>()
   for (const f of state.fixtures) if (f.node != null && f.node >= 0) byComp.set(f.comp, [...(byComp.get(f.comp) ?? []), f])
   for (const comp of Object.values(state.comps)) {
@@ -55,6 +68,7 @@ function units(state: GameState, label: string, fail: (msg: string) => void, w: 
   ev.units.forEach((u, ui) => {
     const nodes = u.nodes ?? []
     if (!nodes.length) return
+    const knockout = u.type !== 'rr' && nodes.some((n) => bracketRound(n.round))
     const ways = new Map<string, Set<string>>()
     nodes.forEach((nd, i) => {
       const f = at.get(base[ui] + i)
@@ -67,6 +81,7 @@ function units(state: GameState, label: string, fail: (msg: string) => void, w: 
       if (f.played && f.result && f.result.mapsWonA === f.result.mapsWonB && u.type !== 'rr' && !u.follow) {
         fail(`${where} · ${u.label} · ${nd.round}：${nameOf(state, f.teamA)} ${f.result.mapsWonA}-${f.result.mapsWonB} ${nameOf(state, f.teamB)}，淘汰赛打平，两边都没法往下走`)
       }
+      if (knockout && !w.ties.has(f)) knockoutTie(state, fail, w, comp, `${where} · ${u.label} · ${nd.round}`, u, nd, base[ui], at, f)
     })
     qualifyStats.entries += ways.size
     for (const [t, s] of ways) if (s.size > 1) fail(`${where} · ${u.label}：${nameOf(state, t)} 同时占了 ${[...s].join(' / ')} 几个入口`)
@@ -112,6 +127,44 @@ function units(state: GameState, label: string, fail: (msg: string) => void, w: 
       }
     })
   })
+}
+
+/**
+ * A bracket's tie that takes an earlier tie's winner or loser: drawn only once that tie is decided — played, or a
+ * walkover — and seating exactly its winner or loser. Each tie is looked at once, as soon as the week finds it drawn.
+ */
+function knockoutTie(
+  state: GameState, fail: (msg: string) => void, w: Watch, comp: Competition, where: string,
+  u: CUnit, nd: CNode, base: number, at: Map<number, Fixture>, f: Fixture,
+): void {
+  const walk = comp.circuit!.walk ?? {}
+  const fed = [nd.a, nd.b].map((s, side) => ({ s, side })).filter(({ s }) => s[0] === 'w' || s[0] === 'l')
+  if (!fed.length) return
+  w.ties.add(f)
+  for (const { s } of fed) {
+    const k = base + s[1]
+    const from = at.get(k)
+    if ((from && gameOf(from)) || k in walk) continue
+    const src = u.nodes![s[1]]
+    fail(`${where}：${nameOf(state, f.teamA)} 对 ${nameOf(state, f.teamB)} 已经排上了，${s[0] === 'w' ? '胜者' : '负者'}要从${src.round}`
+      + `${from ? `（${nameOf(state, from.teamA)} 对 ${nameOf(state, from.teamB)}，第 ${from.day} 天）` : ''}来，那场还没打`)
+    return
+  }
+  for (const { s, side } of fed) {
+    const k = base + s[1]
+    const from = at.get(k)
+    const g = from ? gameOf(from) : null
+    // a walkover sends its side on and nobody down; a level knockout tie of an old save, the side with more rounds (engine/circuit.ts graphOf)
+    const won = g ? g.w ?? (g.roundsA >= g.roundsB ? g.a : g.b) : walk[k] || null
+    const lost = g ? (won === g.a ? g.b : g.a) : null
+    const want = s[0] === 'w' ? won : lost
+    const got = side === 0 ? f.teamA : f.teamB
+    if (got !== want) {
+      fail(`${where}：${nameOf(state, got)} 坐的是${u.nodes![s[1]].round}${s[0] === 'w' ? '胜者' : '负者'}的位置，那场${s[0] === 'w' ? '赢' : '输'}的是 ${nameOf(state, want)}`)
+      return
+    }
+  }
+  qualifyStats.ties++
 }
 
 function lastChance(state: GameState, label: string, fail: (msg: string) => void, w: Watch, comp: Competition, ev: CEvent): void {

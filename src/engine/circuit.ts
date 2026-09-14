@@ -778,6 +778,16 @@ function levelTop(order: string[], games: Game[], real: Map<number, { team: stri
   return true
 }
 
+/**
+ * A tie a bracket names — a semi-final, a final, a match for third, a group's opening match, winners' match or
+ * decider — rather than a table's round (TABLE_ROUND) or only a group's name (FGC 2022 Act 3's 「Stage组」, 2023
+ * Pacific Ascension's 「Alpha组」), read after its group's own tag (「A组 决胜赛」).
+ */
+const bracketRound = (round: string): boolean => {
+  const r = round.replace(/^\S+组 /, '')
+  return !TABLE_ROUND.test(r) && !/^\S*组$/.test(r)
+}
+
 /** PhaseSeats for one real phase, read off the event as it really went. */
 function seatsOfUnit(ev: CEvent, ui: number): PhaseSeats | undefined {
   const u = ev.units[ui]
@@ -795,12 +805,19 @@ function seatsOfUnit(ev: CEvent, ui: number): PhaseSeats | undefined {
   const enter = entriesOf(nodes)
   let shape: PhaseSeats['shape'] = 'bracket'
   let groups: PhaseSeats['groups'] = linked.map((js) => ({ nodes: js }))
+  // A schedule's pairings are fixed whoever wins; a bracket's follow its results. Read off its pairings alone, a
+  // small bracket can pass for a schedule: history's results left 2024 France Revolution's semi-finals, match for
+  // third and final two sides against two (`cross`), and each of 2024 Japan's three-side groups — opening match,
+  // winners' match, decider — three sides that each played the others once (`robin`). Played as schedules, their
+  // later ties were drawn with their first, off the seats history's sides had come from, and a side that won its
+  // semi-final played for third. A unit that names a bracket's rounds plays as a bracket.
+  const schedule = !nodes.some((n) => bracketRound(n.round))
   if (u.type === 'rr') {
     shape = 'rr'
     groups = [{ nodes: nodes.map((_, i) => i) }]
-  } else if (linked.every((js) => { const k = teamsIn(js).length; return k >= 3 && js.length === (k * (k - 1)) / 2 && distinct(js) === js.length })) {
+  } else if (schedule && linked.every((js) => { const k = teamsIn(js).length; return k >= 3 && js.length === (k * (k - 1)) / 2 && distinct(js) === js.length })) {
     shape = 'robin'
-  } else {
+  } else if (schedule) {
     const cross = linked.length === 1 ? crossGroups(nodes) : null
     if (cross && cross.every((ts) => ts.every((t) => enter.has(t)))) {
       shape = 'cross'

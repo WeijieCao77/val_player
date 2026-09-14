@@ -524,7 +524,7 @@ function ahead(): void {
 if (!only || only === 'quiet') quiet()
 if (!only || only === 'entry2026') entry2026()
 if (!only || only === 'ahead') ahead()
-console.log(`\n资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛`)
+console.log(`\n资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛 · ${qualifyStats.ties} 场淘汰赛对阵等前一场打完才排、坐的是那场的胜者或负者`)
 
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；队名按真实改名的日期换（DRX 2026-03-19 才叫 KIWOOM DRX）；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)
