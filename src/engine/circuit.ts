@@ -667,7 +667,10 @@ function championsDirect(state: GameState): Set<string> {
       if (t) f.real.push(t)
       perFeeder.set(key, f)
     }
-    if (r?.kind === 'winner' && event) {
+    // a Last Chance Qualifier is through only once this world has played it. Before that its real
+    // winner holds no Champions place here, and counting one kept it out of its own qualifier:
+    // Cloud9 out of 2021 North America's, KRÜ and FURIA out of 2022 South America's (reported 2026-09-14)
+    if (r?.kind === 'winner' && event && (state.comps[`ev:${event}`]?.champion || eventOf(event)?.stage !== 'lcq')) {
       const c = state.comps[`ev:${event}`]
       const w = c?.champion ?? teamOf(state, champs, v)
       if (w) out.add(w)
