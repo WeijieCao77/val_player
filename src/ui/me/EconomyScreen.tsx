@@ -8,7 +8,7 @@ import { prizeNote } from '../../engine/me/prizes'
 import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
-import { AGENTS, COURSES, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
+import { AGENTS, COURSES, GEAR_EFFECT, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
 import OutletPanels from './OutletPanels'
@@ -73,6 +73,7 @@ export default function EconomyScreen() {
               </div>
             )
           })}
+          <p className="tiny faint" style={{ margin: '6px 0 0' }}>{GEAR_EFFECT}</p>
         </Panel>
         <Panel title="课程">
           {COURSES.map((c) => (
