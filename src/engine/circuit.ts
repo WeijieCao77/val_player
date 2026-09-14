@@ -1810,6 +1810,9 @@ function graphOf(state: GameState, comp: Competition, ev: CEvent, ahead = false)
   for (const n of nodes) {
     const f = fx.get(n.at)
     const g = f && gameOf(f)
+    // a knockout tie a save from before tieBo holds as a level Bo2: the side with more rounds went on
+    const u = ev.units[n.unit]
+    if (g && !g.w && g.a && g.b && u.type !== 'rr' && !u.follow) g.w = g.roundsA >= g.roundsB ? g.a : g.b
     if (g) games.set(n.at, g)
     else if (c.walk && n.at in c.walk) {
       const w = c.walk[n.at] || null
@@ -1980,7 +1983,7 @@ export function roundAheadOf(state: GameState, comp: Competition, teamId: string
       const day = Math.max(n.day, state.day + 1)
       if (best && best.day <= day) continue
       const opponent = (a === teamId ? b : a) ?? null
-      best = { day, round: n.round, bo: n.bo, opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
+      best = { day, round: n.round, bo: tieBo(ev.units[n.unit], n), opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
     }
   }
   if (best) return best
@@ -2043,10 +2046,21 @@ export function roundAheadOf(state: GameState, comp: Competition, teamId: string
     for (const s of [n.a, n.b]) {
       if (s[0] !== 'g' || isOpen(ev.units[s[1]]) || g.unitGames(s[1]) || !canPlace(s[1])) continue
       const day = Math.max(n.day, state.day + 1)
-      if (!best || day < best.day) best = { day, round: n.round, bo: n.bo, opponent: null, wait: 'group', waiting: true }
+      if (!best || day < best.day) best = { day, round: n.round, bo: tieBo(ev.units[n.unit], n), opponent: null, wait: 'group', waiting: true }
     }
   }
   return best
+}
+
+/**
+ * The maps a tie is played to. Bo2 as it really was where a level series is a result: a round robin's point
+ * each, a fixed schedule's table (PhaseSeats `follow`). A tie whose winner and loser go on to different places
+ * is played to a third map instead — level, it sent neither side on: 2021 Indonesia's Challengers 1 drew a Bo2
+ * semi-final and handed its final to a walkover (reported 2026-09-14). The data's Bo2 knockout ties are forfeits
+ * and qualifier rounds that really had a winner.
+ */
+function tieBo(u: CUnit, n: CNode): 1 | 2 | 3 | 5 {
+  return n.bo === 2 && u.type !== 'rr' && !u.follow ? 3 : n.bo
 }
 
 function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
@@ -2067,8 +2081,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
         continue
       }
       const rr = ev.units[n.unit].type === 'rr'
-      // Bo2 as it really was: two maps, and a level series is a point each
-      const bo = n.bo
+      const bo = tieBo(ev.units[n.unit], n)
       // on its real day: a tie fed by one played this morning is played this
       // evening, the way Reykjavík opened (see advanceDay's second pass)
       const f = makeFixture(Math.max(n.day, state.day), comp.stage, comp.key, a, b, bo, rr ? n.round : `KO:${n.at + 1}:${n.round}`)

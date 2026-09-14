@@ -44,6 +44,7 @@ import { MAX_NEW_PARTNERS } from '../src/engine/leagues'
 import { historyNames } from '../src/engine/names'
 import { bookClubsAt } from '../src/engine/timeline'
 import type { Competition, GameState, Region } from '../src/engine/types'
+import { qualifyHolds, qualifyStats } from './qualify_holds'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -139,7 +140,7 @@ function run(label: string, region: Region, start: StartPoint): void {
   if (state.year !== 2021) fail(`${label}：开局是 ${state.year} 年`)
   const onBooks = Object.values(state.comps).filter((c) => c.format === 'circuit').length
   if (onBooks < 100) fail(`${label}：日历上只有 ${onBooks} 场赛事，2021 真实有 121 场`)
-  const week = () => { autoWeek(state) }
+  const week = () => { autoWeek(state); qualifyHolds(state, label, fail) }
   for (const year of [2021, 2022, 2023]) {
     if (!playYear(state, label, year, week, 60)) return
     season(state, label, year, false)
@@ -499,6 +500,7 @@ function ahead(): void {
   try {
     while (state.year < 2029 && !state.gameOver && guard++ < 1300) {
       advanceDay(state, { autoResolveDrawDecisions: true, autoScrims: true })
+      if (state.day % 7 === 0) qualifyHolds(state, '新赛制', fail)
       if (state.day === 345) check(state.year)
     }
   } catch (e) {
@@ -522,6 +524,7 @@ function ahead(): void {
 if (!only || only === 'quiet') quiet()
 if (!only || only === 'entry2026') entry2026()
 if (!only || only === 'ahead') ahead()
+console.log(`\n资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛`)
 
 console.log(bad ? `\n✗ ${bad} 项不对。` : '\n✓ 2021 到 2026 按真实赛历逐年打完，够不着的国际赛保持了真实冠军；2026 冠军赛是真实晋级的 16 队；换季没有一夜换掉世界，2027、2028 接着打；你的俱乐部跟着真实的改名、合并、整队收购走；队名按真实改名的日期换（DRX 2026-03-19 才叫 KIWOOM DRX）；中国的空窗期按月推进。')
 process.exit(bad ? 1 : 0)
