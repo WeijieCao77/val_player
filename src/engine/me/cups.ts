@@ -9,6 +9,7 @@ import { push, pop } from './pending'
 import { addMoney } from './money'
 import { fansCn } from './fans'
 import { cupInvite } from './prepro'
+import { cny } from './moneyfmt'
 
 /**
  * The amateur calendar: what a player with no club can enter, week by week.
@@ -32,21 +33,22 @@ export interface CupDef {
 }
 
 export const CUPS: CupDef[] = [
-  { key: 'city', name: '本地线下赛', week: 6, fee: 800, minFans: 0, heat: 6,
+  // fees and prizes in RMB (me/currency.ts): the old dollar prizes at about seven to the dollar, a local cup's entry at a café's price (暂定)
+  { key: 'city', name: '本地线下赛', week: 6, fee: 300, minFans: 0, heat: 6,
     rounds: [{ bo: 1, label: '首轮' }, { bo: 1, label: '八强' }, { bo: 3, label: '四强' }, { bo: 3, label: '决赛' }],
-    band: [60, 72], prize: [0, 200, 800, 2000, 5000], blurb: '本地的线下赛，路人车队打路人车队。赢两轮就有人看你。' },
+    band: [60, 72], prize: [0, 1500, 5000, 15000, 35000], blurb: '本地的线下赛，路人车队打路人车队。赢两轮就有人看你。' },
   { key: 'premier', name: '官方业余联赛挑战者组', week: 14, fee: 0, minFans: 0, heat: 10,
     rounds: [{ bo: 3, label: '小组赛' }, { bo: 3, label: '小组赛' }, { bo: 3, label: '半决赛' }, { bo: 3, label: '决赛' }],
-    band: [66, 78], prize: [0, 0, 500, 2500, 8000], blurb: '官方业余联赛的最高组，挑战者联赛的俱乐部都在看。' },
+    band: [66, 78], prize: [0, 0, 3500, 18000, 56000], blurb: '官方业余联赛的最高组，挑战者联赛的俱乐部都在看。' },
   { key: 'streamer', name: '主播杯', week: 26, fee: 0, minFans: 60, heat: 18,
     rounds: [{ bo: 3, label: '八强' }, { bo: 3, label: '四强' }, { bo: 3, label: '决赛' }],
-    band: [64, 76], prize: [0, 1000, 3000, 8000], blurb: '邀请制。观众多，队友不一定强。' },
-  { key: 'open', name: '秋季公开赛', week: 36, fee: 500, minFans: 0, heat: 8,
+    band: [64, 76], prize: [0, 7000, 20000, 56000], blurb: '邀请制。观众多，队友不一定强。' },
+  { key: 'open', name: '秋季公开赛', week: 36, fee: 200, minFans: 0, heat: 8,
     rounds: [{ bo: 1, label: '首轮' }, { bo: 3, label: '八强' }, { bo: 3, label: '四强' }, { bo: 3, label: '决赛' }],
-    band: [64, 76], prize: [0, 300, 1200, 3000, 7000], blurb: '转会窗前最后一场公开赛，签约季的敲门砖。' },
+    band: [64, 76], prize: [0, 2000, 8000, 20000, 50000], blurb: '转会窗前最后一场公开赛，签约季的敲门砖。' },
   { key: 'allstar', name: '全明星表演赛', week: 44, fee: 0, minFans: 150, heat: 30,
     rounds: [{ bo: 1, label: '表演赛' }],
-    band: [72, 82], prize: [0, 3000], blurb: '邀请制，输赢不重要，镜头很多。' },
+    band: [72, 82], prize: [0, 20000], blurb: '邀请制，输赢不重要，镜头很多。' },
 ]
 
 export const cupOf = (key: string): CupDef | undefined => CUPS.find((c) => c.key === key)
@@ -225,7 +227,7 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事。'
   if (me.pre.cup) return `你还在打${cupFor(state, me.pre.cup.key)?.name ?? '另一项赛事'}，打完才能报名。`
-  if (me.money < cup.fee) return `报名费 $${cup.fee}，你的钱不够。`
+  if (me.money < cup.fee) return `报名费 ${cny(cup.fee)}，你的钱不够。`
   if (me.fans < cup.minFans) return `这是邀请赛，粉丝要过 ${fansCn(cup.minFans)}。`
   addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
@@ -233,7 +235,7 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [], next, year: state.year }
   pop(state, 'cup', key)
   const plan = cup.rounds.length > 1 ? `赛程 ${cup.rounds.map((r) => r.label).join(' → ')}，一周一轮，` : ''
-  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（$${cup.fee}）` : ''}。${plan}${cup.rounds[0].label}在 ${cupDateCn(state, next)}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
+  pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（${cny(cup.fee)}）` : ''}。${plan}${cup.rounds[0].label}在 ${cupDateCn(state, next)}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
   return null
 }
 
@@ -300,10 +302,10 @@ function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, r
   me.pre.tac = clamp(me.pre.tac + (forfeit ? 0 : 1.5) + reached, 0, 60)
   const at = cup.rounds[Math.min(reached, cup.rounds.length - 1)].label
   const line = rec.won
-    ? `${cup.name}冠军！奖金 $${prize}。`
+    ? `${cup.name}冠军！奖金 ${cny(prize)}。`
     : forfeit
-      ? `${cup.name}${at}弃权，到此为止${prize ? `，奖金 $${prize}` : ''}。`
-      : `${cup.name}止步${at}${prize ? `，奖金 $${prize}` : ''}。`
+      ? `${cup.name}${at}弃权，到此为止${prize ? `，奖金 ${cny(prize)}` : ''}。`
+      : `${cup.name}止步${at}${prize ? `，奖金 ${cny(prize)}` : ''}。`
   pushLog(state, rec.won ? 'good' : 'cup', line)
   // and the deeper the run, the likelier a club's call (me/prepro.ts cupInvite). Once the run is over, as
   // 破晓 has it (cup.ts: a call in the middle of one had players signing at the semi-final and skipping the rest)

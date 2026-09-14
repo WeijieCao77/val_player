@@ -22,7 +22,7 @@ export const MORE_EVENTS: EventDef[] = [
   // ---- the ladder years
   { id: 'pre_vpn', w: 5, max: 2, rec: 2, when: (s) => isPre(s) && macroOf(s) === 'China' && s.year <= 2022,
     q: '加速器半夜又断了，这把排位直接判负。', ctx: '亚服的延迟本来就在六十上下。',
-    a: [{ t: '换一家贵点的加速器', g: 'grind', e: { money: -400, ladder: 1 } },
+    a: [{ t: '换一家贵点的加速器', g: 'grind', e: { money: -60, ladder: 1 } },
       { t: '等凌晨三点人少再打', g: 'hard', e: { fatigue: 8, ladder: 2, form: -1 } },
       { t: '今晚不排了，看职业比赛录像', g: 'warm', e: { ladder: -1, xp: { awareness: 12 } } }] },
   { id: 'cn_server', w: 12, max: 1, rec: 1, when: (s) => macroOf(s) === 'China' && s.year === 2023 && s.day >= 191 && s.day <= 260,
@@ -96,7 +96,7 @@ export const MORE_EVENTS: EventDef[] = [
     q: '年前最后一个训练日，基地里只剩你和教练。', ctx: '回家的车票是明天早上的。',
     a: [{ t: '改签，再练两天', g: 'grind', e: { xp: { aim: 10, utility: 6 }, mental: -1, fatigue: 6 } },
       { t: '按时回家过年', g: 'warm', e: { fatigue: -12, tilt: -10, form: -2 } },
-      { t: '带着外设回家，在网吧接着练', g: 'hard', e: { money: -300, xp: { aim: 8 }, fatigue: -4 } }] },
+      { t: '带着外设回家，在网吧接着练', g: 'hard', e: { money: -150, xp: { aim: 8 }, fatigue: -4 } }] },
 
   // ---- abroad for an international
   { id: 'intl_jetlag', w: 10, max: 4, rec: 0, when: atIntl,
@@ -240,7 +240,7 @@ export const MORE_EVENTS: EventDef[] = [
   { id: 'ch_abroad_call', w: 0, max: 2, rec: 1, chain: 'overseas', when: (s) => s.me!.chain?.id === 'overseas',
     q: '视频面谈。对面的主教练问：「你在队里语音说得多吗？」', ctx: '翻译软件开着，但他想听你自己说。',
     a: [{ t: '用外语硬答', g: 'hard', e: { xp: { communication: 12 }, tilt: 3 }, ch: { track: 'window', score: 1 } },
-      { t: '请经纪人帮忙翻译', g: 'warm', e: { money: -600 }, ch: { track: 'window' } },
+      { t: '请经纪人帮忙翻译', g: 'warm', e: { money: -2000 }, ch: { track: 'window' } },
       { t: '说实话：还是想留在本赛区', g: 'grind', e: { gmTrust: 3 }, ch: { end: 'drop' } }] },
   { id: 'ch_abroad_cold', w: 0, max: 2, rec: 0, chain: 'overseas', when: (s) => s.me!.chain?.id === 'overseas',
     q: '面谈那天你没准备好，对方礼貌地结束了通话。', ctx: '消息还是传到了经理那里。',

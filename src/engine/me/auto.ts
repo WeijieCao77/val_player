@@ -16,7 +16,7 @@ import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
-import { buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
+import { COURSES, GEAR_PRICE, RELAX, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
 import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
 import { retire } from './endings'
@@ -266,23 +266,29 @@ export function runAutoPilot(state: GameState): string[] {
   return done
 }
 
+/** what 托管's shopping never spends below, in RMB (ui/me/AutoScreen.tsx says it) */
+export const AUTO_RESERVE = 25000
+
 /** Shopping the steady way: a reserve first, then what pays now. */
 export function autoBuy(state: GameState): string[] {
   const me = state.me!
   const p = state.players[me.id]
   const out: string[] = []
-  const reserve = 3000
+  // RMB (me/currency.ts); the prices are the shop's own
+  const reserve = AUTO_RESERVE
+  const relax = (key: string) => RELAX.find((r) => r.key === key)?.price ?? 0
+  const course = (key: string) => COURSES.find((c) => c.key === key)?.price ?? 0
   // 理疗 also shortens a lay-off it treats; a short trip, one that is in the head (me/injury.ts)
-  if ((p.fatigue >= 70 || injuryHelpedBy(state, 'physio')) && me.money - 400 >= reserve && !buyRelax(state, 'physio')) out.push('买了理疗')
-  if (injuryHelpedBy(state, 'trip') && me.money - 2500 >= reserve * 2 && !buyRelax(state, 'trip')) out.push('出去散了两天心')
+  if ((p.fatigue >= 70 || injuryHelpedBy(state, 'physio')) && me.money - relax('physio') >= reserve && !buyRelax(state, 'physio')) out.push('买了理疗')
+  if (injuryHelpedBy(state, 'trip') && me.money - relax('trip') >= reserve * 2 && !buyRelax(state, 'trip')) out.push('出去散了两天心')
   for (const s of GEAR_SLOTS) {
     if ((me.gear[s.key] ?? 0) >= 1) continue
-    if (me.money - 900 < reserve) break
+    if (me.money - GEAR_PRICE[1] < reserve) break
     if (!buyGear(state, s.key)) out.push(`${s.name}换成了${gearModel(s.key, 1)}`)
   }
   if (me.phase === 'pro') {
-    if (me.tilt >= 40 && me.money - 8000 >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
-    if (me.abroad && !me.courses.includes('lang') && me.money - 5000 >= reserve && !buyCourse(state, 'lang')) out.push('报了语言课')
+    if (me.tilt >= 40 && me.money - course('psych') >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
+    if (me.abroad && !me.courses.includes('lang') && me.money - course('lang') >= reserve && !buyCourse(state, 'lang')) out.push('报了语言课')
   }
   // where the rest goes: home, a meetup, a scholarship, the winter's holiday, a studio for a streamer (me/outlets.ts)
   out.push(...autoOutlets(state))

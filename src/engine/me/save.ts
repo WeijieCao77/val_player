@@ -5,6 +5,7 @@ import type { GameState } from '../types'
 import { readSaveMeta, writeSaveMeta } from './saveMeta'
 import { migrateRuler } from './rulerMigrate'
 import type { SaveMeta } from './saveMeta'
+import { migrateToCny } from './cnyMigrate'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -65,6 +66,8 @@ const DESK_PLAYER_FIELDS = ['listed', 'listedOn', 'payAskedOn', 'rumourOn', 'per
  */
 export function migratePlayerSave(state: GameState): GameState {
   migrateWorld(state)
+  // a career kept in dollars before the four currencies: once, into RMB and its contracts' own currencies (me/cnyMigrate.ts)
+  migrateToCny(state)
   const s = state as unknown as Record<string, unknown>
   for (const k of DESK_FIELDS) delete s[k]
   for (const p of Object.values(state.players)) {

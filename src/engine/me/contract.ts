@@ -10,22 +10,19 @@ import { coachStarters } from './coach'
 import { makeRoom } from './club'
 import { addMoney } from './money'
 import { PLAYER_PRIZE_SHARE } from './prizes'
-import { inVctLeague } from '../timeline'
-import { regionIn } from '../era'
+import { keepInBand, offerOf, payOf } from './paytable'
+import { roundPay, toCny, toUsd } from './currency'
+import { money as fmtMoney } from './moneyfmt'
 
 /**
- * A VCT partner club's lowest wage, from the 2023 season: US$50,000 in the
- * Americas, €50,000 in EMEA, ₩67,000,000 in Pacific (Dexerto, 2022-10-31) —
- * all about fifty thousand dollars, which is the one currency this game keeps.
- * China's league has a floor too, but its figure was never published, so no
- * number is made up for it. Rookie deals used to come in at $20–40k, under it.
+ * A wage in a club's own currency kept inside its league's band: the partner
+ * leagues' published floors ($50,000 · €50,000 · ₩67,000,000 from 2023; China's
+ * ¥30 万 暂定, its figure unpublished), the second tier's monthly floors, and a
+ * cap at ten times a floor (me/paytable.ts).
  */
-export const VCT_MIN_SALARY = 50000
-
 export function salaryFloor(state: GameState, teamId: string, salary: number): number {
   const team = state.teams[teamId]
-  if (!inVctLeague(state, team) || regionIn(team.region, state.year) === 'China') return salary
-  return Math.max(salary, VCT_MIN_SALARY)
+  return team ? keepInBand(team, state.year, salary) : salary
 }
 
 /**
@@ -59,17 +56,18 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
   const role: SquadRole = team.tier === 1
     ? (d >= 8 || (kind !== 'sign' && me.proven) ? 'starter' : 'rotation')
     : (d >= 8 ? 'star' : 'starter')
+  // the world's dollar wage, moved to the club's league level and written in its currency (me/paytable.ts)
   const base = expectedSalary(p, team.tier)
-  const salary = salaryFloor(state, teamId, Math.round(base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1) / 1000) * 1000)
+  const { cur, salary } = offerOf(team, state.year, base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1))
   const years = team.tier === 1 ? (rng.chance(0.5) ? 2 : 3) : (rng.chance(0.6) ? 1 : 2)
-  const signBonus = Math.round(salary * rng.range(0, 0.3) / 500) * 500
-  const buyout = Math.round(salary * (team.tier === 1 ? rng.range(4, 8) : rng.range(2, 4)) / 1000) * 1000
+  const signBonus = roundPay(salary * rng.range(0, 0.3), cur)
+  const buyout = roundPay(salary * (team.tier === 1 ? rng.range(4, 8) : rng.range(2, 4)), cur)
   const resume = me.pre.cups.reduce((s, c) => s + c.reached * 1.5 + (c.won ? 2 : 0), 0) + Math.min(me.pre.scoutSeen, 12) * 0.5
   const pro = me.seasons.reduce((s, x) => s + x.starts * 0.15, 0) + me.titles.length * 4
   const leverage = ({ 'A+': 26, A: 18, B: 10, C: 4, D: 0 }[grade] ?? 8) + Math.min(me.fans, 300) * 0.045 +
     me.pre.ladder * 0.05 + resume + pro + me.agentTier * 6
   return {
-    id: `deal:${state.year}:${state.day}:${teamId}:${kind}`, teamId, kind, tier: team.tier, role,
+    id: `deal:${state.year}:${state.day}:${teamId}:${kind}`, teamId, kind, tier: team.tier, role, cur,
     salary, signBonus, years, buyout, asks: [], blown: 0, leverage: Math.round(leverage), grade,
     day: state.day, expires: state.day + DEAL_DAYS, abroad: team.region !== me.region,
   }
@@ -78,11 +76,11 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
 export interface Ask { key: string; label: string; cost: number; blurb: string; apply: (d: Deal) => void; can: (d: Deal) => boolean }
 
 export const ASKS: Ask[] = [
-  { key: 'pay', label: '年薪 +25%', cost: 16, blurb: '最直接的一问。', can: () => true, apply: (d) => { d.salary = Math.round(d.salary * 1.25 / 1000) * 1000 } },
+  { key: 'pay', label: '年薪 +25%', cost: 16, blurb: '最直接的一问。', can: () => true, apply: (d) => { d.salary = roundPay(d.salary * 1.25, d.cur) } },
   { key: 'sign', label: '签字费翻倍', cost: 10, blurb: '到手的钱。', can: (d) => d.signBonus > 0, apply: (d) => { d.signBonus *= 2 } },
   { key: 'years', label: '缩短一年', cost: 13, blurb: '早点自由。', can: (d) => d.years > 1, apply: (d) => { d.years -= 1 } },
-  { key: 'buyout', label: '违约金 −40%', cost: 14, blurb: '别的队来挖你时更容易成。', can: () => true, apply: (d) => { d.buyout = Math.round(d.buyout * 0.6 / 1000) * 1000 } },
-  { key: 'role', label: '承诺首发', cost: 18, blurb: '写进合同的上场时间。', can: (d) => d.role === 'rotation', apply: (d) => { d.role = 'starter'; d.salary = Math.round(d.salary * ROLE_PAY.starter / ROLE_PAY.rotation / 1000) * 1000 } },
+  { key: 'buyout', label: '违约金 −40%', cost: 14, blurb: '别的队来挖你时更容易成。', can: () => true, apply: (d) => { d.buyout = roundPay(d.buyout * 0.6, d.cur) } },
+  { key: 'role', label: '承诺首发', cost: 18, blurb: '写进合同的上场时间。', can: (d) => d.role === 'rotation', apply: (d) => { d.role = 'starter'; d.salary = roundPay(d.salary * ROLE_PAY.starter / ROLE_PAY.rotation, d.cur) } },
 ]
 
 /**
@@ -101,6 +99,8 @@ export function askDeal(state: GameState, dealId: string, askKey: string, rng: R
   d.asks.push(askKey)
   if (rng.chance(p)) {
     ask.apply(d)
+    // a raise still stops at the league's cap
+    d.salary = salaryFloor(state, d.teamId, d.salary)
     return { ok: true, blown: false, text: `他们答应了：${ask.label}。（成功率 ${Math.round(p * 100)}%）` }
   }
   const blow = clamp((n - 1) * 0.24 + (ask.cost - d.leverage) / 70, 0.04, 0.55)
@@ -114,8 +114,8 @@ export function askDeal(state: GameState, dealId: string, askKey: string, rng: R
       if (d.kind === 'renew') renewalGone(state, d, '不再续约')
       return { ok: false, blown: true, text: '他们收回了报价。谈崩了。' }
     }
-    d.salary = salaryFloor(state, d.teamId, Math.round(d.salary * 0.9 / 1000) * 1000)
-    return { ok: false, blown: true, text: `他们不高兴了：年薪反而降到 $${d.salary.toLocaleString()}。再来一次就撤回。（成功率 ${Math.round(p * 100)}%）` }
+    d.salary = salaryFloor(state, d.teamId, roundPay(d.salary * 0.9, d.cur))
+    return { ok: false, blown: true, text: `他们不高兴了：年薪反而降到 ${fmtMoney(d.salary, d.cur, state.year)}。再来一次就撤回。（成功率 ${Math.round(p * 100)}%）` }
   }
   return { ok: false, blown: false, text: `他们没答应。（成功率 ${Math.round(p * 100)}%）` }
 }
@@ -168,7 +168,7 @@ export function acceptDeal(state: GameState, dealId: string): string {
   if (d.kind === 'renew') {
     applyTerms(state, d)
     me.tenure += 0
-    pushLog(state, 'deal', `和 ${state.teams[d.teamId]?.name} 续约 ${d.years} 年，年薪 $${d.salary.toLocaleString()}${d.signBonus ? `，签字费 $${d.signBonus.toLocaleString()}` : ''}。`)
+    pushLog(state, 'deal', `和 ${state.teams[d.teamId]?.name} 续约 ${d.years} 年，年薪 ${fmtMoney(d.salary, d.cur, state.year)}${d.signBonus ? `，签字费 ${fmtMoney(d.signBonus, d.cur, state.year)}` : ''}。`)
     me.flags.refusedRenew = 0
     return '已续约。'
   }
@@ -179,14 +179,18 @@ export function acceptDeal(state: GameState, dealId: string): string {
 function applyTerms(state: GameState, d: Deal): void {
   const me = state.me!
   const p = state.players[me.id]
-  p.salary = d.salary
+  const y = state.year
+  // the world keeps its books in dollars — my club's wage bill, a buyer's budget — and the career
+  // keeps the contract as it was signed, in the club's currency (me/paytable.ts payOf)
+  p.salary = Math.round(toUsd(d.salary, d.cur, y) / 1000) * 1000
   p.contractYears = d.years
   p.expiredYear = undefined
   // releaseClause stays 0: the engine sells a man whose clause is met without asking him,
   // and in this game the man is me. The buyout is kept here and read by engine/me/transfer.
-  p.contract = { ...defaultContract(d.salary, d.years), signingBonus: d.signBonus, promisedRole: d.role, releaseClause: 0, noPoach: true, bonusShare: PLAYER_PRIZE_SHARE }
-  me.flags.buyout = d.buyout
-  addMoney(state, 'sign', d.signBonus)
+  p.contract = { ...defaultContract(p.salary, d.years), signingBonus: toUsd(d.signBonus, d.cur, y), promisedRole: d.role, releaseClause: 0, noPoach: true, bonusShare: PLAYER_PRIZE_SHARE }
+  me.pay = { cur: d.cur, salary: d.salary, sign: d.signBonus, buyout: d.buyout, year: y, tier: d.tier }
+  me.flags.buyout = toUsd(d.buyout, d.cur, y)
+  addMoney(state, 'sign', toCny(d.signBonus, d.cur, y))
 }
 
 /**
@@ -210,9 +214,11 @@ export function joinClub(state: GameState, d: Deal): void {
     // the buyout still owed, out of the buyer's budget and into the seller's, as the world's own moves pay (me/market.ts)
     const fee = d.kind === 'transfer' && from.id !== to.id ? buyoutDue(state) : 0
     if (fee) {
+      // the clubs settle in the world's dollars; the line says it the way my old contract wrote it
+      const owed = payOf(state)
       to.budget -= fee
       from.budget += fee
-      pushLog(state, 'money', `${to.name} 向 ${from.name} 支付了 $${fee.toLocaleString()} 的违约金。`)
+      pushLog(state, 'money', `${to.name} 向 ${from.name} 支付了 ${owed ? fmtMoney(owed.buyout, owed.cur, state.year) : fmtMoney(fee, 'USD', state.year)} 的违约金。`)
     }
   }
   // a club already carrying its registered seven lets its weakest man off the five go to register me (me/club.ts)
@@ -249,7 +255,8 @@ export function joinClub(state: GameState, d: Deal): void {
   me.benchedStages = 0
   to.starters = coachStarters(state)
   const where = me.abroad ? `，这是外赛区，${me.flags.lang ? '好在语言不是问题' : '语言会是个问题'}` : ''
-  pushLog(state, 'deal', `签约 ${to.name}（${to.tier === 1 ? 'VCT' : 'Challengers'}）：${ROLE_CN[d.role]}，${d.years} 年，年薪 $${d.salary.toLocaleString()}${d.signBonus ? `，签字费 $${d.signBonus.toLocaleString()}` : ''}，违约金 $${d.buyout.toLocaleString()}${where}。`)
+  const y = state.year
+  pushLog(state, 'deal', `签约 ${to.name}（${to.tier === 1 ? 'VCT' : 'Challengers'}）：${ROLE_CN[d.role]}，${d.years} 年，年薪 ${fmtMoney(d.salary, d.cur, y)}${d.signBonus ? `，签字费 ${fmtMoney(d.signBonus, d.cur, y)}` : ''}，违约金 ${fmtMoney(d.buyout, d.cur, y)}${where}。`)
   if (to.starters.includes(me.id)) pushLog(state, 'good', '教练看了你的第一次训练，把你放进了首发。')
   else pushLog(state, 'info', `首发是 ${to.starters.map((id) => state.players[id]?.ign).join('、')}，你从替补席开始。`)
 }

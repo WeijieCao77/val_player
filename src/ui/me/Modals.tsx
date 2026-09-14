@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGame } from './ctx'
-import { Crest, Modal, money } from './common'
+import { Crest, Modal, money, moneyIn } from './common'
 import type { PendingItem } from '../../engine/me/types'
 import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
 import { FRIENDLY_MAP_FATIGUE, MeMatch } from '../../engine/me/matchplay'
@@ -11,7 +11,7 @@ import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
 import { Rng, hashStr } from '../../engine/rng'
-import { answerStreamOffer } from '../../engine/me/stream'
+import { CLAUSE_FINE, answerStreamOffer } from '../../engine/me/stream'
 import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
 import { storyHint, storyTag } from '../../engine/me/story'
 import { AXIS_CN, traitOf } from '../../engine/me/traits'
@@ -114,7 +114,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
     <Modal title={cup.name} onClose={() => { skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
       <p className="small" style={{ marginTop: 0 }}>{cup.blurb}</p>
       <p className="small muted">
-        {cup.rounds.length} 轮 · 报名费 {cup.fee ? `$${cup.fee}` : '免费'} · 奖金最高 ${cup.prize[cup.prize.length - 1].toLocaleString()}
+        {cup.rounds.length} 轮 · 报名费 {cup.fee ? money(cup.fee) : '免费'} · 奖金最高 {money(cup.prize[cup.prize.length - 1])}
         {cup.minFans ? ` · 邀请制（粉丝过 ${fansCn(cup.minFans)}）` : ''}
       </p>
       <p className="small muted">
@@ -257,8 +257,8 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
       <table style={{ margin: '12px 0' }}>
         <tbody>
           <tr><td className="muted">身份</td><td><b>{ROLE_CN[d.role]}</b></td><td className="muted">年限</td><td><b>{d.years} 年</b></td></tr>
-          <tr><td className="muted">年薪</td><td><b>{money(d.salary)}</b></td><td className="muted">签字费</td><td><b>{money(d.signBonus)}</b></td></tr>
-          <tr><td className="muted">违约金</td><td><b>{money(d.buyout)}</b></td><td /><td /></tr>
+          <tr><td className="muted">年薪</td><td><b>{moneyIn(d.salary, d.cur, game.year)}</b></td><td className="muted">签字费</td><td><b>{moneyIn(d.signBonus, d.cur, game.year)}</b></td></tr>
+          <tr><td className="muted">违约金</td><td><b>{moneyIn(d.buyout, d.cur, game.year)}</b></td><td /><td /></tr>
         </tbody>
       </table>
       {last && <div className="node-line">{last}</div>}
@@ -303,7 +303,7 @@ function StreamModal({ onDone }: { onDone: () => void }) {
           <span className="m">收入随粉丝和热度浮动，上限最高，下限也最低</span>
         </button>
       </div>
-      <p className="tiny faint" style={{ marginBottom: 0 }}>签了独家每个赛段至少播 2 次，做不到扣 $2,000；平台推流让粉丝涨得更快。</p>
+      <p className="tiny faint" style={{ marginBottom: 0 }}>签了独家每个赛段至少播 2 次，做不到扣 {money(CLAUSE_FINE)}；平台推流让粉丝涨得更快。</p>
     </Modal>
   )
 }

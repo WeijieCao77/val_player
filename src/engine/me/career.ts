@@ -26,6 +26,8 @@ import { TALENT_CAP_MAX, ceilingPotential, ensureCeilings } from './bottleneck'
 import { entryBands } from '../ruler'
 import type { EntryBands } from '../ruler'
 import { cupFor } from './cups'
+import { cny } from './moneyfmt'
+import { CNY_FLAG } from './cnyMigrate'
 
 export const ME_ID = 'ME'
 export const TALENT_POINTS = 20
@@ -362,7 +364,7 @@ export function createCareer(o: CareerOpts): GameState {
     id: ME_ID, originKey: o.originKey, phase: 'pre', week: 0, weekDay: 0, ap: AP_PRE, apMax: AP_PRE, plan: {},
     mental: clamp(50 + (origin.mental ?? 0), 0, 100), body: clamp(55 + (origin.body ?? 0), 0, 100), tilt: 0,
     edge: 0, duelsThisWeek: 0, scrimRounds: 0, badStreak: 0, proven: false, coachTrust: 50, gmTrust: 50,
-    fans: Math.max(0, 20 + (origin.fans ?? 0)), heat: 10, money: 3000 + (origin.money ?? 0), upkeep: origin.upkeep ?? 0,
+    fans: Math.max(0, 20 + (origin.fans ?? 0)), heat: 10, money: 20000 + (origin.money ?? 0), upkeep: origin.upkeep ?? 0,
     log: [], matches: [], weekNotes: [], pending: [], seasons: [],
     seasonStart: { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 },
     benchedStages: 0, startedThisStage: 0, playedThisStage: 0,
@@ -379,6 +381,8 @@ export function createCareer(o: CareerOpts): GameState {
   // and a club start's door, for the 成就殿堂's career card (me/hall.ts)
   else me.flags.startTier = clubTier
   if (origin.flags?.lang) me.courses.push('lang')
+  // born in RMB: nothing for me/cnyMigrate.ts to convert
+  me.flags[CNY_FLAG] = 1
   state.me = me
   // the book that counts toward breaking the eight ceilings (me/bottleneck.ts)
   ensureCeilings(state)
@@ -395,7 +399,7 @@ export function createCareer(o: CareerOpts): GameState {
   pushLog(state, 'info', `${state.year} 年 1 月。你 ${p.age} 岁，${originName(origin, serverOf(state))}：${origin.needsClub && club ? origin.blurb.replace('这家俱乐部', club.name) : origin.blurb}${placed}`)
   if (o.start === 'pre') {
     state.training[ME_ID] = 'rest'
-    pushLog(state, 'info', `没有队伍。${ladderLabel(state)}，存款 $${me.money.toLocaleString()}。${cupFor(state, 'city')?.name}第 7 周报名、之后一周打一轮，${cupFor(state, 'premier')?.name}第 15 周报名，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
+    pushLog(state, 'info', `没有队伍。${ladderLabel(state)}，存款 ${cny(me.money)}。${cupFor(state, 'city')?.name}第 7 周报名、之后一周打一轮，${cupFor(state, 'premier')?.name}第 15 周报名，主播杯要粉丝过 ${fansCn(cupFor(state, 'streamer')?.minFans ?? 60)} 才请你。`)
   } else {
     me.ap = AP_SEASON
     me.apMax = AP_SEASON

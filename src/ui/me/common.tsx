@@ -14,17 +14,21 @@ import { roleColor } from '../../engine/player'
 import { crestUrl } from '../../engine/dossier'
 import { AGENT_ROLE, agentCn, canonAgent } from '../../engine/content'
 import type { Player, Role, Trait } from '../../engine/types'
+import { cny, cnyExact } from '../../engine/me/moneyfmt'
 
-export const money = (n: number): string => {
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 1 : 2)}M`
-  if (abs >= 1_000) return `${sign}$${(abs / 1000).toFixed(0)}K`
-  return `${sign}$${abs.toFixed(0)}`
-}
+/**
+ * Money on a screen goes through engine/me/moneyfmt.ts. The wallet and every
+ * price are RMB; a contract or a prize in another league's currency is written
+ * in it with RMB beside it (moneyIn), and the world's dollar books in a club's
+ * own currency (worldMoney).
+ */
+export { money as moneyIn, worldMoney } from '../../engine/me/moneyfmt'
 
-export const moneyFull = (n: number): string =>
-  `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`
+/** RMB, short: ¥8,500 · ¥1.6 万 · ¥64 万 */
+export const money = (n: number): string => cny(n)
+
+/** RMB to the yuan: ¥12,345 */
+export const moneyFull = (n: number): string => cnyExact(n)
 
 /** The rating badge: gold from 90, where the words say 世界级 (words.ts ATTR_TIERS) — at 88 half an international's starters wore it. */
 export function OvrBadge({ value }: { value: number }) {

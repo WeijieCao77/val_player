@@ -16,6 +16,7 @@ import { HallView } from './HallScreen'
 import { ENTRY_CN, ENTRY_YEARS, formatOf, regionIn, regionsOf } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel, money } from './common'
+import { toCny } from '../../engine/me/currency'
 import { attrWord, useNumbers } from './words'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
@@ -156,7 +157,7 @@ function SaveCard({ info, busy, bad, onContinue, onNew }: {
           <div className="save-more save-tiles">
             <div className="save-tile"><small>冠军</small><b>{meta.titles}</b>{meta.intl > 0 && <em>国际赛 {meta.intl}</em>}</div>
             <div className="save-tile"><small>粉丝</small><b>{fanTier(meta.fans).name}</b><em>{fansCn(meta.fans)}</em></div>
-            <div className="save-tile"><small>资金</small><b>{money(meta.money)}</b></div>
+            <div className="save-tile"><small>资金</small><b>{money(meta.cny ? meta.money : toCny(meta.money, 'USD', meta.year))}</b></div>
             <div className="save-tile"><small>成就</small><b>本局 {meta.ach}</b><em>殿堂 {hallNow ?? meta.hall}/{ACHIEVEMENTS.length}</em></div>
           </div>
         )}

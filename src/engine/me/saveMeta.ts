@@ -67,6 +67,8 @@ export interface SaveMeta {
   intl: number
   fans: number
   money: number
+  /** money is in RMB (from 2026-09-14); an older summary's money is dollars */
+  cny?: 1
   last: SaveMetaMatch | null
   /** this career's achievements */
   ach: number
@@ -110,6 +112,7 @@ export function buildSaveMeta(state: GameState): SaveMeta | null {
     intl: me.titles.filter((x) => isIntlComp(x.title)).length,
     fans: Math.round(me.fans),
     money: Math.round(me.money),
+    cny: 1,
     last: m ? { opp: m.opp, oppTag: m.oppTag, score: m.score, result: m.drawn ? 'D' : m.won ? 'W' : 'L', event: m.comp, started: m.started } : null,
     ach: me.achievements.length,
     hall: h ? hallAchCount(h) : 0,
@@ -160,7 +163,7 @@ export function cleanSaveMeta(raw: unknown): SaveMeta | null {
     v: 1, at, year, day, ign, role: str(o.role, 8), age: n(o.age), phase, club,
     ladder: str(o.ladder, 24), date: str(o.date, 24), stage: str(o.stage, 40),
     overall: n(o.overall), titles: n(o.titles), intl: n(o.intl), fans: n(o.fans),
-    money: Math.round(num(o.money) ?? 0), last, ach: n(o.ach), hall: n(o.hall), ending: str(o.ending, 24),
+    money: Math.round(num(o.money) ?? 0), ...(o.cny === 1 ? { cny: 1 as const } : {}), last, ach: n(o.ach), hall: n(o.hall), ending: str(o.ending, 24),
   }
 }
 

@@ -6,6 +6,9 @@ import { importBlock } from '../imports'
 import { pushLog } from './log'
 import { push } from './pending'
 import { ROLE_PAY, buyoutDue, makeDeal, leaveClub, salaryFloor } from './contract'
+import { offerUsd, payOf } from './paytable'
+import { roundPay } from './currency'
+import { money as fmtMoney } from './moneyfmt'
 import { gradeOf } from './tryout'
 import { INVITE_DAYS, declinedNow, expectOf, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
@@ -285,7 +288,8 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
       .sort((a, b) => a.overall - b.overall)[0]
     if (!mate) { out.push({ team, kind: 'hole', fee }); continue }
     if (p.overall > mate.overall) { out.push({ team, kind: 'beat', mate, fee }); continue }
-    const wage = salaryFloor(state, team.id, Math.round(expectedSalary(p, 1) * ROLE_PAY.rotation / 1000) * 1000)
+    // what that club would write into a rotation contract, in the world's dollars its budget is kept in
+    const wage = offerUsd(team, state.year, expectedSalary(p, 1) * ROLE_PAY.rotation)
     if (team.roster.length < VCT_SQUAD && team.budget >= fee + wage) out.push({ team, kind: 'place', fee })
   }
   return out
@@ -339,7 +343,8 @@ function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): voi
   const room = need.kind === 'beat' ? `他们${p.role}位置上的首发 ${need.mate?.ign} 不如你`
     : need.kind === 'hole' ? `他们缺一个${p.role}`
     : '他们名单上还空着一个位置'
-  const pay = need.fee ? `$${need.fee.toLocaleString()} 的违约金他们来付` : '你的合同今年到期，不用付违约金'
+  const owed = payOf(state)
+  const pay = need.fee ? `${owed ? fmtMoney(owed.buyout, owed.cur, state.year) : fmtMoney(need.fee, 'USD', state.year)} 的违约金他们来付` : '你的合同今年到期，不用付违约金'
   const where = `${t.name}（${leagueWord(t)}）`
   const skill = tryoutSkill(state)
   if (skill >= expectOf(t) + 4 || read.by === 'title') {
@@ -347,7 +352,7 @@ function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): voi
     // a club that came for a starter says so in the contract (the 承诺首发 ask's terms, me/contract.ts ASKS)
     if (need.kind !== 'place' && deal.role === 'rotation') {
       deal.role = 'starter'
-      deal.salary = salaryFloor(state, t.id, Math.round(deal.salary * ROLE_PAY.starter / ROLE_PAY.rotation / 1000) * 1000)
+      deal.salary = salaryFloor(state, t.id, roundPay(deal.salary * ROLE_PAY.starter / ROLE_PAY.rotation, deal.cur))
     }
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
@@ -443,7 +448,7 @@ export function seasonContractCheck(state: GameState, rng: Rng): void {
   if (keep && !me.flags.refusedRenew) {
     const d = tryoutSkill(state) - expectOf(team) + (me.proven ? 6 : 0)
     const deal = makeDeal(state, team.id, 'renew', gradeOf(d), rng)
-    if (title) deal.salary = Math.round(deal.salary * 1.15 / 1000) * 1000
+    if (title) deal.salary = salaryFloor(state, team.id, roundPay(deal.salary * 1.15, deal.cur))
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `合同到期，${team.name} 想续约。`)

@@ -5,6 +5,7 @@ import { originName, originOf } from '../../engine/me/origins'
 import { rankAt, rankShort, serverAt } from '../../engine/me/rank'
 import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
 import { compCn } from '../../engine/me/compname'
+import { cny } from '../../engine/me/moneyfmt'
 
 /**
  * The career card as a picture you can keep.
@@ -244,7 +245,7 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
     ['首发胜场', String(wins)],
     ['冠军', String(titles.length)],
     ['粉丝', `${fansCn(me.fans)} · ${fanTier(me.fans).name}`],
-    ['生涯总收入', earned >= 1_000_000 ? `$${(earned / 1_000_000).toFixed(2)}M` : `$${Math.round(earned / 1000)}K`],
+    ['生涯总收入', cny(earned)],
   ]
   const cw = (W - PAD * 2) / stats.length
   g.fillStyle = CO.panel

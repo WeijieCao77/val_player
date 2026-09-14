@@ -1,5 +1,6 @@
 import { useGame } from './ctx'
-import { Crest, Panel, money } from './common'
+import { Crest, Panel, moneyIn } from './common'
+import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, inWindow, listSelf, nextWindow, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
@@ -14,6 +15,8 @@ export default function TransferScreen() {
   const p = game.players[me.id]
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
+  // my contract as signed, in its club's league currency (engine/me/paytable.ts)
+  const pay = payOf(game)
   const skill = tryoutSkill(game)
   const clubs = Object.values(game.teams)
     .filter((t) => t.id !== game.myTeam && (t.region === me.region || me.flags.lang))
@@ -27,11 +30,11 @@ export default function TransferScreen() {
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
-        {pro && team && (
+        {pro && team && pay && (
           <Panel title="合同">
             <p className="small" style={{ margin: 0 }}>
-              <b>{team.name}</b> · {ROLE_CN[p.contract?.promisedRole ?? 'rotation']} · 年薪 <b>{money(p.salary)}</b>
-              <br />到 <b>{game.year + Math.max(0, p.contractYears - 1)} 赛季末</b> · <span title={`合同没到期时别的俱乐部要带走你，得付给 ${team.tag} 这个数。`}>违约金 {money(me.flags.buyout ?? 0)}</span>
+              <b>{team.name}</b> · {ROLE_CN[p.contract?.promisedRole ?? 'rotation']} · 年薪 <b>{moneyIn(pay.salary, pay.cur, game.year)}</b>
+              <br />到 <b>{game.year + Math.max(0, p.contractYears - 1)} 赛季末</b> · <span title={`合同没到期时别的俱乐部要带走你，得付给 ${team.tag} 这个数。`}>违约金 {moneyIn(pay.buyout, pay.cur, game.year)}</span>
             </p>
           </Panel>
         )}
@@ -57,7 +60,7 @@ export default function TransferScreen() {
         {me.deals.length > 0 && (
           <Panel title="桌上的报价">
             {me.deals.map((d) => (
-              <p key={d.id} className="small">{game.teams[d.teamId]?.name} · {ROLE_CN[d.role]} · {money(d.salary)} × {d.years} 年 · 到 {d.expires - game.day} 天后</p>
+              <p key={d.id} className="small">{game.teams[d.teamId]?.name} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · 到 {d.expires - game.day} 天后</p>
             ))}
           </Panel>
         )}

@@ -8,6 +8,8 @@ import { compCn } from './compname'
 import { pushLog } from './log'
 import { inWindow, nextWindow } from './transfer'
 import { isIntlComp } from './compclass'
+import { leagueCurOf } from './currency'
+import { worldMoney } from './moneyfmt'
 
 /**
  * How much of a say you have in your own club.
@@ -308,7 +310,9 @@ export function doSign(state: GameState, targetId: string): string {
   if (fee > myTeam.budget) {
     me.gmTrust = clamp(me.gmTrust - 5, 0, 100)
     pushLog(state, 'bad', `你向经理提出签下 ${target.ign}。他看了一眼账，没接话。「这个价信不是不想，是真没钱。」`)
-    return `俱乐部出不起这个价（要 ${fee.toLocaleString()}，队里只有 ${Math.round(myTeam.budget).toLocaleString()}）。`
+    // a club's books are the world's dollars; said in the club's own currency, RMB beside it
+    const cur = leagueCurOf(myTeam.region)
+    return `俱乐部出不起这个价（要 ${worldMoney(fee, cur, state.year)}，队里只有 ${worldMoney(Math.max(0, myTeam.budget), cur, state.year)}）。`
   }
   const seller = state.teams[target.teamId ?? '']
   // One for one when the roster is full, the way 破晓's clubs deal: the club's
@@ -330,7 +334,7 @@ export function doSign(state: GameState, targetId: string): string {
   seller.budget += fee
   state.news.push({
     day: state.day, kind: 'transfer', important: true,
-    text: `${myTeam.name} 以 $${fee.toLocaleString()} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
+    text: `${myTeam.name} 以 ${worldMoney(fee, leagueCurOf(myTeam.region), state.year)} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
   })
   me.gmTrust = clamp(me.gmTrust - 3, 0, 100)
   pushLog(state, 'team', `俱乐部按你的要求把 <b>${target.ign}</b> 签了下来。<b>这是你的话语权换来的——现在成绩得对得起它。</b>`)

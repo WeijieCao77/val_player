@@ -3,9 +3,11 @@ import estimates from '../../data/prize_estimates_me.json'
 import { OQ_POOLS } from '../ahead'
 import { eventsOf } from '../circuit'
 import type { Competition, StageKey } from '../types'
+import type { Cur } from './currency'
 
 /**
- * Prize money by event and placement (USD): what each event really paid, and
+ * Prize money by event and placement, in the currency each club is paid in
+ * (one of the career's four, me/currency.ts): what each event really paid, and
  * an estimate labelled as one where the amounts were never published.
  *
  * The author's request, 2026-09-11: 「奖金表按照真实重做」. What this replaces
@@ -34,9 +36,16 @@ import type { Competition, StageKey } from '../types'
  * Nothing here reads or is read by the manager game.
  */
 
-export type PrizeRow = [from: number, to: number, usd: number]
-interface Entry { y: number; lp: string; status?: 'none' | 'unpublished'; cur?: string; pay?: PrizeRow[] }
-interface Estimate { y: number; lp: string | null; rule: string; from: string; fromCn: string; k: number; pay: PrizeRow[] }
+export type PrizeRow = [from: number, to: number, amount: number]
+/**
+ * A table in the career's currency (scripts/build_prize_currency.ts): a euro,
+ * won or yuan table at its page's own amounts; any other local currency
+ * converted into its league's currency (`src` says which it was). A dollar
+ * table has none and pays dollars.
+ */
+interface Nat { cur: Cur; pay: PrizeRow[]; src?: string; via?: string }
+interface Entry { y: number; lp: string; status?: 'none' | 'unpublished'; cur?: string; pay?: PrizeRow[]; nat?: Nat }
+interface Estimate { y: number; lp: string | null; rule: string; from: string; fromCn: string; k: number; pay: PrizeRow[]; nat?: Nat }
 const BOOK = (raw as unknown as { events: Record<string, Entry> }).events
 const EST = (estimates as unknown as { events: Record<string, Estimate> }).events
 
@@ -49,11 +58,14 @@ export interface PrizeTable {
    * none: published as paying nothing · unpublished: no amounts on record and no estimate
    */
   status: 'paid' | 'est' | 'none' | 'unpublished'
+  /** place by place, in `cur` */
   pay: PrizeRow[]
+  /** the currency the club is paid in: the table's own when it is one of the four, else its league's */
+  cur: Cur
+  /** the currency the table was published in, when it had to be converted into `cur` */
+  src?: string
   /** the Liquipedia page the amounts are read from — for an estimate, the event's own page, if it has one */
   lp: string | null
-  /** the local currency the table was published in, when it was not dollars */
-  cur?: string
   /** set when another season's amounts stand in — 2026's, for an event from 2027 on */
   basis: number | null
   /** an estimate: the real table it is drawn from (page, short name), its rule (prize_estimates_me.json `rules`) and scale */
@@ -63,10 +75,11 @@ export interface PrizeTable {
 /** An event's table by its id in the books: its published one, else its estimate. */
 function tableOf(id: string | undefined, basis: number | null): PrizeTable {
   const e = id ? BOOK[id] : undefined
-  if (e && e.status !== 'unpublished') return { status: e.status ?? 'paid', pay: e.pay ?? [], lp: e.lp, cur: e.cur, basis }
+  const natOf = (n: Nat | undefined, usd: PrizeRow[]) => (n ? { pay: n.pay, cur: n.cur, ...(n.src ? { src: n.src } : {}) } : { pay: usd, cur: 'USD' as Cur })
+  if (e && e.status !== 'unpublished') return { status: e.status ?? 'paid', ...natOf(e.nat, e.pay ?? []), lp: e.lp, basis }
   const x = id ? EST[id] : undefined
-  if (x) return { status: 'est', pay: x.pay, lp: e?.lp ?? x.lp, basis, from: { lp: x.from, cn: x.fromCn, rule: x.rule, k: x.k } }
-  return { status: 'unpublished', pay: [], lp: e?.lp ?? null, basis }
+  if (x) return { status: 'est', ...natOf(x.nat, x.pay), lp: e?.lp ?? x.lp, basis, from: { lp: x.from, cn: x.fromCn, rule: x.rule, k: x.k } }
+  return { status: 'unpublished', pay: [], cur: 'USD', lp: e?.lp ?? null, basis }
 }
 
 /** The 2026 edition of an event: a league's Kickoff or stage, a Masters, Champions, China's Ascension. */
