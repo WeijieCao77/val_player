@@ -226,11 +226,34 @@ function OtherRegions({ rows, onPick }: { rows: Other[]; onPick: (r: Region) => 
   )
 }
 
+/**
+ * The tab a place's clubs play under: its own where the year has one (2021's circuits), else the league
+ * it is folded into that year. From 2023 the tabs are the four leagues and every place is under one; a
+ * 2022 place folded into no tab that year (Turkey, the Southeast Asian circuits) has none.
+ */
+export function tabOf(place: Region, tabs: Region[], year: number): Region | undefined {
+  if (tabs.includes(place)) return place
+  const league = regionIn(place, year)
+  return tabs.includes(league) ? league : undefined
+}
+
 export default function Standings() {
   const { game, openPlayer } = useGame()
   const [tab, setTab] = useState<'leagues' | 'players'>('leagues')
-  const myRegion = game.teams[game.myTeam]?.region
-  const [region, setRegion] = useState(myRegion ?? 'China')
+  // 2021 ran a dozen circuits; a tab for every one that has a club in it
+  const tabs: Region[] = formatOf(game.year) === 'open'
+    ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r))
+    : REGIONS
+  // The page opens on the tab my club plays under — its VCT league, or the league over its Challengers
+  // circuit — and with no club, on the one over where I am from (「来自」). From 2023 a club's place
+  // (Europe, Turkey) is no tab, and the page opened with no tab lit. A place with no tab that year opens
+  // on itself, as it did.
+  const home: Region | undefined = game.teams[game.myTeam]?.region ?? game.me?.region
+  const start: Region = (home && tabOf(home, tabs, game.year)) ?? home ?? 'China'
+  const [picked, setRegion] = useState<Region | null>(null)
+  const region: Region = picked && tabs.includes(picked) ? picked : start
+  // the home tab still shows what my own place plays: a Challengers circuit is filed under its place, not its league
+  const here: Region = region === start && home ? home : region
 
   // What is being played now sits on top; what is over sinks (「当时正在打的比赛应该提到最上面」).
   const rank = (c: Competition): number => {
@@ -245,27 +268,23 @@ export default function Standings() {
     if (i >= 0) return i
     return c.stage === 'challengers1' ? 3.5 : c.stage === 'challengers2' ? 5.5 : 9
   }
-  const eventsFor = (r: string): Competition[] => Object.values(game.comps)
-    .filter((c) => (c.format === 'circuit' ? circuitShows(c, r) : !c.region || c.region === r))
+  const eventsFor = (...rs: string[]): Competition[] => Object.values(game.comps)
+    .filter((c) => rs.some((r) => (c.format === 'circuit' ? circuitShows(c, r) : !c.region || c.region === r)))
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 3 ? order(b) - order(a) : order(a) - order(b)))
-  const shown = eventsFor(region)
+  const shown = here === region ? eventsFor(region) : eventsFor(region, here)
 
   const leaders = Object.values(game.players)
     .filter((p) => p.season.maps >= 8 && p.teamId)
     .sort((a, b) => ratingOf(b.season) - ratingOf(a.season))
     .slice(0, 40)
-  // where this stage leads, for the club's own region only
-  const qual = region === myRegion ? qualification(game) : null
-  // 2021 ran a dozen circuits; a tab for every one that has a club in it
-  const tabs: Region[] = formatOf(game.year) === 'open'
-    ? regionsOf(game.year).filter((r) => Object.values(game.teams).some((t) => t.region === r))
-    : REGIONS
+  // where this stage leads, on my club's own tab only
+  const qual = region === start ? qualification(game) : null
 
   // the year's points tables, and the one the region on screen counts toward
   const tables = tab === 'leagues' ? pointsTables(game) : []
   const tableFor = (r: Region): PointsTable | undefined => tables.find((t) =>
     t.regions.includes(r) || t.league === r || (!!t.league && regionIn(r, game.year) === t.league))
-  const points = tableFor(region)
+  const points = tableFor(region) ?? (here !== region ? tableFor(here) : undefined)
 
   /** A region's current first: the top of its live table, or its latest champion — its own events, not the internationals every tab shows. */
   const leaderOf = (r: Region): { leader: string; value: string } | null => {
