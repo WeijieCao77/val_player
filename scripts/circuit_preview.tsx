@@ -25,12 +25,14 @@ const day = Number(q.get('day') ?? 160)
 const seed = Number(q.get('seed') ?? 11)
 const region = (q.get('region') ?? 'China') as Region
 const start = (q.get('start') ?? 'chal') as StartPoint
+// the 2026 entrance too: &year=2026
+const year = (q.get('year') === '2026' ? 2026 : 2021) as 2021 | 2026
 
 const state = createCareer({
-  name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year: 2021,
+  name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year,
 })
 let guard = 0
-while (state.year === 2021 && state.day < day && guard++ < 60) {
+while (state.year === year && state.day < day && guard++ < 60) {
   if (autoWeek(state).kind === 'game-over') break
 }
 
