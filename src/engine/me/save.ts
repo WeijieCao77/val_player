@@ -3,6 +3,7 @@ import { resumeCup } from './cups'
 import { stripToTheBone } from '../match'
 import type { GameState } from '../types'
 import { readSaveMeta, writeSaveMeta } from './saveMeta'
+import { migrateRuler } from './rulerMigrate'
 import type { SaveMeta } from './saveMeta'
 
 /**
@@ -81,6 +82,8 @@ export function migratePlayerSave(state: GameState): GameState {
     pre.ladder = Math.min(100, Math.max(0, Number.isFinite(pre.ladder) ? pre.ladder : 0))
     pre.ladderPeak = Math.max(pre.ladder, Math.min(100, Number.isFinite(pre.ladderPeak) ? pre.ladderPeak : 0))
   }
+  // a career from before the rating ruler is read onto it once, the player by his rank (me/rulerMigrate.ts)
+  if (state.me) migrateRuler(state)
   // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
   if (state.me) resumeCup(state)
   return state

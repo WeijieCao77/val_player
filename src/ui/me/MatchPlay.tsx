@@ -173,6 +173,13 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   }
 
   if (phase === 'pre') {
+    // where I stand among this event's starters, me counted — the badges alone do not say it (reported 2026-09-14)
+    const comp = mm.friendly ? undefined : (game.comps[f.comp] ?? Object.values(game.comps).find((c) => c.name === f.comp))
+    const mineNow = game.players[me.id].overall
+    const others = (comp?.teams ?? []).flatMap((id) => game.teams[id]?.starters ?? [])
+      .filter((id) => id !== me.id).map((id) => game.players[id]?.overall).filter((v): v is number => v != null)
+    const fieldAll = others.length >= 10 ? [...others, mineNow].sort((x, y) => x - y) : null
+    const fieldRank = 1 + others.filter((v) => v > mineNow).length
     return (
       <Modal title={`${mm.friendly ? mm.friendly.comp : (game.comps[f.comp]?.name ?? f.comp)} · ${f.label.replace(/^(KO|SW):\d+:/, '')} · BO${f.bo}`} onClose={skip} onBgClose={() => {}}>
         <div className="score-line">
@@ -185,6 +192,13 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <p className="center small" style={{ margin: '4px 0 8px' }}>
             <span className={verdictTag(verdict.k)}>{verdict.t}</span>
             <span className="muted" style={{ marginLeft: 8 }}>{verdict.d}</span>
+          </p>
+        )}
+        {fieldAll && (
+          <p className="center tiny muted" style={{ margin: '0 0 6px' }}>
+            {nums
+              ? `本届首发中位 ${fieldAll[Math.floor(fieldAll.length / 2)]}，你排第 ${fieldRank}/${fieldAll.length}`
+              : `你在本届首发里排在${fieldRank <= fieldAll.length / 3 ? '前段' : fieldRank <= (fieldAll.length * 2) / 3 ? '中段' : '后段'}`}
           </p>
         )}
         <div className="grid mp-sides">
