@@ -6,7 +6,7 @@
  *
  *  - a career that opens at its club opens with no signing card
  *  - no moment comes twice (by key)
- *  - every title I started in has its card, and none won from the bench does
+ *  - every title has its card: the full screen when I started, the event card from the bench
  *  - every award won has its card
  *  - every signing card names a club the career really joined
  *  - a big ladder tier comes at most once, and its flag is set
@@ -64,8 +64,9 @@ function judge(label: string, r: ReturnType<typeof play>): void {
   check(new Set(keys).size === keys.length, `${label}：没有一张卡出两次（${keys.length} 张）`)
   const started = me.titles.filter((t) => t.started)
   const titleCards = seen.filter((m) => m.kind === 'title')
-  check(titleCards.length === started.length && started.every((t) => keys.includes(`title:${t.year}:${t.title}`)),
-    `${label}：首发拿的 ${started.length} 个冠军各一张卡，替补席上的没有（${titleCards.length} 张）`)
+  check(titleCards.length === me.titles.length && me.titles.every((t) => keys.includes(`title:${t.year}:${t.title}`))
+    && titleCards.filter((m) => !m.bench).length === started.length,
+    `${label}：${me.titles.length} 个冠军各一张卡，首发拿的 ${started.length} 个是整屏，替补席上的是事件卡`)
   const won = (me.awards ?? []).filter((a) => a.won)
   check(seen.filter((m) => m.kind === 'award').length === won.length, `${label}：拿到的 ${won.length} 个年度奖项各一张卡`)
   const joined = new Set((p.clubHist ?? []).slice(clubsAtStart).map((h) => h.team))

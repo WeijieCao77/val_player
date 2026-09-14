@@ -4,17 +4,21 @@ import { compCn } from '../../engine/me/compname'
 import { takeMoment } from '../../engine/me/moments'
 import type { MomentItem } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
-import Moment, { type MomentChip } from './Moment'
 import { crestUrl } from '../../engine/dossier'
-import { FaceRow } from './Face'
+import Moment, { type MomentChip } from './Moment'
+import { Modal } from './common'
+import Face, { FaceRow } from './Face'
 import { Medal, PromoBadge, TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
 import { RankEmblem } from './art/emblem'
+import { Scene } from './art/scenes'
 
 /**
- * The big moments the engine queued (me/moments.ts), one full-screen card at a
- * time: a title I started in, a signing, an award, the ladder's first 超凡入圣 /
- * 神话 / 辐能战魂 — the tiers the author settled on 2026-09-14. They come before
- * the achievements they unlock and before any card the clock stopped on
+ * The big moments the engine queued (me/moments.ts), one card at a time: a title,
+ * a signing, an award, the ladder's first 超凡入圣 / 神话 / 辐能战魂 — the tiers
+ * the author settled on 2026-09-14. A title I started in, a signing, an award and
+ * a new tier take the full screen; a title won from the bench is the event tier,
+ * the ordinary card with the stage along its top. They come before the
+ * achievements they unlock and before any card the clock stopped on
  * (PlayerGame). Everything on a card is what was written the day it happened.
  */
 export default function MomentQueue() {
@@ -25,6 +29,20 @@ export default function MomentQueue() {
   const more = (me.moments?.length ?? 1) - 1
   const take = () => { takeMoment(game); commit() }
   const next = more ? `还有 ${more} 件` : undefined
+
+  if (m.kind === 'title' && m.bench) {
+    return (
+      <Modal title="赛场" art={<Scene kind="stage" />} onClose={take} onBgClose={() => {}}>
+        <p className="q ev-q">冠军：{compCn(m.comp ?? '')}</p>
+        <p className="muted small" style={{ margin: '0 0 12px' }}>这一届你在替补席上，没有出场。奖杯有你一份，下一次要自己上场去拿。</p>
+        <div className="row" style={{ justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 }}>
+          <button className="primary" onClick={take}>{more ? '下一件 →' : '知道了'}</button>
+          {next && <span className="tiny faint">{next}</span>}
+        </div>
+      </Modal>
+    )
+  }
+
   const card = cardOf(game, m)
   return (
     <Moment
@@ -94,14 +112,28 @@ function cardOf(g: GameState, m: MomentItem): Card {
         page: { label: '去队伍页', screen: 'team' },
       }
     }
-    case 'award':
+    case 'award': {
+      const ids = m.nomineeIds ?? []
       return {
         tone: 'gold',
         art: <Medal />,
         eyebrow: `${m.year} · 年度颁奖夜${m.league ? ` · ${m.league}` : ''}`,
         title: m.award ?? '年度奖项',
-        body: m.nominees?.length ? `入围：${m.nominees.join('、')}。` : undefined,
+        // a night from before the ids were kept says the names in a line
+        body: !ids.length && m.nominees?.length ? `入围：${m.nominees.join('、')}。` : undefined,
+        extra: ids.length ? (
+          <ul className="mo-list">
+            {ids.map((id, i) => (
+              <li key={id} className={[i === 0 ? 'win' : '', g.me?.id === id ? 'me' : ''].filter(Boolean).join(' ')}>
+                <Face id={id} name={m.nominees?.[i]} size={26} />
+                <span><b>{m.nominees?.[i] ?? g.players[id]?.ign ?? ''}</b><small>{m.nomineeTeams?.[i] ?? ''}</small></span>
+                {i === 0 && <em>得奖</em>}
+              </li>
+            ))}
+          </ul>
+        ) : undefined,
       }
+    }
     case 'rank': {
       const tier = m.tier ?? ''
       const place = m.pos ? `${m.server ?? ''}第 ${m.pos.toLocaleString('en-US')} 名。` : ''

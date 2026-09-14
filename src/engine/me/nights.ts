@@ -179,6 +179,8 @@ export function awardsNight(state: GameState): boolean {
     me.awards.push({
       year: state.year, key: c.key, name: c.name, league: aw.league, won,
       winner: c.top[0].ign, winnerTeam: c.top[0].team, nominees: c.top.map((r) => r.ign),
+      // who they were, not just what they are called, so the card can show their faces (ui/me/MomentQueue.tsx)
+      nomineeIds: c.top.map((r) => r.id), nomineeTeams: c.top.map((r) => r.team),
       rating: Math.round((aw.mine?.rating ?? 0) * 100) / 100,
     })
     if (won) me.fans += AWARD_FANS[c.key]
@@ -469,7 +471,7 @@ export function nightApply(state: GameState, kind: NightKind, tier: CerTier, ski
         : `${def.name}的致辞 <b>${TIER_WORD[tier]}</b>：${awardsAfter(state, tier)}`)
       // what was won gets its card once the night is over, so no card says the name before the stage does (me/moments.ts)
       for (const a of thisYear(state).filter((x) => x.won)) {
-        pushMoment(state, { kind: 'award', key: `award:${a.year}:${a.key}`, award: a.name, league: a.league, nominees: a.nominees })
+        pushMoment(state, { kind: 'award', key: `award:${a.year}:${a.key}`, award: a.name, league: a.league, nominees: a.nominees, nomineeIds: a.nomineeIds, nomineeTeams: a.nomineeTeams })
       }
       return
     }

@@ -42,6 +42,9 @@ export interface MeAward {
   winnerTeam: string
   /** everyone read out, me included, best first */
   nominees: string[]
+  /** the same people by player id, and their clubs as read out — absent for a night from before (ui/me/MomentQueue.tsx faces) */
+  nomineeIds?: string[]
+  nomineeTeams?: string[]
   /** my season rating, as it was judged */
   rating: number
 }
@@ -489,10 +492,14 @@ export interface MomentItem {
   years?: number
   pay?: string
   role?: string
-  /** award: the category, the league, who was up for it */
+  /** title: won from the bench — the event card rather than the full screen (decided 2026-09-14) */
+  bench?: boolean
+  /** award: the category, the league, who was up for it (handles, player ids and clubs, best first) */
   award?: string
   league?: string
   nominees?: string[]
+  nomineeIds?: string[]
+  nomineeTeams?: string[]
   /** rank: 「神话 1」, its tier and division, the server, the place on its board */
   rank?: string
   tier?: string
