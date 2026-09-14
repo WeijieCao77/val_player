@@ -260,11 +260,56 @@ export function holdScale(state: GameState): number {
       refreshValue(p)
     }
   }
+  rerateClubs(state)
+  return moved
+}
+
+/** Every club still playing, rated the way the world rates one: its best five. */
+function rerateClubs(state: GameState): void {
   for (const t of Object.values(state.teams)) {
     if (t.dormant) continue
     const r = top5(t.roster.map((id) => state.players[id]?.overall ?? 0))
     if (r != null) t.rating = r
   }
+}
+
+/**
+ * The shift this ruler gives a real player's numbers as they stand in `year`:
+ * those of the last year the book rated him (engine/timeline.ts reads a man off
+ * his nearest rated year), or January 2021's for someone it never rated.
+ */
+export function lastShift(year: number, vlr: string): number {
+  for (let y = year; y > 2021; y--) if (BOOK.years[String(y)]?.ratings[vlr]) return rulerShift(y, vlr)
+  return rulerShift(2021, vlr)
+}
+
+/**
+ * A world from before this ruler, read onto it once — a save's load
+ * (engine/me/rulerMigrate.ts). Reported 2026-09-14: 「世界赛除了玩家基本都是90分以上
+ * 的选手，玩家只有80」. A save from before the ruler kept the builders' scale and no
+ * winter held it, so its world went on climbing — the VCT starters' median 88 in
+ * 2026 and 94 by 2032, and by 2031 every international's starters 90 or more.
+ *
+ * In a year the roster book covers, every real player moves by what the ruler
+ * gives the year his numbers are from, as a new career's world would have had
+ * them. Past it, the winter's read (holdScale) is done now. Everyone but the
+ * player himself moves, his team-mates included; he is moved by his rank, by the
+ * caller. Stamps the ruler, so it happens once and every winter after holds.
+ */
+export function rereadWorld(state: GameState): number {
+  if (rulerOn(state)) return 0
+  state.ruler = RULER
+  if (!BOOK.years[String(state.year)]) return holdScale(state)
+  let moved = 0
+  for (const p of Object.values(state.players)) {
+    if (p.id === state.me?.id || !/^V\d+$/.test(p.id)) continue
+    const d = lastShift(state.year, p.id.slice(1))
+    if (!d) continue
+    shiftPlayer(p, d)
+    refreshValue(p)
+    moved++
+  }
+  rerateClubs(state)
   return moved
 }
 

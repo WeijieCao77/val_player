@@ -26,8 +26,9 @@ export const money = (n: number): string => {
 export const moneyFull = (n: number): string =>
   `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`
 
+/** The rating badge: gold from 90, where the words say 世界级 (words.ts ATTR_TIERS) — at 88 half an international's starters wore it. */
 export function OvrBadge({ value }: { value: number }) {
-  const cls = value >= 88 ? 'elite' : value >= 78 ? 'good' : value >= 68 ? 'ok' : ''
+  const cls = value >= 90 ? 'elite' : value >= 78 ? 'good' : value >= 68 ? 'ok' : ''
   return <span className={`ovr ${cls}`}>{value}</span>
 }
 
