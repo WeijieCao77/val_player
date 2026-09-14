@@ -32,10 +32,12 @@ import { CNY_FLAG, migrateToCny } from '../src/engine/me/cnyMigrate'
 import { leagueCurOf, perUsd, toUsd } from '../src/engine/me/currency'
 import type { Cur } from '../src/engine/me/currency'
 import { cny, money } from '../src/engine/me/moneyfmt'
-import { payBand, payOf } from '../src/engine/me/paytable'
+import { offerOf, payBand, payOf } from '../src/engine/me/paytable'
+import { ROLE_PAY } from '../src/engine/me/contract'
+import { expectedSalary } from '../src/engine/player'
 import { weekReport } from '../src/engine/me/press'
 import estimates from '../src/data/prize_estimates_me.json'
-import type { Competition, GameState } from '../src/engine/types'
+import type { Competition, GameState, Player, Team } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -244,6 +246,34 @@ fmtFacts.push(['工资带地板：2023 年起合作战队 $50,000 / €50,000 / 
   payBand('North America', 1, 2023).floor === 50_000 && payBand('Europe', 1, 2024).floor === 50_000 && payBand('Korea', 1, 2025).floor === 67_000_000
   && [2021, 2022, 2026].every((y) => payBand('China', 2, y).floor === 72_000 && payBand('China', 2, y).cur === 'CNY')
   && payBand('Europe', 2, 2026).floor === 6_000])
+// tier-1 pay from 2026 (me/paytable.ts T1_2026): a proven starter at 综合 82 is offered what 2026's reports say, in every
+// year to 2034; the floors and caps do not move; 2023–25 is as it was; and Europe's second tier is ×0.55 of the world's wage
+{
+  const REPORTED: [string, number, number][] = [
+    ['North America', 120_000, 144_000], ['Brazil', 120_000, 144_000], ['Europe', 85_000, 106_000],
+    ['Korea', 102_000_000, 136_000_000], ['Thailand', 102_000_000, 136_000_000], ['China', 513_000, 684_000],
+  ]
+  const starter = expectedSalary({ overall: 82, ambition: 70 } as Player, 1) * ROLE_PAY.starter * (0.7 + 0.6 * 0.7)
+  const years = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034]
+  const out: string[] = []
+  for (const [region, lo, hi] of REPORTED) {
+    for (const y of years) {
+      const o = offerOf({ region, tier: 1 } as Team, y, starter)
+      if (o.salary < lo || o.salary > hi) out.push(`${region} ${y} ${money(o.salary, o.cur, y)}`)
+    }
+  }
+  fmtFacts.push([`2026–2034 一线：综合 82 的首发报价都在 2026 年报道的区间里（美洲 $12–14.4 万、EMEA €8.5–10.6 万、太平洋 ₩1.02–1.36 亿、中国 ¥51–68 万）${out.length ? `（${out.slice(0, 3).join(' | ')}）` : ''}`, out.length === 0])
+  const held = years.every((y) => REPORTED.every(([r]) => JSON.stringify(payBand(r, 1, y)) === JSON.stringify(payBand(r, 1, 2026))))
+  const floors = years.every((y) => payBand('North America', 1, y).floor === 50_000 && payBand('Europe', 1, y).floor === 50_000
+    && payBand('Korea', 1, y).floor === 67_000_000 && payBand('China', 1, y).floor === 300_000
+    && payBand('North America', 1, y).cap === 500_000 && payBand('Europe', 1, y).cap === 500_000
+    && payBand('Korea', 1, y).cap === 670_000_000 && payBand('China', 1, y).cap === 3_000_000)
+  fmtFacts.push([`2027–2034 一线工资带沿用 2026 年（暂定），地板 $50,000 / €50,000 / ₩67,000,000 / ¥30 万和封顶不变`, held && floors])
+  const was = [2023, 2024, 2025].every((y) => !payBand('Europe', 1, y).bend && payBand('Europe', 1, y).mul === 0.55 && payBand('Korea', 1, y).mul === 0.45
+    && payBand('North America', 1, y).mul === 0.8) && payBand('China', 1, 2025).mul === 0.55 && !payBand('China', 1, 2025).bend
+  fmtFacts.push(['2023–25 一线工资带不变（EMEA ×0.55、太平洋 ×0.45、美洲 ×0.8、中国 ×0.55）', was])
+  fmtFacts.push(['欧洲二线 ×0.55，每月地板 €500 不变', [2021, 2024, 2026, 2031].every((y) => payBand('Europe', 2, y).mul === 0.55 && payBand('Europe', 2, y).floor === 6_000)])
+}
 
 /* ------------------------------------------------------------------ */
 /*  an old dollar save, converted once                                  */
