@@ -388,7 +388,7 @@ export default function NewCareer({
               <button key={k} className={`origin-pick${originKey === k ? ' on' : ''}`} aria-pressed={originKey === k} onClick={() => setOriginKey(k)}>
                 {/* the card is the story; what it does to the numbers stays in
                     origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
-                {/* named on the server 「来自」 queues on, the year it opens: 韩服榜一路人王, 2021's China on 亚服 */}
+                {/* named on the server 「来自」 queues on, the year it opens: 韩服高分路人王, 2021's China on 亚服 */}
                 <b>{originName(o, serverAt(region, year, 0))}</b>
                 <span>{o.blurb}</span>
               </button>

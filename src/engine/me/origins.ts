@@ -31,7 +31,7 @@ export const ORIGINS: Origin[] = [
   { key: 'netcafe', name: '网吧长大的', blurb: '从小在网吧里打，枪硬，身体一般。', attrs: { aim: 5, reaction: 3 }, body: -6, money: 1500 },
   { key: 'cs', name: 'CS 转型', blurb: '打了几年 CS 二线，枪法和意识都在，道具要从头学。', attrs: { aim: 4, awareness: 3, utility: -5 }, tac: 8, money: 4000 },
   { key: 'streamer', name: '小主播', blurb: '直播间已经有一批固定观众，比赛打得少。', fans: 90, attrs: { teamwork: -3 }, money: 6000, flags: { streamer: 1 } },
-  { key: 'radiant', name: '国服榜一路人王', blurb: '天梯上的名字，队伍里的新人。', attrs: { aim: 6, reaction: 2, teamwork: -4, communication: -3 }, ladder: 28, fans: 40 },
+  { key: 'radiant', name: '国服高分路人王', blurb: '天梯上的名字，队伍里的新人。', attrs: { aim: 6, reaction: 2, teamwork: -4, communication: -3 }, ladder: 28, fans: 40 },
   { key: 'rich', name: '富裕家庭', blurb: '家里全力支持，也没什么人当回事。', money: 40000, fans: -10, mental: -4 },
   { key: 'academy', name: '青训营出身', blurb: '在这家俱乐部的青训营待过一年，被教练提了上来。', needsClub: true, attrs: { utility: 3, teamwork: 3, communication: 2 }, tac: 14, scoutSeen: 3, money: 1000 },
   { key: 'campus', name: '高校战队', blurb: '校队打了两年联赛，指挥过。', attrs: { communication: 3, igl: 5, aim: -2 }, tac: 10, money: 2000 },
@@ -56,8 +56,13 @@ const RETIRED_ORIGINS: Origin[] = [
 export const originOf = (key: string): Origin => ORIGINS.find((o) => o.key === key) ?? RETIRED_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]
 
 /**
- * A card's name on the server the career queues on (me/rank.ts serverAt): 「国服榜一路人王」
- * from Korea is 韩服榜一路人王, and from China before 国服 opened it is 亚服's. The key
+ * A card's name on the server the career queues on (me/rank.ts serverAt): 「国服高分路人王」
+ * from Korea is 韩服高分路人王, and from China before 国服 opened it is 亚服's. The key
  * and what the card does are the same everywhere, so a save reads its own card.
+ *
+ * That card was 「国服榜一路人王」 until 2026-09-14. Once the ladder showed places, it could be
+ * seen to start 辐能战魂 near 国服's 200th and 韩服's 20th with the talents left as they come —
+ * never first. The name now says where it starts; moving the start up to the name would bring
+ * the ladder's invitations forward.
  */
 export const originName = (o: Origin, server: { name: string }): string => o.name.replace('国服', server.name)
