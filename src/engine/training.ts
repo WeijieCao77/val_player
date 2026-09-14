@@ -1,6 +1,6 @@
 import { Rng, clamp, dayStream } from './rng'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling, CEILING_BANK } from './player'
+import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
 import { growLoyalty } from './attachment'
@@ -102,14 +102,16 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng, mods?: C
   p.xp[attr] = (p.xp[attr] ?? 0) + gain
   p.fatigue = clamp(p.fatigue + rng.range(5, 11), 0, 100)
 
-  // a player at his own ceiling (me/bottleneck.ts) banks it and waits
+  // a player at his own ceiling (me/bottleneck.ts) keeps nothing: no 存点数 — his hours there count toward the break
   if (atOwnCeiling(p, attr)) {
-    p.xp[attr] = Math.min(p.xp[attr] ?? 0, CEILING_BANK)
+    p.xp[attr] = 0
     return null
   }
   if ((p.xp[attr] ?? 0) >= 100) {
     p.xp[attr] = (p.xp[attr] ?? 0) - 100
     p.attrs[attr] = clamp(p.attrs[attr] + 1, 20, 99)
+    // and the point that reaches it leaves nothing over
+    if (atOwnCeiling(p, attr)) p.xp[attr] = 0
     const before = p.overall
     recomputeOverall(p)
     refreshValue(p)
@@ -124,11 +126,12 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   // pair drill go through this path, and they used to walk a maxed player
   // several points past his own potential — the number the whole scouting and
   // transfer economy is priced on.
-  // A player carrying his own ceilings is held by them instead: the bar fills
-  // and waits, and the one number is re-derived from them (me/bottleneck.ts).
+  // A player carrying his own ceilings is held by them instead: at a ceiling the
+  // bar stays empty — nothing is stored to land when it opens, no 存点数 — and
+  // the one number is re-derived from them (me/bottleneck.ts).
   if (p.caps) {
     if (atOwnCeiling(p, k)) {
-      p.xp[k] = Math.min((p.xp[k] ?? 0) + amount, CEILING_BANK)
+      p.xp[k] = 0
       return false
     }
   } else if (p.overall >= p.potential) {
@@ -139,6 +142,7 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
   if ((p.xp[k] ?? 0) < 100) return false
   p.xp[k] = (p.xp[k] ?? 0) - 100
   p.attrs[k] = clamp(p.attrs[k] + 1, 20, 99)
+  if (atOwnCeiling(p, k)) p.xp[k] = 0
   recomputeOverall(p)
   refreshValue(p)
   return true
@@ -348,6 +352,8 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
         if (p.overall < p.potential && rng.chance(0.55 * drift)) {
           // his own ceiling holds here too; the dice are rolled the same either way
           p.attrs[k] = clamp(p.attrs[k] + rng.int(0, 2), 20, Math.max(p.attrs[k], ceilingOf(p, k)))
+          // and reaching it keeps no progress over (no 存点数, me/bottleneck.ts)
+          if (atOwnCeiling(p, k)) p.xp[k] = 0
           recomputeOverall(p)
         }
       } else if (rng.chance(Math.abs(drift) * 0.5)) {

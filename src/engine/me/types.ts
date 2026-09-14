@@ -445,6 +445,8 @@ export interface BottleneckState {
   mileV?: Partial<Record<keyof Attrs, number>>
   /** 2 once the book has had the one-time look back for the title breaks an older build missed */
   rev?: number
+  /** true once what a save from before banked at its ceilings (「存点数」, gone 2026-09-14) has been dropped (me/bottleneck.ts dropBank) */
+  noBank?: boolean
 }
 
 /** What can be wrong with me - see me/injury.ts. */

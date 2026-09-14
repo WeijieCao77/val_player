@@ -8,7 +8,7 @@ import { fanTier } from '../../engine/me/fans'
 import { originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
 import { cupOf, cupView } from '../../engine/me/cups'
-import { BANK_POINTS, CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
+import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { ageNote } from '../../engine/me/growth'
 import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
 import RivalsPanel from './Rivals'
@@ -68,14 +68,13 @@ export default function MeScreen() {
             const atCap = v >= cap
             const near = !atCap && cap - v <= 2
             // 进度 on its own said nothing: say what it is progress toward, and
-            // at the ceiling say that instead
-            const banked = Math.min(BANK_POINTS, Math.floor((p.xp[k] ?? 0) / 100))
-            const note = atCap ? (cap >= CAP_HARD ? '到头了' : banked ? `卡在瓶颈 · 存了 ${banked} 点` : '卡在瓶颈')
+            // at the ceiling say that instead — with nothing stored: 「存点数」 is gone (engine/me/bottleneck.ts)
+            const note = atCap ? (cap >= CAP_HARD ? '到头了' : '卡在瓶颈')
               : nums ? `到 ${v + 1} · ${next}%`
                 : near ? '快到瓶颈'
                   : attrRank(cap) > attrRank(v) ? `够得着${attrWord(cap)}` : '还在长'
             const tip = atCap
-              ? (cap >= CAP_HARD ? '99 是所有人的终点。' : `练到瓶颈就上不去了：再练的先存着，最多存 ${BANK_POINTS} 点，瓶颈松开的那一刻一起涨上去；不练也不会掉。怎么破写在下面。`)
+              ? (cap >= CAP_HARD ? '99 是所有人的终点。' : '练到瓶颈就上不去了，练的时间也不会存着：照下面「怎么破」做满，瓶颈当场破开，属性再照常练上去。不练也不会掉。')
               : nums
                 ? `练到 ${v + 1} 的进度：训练、训练赛、复盘和一些事件都往里攒，攒满 100% 就涨 1 点。瓶颈在 ${cap}，还能再涨 ${cap - v} 点。`
                 : '条下面的细线是练到下一点的进度：训练、训练赛、复盘和一些事件都往里攒，攒满就涨一点。竖线是瓶颈。'

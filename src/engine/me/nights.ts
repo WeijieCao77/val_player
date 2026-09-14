@@ -58,8 +58,12 @@ function open(state: GameState, kind: NightKind, about: string): void {
   cerCounted(state, kind)
 }
 
-/** Training progress, without growth.ts (which imports ceremony.ts): rolls over at the next session. */
+/**
+ * Training progress, without growth.ts (which imports ceremony.ts): rolls over at the next session.
+ * At my own ceiling it keeps nothing — it was a second, smaller 存点数 that landed after a break (me/bottleneck.ts).
+ */
 function bumpXp(p: Player, k: keyof Attrs, n: number): void {
+  if (p.caps && p.attrs[k] >= p.caps[k]) return
   p.xp[k] = Math.min((p.xp[k] ?? 0) + n, 199)
 }
 

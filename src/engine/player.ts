@@ -40,13 +40,10 @@ export const weightsFor = (p: Pick<Player, 'role'>): Record<keyof Attrs, number>
 export const ceilingOf = (p: Pick<Player, 'caps'>, k: keyof Attrs): number => p.caps?.[k] ?? 99
 
 /**
- * Progress a player at his own ceiling still banks, in xp: three points' worth,
- * which land the moment the ceiling opens (me/bottleneck.ts). One point was all
- * it kept, so three weeks of 枪法 at the ceiling showed one point on the break.
+ * Sitting at his own ceiling. False for anyone without ceilings, so the rest of the world trains as it always has.
+ * A player there keeps no progress: the bank of three points' worth that landed when the ceiling opened
+ * (「存点数」) is gone since 2026-09-14 — his hours there count toward breaking it (me/bottleneck.ts).
  */
-export const CEILING_BANK = 300
-
-/** Sitting at his own ceiling. False for anyone without ceilings, so the rest of the world trains as it always has. */
 export const atOwnCeiling = (p: Pick<Player, 'caps' | 'attrs'>, k: keyof Attrs): boolean =>
   !!p.caps && p.attrs[k] >= p.caps[k]
 
