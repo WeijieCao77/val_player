@@ -11,7 +11,8 @@ import { push } from './pending'
 import { makeDeal } from './contract'
 import { gradeOf } from './tryout'
 import { declinedNow, expectOf, tryoutSkill } from './prepro'
-import { PLAYER_WINDOWS, nextWindow, proPerf } from './transfer'
+import { proPerf } from './transfer'
+import { absDay, nextMarketAbs, todayAbs, weeksToMarket, windowAt } from './window'
 import type { ChainLive } from './story'
 import { CHAIN_CN, chainProgress, chainWeekCount, closeChain, isPro, isStarter, seedLive } from './story'
 
@@ -160,7 +161,8 @@ const CHAINS: ChainDef[] = [
     setup: (s, rng) => {
       const me = s.me!
       if (!isPro(s) || me.abroad || me.tenure < 1) return null
-      const w = nextWindow(s).weeks
+      // the terms come at the next market day (me/window.ts MARKET_DAYS), once both clubs' windows are open
+      const w = weeksToMarket(s)
       if (w < 5 || w > 16) return null
       const t = pickForeign(s, rng)
       if (!t) return null
@@ -215,9 +217,16 @@ function metNow(state: GameState, c: ChainLive): boolean {
 /** A club that said it would come with terms at the window, coming — or not. */
 function windowTick(state: GameState, c: ChainLive, rng: Rng): boolean {
   const me = state.me!
-  const open = PLAYER_WINDOWS.some(([a, b]) => state.day >= a && state.day <= b)
-  if (!open) {
-    c.due = me.week + nextWindow(state).weeks
+  // at the first market day after the answer (me/window.ts MARKET_DAYS), once both clubs' windows are open
+  const T = todayAbs(state)
+  const at = nextMarketAbs(absDay(c.fromYear ?? state.year, c.fromDay ?? state.day))
+  if (T < at) {
+    c.due = me.week + Math.max(1, Math.ceil((at - T) / 7))
+    return false
+  }
+  const w = windowAt(state, c.club)
+  if (!w.open) {
+    c.due = me.week + Math.max(1, Math.ceil(((w.nextOpens ?? T + 7) - T) / 7))
     return false
   }
   const t = c.club ? state.teams[c.club] : undefined

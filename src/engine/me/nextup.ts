@@ -1,9 +1,13 @@
-import { drawStanding, roundAheadOf } from '../circuit'
+import { drawStanding, eventOf, roundAheadOf } from '../circuit'
 import type { DrawStanding, RoundAhead } from '../circuit'
 import { formatOf, onTimeline, stagesOf } from '../era'
 import { nextInEvent, upcomingInternational } from '../qualify'
 import { nextRealFixtureFor } from '../season'
 import type { Competition, Fixture, GameState } from '../types'
+
+/** The latest day an event not drawn yet can play a club's decider: its open qualifiers' last day, or its draw's (circuit.ts offerPlayIn, planPlayIn). */
+const deciderBy = (c: Competition): number =>
+  Math.max(c.circuit!.start - 1, ...(eventOf(c.circuit!.id)?.units ?? []).filter((u) => u.type === 'open').map((u) => u.last ?? 0))
 
 /**
  * My club's next match, whether or not its tie is written yet: what the week's
@@ -144,7 +148,16 @@ export function nextUp(state: GameState): NextUp {
   const fixture = nextRealFixtureFor(state, club)
   const ahead = roundsAhead(state)
   if (fixture && (!ahead.length || fixture.day <= ahead[0].day)) return { kind: 'fixture', day: fixture.day, fixture }
-  if (ahead.length) return ahead[0]
+  if (ahead.length) {
+    // An event not drawn yet, open for the club to enter, whose decider is surely played before that round: the
+    // decider is written with the draw, on its open qualifier's last day or the draw's own (circuit.ts offerPlayIn,
+    // planPlayIn). Seen 2026-09-14 in a Challengers club booked into two leagues' third stages at once
+    // (scripts/check_nextup.ts, seed 11): the week named the round of one while the other's decider came four days
+    // sooner. A seated event is not put first: a bye there can come after the round.
+    const soon = onTimeline(state) ? eventsAhead(state, club, ahead[0].day - 1).entry : undefined
+    if (soon && deciderBy(soon) < ahead[0].day) return { kind: 'event', day: soon.circuit!.start, name: soon.name, sure: false }
+    return ahead[0]
+  }
   const out = outOf(state, club, ahead)
   if (!onTimeline(state)) {
     // the old 2026 world has no real events on its books: its next stage, from the calendar

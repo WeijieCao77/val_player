@@ -13,6 +13,7 @@ import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
 import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
+import { absDay, dateCn, windowAt } from './window'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -172,8 +173,43 @@ export function acceptDeal(state: GameState, dealId: string): string {
     me.flags.refusedRenew = 0
     return '已续约。'
   }
+  // a club under a roster lock registers nobody until its event is over: agreed now, made then (me/window.ts)
+  const w = windowAt(state, d.teamId)
+  if (w.lock) {
+    me.moveAfter = { deal: d, event: w.lock.event, until: w.lock.until, year: state.year }
+    const to = state.teams[d.teamId]?.name ?? '对方'
+    const when = dateCn(absDay(state.year, w.lock.until), state.year)
+    pushLog(state, 'deal', `和 ${to} 谈妥了。${w.side === 'other' ? `${to} ` : '你的俱乐部'}正在打 ${w.lock.event}，名单锁定到 ${when}，打完再正式转会。`)
+    return `谈妥了：${w.lock.event} 打完（${when}后）正式去 ${to}。`
+  }
   joinClub(state, d)
   return `你签进了 ${state.teams[d.teamId]?.name}。`
+}
+
+/**
+ * A move agreed under a roster lock, made the day the lock lifts (me/week.ts, each
+ * day) — or, `now`, at the turn of the year, when no event holds anybody. A buyer
+ * that has gone quiet since takes nobody.
+ */
+export function settleMove(state: GameState, now = false): void {
+  const me = state.me
+  const m = me?.moveAfter
+  if (!me || !m) return
+  const to = state.teams[m.deal.teamId]
+  if (me.phase === 'retired' || !to || to.dormant || state.myTeam === to.id) {
+    me.moveAfter = undefined
+    if (me.phase !== 'retired' && state.myTeam !== to?.id) pushLog(state, 'bad', `${to?.name ?? '那家俱乐部'} 那边出了变故，谈好的转会没能成行。`)
+    return
+  }
+  const w = now ? null : windowAt(state, to.id)
+  if (w?.lock) {
+    m.event = w.lock.event
+    m.until = w.lock.until
+    return
+  }
+  me.moveAfter = undefined
+  pushLog(state, 'deal', `${m.event} 打完了，名单锁定解除，转会正式生效。`)
+  joinClub(state, m.deal)
 }
 
 function applyTerms(state: GameState, d: Deal): void {

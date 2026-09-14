@@ -570,6 +570,8 @@ export interface MeState {
   pre: PreState
   tryout?: Tryout
   deals: Deal[]
+  /** a move agreed while a club was under a roster lock: made the day the lock lifts (me/contract.ts settleMove) */
+  moveAfter?: { deal: Deal; event: string; until: number; year: number }
   /** clubs that wrote me down at a stage's end */
   intents: { teamId: string; day: number }[]
   /** clubs turned down this year, or that turned me down, each with its year: it stays away until the year turns (me/prepro.ts declinedNow) */

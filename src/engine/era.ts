@@ -366,6 +366,64 @@ export function stagesOf(year: number, timeline = year <= 2025): StageDef[] {
 export const stageAtIn = (year: number, day: number, timeline?: boolean): StageKey =>
   stagesOf(year, timeline).find((s) => day >= s.start && day <= s.end)?.key ?? 'offseason'
 
+/* ------------------------------------------------------------------ */
+/*  VCT 联赛的转会窗口                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * When a VCT league club may sign or release a player, season by season: the
+ * windows Riot published, first and last day inclusive. Before 2023 there were
+ * no leagues and no set windows, and below the leagues a club is not held to
+ * one (engine/me/window.ts reads each club's own).
+ *
+ *  - 2023: the off-season window into VCT 23 ran 26 September 2022 – 1 February
+ *    2023, a second one 6–25 March, then nothing until 2024's opened on
+ *    11 September 2023 (vlr.gg/145908 VCT 23 roster construction rules; Dexerto's
+ *    VCT 2023 rules).
+ *  - 2024: 11 September 2023 – 15 July 2024; the sides at Champions locked their
+ *    final rosters on 26 July (vlr.gg/271261; esports.gg, VCT 2024 transfer window).
+ *  - 2025: 7 October 2024 until one week before the club's own league's Stage 2
+ *    playoffs (Liquipedia, VCT25 Roster Construction Rules). `stage2` is read off
+ *    that league's event; the day per league is 暂定.
+ *  - 2026 on: 2025's shape. 2026's opening day is 暂定; from 2027 a window opens
+ *    eight days after the season before's Champions ends, 暂定 too.
+ */
+export interface VctWindow {
+  /** the season it signs for */
+  season: number
+  opens: string
+  /** a date, or `stage2`: one week before the club's league's Stage 2 playoffs */
+  closes: string
+  /** a second window inside the season */
+  mid?: [string, string]
+  /** after the window closed: the day the sides at Champions locked their final rosters */
+  championsLock?: string
+  /** a date here nobody has published */
+  tentative?: boolean
+}
+
+export const VCT_WINDOWS: VctWindow[] = [
+  { season: 2023, opens: '2022-09-26', closes: '2023-02-01', mid: ['2023-03-06', '2023-03-25'] },
+  { season: 2024, opens: '2023-09-11', closes: '2024-07-15', championsLock: '2024-07-26' },
+  { season: 2025, opens: '2024-10-07', closes: 'stage2' },
+  // Champions Paris ended on 5 October 2025; the day 2026's window opened is 暂定
+  { season: 2026, opens: '2025-10-13', closes: 'stage2', tentative: true },
+]
+
+const VCT_AHEAD = new Map<number, VctWindow>()
+/** A season's VCT window: the table, and from 2027 2026's shape on its own calendar (暂定). None before the leagues. */
+export function vctWindowOf(season: number): VctWindow | null {
+  if (season < 2023) return null
+  const known = VCT_WINDOWS.find((w) => w.season === season) ?? VCT_AHEAD.get(season)
+  if (known) return known
+  const champs = stagesOf(season - 1, true).find((s) => s.key === 'champions')
+  const d = new Date(Date.UTC(season - 1, 0, 1 + (champs?.end ?? 290) + 8))
+  const opens = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  const w: VctWindow = { season, opens, closes: 'stage2', tentative: true }
+  VCT_AHEAD.set(season, w)
+  return w
+}
+
 /**
  * Tier-2 splits and Ascension run beside the partnered calendar rather than
  * being a slice of it, so they have names but no dates. They did not exist
