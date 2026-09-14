@@ -136,8 +136,8 @@ function foreignLeague(state: GameState, t: Team): boolean {
  * Those were windows when the career moved only on its two market days. Since
  * 2026-09-14 the count is by transfer period — the half-season a market day
  * closes, whichever of its days the window was open (me/window.ts periodKey).
- * Sixteen careers from club starts (scripts/probe_window.ts 8 6 2021 and 8 5 2026,
- * seeds 4100–4471): 135 periods at a Challengers club, the window open at the end
+ * Sixteen careers from club starts (8×6 seasons from 2021 and 8×5 from 2026, seeds
+ * 4100–4471, the seeds scripts/check_window.ts reads its churn off): 135 periods at a Challengers club, the window open at the end
  * of 2,915 of their weeks; 10 brought a VCT club, 62 only other clubs.
  *
  * 破晓's rule for a second-team man is the model (tryout.ts rollProOffers): his
