@@ -21,11 +21,12 @@ import type { GameState, MatchResult, Player } from './types'
 export const NEUTRAL = 10
 
 /**
- * How easy a player is to share a room with: 协同 and 沟通 against 70, halved.
- * A fresh 18-year-old with two talent points in each is about −12, one with
- * eight about +6; a Challengers regular sits near −2 (2026: p50 67 and 69).
+ * How easy a player is to share a room with: 协同 and 沟通 against 68, halved.
+ * 68 is a Challengers regular (2026: p50 67 and 69), so the man a career player
+ * lines up beside sits near 0; a fresh 18-year-old with two talent points in
+ * each is about −10, one with eight about +8.
  */
-export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.attrs.communication - 140) / 2
+export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.attrs.communication - 136) / 2
 
 /**
  * The room is live at the career player's club (decided 2026-09-14,
@@ -36,9 +37,13 @@ export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.
  *  - EASE_REST, EASE_RATE: where a bond drifts back to when nothing happens,
  *    and how fast — an easy pair settles warmer and fades slower;
  *  - EASE_WIN, EASE_LOSS: how much a win builds and a loss costs;
- *  - EASE_ARGUE: how far above zero a bad loss can still turn into an argument.
+ *  - EASE_ARGUE: how far above zero a bad loss can still turn into an argument,
+ *    up to ARGUE_TOP.
  *
- * Measured with scripts/probe_igl.ts; checked by scripts/check_igl.ts.
+ * Measured with scripts/probe_igl.ts; checked by scripts/check_igl.ts. A first
+ * cut (ease against 70, EASE_REST 0.6, EASE_ARGUE 0.8) put a 2+2 duelist into
+ * fifty arguments in six seasons against eight before, and cooled every pair at
+ * his club.
  *
  * Every other club keeps the old rule. Only our club's bonds are ever played
  * out (applyMatchBonds, weeklyBonds), so another club's chemistry is its
@@ -46,11 +51,12 @@ export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.
  * player, and none of this moves.
  */
 export const EASE_INIT = 0.25
-export const EASE_REST = 0.6
-export const EASE_RATE = 0.02
+export const EASE_REST = 0.4
+export const EASE_RATE = 0.015
 export const EASE_WIN = 0.015
 export const EASE_LOSS = 0.02
-export const EASE_ARGUE = 0.8
+export const EASE_ARGUE = 0.4
+export const ARGUE_TOP = 8
 
 /** The pair's ease where the room is live — both at the career player's club — else null. */
 export function liveEase(state: GameState, a: Player, b: Player): number | null {
@@ -195,7 +201,7 @@ export const winMul = (live: number | null): number => (live == null ? 1 : clamp
 /** And how hard a loss lands on it (EASE_LOSS). */
 export const lossMul = (live: number | null): number => (live == null ? 1 : clamp(1 - live * EASE_LOSS, 0.6, 1.5))
 /** The bond under which a bad loss turns into an argument: zero, or above it for an awkward pair (EASE_ARGUE). */
-export const argueAt = (live: number | null): number => (live == null ? 0 : clamp(-live * EASE_ARGUE, -15, 20))
+export const argueAt = (live: number | null): number => (live == null ? 0 : clamp(-live * EASE_ARGUE, -ARGUE_TOP, ARGUE_TOP))
 
 /**
  * What a match did to the dressing room.

@@ -1,6 +1,6 @@
 import { clamp } from '../rng'
 import type { GameState, Player } from '../types'
-import { bondBetween, ease, squadHarmony } from '../bonds'
+import { bondBetween, ease, NEUTRAL, squadHarmony } from '../bonds'
 import { squadOf } from '../roster'
 
 /**
@@ -14,44 +14,57 @@ import { squadOf } from '../roster'
  * to the people in it:
  *
  *  - the coach's eye (roomEdge, me/coach.ts coachView): between two players of
- *    about the same level, the one who is easy to play with and gets on with
- *    the squad. ROOM_EDGE_MAX either way, on a scale where a point is a point of
- *    综合 — it settles a close call and cannot bench a clearly better player;
- *  - form (roomForm, roomWeek): a player at ease in the room plays nearer his
- *    best. Nudged every week at the rate the engine pulls form back to 70
- *    (engine/training.ts weeklyTick), so it settles about roomForm away from
- *    where it would have been, ROOM_FORM_MAX either way.
+ *    about the same level, the one who is easier to play with and gets on
+ *    better with the squad. ROOM_EDGE_MAX either way, on a scale where a point
+ *    is a point of 综合 — it settles a close call and cannot bench a clearly
+ *    better player;
+ *  - form (roomForm, roomWeek): a player more at ease in the room than the rest
+ *    of it plays nearer his best. Nudged every week at the rate the engine pulls
+ *    form back to 70 (engine/training.ts weeklyTick), so it settles about
+ *    roomForm away from where it would have been, ROOM_FORM_MAX either way.
  *
- * Both read the same two things: the player's own ease (协同 and 沟通 against
- * 70) and his average bond with the rest of the squad against ROOM_BOND_REF.
+ * Both measure a player against his own squad — his ease against the squad's
+ * average ease, his average bond with the squad against the squad's average
+ * bond — so the room sorts players inside a club and never moves the club as a
+ * whole: the squad's average form, and so its strength against clubs this rule
+ * does not reach, is what it was. A first cut measured from fixed points (ease
+ * 0, bond 30) sat nearly every man at the career player's club under both and
+ * cost that club three to four points of form (scripts/probe_igl.ts).
  */
 
-/** the bond a squad settles around in a career's first seasons (scripts/probe_igl.ts, 2026: 20–30) */
-export const ROOM_BOND_REF = 30
-/** the coach's eye: per point of ease, per point of bond, and the most it moves a player */
+/** the coach's eye: per point of ease over the squad's, per point of bond over the squad's, and the most it moves a player */
 export const ROOM_EDGE_EASE = 0.05
 export const ROOM_EDGE_BOND = 0.02
 export const ROOM_EDGE_MAX = 1.5
-/** form: per point of ease, per point of bond, the most, and the weekly share of it applied */
-export const ROOM_FORM_EASE = 0.15
-export const ROOM_FORM_BOND = 0.08
-export const ROOM_FORM_MAX = 4
+/** form: the same two, the most, and the weekly share of it applied */
+export const ROOM_FORM_EASE = 0.1
+export const ROOM_FORM_BOND = 0.05
+export const ROOM_FORM_MAX = 3
 export const ROOM_FORM_PULL = 0.06
 
 /** His average bond with the rest of his club's squad. */
 export function roomBond(state: GameState, p: Player): number {
   const others = squadOf(state, p.teamId ?? '').filter((x) => x.id !== p.id)
-  return others.length ? others.reduce((s, x) => s + bondBetween(state, p.id, x.id), 0) / others.length : ROOM_BOND_REF
+  return others.length ? others.reduce((s, x) => s + bondBetween(state, p.id, x.id), 0) / others.length : NEUTRAL
+}
+
+/** What everyone in a squad is measured against: its average ease, and its average bond (every player's average bond, averaged). */
+export function roomBase(state: GameState, teamId: string): { ease: number; bond: number } {
+  const squad = squadOf(state, teamId)
+  return {
+    ease: squad.length ? squad.reduce((s, x) => s + ease(x), 0) / squad.length : 0,
+    bond: squadHarmony(state, teamId),
+  }
 }
 
 /** What the room adds to how the coach sees him. */
-export function roomEdge(state: GameState, p: Player): number {
-  return clamp(ease(p) * ROOM_EDGE_EASE + (roomBond(state, p) - ROOM_BOND_REF) * ROOM_EDGE_BOND, -ROOM_EDGE_MAX, ROOM_EDGE_MAX)
+export function roomEdge(state: GameState, p: Player, base = roomBase(state, p.teamId ?? '')): number {
+  return clamp((ease(p) - base.ease) * ROOM_EDGE_EASE + (roomBond(state, p) - base.bond) * ROOM_EDGE_BOND, -ROOM_EDGE_MAX, ROOM_EDGE_MAX)
 }
 
 /** Where the room sets his form, against where it would be. */
-export function roomForm(state: GameState, p: Player): number {
-  return clamp(ease(p) * ROOM_FORM_EASE + (roomBond(state, p) - ROOM_BOND_REF) * ROOM_FORM_BOND, -ROOM_FORM_MAX, ROOM_FORM_MAX)
+export function roomForm(state: GameState, p: Player, base = roomBase(state, p.teamId ?? '')): number {
+  return clamp((ease(p) - base.ease) * ROOM_FORM_EASE + (roomBond(state, p) - base.bond) * ROOM_FORM_BOND, -ROOM_FORM_MAX, ROOM_FORM_MAX)
 }
 
 /** The week's nudge, for everyone at my club. */
@@ -59,8 +72,9 @@ export function roomWeek(state: GameState): void {
   const me = state.me
   if (!me || me.phase !== 'pro' || !state.myTeam) return
   const squad = squadOf(state, state.myTeam)
+  const base = roomBase(state, state.myTeam)
   // read the whole room before touching anyone, so the order of the roster does not matter
-  const nudge = squad.map((p) => roomForm(state, p) * ROOM_FORM_PULL)
+  const nudge = squad.map((p) => roomForm(state, p, base) * ROOM_FORM_PULL)
   squad.forEach((p, i) => { p.form = clamp(p.form + nudge[i], 30, 99) })
 }
 
@@ -82,12 +96,13 @@ export function roomView(state: GameState): RoomView | null {
   if (!me || me.phase !== 'pro' || !state.myTeam) return null
   const p = state.players[me.id]
   const others = squadOf(state, state.myTeam).filter((x) => x.id !== me.id)
+  const base = roomBase(state, state.myTeam)
   return {
     mine: roomBond(state, p),
-    squad: squadHarmony(state, state.myTeam),
+    squad: base.bond,
     ease: ease(p),
     mates: others.length ? others.reduce((s, x) => s + ease(x), 0) / others.length : 0,
-    form: roomForm(state, p),
-    edge: roomEdge(state, p),
+    form: roomForm(state, p, base),
+    edge: roomEdge(state, p, base),
   }
 }
