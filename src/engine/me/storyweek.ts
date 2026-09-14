@@ -12,7 +12,7 @@ import { makeDeal } from './contract'
 import { gradeOf } from './tryout'
 import { declinedNow, expectOf, tryoutSkill } from './prepro'
 import { proPerf } from './transfer'
-import { absDay, nextMarketAbs, todayAbs, weeksToMarket, windowAt } from './window'
+import { absDay, dateCn, nextMarketAbs, nextPeriodAbs, signedThisPeriod, todayAbs, weeksToMarket, windowAt } from './window'
 import type { ChainLive } from './story'
 import { CHAIN_CN, chainProgress, chainWeekCount, closeChain, isPro, isStarter, seedLive } from './story'
 
@@ -222,6 +222,16 @@ function windowTick(state: GameState, c: ChainLive, rng: Rng): boolean {
   const at = nextMarketAbs(absDay(c.fromYear ?? state.year, c.fromDay ?? state.day))
   if (T < at) {
     c.due = me.week + Math.max(1, Math.ceil((at - T) / 7))
+    return false
+  }
+  // signed this transfer period, or a move already agreed: the terms wait for the next period instead of coming
+  // now or going away (me/window.ts moveBlock). Asked every week meanwhile, it is said once, when it is put off.
+  if (me.moveAfter || signedThisPeriod(state)) {
+    const next = nextPeriodAbs(state)
+    const fresh = me.week >= c.due
+    c.due = me.week + Math.max(1, Math.ceil((next - T) / 7))
+    const who = c.club ? state.teams[c.club]?.name : undefined
+    if (fresh) pushLog(state, 'deal', `外区邀约：${who ?? '那家俱乐部'}听说你${me.moveAfter ? '已经谈妥了下一家' : '这个转会期刚签约'}，说等下个转会期（${dateCn(next, state.year)}起）再谈。`)
     return false
   }
   const w = windowAt(state, c.club)

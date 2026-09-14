@@ -449,16 +449,44 @@ export function signedThisPeriod(state: GameState): boolean {
 }
 
 /**
+ * Why no move can reach me today because I signed in this transfer period, or null: the one gate for
+ * every way a club comes for me — a tryout invitation, an offer (on the bench or listed, too), a VCT
+ * club, a story's promised terms — and for putting myself on the market. The author's rule, applied
+ * to every move (2026-09-14): 「如果玩家在同一个转会期签约了，那就不发了，只能等下一个转会期让他又
+ * 跳槽的可能」. A renewal from my own club is not a move. `what` is what waits for the next period.
+ */
+export function moveBlock(state: GameState, what = '才会有俱乐部来邀请试训或报价'): string | null {
+  if (!signedThisPeriod(state)) return null
+  return `这个转会期刚签约，下个转会期（${dateCn(nextPeriodAbs(state), state.year)}起）${what}`
+}
+
+/**
  * Why no club can ask me to a tryout today, or null while one can — the one gate every invitation
  * passes (me/prepro.ts rollInvites, cupInvite; me/transfer.ts vctApproach): a move already agreed;
- * a signing in this transfer period; or the window, mine when I have a club and `teamId`'s when
- * given (windowAt). The screens grey the invitations with this line instead of hiding them.
+ * a signing in this transfer period (moveBlock); or the window, mine when I have a club and `teamId`'s
+ * when given (windowAt). The screens grey the invitations with this line instead of hiding them.
  */
 export function inviteBlock(state: GameState, teamId?: string): string | null {
   const me = state.me
   if (me?.moveAfter) return `已经和 ${state.teams[me.moveAfter.deal.teamId]?.name ?? '下一家'} 谈妥，不再去别家试训`
-  if (signedThisPeriod(state)) return `这个转会期刚签约，下个转会期（${dateCn(nextPeriodAbs(state), state.year)}起）才会有俱乐部来邀请试训`
-  return windowBlock(state, teamId)
+  return moveBlock(state) ?? windowBlock(state, teamId)
+}
+
+/**
+ * Why I cannot put myself on the market today, or null while I can (me/transfer.ts listSelf): no
+ * contract, a move already agreed, the period I signed in (moveBlock), the window, a listing already
+ * made this year. The transfer screen's button can grey itself with this same line.
+ */
+export function listBlock(state: GameState): string | null {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return '你现在没有合同可挂'
+  if (me.moveAfter) return '已经谈妥了下一家，等名单锁定解除'
+  const signed = moveBlock(state, '才能挂牌')
+  if (signed) return signed
+  const shut = windowBlock(state)
+  if (shut) return `${shut}。挂牌没人看`
+  if (me.listedYear === state.year) return '今年已经挂过牌了'
+  return null
 }
 
 /** This season's VCT windows in dates. */
@@ -488,7 +516,7 @@ export function windowRuleLines(state: GameState): string[] {
     out.push('Challengers 和其他联赛外的俱乐部不设固定窗口，只在打季后赛、晋级赛这类升级赛时锁名单——比 Riot 的规定宽，是有意的。')
   }
   out.push('一笔转会要两边俱乐部的窗口都开着。开着的时候，赛段结束、6 月中和 11 月下旬的两个转会日、平常的每周都可能来报价，每半个赛季最多来一轮。')
-  out.push('试训邀请也只在窗口开着时来。在一个转会期里刚签约的，这个转会期不会再有俱乐部来请你试训，一线俱乐部也不会来挖人，要等下个转会期。')
+  out.push('试训邀请也只在窗口开着时来。在一个转会期里刚签约的，这个转会期不会再有俱乐部来请你试训或报价，外区的邀约顺延，自己也不能挂牌，要等下个转会期；自己俱乐部的续约不受影响。')
   out.push('谈妥时有一边名单锁定的，比赛打完才正式转会。')
   return out
 }

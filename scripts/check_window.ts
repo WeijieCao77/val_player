@@ -12,9 +12,10 @@
  * 五、2023 年从 1 月 1 日打：VCT 俱乐部在 1/1–2/1、3/6–3/25 有开窗的时刻，其余时间关着；
  *     Challengers 俱乐部只有打大赛、季后赛时关；锁定的日子里没有报价进来；LOCK//IN 出局就解锁
  * 六、生涯里的报价和转会（报数，只拦爆炸）；签约的那个转会期里，没有试训邀请、没有 VCT 俱乐部来找
- * 七、试训邀请（2026-09-14，作者：「改成只在转会期发，如果玩家在同一个转会期签约了，那就不发了，
- *     只能等下一个转会期让他又跳槽的可能」）：自己俱乐部窗口关着不发；同一个转会期签约后不发，
- *     并说明为什么；下个转会期又能来；被放走的自由人不受这一条限制
+ * 七、签约的那个转会期（2026-09-14，作者：「如果玩家在同一个转会期签约了，那就不发了，只能等下一个
+ *     转会期让他又跳槽的可能」，用到每一种转会来路上）：不来试训邀请、不来报价（坐板凳也不来，没签约的
+ *     对照会来）、挂牌被拒并写明原因和日期、外区邀约顺延到下个转会期再兑现；自己俱乐部窗口关着不发邀请；
+ *     下个转会期邀请、报价、挂牌照常；被放走的自由人不受这一条限制
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
@@ -22,8 +23,9 @@ import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { acceptDeal, joinClub, leaveClub, makeDeal, settleMove } from '../src/engine/me/contract'
 import { cupInvite } from '../src/engine/me/prepro'
-import { VCT_SEEN, listSelf, vctApproach, vctRead, windowRoll } from '../src/engine/me/transfer'
-import { MARKET_DAYS, absDay, clubOpen, inviteBlock, marketDay, periodKey, playoffsFrom, signedThisPeriod, windowAt, windowLine, windowOfClub, windowRuleLines } from '../src/engine/me/window'
+import { storyWeek } from '../src/engine/me/storyweek'
+import { VCT_SEEN, listSelf, rollOffers, vctApproach, vctRead, windowRoll } from '../src/engine/me/transfer'
+import { MARKET_DAYS, absDay, clubOpen, inviteBlock, listBlock, marketDay, moveBlock, periodKey, playoffsFrom, signedThisPeriod, windowAt, windowLine, windowOfClub, windowRuleLines } from '../src/engine/me/window'
 import type { WindowState } from '../src/engine/me/window'
 import { eventsOf } from '../src/engine/circuit'
 import type { CEvent } from '../src/engine/circuit'
@@ -395,8 +397,8 @@ console.log('六、生涯里的报价和转会（和改之前量的是同一批�
   if (tot.afterSign) fail(`签约的那个转会期里，又来了 ${tot.afterSign} 份试训邀请或 VCT 俱乐部来找`)
 }
 
-/* ---- 七、试训邀请 ---- */
-console.log('七、试训邀请只在转会期发，签约后这个转会期不再发')
+/* ---- 七、签约的那个转会期 ---- */
+console.log('七、签约的那个转会期里：不来试训邀请、不来报价、不能挂牌，外区邀约顺延；下个转会期照常')
 {
   const s = structuredClone(base) as GameState
   const me = s.me!
@@ -406,51 +408,100 @@ console.log('七、试训邀请只在转会期发，签约后这个转会期不�
   const chalClub = Object.values(s.teams)
     .filter((t) => t.tier === 2 && !t.dormant && t.roster.length >= 5 && regionIn(t.region, 2026) === league)
     .sort((x, y) => y.rating - x.rating)[0]
-  if (!chalClub) fail(`2026 年 ${league} 找不到 Challengers 俱乐部`)
+  const abroadClub = Object.values(s.teams)
+    .filter((t) => t.tier === 1 && !t.dormant && t.roster.length >= 5 && regionIn(t.region, 2026) !== league && hasPlace(s, t))
+    .sort((x, y) => x.rating - y.rating)[0]
+  if (!chalClub || !abroadClub) fail(`2026 年找不到 ${league} 的 Challengers 俱乐部，或外赛区的 VCT 俱乐部`)
   else {
     const run = { key: 'probe', year: 2026, reached: 3, rounds: 3, won: true, prize: 0 }
-    /** six draws of what brings a call: the VCT clubs of his league coming for him (vctApproach), a cup run's end (cupInvite) */
-    const draws = (): { invites: number; offers: number } => {
+    const clear = (): void => {
+      me.pre.invites = []
+      me.deals = []
+      me.pending = []
+      me.intents = []
+      me.flags.vctGot = 0
+      me.flags.winGot = 0
+    }
+    /** six draws of each way a club comes: the VCT clubs of his league (vctApproach), a cup run's end (cupInvite), a round of offers (rollOffers) */
+    const draws = (): { invites: number; offers: number; market: number } => {
       let invites = 0
       let offers = 0
+      let market = 0
       for (let i = 1; i <= 6; i++) {
-        me.pre.invites = []
-        me.deals = []
-        me.pending = []
-        me.intents = []
-        me.flags.vctGot = 0
-        me.flags.winGot = 0
+        clear()
         vctApproach(s, new Rng(700 + i), 1)
         cupInvite(s, run, new Rng(800 + i))
         invites += me.pre.invites.length
         offers += me.deals.length
+        clear()
+        rollOffers(s, new Rng(900 + i), false, 1)
+        market += me.deals.length
       }
-      me.pre.invites = []
-      me.deals = []
-      me.pending = []
-      return { invites, offers }
+      clear()
+      return { invites, offers, market }
     }
+    const since = (mark: typeof me.log[number] | undefined): string[] => me.log.slice(mark ? me.log.lastIndexOf(mark) + 1 : 0).map((l) => l.text)
     // signed on day 20 at a Challengers club, at a VCT starter's level: reproduced 2026-09-14, the week after brought 12 invitations in 8 draws
     s.year = 2026
     s.day = 20
     joinClub(s, makeDeal(s, chalClub.id, 'transfer', 'A', new Rng(1)))
     me.seasonStart.starts = VCT_SEEN
-    me.tenure = 1
     const read = vctRead(s)
     if (!read) fail(`${chalClub.name}：读不出 VCT 首发的线`)
     else p.overall = Math.max(p.overall, read.bar + 1)
+    // just signed and on the bench, with an international title this year: a round of offers is a certainty for him (rollOffers)
+    me.tenure = 0
+    me.titles.push({ year: 2026, title: '圣地亚哥大师赛', started: true })
+    const club = s.teams[s.myTeam]
+    club.starters = club.starters.filter((id) => id !== me.id)
     s.day = 27
     if (!windowAt(s).open) fail(`2026 第 27 天 ${chalClub.name} 的窗口应该开着：${windowLine(s)}`)
     const same = draws()
     const why = inviteBlock(s)
-    if (same.invites || same.offers) fail(`第 20 天签约，第 27 天（同一个转会期）还来了 ${same.invites} 份试训邀请、${same.offers} 份 VCT 俱乐部的报价`)
+    if (same.invites || same.offers || same.market) fail(`第 20 天签约，第 27 天（同一个转会期、坐板凳）还来了 ${same.invites} 份试训邀请、${same.offers} 份 VCT 俱乐部的报价、${same.market} 份报价`)
     if (!signedThisPeriod(s) || !why?.includes('刚签约')) fail(`同一个转会期签约以后，没说为什么不来邀请：${why}`)
+    // the same man the same day, had he not signed this period: what the signing alone holds back
+    me.flags.signedPeriod = 0
+    const control = draws()
+    me.flags.signedPeriod = periodKey(2026, 20)
+    if (!control.market) fail('对照：同一天没在这个转会期签约的同一个人也一份报价都没有——挡住报价的应该只是签约')
+    // 挂牌: refused with the reason and the next period's date; the button's helper says the same line
+    const block = listBlock(s)
+    const listed = listSelf(s)
+    if (me.listedYear === 2026 || !listed.includes('刚签约') || !listed.includes('才能挂牌') || !/\d+月\d+日/.test(listed) || listed !== `${block}。`) fail(`签约的转会期里挂牌：「${listed}」，按钮说「${block}」`)
+    // 外区邀约: terms promised for a market day already past, due now — held to the next transfer period, not dropped
+    me.abroad = false
+    me.pendingEvent = undefined
+    me.chain = { id: 'overseas', step: 1, wk: me.week, due: me.week, score: 1, club: abroadClub.id, track: 'window', fromYear: 2025, fromDay: 300 }
+    let mark = me.log[me.log.length - 1]
+    storyWeek(s)
+    const held = since(mark)
+    const heldTo = me.chain?.due ?? me.week
+    if (!me.chain || me.deals.length || !held.some((t) => t.includes('外区邀约') && t.includes('下个转会期'))) fail(`签约的转会期里外区邀约没有顺延：${me.chain ? '还在' : '没了'}，报价 ${me.deals.length}，日志「${held.join(' | ')}」`)
+    if (heldTo <= me.week + 1) fail(`外区邀约只顺延到第 ${heldTo} 周（现在第 ${me.week} 周），应该等到下个转会期`)
+    // a week on and still this period: asked again, and says nothing again
+    me.week += 1
+    s.day += 7
+    mark = me.log[me.log.length - 1]
+    storyWeek(s)
+    if (!me.chain || me.deals.length || since(mark).some((t) => t.includes('外区邀约'))) fail('外区邀约顺延以后每周又说一遍，或者没到下个转会期就兑现了')
     // the next transfer period: after the market day that closed the first
     s.day = MARKET_DAYS[0] + 4
     if (periodKey(2026, 20) === periodKey(2026, s.day)) fail(`第 20 天和第 ${s.day} 天算成了同一个转会期`)
+    me.week = Math.max(me.week + 1, heldTo)
+    mark = me.log[me.log.length - 1]
+    storyWeek(s)
+    const came = since(mark)
+    if (me.chain || !me.deals.some((d) => d.teamId === abroadClub.id) || !came.some((t) => t.includes('按之前谈的开出了报价'))) fail(`下个转会期外区邀约没兑现：${came.join(' | ') || '没动静'}`)
     const next = draws()
-    if (signedThisPeriod(s) || inviteBlock(s)) fail(`下个转会期还挡着：${inviteBlock(s)}`)
+    if (signedThisPeriod(s) || inviteBlock(s) || moveBlock(s)) fail(`下个转会期还挡着：${inviteBlock(s)}`)
     if (!next.invites) fail(`下个转会期、两边窗口开着，6 次里一份试训邀请都没来（报价 ${next.offers}）`)
+    if (!next.market) fail('下个转会期，坐板凳的国际赛冠军 6 次里一份报价都没来')
+    const again = listSelf(s)
+    if (me.listedYear !== 2026) fail(`下个转会期挂不了牌：${again}`)
+    clear()
+    console.log(`  第 20 天签约、坐板凳：同一个转会期 ${same.invites} 份邀请 / ${same.offers + same.market} 份报价（没签约的对照 ${control.market} 份）· 挂牌「${listed}」· 外区邀约「${held.find((t) => t.includes('外区邀约')) ?? ''}」→ ${came.find((t) => t.includes('外区邀约')) ?? ''}`)
+    console.log(`  下个转会期 ${next.invites} 份邀请 / ${next.offers + next.market} 份报价，挂牌「${again}」`)
     // his own club's window shut: at a VCT club after its 2026 window closed, with no signing in that period
     joinClub(s, makeDeal(s, vctClub.id, 'transfer', 'A', new Rng(2)))
     me.flags.signedPeriod = 0
