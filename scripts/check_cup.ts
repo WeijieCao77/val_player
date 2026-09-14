@@ -94,6 +94,9 @@ function playRound(s: GameState, rows: Row[]): void {
   const m = mountCupMatch(s, cup, run.round, cupRng(s, `r${run.round}`))
   const rec = new MeMatch(s, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }).runOut()
   const label = cup.rounds[run.round].label
+  // the round's line in the week's report names the cup once (reported 2026-09-14: 「网吧赛 网吧赛 首轮」)
+  const said = me.log.filter((l) => l.kind === 'cup').slice(-1)[0]?.text ?? ''
+  if (!said.startsWith(`${cup.name} ${label} vs `)) fail(`${cup.name}${label}：这一轮的战报写成「${said.split(' vs ')[0]}」`)
   const week = me.week
   const weekDay = me.weekDay
   afterCupMatch(s, rec.won, rec.score, cupRng(s, 'after'))

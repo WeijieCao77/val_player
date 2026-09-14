@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
-import { candidateClubs, careerRegions, ceilingLines, ceilingPreview, createCareer, emptyTalents, isAcademy, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
+import { careerRegions, ceilingLines, ceilingPreview, createCareer, emptyTalents, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
@@ -13,7 +13,7 @@ import type { SaveMeta } from '../../engine/me/saveMeta'
 import { fanTier, fansCn } from '../../engine/me/fans'
 import { compCn } from '../../engine/me/compname'
 import { HallView } from './HallScreen'
-import { ENTRY_CN, ENTRY_YEARS, formatOf, regionIn, regionsOf } from '../../engine/era'
+import { ENTRY_CN, ENTRY_YEARS, formatOf, regionIn } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel, money } from './common'
 import { toCny } from '../../engine/me/currency'
@@ -23,16 +23,6 @@ const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
 /** From 2023 every place a career can start from is under one of the four leagues. */
 const LEAGUE_ORDER: Region[] = ['Americas', 'EMEA', 'Pacific', 'China']
-
-/**
- * The regions a career can open in that year: the ones that year's world has
- * clubs in. 2021's SEA is a stage its sub-regions played up to, not a place a
- * club was based, so it is not offered. 2026 is the one timeline's 2026: its
- * clubs are based where they really are, not in the four leagues' names.
- */
-const regionsFor = (year: EntryYear): Region[] => (year >= 2026
-  ? careerRegions(year)
-  : regionsOf(year).filter((r) => candidateClubs(r, 1, year).length + candidateClubs(r, 2, year).length > 0))
 
 /**
  * Backgrounds on offer per visit (asked 2026-09-12: 「把选择都放进后台，每次随机抽取三个留给玩家选择」).
@@ -220,9 +210,12 @@ export default function NewCareer({
   const [hallName] = useState(() => hallTitle(readHall()))
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
-  const regions = useMemo(() => regionsFor(year), [year])
+  // the regions that year's world has clubs in (career.ts careerRegions), the list createCareer opens from
+  const regions = useMemo(() => careerRegions(year), [year])
   // where a club start is placed: the game picks from these once the career starts (career.ts pickClub)
   const pool = useMemo(() => startPool(region, start, year), [region, start, year])
+  // what createCareer would refuse here, ladder start included, in the button's words (career.ts startBlocked)
+  const gate = useMemo(() => startBlocked(region, start, year), [region, start, year])
   const academies = useMemo(() => start === 'chal' && pool.some((c) => isAcademy(c, year)), [pool, start, year])
   // the talent panel's ceiling and the starters beside it, from the engine and the entry year's data (me/career.ts ceilingLines)
   const [capNums] = useNumbers()
@@ -288,14 +281,14 @@ export default function NewCareer({
         : academies ? `这里有 ${pool.length} 支一线队的二队，开局进其中一支。`
           : `这里有 ${pool.length} 支${clubWord}俱乐部，开局进其中一支，弱队更愿意赌新人。`)
   // what is still missing, said on the button, in the order the page asks (破晓's 建档 button, main.ts viewCreate)
-  const blocked = start !== 'pre' && !pool.length ? `${year} 年开季时${REGION_CN[region]}没有${start === 't1' ? '一线' : '二线'}俱乐部`
+  const blocked = gate ? gate
     : !originKey ? '先选一个出身'
       : left !== 0 ? `还需分配 ${left} 点天赋`
         : ''
 
   const pickYear = (y: EntryYear) => {
     setYear(y)
-    if (!regionsFor(y).includes(region)) setRegion('China')
+    if (!careerRegions(y).includes(region)) setRegion('China')
   }
   const pickStart = (k: StartPoint) => {
     setStart(k)
@@ -396,7 +389,7 @@ export default function NewCareer({
               <button key={k} className={`origin-pick${originKey === k ? ' on' : ''}`} aria-pressed={originKey === k} onClick={() => setOriginKey(k)}>
                 {/* the card is the story; what it does to the numbers stays in
                     origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
-                {/* named on the server 「来自」 queues on, the year it opens: 韩服榜一路人王, 2021's China on 亚服 */}
+                {/* named on the server 「来自」 queues on, the year it opens: 韩服高分路人王, 2021's China on 亚服 */}
                 <b>{originName(o, serverAt(region, year, 0))}</b>
                 <span>{o.blurb}</span>
               </button>

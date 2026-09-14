@@ -7,7 +7,7 @@ import { realName } from '../names'
 import { arrive2026 } from '../today'
 import { setupSeason } from '../season'
 import { Rng, clamp, hashStr } from '../rng'
-import { ATTR_KEYS, emptyStats } from '../types'
+import { ATTR_KEYS, REGION_CN, emptyStats } from '../types'
 import type { Attrs, GameState, Player, Region, Role } from '../types'
 import { expectedSalary, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { AP_SEASON } from './actions'
@@ -19,7 +19,7 @@ import { pushLog } from './log'
 import { originName, originOf } from './origins'
 import { serverOf } from './rank'
 import { makeDeal, joinClub } from './contract'
-import { onTimeline, regionIn, stageNameIn } from '../era'
+import { MERGED_INTO, onTimeline, regionsOf, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
 import { TALENT_CAP_MAX, ceilingPotential, ensureCeilings } from './bottleneck'
@@ -147,12 +147,51 @@ export function startPool(region: Region, start: StartPoint, year = 2026): ClubC
   return room.length ? room : base
 }
 
-/** The regions a career can open in that year: the ones its world has clubs in, busiest first. */
+/**
+ * The regions a career can open in that year: the ones its world has clubs in — 2026's busiest first,
+ * 2021's in the order of its circuits, as the new-career screen lists them. 2021's SEA is a stage its
+ * sub-regions played up to, not a place a club was based, so it is not one. 2026 is the one timeline's
+ * 2026: its clubs are based where they really are, not in the four leagues' names.
+ */
 export function careerRegions(year: number): Region[] {
-  if (year < 2026) return []
+  if (year < 2026) return regionsOf(year).filter((r) => candidateClubs(r, 1, year).length + candidateClubs(r, 2, year).length > 0)
   const count = new Map<Region, number>()
   for (const t of bookClubsAt(year)) count.set(t.region, (count.get(t.region) ?? 0) + 1)
   return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([r]) => r)
+}
+
+/**
+ * Where a career asked to open in `asked` opens that year: there, when that year's world has clubs
+ * there. A name over several places — a league's (Americas, EMEA, Pacific), or 2021's SEA — is not a
+ * place a club is based: it opens in the first place under it on that year's list (careerRegions, the
+ * new-career screen's order: 2026's busiest first, 2021's circuits as they are listed) that can take
+ * this door, in 2021 as in 2026. Anywhere else with no club that year: nowhere (null).
+ *
+ * Reported 2026-09-14: a 2021 ladder start from 「Americas」 threw a TypeError in createCareer, looking
+ * for a club to build the world around. Only 2026 put a league's name on a real region, and the ladder
+ * start had no guard where a club start refuses in words (pickClub).
+ */
+export function startRegion(asked: Region, year: number, start: StartPoint = 'pre'): Region | null {
+  const list = careerRegions(year)
+  if (list.includes(asked)) return asked
+  const under = list.filter((r) => {
+    for (let x = MERGED_INTO[r]?.into, guard = 0; x && guard < 6; x = MERGED_INTO[x]?.into, guard++) if (x === asked) return true
+    return false
+  })
+  // 2021's EMEA lists Turkey before CIS, and Turkey had no first-tier club: a 替补 start goes on to one that had
+  return under.find((r) => start === 'pre' || startPool(r, start, year).length > 0) ?? under[0] ?? null
+}
+
+/**
+ * Why a career cannot open at this place and door that year, in the words the new-career screen puts
+ * on its start button; null when it can. createCareer, left to pick the club, refuses exactly these
+ * (scripts/check_starts.ts).
+ */
+export function startBlocked(asked: Region, start: StartPoint, year: number): string | null {
+  const region = startRegion(asked, year, start)
+  if (!region) return `${year} 年开季时${REGION_CN[asked] ?? asked}没有俱乐部`
+  if (start !== 'pre' && !startPool(region, start, year).length) return `${year} 年开季时${REGION_CN[region] ?? region}没有${start === 't1' ? '一线' : '二线'}俱乐部`
+  return null
 }
 
 /**
@@ -316,13 +355,13 @@ export function createCareer(o: CareerOpts): GameState {
   const origin = originOf(o.originKey)
   const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
   const year = o.year ?? 2026
-  // a league's name is not a place a club is based: in 2026's world a career asked to open in
-  // 「Pacific」 opens in the busiest real region the Pacific league draws on
-  const region = year >= 2026 && !careerRegions(year).includes(o.region)
-    ? careerRegions(year).find((r) => regionIn(r, year) === o.region) ?? o.region
-    : o.region
+  // a league's name is not a place a club is based: a career asked to open in 「Pacific」 opens in the
+  // first real region under it that the year lists, 2021 and 2026 alike; a place with no club that year
+  // is refused in words (startRegion), as a club start with no club to sign for is (pickClub)
+  const region = startRegion(o.region, year, o.start)
+  if (!region) throw new Error(`${year} 年开季时 ${o.region} 没有俱乐部，这一年不能从这里开始`)
   const teamId = o.start === 'pre'
-    ? candidateClubs(region, 2, year)[0]?.id ?? candidateClubs(region, 1, year)[0].id   // the world is built around a club; I am not at it
+    ? (candidateClubs(region, 2, year)[0] ?? candidateClubs(region, 1, year)[0]).id   // the world is built around a club; I am not at it
     : (o.teamId ?? pickClub(region, o.start, rng, year))
   const state = year >= 2026 ? createWorldAt(teamId, seed, year) : ruleOpening(createWorld(teamId, seed, year))
   // Nobody's club until I sign for one. The world used to keep a club "watched" for a player on the

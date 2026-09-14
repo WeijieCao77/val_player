@@ -155,11 +155,27 @@ ok(Math.abs(firstAt('ladder_100', 'China') - 72) <= 1.5, `前一百 on 国服 at
 ok(firstAt('ladder_100', 'Korea') < firstAt('ladder_100', 'China'), '前一百 comes earlier on a smaller server')
 ok(Math.abs(firstAt('ladder_top', 'China') - 96) <= 2, `登顶 on 国服 about 96 (${firstAt('ladder_top', 'China')})`)
 const radiantCard = ORIGINS.find((o) => o.key === 'radiant')!
-ok(originName(radiantCard, serverAt('China', 2026, 0)) === '国服榜一路人王', 'the card on 国服')
-ok(originName(radiantCard, serverAt('Korea', 2026, 0)) === '韩服榜一路人王', 'the card from Korea')
-ok(originName(radiantCard, serverAt('China', 2021, 0)) === '亚服榜一路人王', 'the card from 2021 China')
-ok(originName(radiantCard, serverAt('North America', 2026, 0)) === '北美服榜一路人王', 'the card from North America')
+ok(originName(radiantCard, serverAt('China', 2026, 0)) === '国服高分路人王', 'the card on 国服')
+ok(originName(radiantCard, serverAt('Korea', 2026, 0)) === '韩服高分路人王', 'the card from Korea')
+ok(originName(radiantCard, serverAt('China', 2021, 0)) === '亚服高分路人王', 'the card from 2021 China')
+ok(originName(radiantCard, serverAt('North America', 2026, 0)) === '北美服高分路人王', 'the card from North America')
 ok(ORIGINS.filter((o) => o.key !== 'radiant').every((o) => originName(o, SERVERS.KR) === o.name), 'no other card changes its name')
+// 高分, not 榜一 (2026-09-14): the card promises no place, and with the talents as they come it starts on its
+// server's board — 神话 or up — on every server, in both entry years
+ok(!ORIGINS.some((o) => /榜一|第一/.test(o.name)), 'no card is named for a first place')
+{
+  const opens: string[] = []
+  for (const year of [2021, 2026] as const) {
+    for (const region of ['China', 'Japan', 'North America', 'Europe', 'Korea', 'Brazil', 'LATAM'] as Region[]) {
+      if (year === 2021 && region === 'Japan') continue
+      const s = createCareer({ name: 'Card', region, role: '决斗者', talents: emptyTalents(), originKey: 'radiant', start: 'pre', seed: 5, year })
+      const r = rankAt(s)
+      ok(r.pos !== null, `the 高分路人王 card starts on its server's board: ${region} ${year} → ${rankFull(r)}`)
+      opens.push(`${year} ${rankText(r)}`)
+    }
+  }
+  console.log(`高分路人王 opens at: ${opens.join(' | ')}`)
+}
 
 /* ---- what a career shows ---- */
 for (const [region, year] of [['China', 2026], ['Korea', 2026], ['LATAM', 2026], ['China', 2021]] as [Region, number][]) {

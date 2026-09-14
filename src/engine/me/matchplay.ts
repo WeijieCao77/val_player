@@ -126,7 +126,9 @@ export class MeMatch {
     this.state = state
     if ('aId' in src) {
       this.friendly = src
-      const id = `friendly:${state.year}:${state.day}:${src.label}`
+      // a cup round's label had the cup's name in front of it until 2026-09-14 (me/cups.ts mountCupMatch); the id
+      // still does, so a round draws as it did and a hurt card's id on an old save is still this match's
+      const id = `friendly:${state.year}:${state.day}:${src.comp} ${src.label}`
       const [ta, tb] = src.mineSecond ? [src.bId, src.aId] : [src.aId, src.bId]
       this.fixture = { id, day: state.day, stage: state.stage, comp: src.comp, teamA: ta, teamB: tb, bo: src.bo, label: src.label, played: false }
       this.sim = new MatchSim(state, ta, tb, src.bo, new Rng(hashStr(`match:${state.seed}:${id}`)))

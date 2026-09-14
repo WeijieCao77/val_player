@@ -153,7 +153,9 @@ export function mountCupMatch(state: GameState, cup: CupDef, round: number, rng:
   }
   const name = OPP_NAMES[rng.int(0, OPP_NAMES.length - 1)]
   state.teams[TEMP_OPP] = tempTeam(state, TEMP_OPP, name, name.slice(0, 3), oppIds, Math.round(lo))
-  return { bo: r.bo, label: `${cup.name} ${r.label}`, opp: name }
+  // the round alone: the match's comp is already the cup's name, and the two together read
+  // 「网吧赛 网吧赛 首轮」 in the week's report (reported 2026-09-14)
+  return { bo: r.bo, label: r.label, opp: name }
 }
 
 export function dropTempTeams(state: GameState): void {
