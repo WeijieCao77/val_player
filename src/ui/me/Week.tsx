@@ -13,7 +13,8 @@ import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
-import { nextRealFixtureFor, fixturesFor } from '../../engine/season'
+import { fixturesFor } from '../../engine/season'
+import { WAIT_CN, nextUp } from '../../engine/me/nextup'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, ladderLabel, ladderTier, skillToLadder } from '../../engine/me/prepro'
 import { CUPS, cupView } from '../../engine/me/cups'
@@ -50,8 +51,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
-  const next = pro ? nextRealFixtureFor(game, game.myTeam) : undefined
-  const opp = next ? game.teams[next.teamA === game.myTeam ? next.teamB : next.teamA] : null
+  // my club's next match, its tie written or not, or else the next event that is its own (engine/me/nextup.ts)
+  const up = pro ? nextUp(game) : undefined
+  const next = up?.kind === 'fixture' ? up.fixture : undefined
+  const oppId = next ? (next.teamA === game.myTeam ? next.teamB : next.teamA) : up?.kind === 'round' ? up.opponent : null
+  const opp = oppId ? game.teams[oppId] ?? null : null
   const soon = pro ? fixturesFor(game, game.myTeam).filter((f) => !f.played && f.day > game.day && f.day <= game.day + 7) : []
   const recent = pro ? fixturesFor(game, game.myTeam).filter((f) => f.played && f.comp !== 'scrim').slice(-3).reverse() : []
   const target = pro ? duelTarget(game) : null
@@ -277,29 +281,56 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         {pro ? (
           <>
             <Panel title="下一场" className={starter ? 'own' : ''}>
-              {next && opp && team ? (
+              {up && (up.kind === 'fixture' || up.kind === 'round') && team ? (
                 <>
                   <div className="score-line" style={{ padding: '4px 0 8px' }}>
                     <div className="t a"><Crest id={game.myTeam} size={28} /><span>{team.tag}</span></div>
                     <div className="s muted" style={{ fontSize: 18 }}>VS</div>
-                    <div className="t"><Crest id={opp.id} size={28} /><span>{opp.tag}</span></div>
+                    {opp
+                      ? <div className="t"><Crest id={opp.id} size={28} /><span>{opp.tag}</span></div>
+                      : <div className="t"><span className="muted">待定</span></div>}
                   </div>
-                  <FaceRow ids={opp.starters.length ? opp.starters : opp.roster.slice(0, 5)} />
+                  {opp && <FaceRow ids={opp.starters.length ? opp.starters : opp.roster.slice(0, 5)} />}
                   <p className="small" style={{ margin: '0 0 6px' }}>
-                    {game.comps[next.comp]?.name ?? next.comp} · {next.label.replace(/^(KO|SW):\d+:/, '')} · BO{next.bo} · {next.day - game.day <= 0 ? '今天' : `${next.day - game.day} 天后`}
+                    {up.kind === 'fixture'
+                      ? `${game.comps[up.fixture.comp]?.name ?? up.fixture.comp} · ${up.fixture.label.replace(/^(KO|SW):\d+:/, '')} · BO${up.fixture.bo}`
+                      : `${up.name} · ${up.round}${up.bo ? ` · BO${up.bo}` : ''}`}
+                    {' · '}{up.day - game.day <= 0 ? '今天' : `${up.day - game.day} 天后`}
                   </p>
-                  <p className="small" style={{ margin: 0 }}>纸面：<b>{paper}</b>{nums ? `（实力 ${team.rating} vs ${opp.rating}，约 ${Math.round(est * 100)}%）` : ''}</p>
+                  {/* a round already ours with no tie written yet: what the other side is still waiting on */}
+                  {up.kind === 'round' && !opp && <p className="tiny faint" style={{ margin: '0 0 6px' }}>{WAIT_CN[up.wait]}</p>}
+                  {opp && <p className="small" style={{ margin: 0 }}>纸面：<b>{paper}</b>{nums ? `（实力 ${team.rating} vs ${opp.rating}，约 ${Math.round(est * 100)}%）` : ''}</p>}
                   {/* whether I start is on the top bar; here only a benching, with its clock */}
                   {me.benchLock && me.benchLock > game.day ? (
                     <p className="small" style={{ margin: '6px 0 0', color: 'var(--loss)' }}>被换下，还有 {me.benchLock - game.day} 天</p>
                   ) : null}
                 </>
-              ) : <p className="muted" style={{ margin: 0 }}>暂时没有排定的比赛。</p>}
-              {soon.length > 1 && (
-                <p className="tiny faint" style={{ margin: '8px 0 0' }}>
-                  七天内还有：{soon.slice(1).map((f) => `${game.teams[f.teamA === game.myTeam ? f.teamB : f.teamA]?.tag}（${f.day - game.day} 天后）`).join('，')}
+              ) : up?.kind === 'waiting' ? (
+                <p className="small" style={{ margin: 0 }}>
+                  <b>{up.name}</b>：这一阶段还没打完，名次出来才知道有没有下一场。出线的话 {fmtDay(up.day, game.year)} 打{up.round}（{up.day - game.day} 天后）。
                 </p>
+              ) : (
+                <>
+                  {/* out of an event still being played: said first, then what is next */}
+                  {up && (up.kind === 'event' || up.kind === 'none') && up.out && <p className="small" style={{ margin: '0 0 6px' }}>{up.out}：已经出局。</p>}
+                  {up?.kind === 'event' ? (
+                    <>
+                      <p className="small" style={{ margin: 0 }}>
+                        {up.stage ? '下一个赛段' : '下一项赛事'}：<b>{up.name}</b> · {fmtDay(up.day, game.year)} {up.stage ? '开始' : '开打'}（{up.day - game.day} 天后）
+                      </p>
+                      {!up.stage && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{up.sure ? '对阵开打前一天才排出来。' : '你们可以报名，名单开打前一天定。'}</p>}
+                    </>
+                  ) : <p className="muted" style={{ margin: 0 }}>暂时没有排定的比赛。</p>}
+                </>
               )}
+              {(() => {
+                const others = soon.filter((f) => f.id !== next?.id)
+                return others.length > 0 ? (
+                  <p className="tiny faint" style={{ margin: '8px 0 0' }}>
+                    七天内还有：{others.map((f) => `${game.teams[f.teamA === game.myTeam ? f.teamB : f.teamA]?.tag}（${f.day - game.day} 天后）`).join('，')}
+                  </p>
+                ) : null
+              })()}
             </Panel>
             <Panel title="教练怎么看你">
               <p className="small" style={{ margin: '0 0 6px' }}>
