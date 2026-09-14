@@ -293,6 +293,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .talent-verdict { margin: 10px 0 0; font-size: var(--t-small); color: var(--muted); line-height: 1.6; }
 .talent-verdict b { color: var(--accent); margin-right: 6px; }
 
+/* ---- 音效 under the theme switch at the rail's foot (ui/me/SoundToggle.tsx); `.nav button` would make it a block row */
+.app.career .nav .nav-foot .sound-toggle { display: flex; width: 100%; justify-content: center; margin-top: 6px; padding: 5px 0; }
+.app.career .nav .nav-foot .sound-toggle.on { color: var(--accent); border-color: var(--accent-line); }
+
 /* ---- new career: start points and origins ---- */
 .start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 720px) { .start-grid { grid-template-columns: 1fr; } }
@@ -498,7 +502,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
      按钮、下拉、能点的行不低于 40px。
    只挂在 .app.career（生涯）和 .newcareer（开局页）下。
 
-   叠放次序：更新日志 30 < 「更多」的遮罩 39 < 底栏 40 < 成就卡 45 < 卡片 50 < 提示 100。 */
+   叠放次序：更新日志 30 < 「更多」的遮罩 39 < 底栏 40 < 卡片 50 < 大事卡（成就）60 < 更新提示 85
+   < 导览 94–97 < 提示 100。大事卡还开着时卡片和导览都先等（PlayerGame.tsx unlocks）。 */
 @media (max-width: 720px) {
   .app.career, .newcareer {
     --t-body: 15px; --t-small: 13.5px; --t-tiny: 12px; --t-label: 12px;
@@ -570,8 +575,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
     display: flex; order: 2; flex: 0 0 100%; align-items: center; gap: 10px;
     position: static; margin: 4px 0 0; padding: 6px 8px 8px; border-top: 0; border-bottom: 1px solid var(--line);
   }
-  .app.career .nav.more-open > .nav-foot::before { content: '界面配色'; color: var(--muted); font-size: var(--t-small); margin-right: auto; }
-  .app.career .nav .nav-foot .theme-cycle { width: auto; min-height: 40px; padding: 0 14px; font-size: var(--t-small); }
+  .app.career .nav.more-open > .nav-foot::before { content: '配色与音效'; color: var(--muted); font-size: var(--t-small); margin-right: auto; }
+  .app.career .nav .nav-foot .theme-cycle, .app.career .nav .nav-foot .sound-toggle { width: auto; min-height: 40px; margin-top: 0; padding: 0 14px; font-size: var(--t-small); }
   .app.career > .nav-scrim { position: fixed; inset: 0; z-index: 39; background: var(--scrim-soft); }
 
   /* -- the week page: the button ends the week's panel, and its copy sits in the overview where the page opens
@@ -582,7 +587,6 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career .advance-me select.advance-far { width: auto; min-height: 44px; font-size: 16px; }
   /* a toast and an achievement card stand above the changelog button, which stands on the tab bar */
   .app.career > .toast { bottom: calc(var(--dock-h) + var(--safe-b) + 60px); max-width: calc(100vw - 24px); }
-  .app.career > .ach-pop { bottom: calc(var(--dock-h) + var(--safe-b) + 58px) !important; }
 
   /* -- a card the clock stopped on: a card 8px in from the screen's edges that scrolls inside itself, its title and
         close held at its top, its buttons where its text ends (破晓's event and ceremony cards, .ev-inner / .cer-inner) */

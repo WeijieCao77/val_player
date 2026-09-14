@@ -37,6 +37,7 @@ import Standings from './ui/me/Standings'
 import MatchModal from './ui/me/MatchModal'
 import PlayerCard from './ui/me/PlayerCard'
 import ThemeToggle from './ui/me/ThemeToggle'
+import SoundToggle from './ui/me/SoundToggle'
 import { attrWord, useNumbers } from './ui/me/words'
 import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
@@ -357,7 +358,8 @@ export default function PlayerGame() {
             <div className="nav-more">
               <button className={`nav-item${more ? ' active' : ''}`} aria-expanded={more} onClick={() => setMore(!more)}>更多</button>
             </div>
-            <div className="nav-foot"><ThemeToggle compact /></div>
+            {/* the ground and the chime (off until turned on, ui/me/sfx.ts) — on a phone both sit in 更多 */}
+            <div className="nav-foot"><ThemeToggle compact /><SoundToggle /></div>
           </nav>
           <main className="main" id="main" ref={mainRef}>
             {me.phase === 'retired' ? (

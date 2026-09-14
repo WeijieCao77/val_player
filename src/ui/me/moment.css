@@ -1,0 +1,80 @@
+/* ---------------------------------------------------------------- moments (大事卡)
+
+   The career's big moments, full screen, in direction A 「转播红」 as the author
+   chose it on 2026-09-14 (design page https://claude.ai/code/artifact/7fdca3cb-f1b9-4d1f-a090-3891ffea8eaa),
+   built after 破晓's .rankup card: a red slash band with rays behind the art,
+   clipped corners, one primary button and no ✕. The glow sits on the wrapper —
+   clip-path would cut a box-shadow off (破晓 lost its glow exactly that way).
+
+   Stacking: above the cards (50), under the update bar (85), the tour (94–97)
+   and the toast (100). */
+.moment-bg {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 16px;
+  background: var(--scrim); backdrop-filter: blur(3px);
+  animation: mo-fade .25s ease;
+}
+.moment-glow {
+  --tone: var(--accent);
+  width: min(500px, 100%);
+  filter: drop-shadow(0 0 34px color-mix(in srgb, var(--tone) 40%, transparent));
+}
+.moment-glow.gold { --tone: var(--gold); }
+.moment {
+  max-height: calc(100svh - 32px); overflow: hidden auto; overscroll-behavior: contain;
+  text-align: center; padding: 0 24px 22px;
+  background: radial-gradient(120% 55% at 50% 0, color-mix(in srgb, var(--tone) 15%, transparent), transparent 62%), var(--panel);
+  border: 1px solid color-mix(in srgb, var(--tone) 70%, transparent);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+.mo-hero { position: relative; height: 176px; margin: 0 -24px 8px; display: grid; place-items: center; overflow: hidden; }
+.mo-band {
+  position: absolute; inset: 0 0 auto; height: 112px;
+  background: linear-gradient(100deg, var(--tone), color-mix(in srgb, var(--tone) 50%, #000));
+  clip-path: polygon(0 0, 100% 0, 100% 58%, 0 100%);
+}
+.mo-band::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(100deg, transparent 0 22px, rgba(255, 255, 255, .06) 22px 25px); }
+.mo-rays { position: absolute; width: 340px; height: 340px; color: var(--tone); opacity: .2; animation: mo-spin 80s linear infinite; }
+.mo-art { position: relative; width: 108px; height: 108px; color: #fff; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .5)); animation: mo-pop .45s cubic-bezier(.2, 1.4, .4, 1); }
+.mo-art svg { display: block; width: 100%; height: 100%; }
+/* no band behind it: the art takes the tone instead of white */
+.moment.bare .mo-art { color: var(--tone); filter: drop-shadow(0 0 16px color-mix(in srgb, var(--tone) 55%, transparent)); }
+.mo-eyebrow { margin: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .24em; color: var(--tone); overflow-wrap: anywhere; }
+.mo-title { margin: 4px 0 6px; font-size: 32px; font-weight: 900; line-height: 1.18; letter-spacing: .03em; text-wrap: balance; color: var(--text); }
+.mo-body { margin: 0 0 12px; color: var(--muted); font-size: var(--t-body, 15px); line-height: 1.7; }
+.mo-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0 0 14px; }
+.mo-chip { font-size: 13px; padding: 3px 10px; border: 1px solid var(--line-hi); border-radius: 999px; font-variant-numeric: tabular-nums; }
+.mo-chip.up { border-color: var(--win); color: var(--pos-ink); }
+.mo-chip.dn { border-color: var(--accent); color: var(--neg-ink); }
+.mo-chip.gold { border-color: var(--gold); color: var(--gold); }
+.mo-acts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.mo-acts button { min-height: 44px; }
+.mo-acts .primary { min-width: 140px; }
+.mo-next { margin: 8px 0 0; font-size: var(--t-small, 13.5px); color: var(--muted); }
+
+/* the rest of a long run of unlocks, on one card */
+.mo-list { display: grid; gap: 6px; margin: 2px 0 16px; padding: 0; text-align: left; }
+.mo-list li { list-style: none; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); background: var(--panel-2); }
+.mo-list li svg { width: 24px; height: 24px; color: var(--tone); }
+.mo-list li b { display: block; }
+.mo-list li small { display: block; color: var(--muted); font-size: var(--t-small, 13.5px); line-height: 1.5; }
+.mo-list li em { font-style: normal; font-size: 12.5px; color: var(--pos-ink); text-align: right; }
+
+@keyframes mo-fade { from { opacity: 0; } }
+@keyframes mo-pop { from { transform: scale(.4); opacity: 0; } }
+@keyframes mo-spin { to { transform: rotate(1turn); } }
+
+@media (max-width: 720px) {
+  .moment-bg { padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .moment { padding: 0 14px 16px; max-height: calc(100svh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .mo-hero { height: 140px; margin: 0 -14px 6px; }
+  .mo-band { height: 90px; }
+  .mo-rays { width: 280px; height: 280px; }
+  .mo-art { width: 84px; height: 84px; }
+  .mo-title { font-size: 25px; }
+  .mo-list li { grid-template-columns: 24px minmax(0, 1fr); }
+  .mo-list li em { grid-column: 2; text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment-bg, .mo-art, .mo-rays { animation: none; }
+}
