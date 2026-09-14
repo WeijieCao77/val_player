@@ -5,7 +5,7 @@ import type { PendingItem } from '../../engine/me/types'
 import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
 import { FRIENDLY_MAP_FATIGUE, MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
-import { expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
+import { awayWord, expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
 import { doorsOf, formatOf } from '../../engine/era'
 import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
@@ -158,13 +158,15 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
   const team = game.teams[inv.teamId]
   const skill = tryoutSkill(game)
   const expect = expectOf(team)
+  // 「外赛区」 by league, 「国外俱乐部」 by country: the word the offer's card and the transfer screen put on it (engine/me/prepro.ts awayWord)
+  const away = awayWord(game, team)
   const via = { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '教练组推荐', free: '知道你在找队' }[inv.via]
   return (
     <Modal title={inv.direct ? `${team.name} 的报价` : `${team.name} 的试训邀请`} onClose={() => {}} onBgClose={() => {}}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Crest id={team.id} size={40} />
         <div>
-          <b>{team.name}</b> <span className="tag">{REGION_CN[team.region]} · {formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : 'Challengers'} · {CLUB_TIER_CN(team)}</span>
+          <b>{team.name}</b> <span className="tag">{REGION_CN[team.region]} · {formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : 'Challengers'} · {CLUB_TIER_CN(team)}</span>{away && <span className="tag warn" style={{ marginLeft: 4 }}>{away}</span>}
           <div className="tiny muted">他们{via}</div>
         </div>
       </div>
@@ -249,6 +251,9 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
   const d = me.deals.find((x) => x.id === dealId)
   if (!d) { pop(game, 'deal', dealId); onDone(); return null }
   const team = game.teams[d.teamId]
+  // 「外赛区」 from 2023 by league, 「国外俱乐部」 a club of my league from another country (engine/me/prepro.ts awayWord);
+  // the deal's own `abroad` is the move abroad, by country
+  const away = awayWord(game, team)
   const title = d.kind === 'renew' ? `${team.name} 的续约` : d.kind === 'transfer' ? `${team.name} 的转会报价` : `${team.name} 的合同`
   const ask = (key: string) => {
     const r = askDeal(game, dealId, key, new Rng(hashStr(`ask:${game.seed}:${game.day}:${key}:${d.asks.length}`)))
@@ -261,7 +266,7 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Crest id={team.id} size={40} />
         <div>
-          <b>{team.name}</b> <span className="tag">{team.tier === 1 ? 'VCT' : 'Challengers'}</span>{d.abroad && <span className="tag warn" style={{ marginLeft: 4 }}>外赛区</span>}
+          <b>{team.name}</b> <span className="tag">{team.tier === 1 ? 'VCT' : 'Challengers'}</span>{away && <span className="tag warn" style={{ marginLeft: 4 }}>{away}</span>}
           <div className="tiny muted">评级 {d.grade}</div>
         </div>
       </div>

@@ -4,7 +4,7 @@ import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { absDay, dateCn, inviteBlock, listBlock, moveLifts, signedThisPeriod, windowLine } from '../../engine/me/window'
-import { abroadClub, clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
+import { abroadClub, awayWord, clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
 import { push } from '../../engine/me/pending'
@@ -199,10 +199,12 @@ export default function TransferScreen() {
             {clubs.map((t) => {
               const e = expectOf(t)
               const d = skill - e
+              // the word the cards put on a club: 「外赛区」 by league, 「国外俱乐部」 by country (engine/me/prepro.ts awayWord)
+              const word = awayWord(game, t)
               return (
                 <tr key={t.id} style={{ opacity: reach.has(t.id) ? 1 : 0.55 }}>
                   <td><span className="club"><Crest id={t.id} size={18} />{t.tag}</span></td>
-                  <td className="tiny">{CLUB_TIER_CN(t)}{away.has(t.id) ? ' · 外赛区' : ''}</td>
+                  <td className="tiny">{CLUB_TIER_CN(t)}{word ? ` · ${word}` : ''}</td>
                   {nums && <><td className="num">{t.rating}</td><td className="num">{Math.round(e)}</td></>}
                   <td className="num" style={{ color: d >= 0 ? 'var(--win)' : d >= -6 ? 'var(--warn)' : 'var(--loss)' }}>{nums ? `${d >= 0 ? '+' : ''}${Math.round(d)}` : gapWord(-d)}</td>
                 </tr>

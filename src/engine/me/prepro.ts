@@ -199,6 +199,46 @@ export function abroadClub(state: GameState, t: Team): boolean {
   return formatOf(state.year) === 'open' ? t.region !== state.me!.region : foreignLeague(state, t)
 }
 
+/**
+ * A club of my own VCT league based in another country or region than mine, from 2023: 本赛区 — no 外赛区 on it, nothing
+ * of ABROAD_CAP over it — but not my own country's. 「Another country」 is read the way 2021–2022 read 外赛区: the club's
+ * own region against mine (`t.region !== me.region`). For a North American in VCT Americas that is a Brazilian or LATAM
+ * club, for a European in VCT EMEA a Turkish, CIS or MENA one, and for a man playing in another league than his own
+ * (foreignLeague) every club of that league as well. Before 2023 there is none: a club of another region is 外赛区.
+ */
+export function leagueMate(state: GameState, t: Team): boolean {
+  return formatOf(state.year) !== 'open' && t.region !== state.me!.region && !foreignLeague(state, t)
+}
+
+/**
+ * What a club of my league from another country weighs against one of my own country's (leagueMate): in a call's draw
+ * (pickClub), a round of offers (me/transfer.ts pickBuyer) and the VCT clubs that come for a Challengers man
+ * (me/transfer.ts vctApproach). The author, 2026-09-14, on 「统一按联赛算」 having weighed them whole: 「给个中间分量」.
+ *
+ * Whole, the same 840 calls of a 2026 North American of 70 without the language came 400 from his own country's clubs
+ * and 334 from Brazil's and LATAM's; a European's 562 from Europe's and 228 from Türkiye's, the CIS's and MENA's. At
+ * half: 500 and 214, 648 and 140 — and 外赛区 106 → 126 and 50 → 52, home weighing less in the draw, still well under
+ * ABROAD_CAP (15% and 6% of the calls, no draw past 17%). A listed round's 240 picks, from his own country and from the
+ * league's others: at G2 131 → 156 and 102 → 70, at a North American Challengers side 116 → 169 and 119 → 65, at Team
+ * Heretics 131 → 172 and 102 → 60, at a European Challengers side 151 → 175 and 87 → 60. 2021–2022, and China's league
+ * of one country, draw exactly as before. scripts/check_language.ts 八 holds it.
+ */
+export const MATE_SHARE = 0.5
+
+/** A home club's share of its weight: one of my own country's whole, one of my league from another country MATE_SHARE. */
+export const homeShare = (state: GameState, t: Team): number => (leagueMate(state, t) ? MATE_SHARE : 1)
+
+/**
+ * The word a card or a table puts on a club (the author, 2026-09-14: 「标签按联赛、出海按国家」): 「外赛区」 for a club
+ * of another 赛区 as a call and an offer read it (abroadClub: from 2023 another VCT league), 「国外俱乐部」 for one of my
+ * league based in another country (leagueMate), nothing for my own country's. Both of the first two are a move abroad
+ * (me/contract.ts joinClub reads `me.abroad` by country): the language, the achievements and the following go by that.
+ */
+export function awayWord(state: GameState, t: Team): '外赛区' | '国外俱乐部' | '' {
+  if (abroadClub(state, t)) return '外赛区'
+  return t.region !== state.me!.region ? '国外俱乐部' : ''
+}
+
 function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng): Invite {
   void rng
   const me = state.me!
@@ -285,10 +325,11 @@ function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0, abroad = false)
   // 2021–2022: no import limits and no franchise, and the author's rule —
   // every region's clubs can write, each to its own bar. The bar is the
   // club's own level (expectOf), so a Thai side asks less than Sentinels.
-  // Each club of another 赛区 weighs less than one of mine, and all of them together no more than ABROAD_CAP of mine.
+  // Each club of another 赛区 weighs less than one of mine, and all of them together no more than ABROAD_CAP of mine;
+  // from 2023 a club of my league from another country is mine at MATE_SHARE of one of my own country's (leagueMate).
   // The same with the language or without it: what the language brings comes on top (LANG_EXTRA).
   const per = formatOf(state.year) === 'open' ? 0.5 : 0.04
-  const w = pool.map((t, i) => inviteWeight(state, t, prefer) * (away[i] ? per : 1))
+  const w = pool.map((t, i) => inviteWeight(state, t, prefer) * (away[i] ? per : homeShare(state, t)))
   return rng.weighted(pool, holdAbroad(w, away))
 }
 

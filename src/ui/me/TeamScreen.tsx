@@ -266,7 +266,7 @@ function CloutPanel() {
           </p>
           {targets.length ? targets.map((t) => (
             <div key={t.id} className="clout-row">
-              <span><b>{t.ign}</b> <span className="muted">{t.role} · 综合 {t.overall} · {t.teamName}{t.abroad ? ' · 外赛区' : ''} · 身价 {worldMoney(t.fee, leagueCurOf(team.region), game.year)}</span></span>
+              <span><b>{t.ign}</b> <span className="muted">{t.role} · 综合 {t.overall} · {t.teamName}{t.away ? ` · ${t.away}` : ''} · 身价 {worldMoney(t.fee, leagueCurOf(team.region), game.year)}</span></span>
               <button className="sm" onClick={() => act(doSign(game, t.id))}>要</button>
             </div>
           )) : <p className="small muted" style={{ margin: 0 }}>现在没有你够得着、又比队里现有的人强的目标。</p>}

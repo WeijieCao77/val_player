@@ -25,6 +25,13 @@
  *    only pressed down together
  * 六 from 2023 by the league: a club of my league based in another country is home, and calls without the language
  * 七 no club of my own within reach: a club from abroad still calls
+ * 八 「给个中间分量」 and 「标签按联赛、出海按国家」 (the author, 2026-09-14): from 2023 a club of my league from another
+ *    country weighs MATE_SHARE of one of my own country's and is home all the same — in 五's draws of a call, read as well
+ *    under the rule before (each weighed whole), and in a listed round of offers read the same way — so my own
+ *    country's clubs call and offer more, the league's other countries less, and 外赛区 stays under the cap; 2021–2022
+ *    and a league of one country draw exactly as before. The word on a club by year and league (「外赛区」 by league,
+ *    「国外俱乐部」 by country), on the invitation and offer cards and the transfer screen; going abroad still by
+ *    country (me.abroad, 「语言会是个问题」)
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
@@ -32,10 +39,11 @@ import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import {
-  ABROAD_CAP, INVITE_FANS, INVITE_FANS_T1, INVITE_LADDER, INVITE_LADDER_T1, LANG_EXTRA,
-  abroadClub, cupInvite, foreignLeague, inviteWeight, markDeclined, reachableClubs, rollInvites,
+  ABROAD_CAP, INVITE_FANS, INVITE_FANS_T1, INVITE_LADDER, INVITE_LADDER_T1, LANG_EXTRA, MATE_SHARE,
+  abroadClub, awayWord, cupInvite, foreignLeague, holdAbroad, inviteWeight, leagueMate, markDeclined, reachableClubs, rollInvites,
 } from '../src/engine/me/prepro'
 import { rollOffers } from '../src/engine/me/transfer'
+import { joinClub, makeDeal } from '../src/engine/me/contract'
 import { COURSES } from '../src/engine/me/shop'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
 import { recomputeOverall } from '../src/engine/player'
@@ -335,7 +343,11 @@ function held(region: Region, year: 2021 | 2026, seed: number): void {
   console.log(`\n${year} ${me.region}，综合 ${Math.round(s.players[me.id].overall)}：能去试训的本赛区 ${pool0.filter((t) => !away(t)).length} 家、外赛区 ${pool0.filter(away).length} 家；${CHANNELS.length} 条来电的路各 ${DRAWS} 次，同样的抽签按改之前和现在的规矩各读一遍`)
   if (block || !pool0.length) { fail(`探针设置不对：${block ?? '没有俱乐部能去试训'}`); return }
 
-  const T = { calls: 0, home: 0, far: 0, homeWas: 0, farWas: 0, lost: 0, lostSplit: 0, worst: 0, noHome: 0, wrongVia: 0, noCall: 0, moved: 0, nat: 0, natWas: 0, mate: 0, mateWas: 0 }
+  const T = {
+    calls: 0, home: 0, far: 0, homeWas: 0, farWas: 0, lost: 0, lostSplit: 0, worst: 0, noHome: 0, wrongVia: 0, noCall: 0, moved: 0, nat: 0, natWas: 0, mate: 0, mateWas: 0,
+    // 八 under the rule before MATE_SHARE: a club of my league from another country weighed whole
+    wrongShare: 0, mateSeen: 0, natWhole: 0, mateWhole: 0, farWhole: 0, movedWhole: 0,
+  }
   const lines: string[] = []
   for (const ch of CHANNELS) {
     const c = { calls: 0, far: 0, farWas: 0 }
@@ -358,6 +370,19 @@ function held(region: Region, year: 2021 | 2026, seed: number): void {
       if (w0.region === me.region) T.natWas++
       if (t.region !== me.region && !away(t)) T.mate++
       if (w0.region !== me.region && !away(w0)) T.mateWas++
+      // 八 the draw's weights as they must be — my own country's whole, my league's other countries MATE_SHARE each, 外赛区
+      // pressed under the cap together — and the same draw under the rule before, each club of my league weighed whole
+      const aw = spy.pool.map(away)
+      const per = s.year <= 2022 ? 0.5 : 0.04
+      const wNow = holdAbroad(spy.pool.map((x, j) => inviteWeight(s, x, ch.prefer) * (aw[j] ? per : leagueMate(s, x) ? MATE_SHARE : 1)), aw)
+      if (spy.w.some((v, j) => Math.abs(v - wNow[j]) > 1e-9 * Math.max(1, wNow[j]))) T.wrongShare++
+      const mates = spy.pool.filter((x) => leagueMate(s, x)).length
+      T.mateSeen += mates
+      const w1 = new Rng(spy.before).weighted(spy.pool, holdAbroad(spy.pool.map((x, j) => inviteWeight(s, x, ch.prefer) * (aw[j] ? per : 1)), aw))
+      if (w1.region === me.region) T.natWhole++
+      else if (away(w1)) T.farWhole++
+      else T.mateWhole++
+      if (!mates && w1.id !== t.id) T.movedWhole++
       // the rule's own split the same as the old one for every club of this draw: 2021–2022, or no club of my league abroad in it
       const split = spy.pool.every((x) => away(x) === (x.region !== me.region))
       if (!away(w0) && away(t)) { T.lost++; if (split) T.lostSplit++ }
@@ -443,6 +468,154 @@ function held(region: Region, year: 2021 | 2026, seed: number): void {
     if (calls < 40 || far < calls || pressed) fail(`本赛区一家都够不着（${homes.length} 家都回绝了）：40 次杯赛夺冠来了 ${calls} 次，外赛区的 ${far} 次，${pressed} 次外赛区的分量还被压了`)
     else pass(`本赛区一家都够不着（${homes.length} 家都回绝了）：40 次杯赛夺冠照样来了 ${calls} 次，都是外赛区的，分量没压`)
   }
+
+  // 八 from 2023 a club of my league from another country weighs MATE_SHARE of one of my own country's, home all the same:
+  // the same draws read under the rule before (each weighed whole). With none in a draw — 2021–2022, a league of one country — nothing moves
+  if (T.wrongShare) fail(`${T.wrongShare} 次抽签的分量对不上：本国俱乐部整份，同联赛别国的每家 ${MATE_SHARE} 份，外赛区的照旧一起压在上限以下`)
+  else if (!T.mateSeen) {
+    if (T.movedWhole) fail(`抽签里没有同联赛别国的俱乐部，却有 ${T.movedWhole} 次来的和上一版不是同一家`)
+    else pass(`${s.year <= 2022 ? '2023 年以前不分同联赛别国' : '联赛里只有本国的俱乐部'}：${T.calls} 次抽签的分量和上一版一样，来的是同一家`)
+  } else {
+    const where = [...new Set(Object.values(s.teams).filter((t) => !t.dormant && leagueMate(s, t)).map((t) => t.region))].join('、')
+    const line = `本国俱乐部 ${T.natWhole} → ${T.nat} 份，${where} ${T.mateWhole} → ${T.mate} 份，外赛区 ${T.farWhole} → ${T.far} 份`
+    if (T.nat <= T.natWhole || T.mate >= T.mateWhole) fail(`同联赛别国的俱乐部减到 ${MATE_SHARE} 份，本国俱乐部的邀请没有回来：${line}`)
+    else if (T.nat <= T.mate) fail(`本国俱乐部不再是邀请的主要来源：${line}`)
+    else pass(`同联赛别国的俱乐部每家是本国俱乐部的 ${MATE_SHARE} 份（在抽签里出现 ${T.mateSeen} 次，分量一次不差；仍算本赛区，不受外赛区上限压）。同样的抽签按上一版（每家和本国一样重）读：${line}`)
+  }
+  // 八 the word on a club (me/prepro.ts awayWord): 「外赛区」 by a club's region before 2023 and by league from it, 「国外俱乐部」 my league's other countries
+  {
+    const clubs = Object.values(s.teams).filter((t) => !t.id.startsWith('CUP_'))
+    const want = (t: Team): string => (t.region === me.region ? '' : s.year <= 2022 || regionIn(t.region, s.year) !== league ? '外赛区' : '国外俱乐部')
+    const wrong = clubs.filter((t) => awayWord(s, t) !== want(t))
+    const n = (w: string): number => clubs.filter((t) => want(t) === w).length
+    if (wrong.length) fail(`卡片上的字有 ${wrong.length} 家不对：${wrong.slice(0, 4).map((t) => `${t.name}「${awayWord(s, t)}」应为「${want(t)}」`).join('、')}`)
+    else pass(`卡片上的字：本国 ${n('')} 家不标，「国外俱乐部」${n('国外俱乐部')} 家，「外赛区」${n('外赛区')} 家${s.year <= 2022 ? '（2023 年以前按俱乐部所在赛区，和以前一样）' : '（外赛区按联赛，国外俱乐部按国家）'}`)
+  }
+}
+
+/* ---- 八 a round of offers, going abroad ---- */
+
+/** A round's stream with its gate held open, every draw of it read as it is made: a round of offers picks up to twice */
+class Tape extends Rng {
+  draws: { pool: Team[]; w: number[]; before: number }[] = []
+  constructor(seed: number) { super(spread(seed)) }
+  chance(p: number): boolean { void p; this.next(); return true }
+  weighted<T>(xs: readonly T[], ws: readonly number[]): T {
+    this.draws.push({ pool: xs.slice() as unknown as Team[], w: ws.slice(), before: this.state })
+    return super.weighted(xs, ws)
+  }
+}
+
+type Kind = 'nat' | 'mate' | 'far'
+const kinds = (): Record<Kind, number> => ({ nat: 0, mate: 0, far: 0 })
+
+/**
+ * A listed round of offers (me/transfer.ts rollOffers → pickBuyer), every pick read under today's weights and under the
+ * rule before MATE_SHARE on the same stream. A buyer's weight is its own part — how far above my club, a VCT club, a name
+ * written down — times 1.5 at home and 0.015 in another league; a club of my league from another country 1.5 × MATE_SHARE
+ * now and 1.5 before.
+ */
+function mateOffers(region: Region, year: 2021 | 2026, start: StartPoint, seed: number): void {
+  const s = createCareer({ name: 'Mate', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year })
+  const me = s.me!
+  lift(s, start === 't1' ? 82 : 76)
+  me.tenure = 1
+  setLang(s, false)
+  const mine = s.teams[s.myTeam]
+  console.log(`\n${year} ${me.region} ${start === 't1' ? '一线队' : 'Challengers'}（${mine?.name ?? '没有俱乐部'}，综合 ${Math.round(s.players[me.id].overall)}）：挂牌那一轮 ${DRAWS} 次，同样的抽签按上一版（同联赛别国每家和本国一样重）和现在各读一遍`)
+  const shut = !windowAt(s).open
+  if (!mine || shut || moveBlock(s)) { fail(`探针设置不对：${shut ? '窗口关着' : moveBlock(s) ?? '没有俱乐部'}`); return }
+  const snap = { deals: me.deals.slice(), pending: me.pending.slice(), intents: me.intents.slice(), flags: { ...me.flags }, log: me.log.slice() }
+  const restore = (): void => {
+    me.deals = snap.deals.slice()
+    me.pending = snap.pending.slice()
+    me.intents = snap.intents.slice()
+    me.flags = { ...snap.flags }
+    me.log = snap.log.slice()
+  }
+  const kind = (t: Team): Kind => (foreignLeague(s, t) ? 'far' : leagueMate(s, t) ? 'mate' : 'nat')
+  const own = (t: Team): number => (10 + Math.max(0, t.rating - mine.rating) * 3 + (t.tier === 1 ? 6 : 0)) * (snap.intents.some((x) => x.teamId === t.id) ? 4 : 1)
+  const share: Record<Kind, number> = { nat: 1.5, mate: 1.5 * MATE_SHARE, far: 0.015 }
+  const now = (t: Team): number => own(t) * share[kind(t)]
+  const whole = (t: Team): number => own(t) * (kind(t) === 'far' ? 0.015 : 1.5)
+  const N = kinds()
+  const W = kinds()
+  const P = kinds()
+  const c = { picks: 0, wrong: 0, mateSeen: 0, moved: 0 }
+  for (let i = 0; i < DRAWS; i++) {
+    restore()
+    const tape = new Tape(hashStr(`check:lang:mate:${year}:${region}:${start}:${seed}:${i}`))
+    rollOffers(s, tape, true, 1)
+    for (const d of tape.draws) {
+      if (!c.picks) for (const t of d.pool) P[kind(t)]++
+      c.picks++
+      if (d.w.some((v, j) => Math.abs(v - now(d.pool[j])) > 1e-9 * Math.max(1, v))) c.wrong++
+      const mates = d.pool.filter((t) => kind(t) === 'mate').length
+      c.mateSeen += mates
+      const got = new Rng(d.before).weighted(d.pool, d.w)
+      const was = new Rng(d.before).weighted(d.pool, d.pool.map(whole))
+      N[kind(got)]++
+      W[kind(was)]++
+      if (!mates && got.id !== was.id) c.moved++
+    }
+  }
+  restore()
+  info(`挑了 ${c.picks} 次人；第一次的池子：本国 ${P.nat} 家、同联赛别国 ${P.mate} 家、外赛区 ${P.far} 家`)
+  const line = `本国俱乐部 ${W.nat} → ${N.nat} 份，同联赛别国 ${W.mate} → ${N.mate} 份，外赛区 ${W.far} → ${N.far} 份`
+  if (c.picks < DRAWS) fail(`只挑了 ${c.picks} 次人，这组抽签测不出东西`)
+  else if (c.wrong) fail(`${c.wrong} 次挑人的分量对不上：本国俱乐部 ×1.5，同联赛别国 ×1.5×${MATE_SHARE}，外赛区 ×0.015`)
+  else if (!c.mateSeen) {
+    if (c.moved) fail(`池子里没有同联赛别国的俱乐部，却有 ${c.moved} 次挑的和上一版不是同一家`)
+    else pass(`${year <= 2022 ? '2023 年以前不分同联赛别国' : '池子里没有同联赛别国的俱乐部'}：${c.picks} 次挑人的分量和上一版一样，挑的是同一家（本国 ${N.nat} 份，外赛区 ${N.far} 份）`)
+  } else if (N.nat <= W.nat || N.mate >= W.mate) fail(`同联赛别国的俱乐部减到 ${MATE_SHARE} 份，本国俱乐部的报价没有回来：${line}`)
+  else if (N.nat <= N.mate) fail(`本国俱乐部不再是报价的主要来源：${line}`)
+  else pass(`报价：同联赛别国的俱乐部每家是本国俱乐部的 ${MATE_SHARE} 份（在池子里 ${c.mateSeen} 次，分量一次不差）；${line}`)
+}
+
+/**
+ * A North American signing: going abroad by country (me/contract.ts joinClub `me.abroad`, the signing's 「语言会是个问题」),
+ * the word on the club by league (me/prepro.ts awayWord) — and, playing in another league, that league's clubs are
+ * 「国外俱乐部」, not 外赛区, as an offer reads them (foreignLeague).
+ */
+function goAbroad(year: 2021 | 2026, seed: number): void {
+  const s0 = createCareer({ name: 'Abroad', region: 'North America', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed, year })
+  setLang(s0, false)
+  const f0 = fails
+  const top = (s: GameState, region: Region): Team | undefined => Object.values(s.teams)
+    .filter((t) => t.region === region && t.tier === 1 && !t.dormant && t.roster.length >= 5 && t.id !== s.myTeam)
+    .sort((a, b) => b.rating - a.rating)[0]
+  const cases: [Region, string][] = year <= 2022
+    ? [['North America', ''], ['Brazil', '外赛区'], ['Korea', '外赛区']]
+    : [['North America', ''], ['Brazil', '国外俱乐部'], ['Korea', '外赛区']]
+  console.log(`\n${year} 北美选手签约：卡片上的字按${year <= 2022 ? '俱乐部所在赛区' : '联赛'}，出海按国家`)
+  const said: string[] = []
+  let pacific: GameState | null = null
+  for (const [region, word] of cases) {
+    const s = structuredClone(s0) as GameState
+    const t = top(s, region)
+    if (!t) { fail(`${year} 年找不到 ${region} 的一线俱乐部`); continue }
+    const abroad = region !== 'North America'
+    const card = awayWord(s, t)
+    const deal = makeDeal(s, t.id, 'transfer', 'B', new Rng(hashStr(`check:lang:abroad:${year}:${region}`)))
+    joinClub(s, deal)
+    const me = s.me!
+    const line = me.log.map((l) => l.text).filter((x) => x.startsWith('签约 ')).pop() ?? ''
+    const lang = line.includes('语言会是个问题')
+    if (card !== word || deal.abroad !== abroad || me.abroad !== abroad || lang !== abroad || (abroad && !line.includes(`这是${word}`))) {
+      fail(`签 ${t.name}（${region}）：卡片「${card}」应为「${word}」，出海 ${me.abroad}（报价上 ${deal.abroad}）应为 ${abroad}，签约那一行「${line}」`)
+    }
+    said.push(`${t.name}（${region}）${card ? `「${card}」` : '不标'}、${me.abroad ? '出海' : '不算出海'}${lang ? '、「语言会是个问题」' : ''}`)
+    if (region === 'Korea') pacific = s
+  }
+  if (fails === f0) pass(said.join('；'))
+  if (pacific && year >= 2023) {
+    const s = pacific
+    const want: [Region, string][] = [['Korea', '国外俱乐部'], ['Japan', '国外俱乐部'], ['Brazil', '国外俱乐部'], ['North America', ''], ['Europe', '外赛区']]
+    const got = want.map(([r, w]) => ({ r, w, t: top(s, r) })).map((g) => ({ ...g, word: g.t ? awayWord(s, g.t) : null }))
+    const bad = got.filter((g) => g.word !== g.w)
+    if (bad.length || !s.me!.abroad) fail(`在 ${s.teams[s.myTeam]?.name} 时卡片上的字不对，或不算出海（${s.me!.abroad}）：${bad.map((g) => `${g.t?.name ?? g.r}「${g.word ?? '找不到'}」应为「${g.w}」`).join('、')}`)
+    else pass(`在 ${s.teams[s.myTeam].name}（Pacific）打的时候：${got.map((g) => `${g.t!.name}${g.word ? `「${g.word}」` : '不标'}`).join('、')}——自己在打的联赛不算外赛区；仍算出海`)
+  }
 }
 
 console.log('一、二 试训邀请')
@@ -465,6 +638,16 @@ console.log('\n四 字面')
   else pass('帮助：不会外语时外赛区邀请的上限从 ABROAD_CAP 读，2023 年起按 VCT 联赛分赛区')
   if (!/abroadClub\(/.test(transfer) || /t\.region [!=]== me\.region/.test(transfer)) fail('转会页的门槛表还按俱乐部所在国家分本赛区、外赛区')
   else pass('转会页的门槛表：本赛区、外赛区和来电用同一条规矩（abroadClub）')
+  // 八 the word on a club: one rule on every card and table (me/prepro.ts awayWord), and the help says it
+  const modals = readFileSync(new URL('../src/ui/me/Modals.tsx', import.meta.url), 'utf8')
+  const teamPage = readFileSync(new URL('../src/ui/me/TeamScreen.tsx', import.meta.url), 'utf8')
+  const cards = (modals.match(/awayWord\(game, team\)/g) ?? []).length
+  const table = /awayWord\(game, t\)/.test(transfer) && !/' · 外赛区'/.test(transfer)
+  const ask = !/' · 外赛区'/.test(teamPage)
+  if (cards < 2 || /d\.abroad &&/.test(modals) || !table || !ask) fail(`「外赛区」「国外俱乐部」没在每张卡片和表上用同一条规矩：邀请卡、报价卡 ${cards}/2 处读 awayWord，转会页门槛表${table ? '读了' : '没读'}，队伍页「要人」${ask ? '按联赛' : '还按国家标外赛区'}`)
+  else pass('邀请卡、报价卡、转会页门槛表：「外赛区」按联赛、「国外俱乐部」按国家，和来电、报价同一条规矩（awayWord）；队伍页「要人」从自己俱乐部那边按同样的分法')
+  if (!/MATE_SHARE/.test(help) || !/国外俱乐部/.test(help)) fail('帮助没说同联赛别国的俱乐部标「国外俱乐部」、每家的分量（从 MATE_SHARE 读）')
+  else pass('帮助：同联赛别国的俱乐部标「国外俱乐部」，每家的分量从 MATE_SHARE 读，别的联赛的才标「外赛区」')
 }
 
 console.log(`\n五、六、七 不会外语：外赛区的邀请不过半；2023 年起按联赛算`)
@@ -475,5 +658,14 @@ held('China', 2026, 31)
 held('North America', 2026, 31)
 held('Europe', 2026, 31)
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+console.log('\n八 同联赛别国的俱乐部：报价也按这个分量；卡片上的字按联赛，出海按国家')
+mateOffers('North America', 2026, 't1', 77)
+mateOffers('North America', 2026, 'chal', 77)
+mateOffers('Europe', 2026, 't1', 77)
+mateOffers('Europe', 2026, 'chal', 77)
+mateOffers('North America', 2021, 'chal', 5)
+goAbroad(2026, 41)
+goAbroad(2021, 41)
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

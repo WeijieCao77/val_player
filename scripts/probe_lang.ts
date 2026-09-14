@@ -16,7 +16,7 @@
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { INVITE_FANS, INVITE_LADDER, abroadClub, cupInvite, foreignLeague, holdAbroad, inviteWeight, reachableClubs, rollInvites } from '../src/engine/me/prepro'
+import { INVITE_FANS, INVITE_LADDER, abroadClub, cupInvite, foreignLeague, holdAbroad, homeShare, inviteWeight, reachableClubs, rollInvites } from '../src/engine/me/prepro'
 import { rollOffers } from '../src/engine/me/transfer'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
 import { formatOf } from '../src/engine/era'
@@ -111,8 +111,9 @@ function poolRead(s: GameState, a: Acc): void {
   const pool = reachableClubs(s).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(s, t.id))
   const away = pool.map((t) => abroadClub(s, t))
   const per = formatOf(s.year) === 'open' ? 0.5 : 0.04
-  // the same with the language since 2026-09-14 (before, 0.8 / 0.2 a club); 外赛区 held to ABROAD_CAP of home since that day too
-  const w = holdAbroad(pool.map((t, i) => inviteWeight(s, t, 0) * (away[i] ? per : 1)), away)
+  // the same with the language since 2026-09-14 (before, 0.8 / 0.2 a club); 外赛区 held to ABROAD_CAP of home since that day too,
+  // and a club of my league from another country at MATE_SHARE of one of my own country's (homeShare)
+  const w = holdAbroad(pool.map((t, i) => inviteWeight(s, t, 0) * (away[i] ? per : homeShare(s, t))), away)
   pool.forEach((_, i) => {
     if (!away[i]) { a.poolDom++; a.wDomOff += w[i]; return }
     a.poolFor++

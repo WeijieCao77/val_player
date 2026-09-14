@@ -10,7 +10,7 @@ import { offerUsd, payOf } from './paytable'
 import { roundPay } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { gradeOf } from './tryout'
-import { INVITE_DAYS, LANG_EXTRA, declinedNow, expectOf, foreignLeague, tryoutSkill } from './prepro'
+import { INVITE_DAYS, LANG_EXTRA, declinedNow, expectOf, foreignLeague, homeShare, tryoutSkill } from './prepro'
 import { hasPlace, inVctLeague } from '../timeline'
 import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
@@ -101,8 +101,9 @@ function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false, a
   const w = fit.map((t) => {
     let v = 10 + Math.max(0, t.rating - mine.rating) * (rut ? 0 : 3) + (t.tier === 1 ? 6 : 0)
     // another league's club weighs the same with a language or a gold agent as without them: what they bring
-    // abroad comes on top of the round (rollOffers, me/prepro.ts LANG_EXTRA), never in place of a home club
-    if (!abroad) v *= foreignLeague(state, t) ? 0.015 : 1.5
+    // abroad comes on top of the round (rollOffers, me/prepro.ts LANG_EXTRA), never in place of a home club;
+    // a club of my league from another country is home at MATE_SHARE of one of my own country's (me/prepro.ts leagueMate)
+    if (!abroad) v *= foreignLeague(state, t) ? 0.015 : 1.5 * homeShare(state, t)
     if (me.intents.some((i) => i.teamId === t.id)) v *= 4
     return v
   })
@@ -295,6 +296,8 @@ export function vctApproach(state: GameState, rng: Rng, weight = 1): number {
       let v = 10 + Math.max(0, x.team.rating - 75) + (x.mate ? (p.overall - x.mate.overall) * 4 : x.kind === 'hole' ? 12 : 0)
       if (x.kind === 'place') v *= 0.5
       if (me.intents.some((it) => it.teamId === x.team.id)) v *= 2
+      // a club of his league from another country, as a call and an offer weigh it (me/prepro.ts MATE_SHARE)
+      v *= homeShare(state, x.team)
       return v
     })
     const pick = rng.weighted(pool, w)

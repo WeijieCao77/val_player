@@ -3,7 +3,8 @@ import { importBlock } from '../imports'
 import { squadOf } from '../roster'
 import { CLUB_CEILING, feeOf, floorBlock, joinRoster, leaveRoster } from './club'
 import { duoBonded } from '../bonds'
-import type { GameState, Player } from '../types'
+import type { GameState, Player, Team } from '../types'
+import { formatOf, regionIn } from '../era'
 import { compCn } from './compname'
 import { pushLog } from './log'
 import { clubOpen, windowAt, windowBlock } from './window'
@@ -226,7 +227,17 @@ export function canSign(state: GameState): Gate {
   return { ok: true }
 }
 
-export interface SignTarget { id: string; ign: string; role: string; overall: number; teamName: string; abroad: boolean; fee: number }
+export interface SignTarget { id: string; ign: string; role: string; overall: number; teamName: string; away: '外赛区' | '国外俱乐部' | ''; fee: number }
+
+/**
+ * The word on a name's club, from my club's side, the way a card puts one on a club for me (me/prepro.ts awayWord;
+ * the author, 2026-09-14: 「标签按联赛」): 「外赛区」 for another VCT league's club from 2023 and another region's before,
+ * 「国外俱乐部」 for a club of my club's league from another country. It used to be 外赛区 for any other region.
+ */
+function awayFrom(state: GameState, home: Team, t: Team | undefined): SignTarget['away'] {
+  if (!t || t.region === home.region) return ''
+  return formatOf(state.year) === 'open' || regionIn(t.region, state.year) !== regionIn(home.region, state.year) ? '外赛区' : '国外俱乐部'
+}
 
 /**
  * Who you could plausibly ask for.
@@ -262,7 +273,7 @@ export function signTargets(state: GameState): SignTarget[] {
   return pick.map(({ q }) => ({
     id: q.id, ign: q.ign, role: q.role, overall: q.overall,
     teamName: state.teams[q.teamId!]?.name ?? '—',
-    abroad: state.teams[q.teamId!]?.region !== myTeam.region,
+    away: awayFrom(state, myTeam, state.teams[q.teamId!]),
     fee: feeOf(q),
   }))
 }

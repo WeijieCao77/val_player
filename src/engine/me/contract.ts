@@ -5,7 +5,7 @@ import { expectedSalary } from '../player'
 import type { Deal } from './types'
 import { pushLog } from './log'
 import { pop } from './pending'
-import { expectOf, markDeclined, tryoutSkill } from './prepro'
+import { awayWord, expectOf, markDeclined, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
 import { makeRoom } from './club'
 import { iglDrop } from './igl'
@@ -73,6 +73,7 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
   return {
     id: `deal:${state.year}:${state.day}:${teamId}:${kind}`, teamId, kind, tier: team.tier, role, cur,
     salary, signBonus, years, buyout, asks: [], blown: 0, leverage: Math.round(leverage), grade,
+    // a move abroad is by country (「出海按国家」); the card's 「外赛区」 or 「国外俱乐部」 is by league (me/prepro.ts awayWord)
     day: state.day, expires: state.day + DEAL_DAYS, abroad: team.region !== me.region,
   }
 }
@@ -242,6 +243,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   const p = state.players[me.id]
   const to = state.teams[d.teamId]
   const from = p.teamId ? state.teams[p.teamId] : null
+  // the word the offer's card put on the club, read before it is my club (me/prepro.ts awayWord reads my club's league)
+  const word = awayWord(state, to)
   if (from) {
     from.roster = from.roster.filter((id) => id !== me.id)
     from.starters = from.starters.filter((id) => id !== me.id)
@@ -303,7 +306,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   me.pending = me.pending.filter((x) => x.kind !== 'invite' && x.kind !== 'tryout')
   me.benchedStages = 0
   to.starters = coachStarters(state)
-  const where = me.abroad ? `，这是外赛区，${me.flags.lang ? '好在语言不是问题' : '语言会是个问题'}` : ''
+  // going abroad is by country, the word on the club by league: a club of my league from another country is 「国外俱乐部」
+  const where = me.abroad ? `，这是${word || '外赛区'}，${me.flags.lang ? '好在语言不是问题' : '语言会是个问题'}` : ''
   const y = state.year
   pushLog(state, 'deal', `签约 ${to.name}（${to.tier === 1 ? 'VCT' : 'Challengers'}）：${ROLE_CN[d.role]}，${d.years} 年，年薪 ${fmtMoney(d.salary, d.cur, y)}${d.signBonus ? `，签字费 ${fmtMoney(d.signBonus, d.cur, y)}` : ''}，违约金 ${fmtMoney(d.buyout, d.cur, y)}${where}。`)
   if (to.starters.includes(me.id)) pushLog(state, 'good', '教练看了你的第一次训练，把你放进了首发。')
