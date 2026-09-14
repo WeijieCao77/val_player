@@ -89,7 +89,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
         {inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
         {quit ? (
           <>
-            <p className="small" style={{ color: 'var(--loss)' }}>弃权就是这一轮不上场：{cup.name}到此为止，奖金按已经赢下的 {run.round} 轮算{prize ? `（$${prize.toLocaleString()}）` : '，没有奖金'}。</p>
+            <p className="small" style={{ color: 'var(--loss)' }}>弃权就是这一轮不上场：{cup.name}到此为止，奖金按已经赢下的 {run.round} 轮算{prize ? `（${money(prize)}）` : '，没有奖金'}。</p>
             <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
               <button className="primary" onClick={() => setQuit(false)}>还是去打</button>
               <button onClick={() => { forfeitCup(game, cupRng(game, 'forfeit')); commit(); onDone() }}>确认弃权</button>
@@ -110,7 +110,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
   // 报名 greyed with the reason under it: a run still going, the fee, the invitation
   const why = run
     ? `还在打${cupFor(game, run.key)?.name ?? '另一项赛事'}，打完才能报名`
-    : me.money < cup.fee ? `报名费 $${cup.fee.toLocaleString()}，你只有 $${Math.max(0, me.money).toLocaleString()}`
+    : me.money < cup.fee ? `报名费 ${money(cup.fee)}，你只有 ${money(Math.max(0, me.money))}`
       : me.fans < cup.minFans ? `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}` : null
   return (
     <Modal title={cup.name} onClose={() => { skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
