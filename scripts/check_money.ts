@@ -33,6 +33,7 @@ import { leagueCurOf, perUsd, toUsd } from '../src/engine/me/currency'
 import type { Cur } from '../src/engine/me/currency'
 import { cny, money } from '../src/engine/me/moneyfmt'
 import { payBand, payOf } from '../src/engine/me/paytable'
+import { weekReport } from '../src/engine/me/press'
 import estimates from '../src/data/prize_estimates_me.json'
 import type { Competition, GameState } from '../src/engine/types'
 
@@ -78,6 +79,8 @@ const harvest = () => {
 const prizeLines: string[] = []
 let seenLog = 0
 const bandBreaks: string[] = []
+/** what the week's paper put in front of the player — the world's roster news included */
+const paper: { year: number; text: string }[] = []
 
 // the autopilot's shopping as the UI's 托管 does it, so the prices are paid through the door too
 me.auto.buy = true
@@ -88,6 +91,7 @@ while (state.year - year0 < seasons && guard++ < 60 * seasons) {
   harvest()
   for (const l of me.log.slice(seenLog)) if (l.text.includes('奖金分成到账')) prizeLines.push(`${l.year} ${l.text}`)
   seenLog = me.log.length
+  for (const text of weekReport(state)) paper.push({ year: state.year, text })
   // my contract, whenever I have one: its club's league currency, inside that league's band
   const pay = payOf(state)
   const team = state.teams[state.myTeam]
@@ -226,10 +230,14 @@ fmtFacts.push([`玩家看得到的文件里没有自己拼的金额${hardcoded.l
 
 // every non-RMB amount the diary wrote carries its RMB
 // the whole amount (no backing off a digit to dodge the lookahead), then what follows it
-const bare = me.log.flatMap((l) => [...l.text.matchAll(/[$€₩](\d[\d,]*(?:\.\d+)?(?: [万亿])?)(.{0,4})/g)]
+const bareIn = (lines: { year: number; text: string }[]) => lines.flatMap((l) => [...l.text.matchAll(/[$€₩](\d[\d,]*(?:\.\d+)?(?: [万亿])?)(.{0,4})/g)]
   .filter((m) => !m[2].startsWith('（约 ¥'))
   .map((m) => `${l.year} ${m[0]} ← ${l.text.slice(0, 60)}`))
+const bare = bareIn(me.log)
 fmtFacts.push([`日记里的外币金额都带人民币换算${bare.length ? `（${bare.length} 处：${bare.slice(0, 3).join(' | ')}）` : ''}`, bare.length === 0])
+// the week's paper and the world's news it draws on: anything the player can read
+const barePaper = bareIn([...paper, ...state.news.map((n) => ({ year: state.year, text: n.text }))])
+fmtFacts.push([`周报和新闻里的外币金额也都带人民币换算（周报 ${paper.length} 行）${barePaper.length ? `（${barePaper.length} 处：${barePaper.slice(0, 3).join(' | ')}）` : ''}`, barePaper.length === 0])
 fmtFacts.push([`合同一直按俱乐部所在联赛的货币、在联赛工资带里${bandBreaks.length ? `（${bandBreaks.slice(0, 3).join(' | ')}）` : ''}`, bandBreaks.length === 0])
 
 /* ------------------------------------------------------------------ */
