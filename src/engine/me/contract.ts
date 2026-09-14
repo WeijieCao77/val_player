@@ -289,6 +289,8 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   me.flags.renewPending = 0
   me.pre.invites = []
   me.tryout = undefined
+  // and their cards with them: a tryout's card left behind could not be answered or closed (found 2026-09-14)
+  me.pending = me.pending.filter((x) => x.kind !== 'invite' && x.kind !== 'tryout')
   me.benchedStages = 0
   to.starters = coachStarters(state)
   const where = me.abroad ? `，这是外赛区，${me.flags.lang ? '好在语言不是问题' : '语言会是个问题'}` : ''

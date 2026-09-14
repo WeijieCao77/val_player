@@ -43,7 +43,7 @@ import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
-import { pushMoment } from './moments'
+import { noteQualify, pushMoment } from './moments'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -347,6 +347,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // a move agreed under a roster lock, made the day it lifts (me/contract.ts)
     settleMove(state)
     syncTitles(state)
+    // my club in a Masters', Champions' or LOCK//IN's field, the day it is drawn: a big moment's card (me/moments.ts)
+    noteQualify(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)
     // a team-mate's birthday, a year at the club, my age at the year's turn (me/life.ts)

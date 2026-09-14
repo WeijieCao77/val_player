@@ -134,6 +134,21 @@ function cardOf(g: GameState, m: MomentItem): Card {
         ) : undefined,
       }
     }
+    case 'qualify': {
+      const comp = m.comp ?? ''
+      const cls = compClass(comp)
+      const name = compCn(comp)
+      return {
+        wide: true,
+        art: <div className="mo-move"><ClubMark g={g} id={m.teamId} size={96} /></div>,
+        eyebrow: /20\d\d/.test(name) ? '国际赛' : `${m.year} · 国际赛`,
+        title: cls === 'lockin' ? `出战 ${name}` : `晋级 ${name}`,
+        body: cls === 'champions' ? '全球冠军赛的名额拿到了，一年里最大的舞台。'
+          : cls === 'lockin' ? '所有合作俱乐部齐聚一地，新赛季从这里开打。'
+            : '大师赛的名额拿到了，要去和别的赛区交手。',
+        page: { label: '去赛程页', screen: 'schedule' },
+      }
+    }
     case 'rank': {
       const tier = m.tier ?? ''
       const place = m.pos ? `${m.server ?? ''}第 ${m.pos.toLocaleString('en-US')} 名。` : ''

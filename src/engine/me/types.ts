@@ -477,7 +477,7 @@ export interface PendingItem {
  * moved on by the time it is shown.
  */
 export interface MomentItem {
-  kind: 'title' | 'sign' | 'award' | 'rank'
+  kind: 'title' | 'sign' | 'award' | 'rank' | 'qualify'
   /** one card per key */
   key: string
   year: number

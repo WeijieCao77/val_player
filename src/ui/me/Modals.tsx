@@ -194,7 +194,8 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
   const me = game.me!
   const t = me.tryout
   const [last, setLast] = useState<string | null>(null)
-  if (!t) { onDone(); return null }
+  // a card whose tryout is gone comes off the list first, or it would come straight back
+  if (!t) { pop(game, 'tryout'); onDone(); return null }
   const team = game.teams[t.teamId]
   const days = tryoutDays(game)
   const day = days[t.step]

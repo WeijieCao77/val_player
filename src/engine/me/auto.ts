@@ -188,16 +188,24 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     case 'invite': {
       const inv = me.pre.invites.find((i) => i.id === item.id)
       if (!inv) { pop(state, 'invite', item.id); return '' }
+      // two clubs asked on the same day: the tryout already under way is played out first — startTryout refuses a
+      // second one, and the invite used to sit at the head of the list for ever (found 2026-09-14)
+      let guard = 0
+      while (me.tryout && guard++ < 6) tryoutChoose(state, tryoutDays(state)[me.tryout.step].rec)
       const team = state.teams[inv.teamId]
       const cur = me.phase === 'pro' ? state.teams[state.myTeam] : null
       if (cur && team.rating < cur.rating + 2) { declineInvite(state, inv.id); return `回绝了 ${team.name}` }
       if (tryoutSkill(state) < expectOf(team) - 6) { declineInvite(state, inv.id); return `差太远，回绝了 ${team.name}` }
-      startTryout(state, inv.id)
+      const why = startTryout(state, inv.id)
+      // refused all the same: off the list, and the invite runs out on its own
+      if (why) { pop(state, 'invite', inv.id); return why }
       return `去 ${team.name} 试训`
     }
     case 'tryout': {
       let guard = 0
       while (me.tryout && guard++ < 6) tryoutChoose(state, tryoutDays(state)[me.tryout.step].rec)
+      // a tryout's card whose tryout is gone (signed elsewhere meanwhile) comes off the list instead of being answered for ever
+      if (!me.tryout) pop(state, 'tryout', item.id)
       return '试训打完了'
     }
     case 'deal': {

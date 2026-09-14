@@ -19,6 +19,7 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { CareerOpts } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { BIG_TIERS, MOMENTS_CAP, pushMoment } from '../src/engine/me/moments'
+import { compClass } from '../src/engine/me/compclass'
 import type { MomentItem } from '../src/engine/me/types'
 import type { GameState } from '../src/engine/types'
 
@@ -73,6 +74,9 @@ function judge(label: string, r: ReturnType<typeof play>): void {
   const signs = seen.filter((m) => m.kind === 'sign')
   check(signs.every((m) => !!m.teamId && joined.has(m.teamId)) && signs.length <= (p.clubHist?.length ?? 0) - clubsAtStart,
     `${label}：${signs.length} 张签约卡都是真的加盟过的俱乐部（开局之后待过 ${(p.clubHist?.length ?? 0) - clubsAtStart} 家）`)
+  const quals = seen.filter((m) => m.kind === 'qualify')
+  check(quals.every((m) => ['masters', 'champions', 'lockin'].includes(compClass(m.comp ?? ''))),
+    `${label}：晋级卡只给大师赛、冠军赛、LOCK//IN（${quals.map((m) => m.comp).join('、') || '这几季没去'}）`)
   const ranks = seen.filter((m) => m.kind === 'rank')
   check(ranks.length <= BIG_TIERS.length && new Set(ranks.map((m) => m.tier)).size === ranks.length && ranks.every((m) => !!me.flags[`reached:${m.tier}`]),
     `${label}：天梯大段位每个最多一张（${ranks.map((m) => m.rank).join('、') || '没到'}）`)
