@@ -467,8 +467,34 @@ export interface MeInjury {
   played: number
 }
 
+/**
+ * 指挥 at my club (me/igl.ts): how long I have been here, what the coach has asked and when, and
+ * the day he handed me the calls, with what I brought to them that day. Absent in older saves.
+ */
+export interface IglBook {
+  /** the club the clock below runs at */
+  club: string
+  /** weeks as a professional at it */
+  weeks: number
+  /** offers made at this club */
+  asked: number
+  /** career week (MeState.week) of the last offer here, and of the last time the calls were taken back */
+  lastOffer?: number
+  lastRevoke?: number
+  /** the career's counts */
+  offers: number
+  declines: number
+  revokes: number
+  /** weeks I have called, over the career */
+  calledWeeks: number
+  /** calling now: since when, whom I took it from, and where I stood on each gate that day */
+  since?: { year: number; day: number; week: number; prev?: string; igl: number; comm: number; trust: number; weeks: number }
+  /** the last year I called for a club, kept across clubs — what a club reads when it signs a caller */
+  lastYear?: number
+}
+
 export interface PendingItem {
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt'
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt' | 'igl'
   id?: string
   day: number
 }
@@ -543,6 +569,8 @@ export interface MeState {
   badStreak: number
   /** losses with me near the bottom, in a row — the coach starts trying other fives */
   rotateHeat?: number
+  /** 指挥 at my club — see me/igl.ts; absent until my first professional week */
+  igl?: IglBook
   /** everyone who ever shared a roster with me — see me/bond.ts, never pruned */
   mates?: Record<string, BondEntry>
   /** 宿敌, read off what happened in this save — see me/rivals.ts; absent until the first pro week */

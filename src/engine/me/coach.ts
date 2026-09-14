@@ -8,6 +8,8 @@ import type { MeMatchRecord } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
 import { fireEvent } from './events'
+import { roomEdge } from './room'
+import { myCall } from './igl'
 
 /** duels won (net) before the coach agrees to a trial */
 export const EDGE_NEED = 3
@@ -20,8 +22,13 @@ export const TRIAL_MATCHES = 2
  * sample behind it is thin — plus this week's form and condition. I am the
  * exception in two ways: the coach's trust in me moves the number, and once I
  * have proven myself in a trial the rookie discount is gone for good.
+ *
+ * And the room (2026-09-14, me/room.ts roomEdge): between two of about the same
+ * level he picks the one who is easy to play with and gets on with the squad —
+ * at most ROOM_EDGE_MAX, a close call and never a clearly better player. `room`
+ * false leaves it out, to tell whether it settled a place (roomCall).
  */
-export function coachView(state: GameState, p: Player): number {
+export function coachView(state: GameState, p: Player, room = true): number {
   const me = state.me
   let v = confidentRating(p)
   if (me && p.id === me.id) {
@@ -30,6 +37,7 @@ export function coachView(state: GameState, p: Player): number {
     if (me.benchLock && me.benchLock > state.day) v -= 40
   }
   v += (p.form - 70) * 0.05 - Math.max(0, p.fatigue - 60) * 0.05
+  if (room) v += roomEdge(state, p)
   return v
 }
 
@@ -45,16 +53,19 @@ export function refreshMyRounds(state: GameState): void {
  * The five the coach names this week — world.ts autoStarters, read through
  * coachView, with the trial rule on top: a man on trial plays.
  */
-export function coachStarters(state: GameState): string[] {
+export function coachStarters(state: GameState, room = true): string[] {
   const team = state.teams[state.myTeam]
   const me = state.me
-  const squad = team.roster
+  const squadAll = team.roster
     .map((id) => state.players[id])
     .filter((p): p is Player => !!p)
-    .sort((a, b) => {
-      const fit = (x: Player) => (x.injuredUntil > state.day ? 1 : 0)
-      return fit(a) - fit(b) || coachView(state, b) - coachView(state, a)
-    })
+  // read once: the room term reads every bond in the squad
+  const view = new Map(squadAll.map((p) => [p.id, coachView(state, p, room)]))
+  const cv = (p: Player) => view.get(p.id) ?? coachView(state, p, room)
+  const squad = squadAll.sort((a, b) => {
+    const fit = (x: Player) => (x.injuredUntil > state.day ? 1 : 0)
+    return fit(a) - fit(b) || cv(b) - cv(a)
+  })
 
   const chosen: Player[] = []
   const core = ROLES.filter((r) => r !== '自由人')
@@ -74,14 +85,19 @@ export function coachStarters(state: GameState): string[] {
   }
   const five = chosen.slice(0, 5)
 
-  const igl = squad.filter((p) => p.isIgl).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
+  // The caller goes out with the team: the loudest flagged man — or me, once
+  // the coach has named me his caller (me/igl.ts), over a louder deputy.
+  const mine = me ? squad.find((p) => p.id === me.id) : undefined
+  const igl = mine?.isIgl && mine.iglSource === 'appointed'
+    ? mine
+    : squad.filter((p) => p.isIgl).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
   if (igl && !five.includes(igl)) {
     const covered = (without: Player) => {
       const rest = five.filter((x) => x !== without).concat(igl)
       const have = new Set(rest.flatMap((p) => p.roles ?? [p.role]))
       return core.every((r) => have.has(r))
     }
-    const drop = five.slice().sort((a, b) => coachView(state, a) - coachView(state, b)).find(covered)
+    const drop = five.slice().sort((a, b) => cv(a) - cv(b)).find(covered)
     if (drop) five[five.indexOf(drop)] = igl
   }
 
@@ -90,7 +106,7 @@ export function coachStarters(state: GameState): string[] {
     const mine = state.players[me.id]
     if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
       const out = five.find((p) => p.id === me.trial!.displaced)
-        ?? five.filter((p) => !p.isIgl).sort((a, b) => coachView(state, a) - coachView(state, b))[0]
+        ?? five.filter((p) => !p.isIgl).sort((a, b) => cv(a) - cv(b))[0]
       if (out) five[five.indexOf(out)] = mine
     }
   }
@@ -103,11 +119,32 @@ export function coachStarters(state: GameState): string[] {
     if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
       const sameRole = five.filter((p) => !p.isIgl && (p.roles ?? [p.role]).includes(mine.role))
       const out = (sameRole.length ? sameRole : five.filter((p) => !p.isIgl))
-        .sort((a, b) => coachView(state, a) - coachView(state, b))[0]
+        .sort((a, b) => cv(a) - cv(b))[0]
       if (out) five[five.indexOf(out)] = mine
     }
   }
   return five.map((p) => p.id)
+}
+
+/**
+ * Whether the room settled my place, in the coach's words: the five he names
+ * with the room counted (coachView) and without it differ on me. Null when my
+ * level decided it — or when a trial did.
+ */
+export function roomCall(state: GameState): string | null {
+  const me = state.me
+  const team = state.teams[state.myTeam]
+  if (!me || me.phase !== 'pro' || me.trial || !team) return null
+  const withRoom = coachStarters(state)
+  const plain = coachStarters(state, false)
+  const inNow = withRoom.includes(me.id)
+  if (plain.includes(me.id) === inNow) return null
+  // the man whose place turned on it: in one five and not the other
+  const otherId = inNow ? plain.find((id) => !withRoom.includes(id)) : withRoom.find((id) => !plain.includes(id))
+  const who = (otherId && state.players[otherId]?.ign) || '另一个人'
+  return inNow
+    ? `教练的说法：你和 ${who} 能力差不多，他用了和队伍更合得来的你——协同、沟通、和队友处得怎么样，他都看在眼里。`
+    : `教练的说法：你和 ${who} 能力差不多，他用了和队伍更合得来的 ${who}——协同、沟通、和队友处得怎么样，他都看在眼里。`
 }
 
 /** The starter I am competing with: same role, lowest in the coach's eyes. */
@@ -127,7 +164,7 @@ export function duelTarget(state: GameState): Player | null {
   return pool.sort((a, b) => coachView(state, a) - coachView(state, b))[0]
 }
 
-/** Name this week's five and tell me if my place changed. */
+/** Name this week's five and tell me if my place changed — and, when the room settled it, why. */
 export function weeklyLineup(state: GameState): void {
   const me = state.me
   if (!me) return
@@ -137,6 +174,8 @@ export function weeklyLineup(state: GameState): void {
   const now = team.starters.includes(me.id)
   if (now && !was) pushLog(state, 'good', me.trial ? '教练兑现了承诺：本周你在首发名单里，这是试用。' : '教练把你排进了本周的首发名单。')
   if (!now && was) pushLog(state, 'bad', '本周你回到替补席。')
+  const why = now !== was ? roomCall(state) : null
+  if (why) pushLog(state, now ? 'good' : 'bad', why)
   me.lastLineupIn = now
 }
 
@@ -210,17 +249,27 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
 /**
  * What the coach makes of the match I just played (or watched): a trial
  * confirmed or ended, a run of bad nights costing my place.
+ *
+ * A caller is judged on the result, not on where his line sits in the five
+ * (2026-09-14): the man who calls is often the lowest fragger on the server,
+ * and a coach who named him does not bench him for it. While I call, the rank
+ * terms of his trust and the bottom-of-the-five benching and rotation below
+ * pass me by; a run of defeats since I took the calls is what costs them
+ * (me/igl.ts revokeWhy).
  */
 export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   const me = state.me
   if (!me) return
   const team = state.teams[state.myTeam]
   const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
+  const calling = myCall(state)
 
   if (rec.started) {
     let d = rec.won ? 1.5 : -0.5
-    if (rec.rank === 1) d += 1.5
-    else if (rec.rank >= 5) d -= 2
+    if (!calling) {
+      if (rec.rank === 1) d += 1.5
+      else if (rec.rank >= 5) d -= 2
+    }
     if (d > 0) d *= traitMul(me, 'trust')
     me.coachTrust = clamp(me.coachTrust + d, 0, 100)
     const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
@@ -258,7 +307,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     return
   }
 
-  if (rec.started) {
+  if (rec.started && !calling) {
     if (!rec.won && rec.rank >= 5) me.badStreak++
     else me.badStreak = Math.max(0, me.badStreak - 1)
     if (me.badStreak >= 3) {

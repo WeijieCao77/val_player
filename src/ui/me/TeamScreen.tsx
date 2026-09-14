@@ -1,9 +1,12 @@
 import { useGame } from './ctx'
 import { Condition, OvrBadge, Panel, Roles } from './common'
 import { bondBetween } from '../../engine/bonds'
-import { trustLabel } from './words'
+import { callerOf } from '../../engine/roster'
+import { attrWord, trustLabel, useNumbers } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
-import { duelTarget, EDGE_NEED } from '../../engine/me/coach'
+import { duelTarget, EDGE_NEED, roomCall } from '../../engine/me/coach'
+import { IGL_TRUST_LOST, SKID_OF, SKID_WINS, clubCaller, iglBlock, iglGates, myCall } from '../../engine/me/igl'
+import { roomView } from '../../engine/me/room'
 import { mateMark } from '../../engine/me/hurtplay'
 import {
   canList, canSign, cloutBreakdown, cloutTier,
@@ -22,6 +25,8 @@ export default function TeamScreen() {
   const p = game.players[me.id]
   const team = game.teams[game.myTeam]
   const target = duelTarget(game)
+  // who calls: the club's named caller, else its loudest flagged man; the others who carry the flag are deputies
+  const caller = callerOf(game, game.myTeam)
   const rows = team.roster.map((id) => game.players[id]).filter(Boolean)
     .sort((a, b) => Number(team.starters.includes(b.id)) - Number(team.starters.includes(a.id)) || b.overall - a.overall)
 
@@ -36,9 +41,10 @@ export default function TeamScreen() {
               const isMe = p.id === me.id
               const starter = team.starters.includes(p.id)
               const bond = isMe ? 0 : bondBetween(game, me.id, p.id)
+              const main = caller?.id === p.id
               return (
                 <tr key={p.id} className={isMe ? 'me' : 'clickable'} onClick={() => !isMe && openPlayer(p.id)}>
-                  <td className="sticky-name at-left"><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className="tag" style={{ marginLeft: 6 }}>IGL</span> : null}{p.fictional ? <span className="tag" style={{ marginLeft: 6 }} title="虚构选手，不对应真实的人">虚构新人</span> : null}</td>
+                  <td className="sticky-name at-left"><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className={`tag${main ? ' t1' : ''}`} style={{ marginLeft: 6 }} title={main ? '主指挥：比赛里全队按他的指挥来打' : '副指挥：主指挥不在场上时由他来喊'}>{main ? '主指挥' : '副指挥'}</span> : null}{p.fictional ? <span className="tag" style={{ marginLeft: 6 }} title="虚构选手，不对应真实的人">虚构新人</span> : null}</td>
                   <td><Roles p={p} /></td>
                   <td className="num"><OvrBadge value={p.overall} /></td>
                   <td className="num">{p.age}</td>
@@ -57,6 +63,8 @@ export default function TeamScreen() {
         <Panel title="教练组">
           <p className="small" style={{ margin: 0 }}>主教练 <b>{team.coach?.name ?? '（未知）'}</b> · 对你：<b>{trustLabel(me.coachTrust)}</b></p>
         </Panel>
+        <IglPanel />
+        <RoomPanel />
         {/* who you have played beside, and which of you was carrying */}
         {(() => {
           const all = bondAll(game)
@@ -114,7 +122,7 @@ export default function TeamScreen() {
               : `再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场对位，教练给试用期。`}
           </p>
           <p className="tiny faint" style={{ margin: 0 }}>
-            名单每周一重排；连着三场全队最差会被换下两周。
+            名单每周一重排；连着三场全队最差会被换下两周；能力接近时，教练先用和队伍合得来的人。
           </p>
         </Panel>
       </div>
@@ -122,6 +130,85 @@ export default function TeamScreen() {
   )
 }
 
+/**
+ * 指挥: who calls, and what the coach waits for before he hands the calls to me
+ * (engine/me/igl.ts). Every gate is on the screen, met or not — a locked door
+ * says what the lock is.
+ */
+function IglPanel() {
+  const { game } = useGame()
+  const [nums] = useNumbers()
+  const me = game.me!
+  const p = game.players[me.id]
+  const w = (v: number) => (nums ? ` ${v}` : attrWord(v))
+  if (myCall(game)) {
+    const since = me.igl?.since
+    const runs = since ? me.matches.filter((m) => !m.friendly && m.started && (m.year > since.year || (m.year === since.year && m.day >= since.day))) : []
+    return (
+      <Panel title="指挥" actions={<span className="tag t1">主指挥</span>}>
+        <p className="small" style={{ margin: '0 0 6px' }}>你是队里的主指挥：比赛里全队按你的指挥来打（指挥{w(p.attrs.igl)}）。复盘和每一张你喊过的图都会涨指挥；关键回合里看协同、沟通的选项也会加上它。</p>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          {since ? `${since.year} 年接的指挥，之后首发 ${runs.length} 场，赢 ${runs.filter((m) => m.won).length} 场。` : ''}
+          最近 {SKID_OF} 场只赢 {SKID_WINS} 场以下、教练的信任掉到{nums ? ` ${IGL_TRUST_LOST} 以下` : '「有保留」'}，或者你被换下场，他会把指挥收回去。
+        </p>
+      </Panel>
+    )
+  }
+  const caller = clubCaller(game)
+  const block = iglBlock(game)
+  return (
+    <Panel title="指挥">
+      <p className="small" style={{ margin: '0 0 6px' }}>
+        {caller
+          ? <>队里的主指挥是 <b>{caller.ign}</b>（指挥{w(caller.attrs.igl)} · 沟通{w(caller.attrs.communication)}{caller.iglSource === 'inferred' ? ' · 临时顶上的' : ''}）。</>
+          : '队里现在没人真正在喊。'}
+      </p>
+      <p className="tiny muted" style={{ margin: '0 0 4px' }}>这几条都满足，教练会让你来喊：</p>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {iglGates(game).map((g) => (
+          <span key={g.key} className={`tag${g.ok ? ' win' : ''}`}>
+            {g.ok ? '✓' : '✗'} {g.label}
+            {g.key === 'weeks' ? ` ${g.have}/${g.need} 周` : g.key !== 'starter' && nums ? ` ${g.have}/${g.need}` : ''}
+          </span>
+        ))}
+      </div>
+      {block && <p className="tiny faint" style={{ margin: '6px 0 0' }}>{block}。</p>}
+    </Panel>
+  )
+}
+
+/**
+ * 化学反应: how the room takes me (engine/bonds.ts ease, engine/me/room.ts) — my
+ * bond with the squad, what my 协同 and 沟通 do to it, and what it does to my
+ * form and to a close call for a place. The figures ride the 数值 switch.
+ */
+function RoomPanel() {
+  const { game } = useGame()
+  const [nums] = useNumbers()
+  const v = roomView(game)
+  if (!v) return null
+  const call = roomCall(game)
+  const f1 = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`
+  const vsMates = v.ease - v.mates
+  return (
+    <Panel title="化学反应">
+      <p className="small" style={{ margin: '0 0 6px' }}>
+        你和队友：<b>{bondWord(v.mine)}</b>{nums ? `（${Math.round(v.mine)}）` : ''} · 全队之间：<b>{bondWord(v.squad)}</b>{nums ? `（${Math.round(v.squad)}）` : ''}
+      </p>
+      <p className="small" style={{ margin: '0 0 6px' }}>
+        你的协同、沟通{vsMates >= 3 ? '比队里多数人高' : vsMates <= -3 ? '比队里多数人低' : '和队里差不多'}
+        {v.ease >= 3 ? '：和队友的关系掉得慢，赢球涨得多，输了不容易起争执。'
+          : v.ease <= -3 ? '：和队友的关系掉得快，输球伤得重，输了容易起争执。'
+            : '：和队友的关系照常涨落。'}
+      </p>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        状态{nums ? ` ${f1(v.form)}` : v.form >= 1 ? '因此更好' : v.form <= -1 ? '因此受影响' : '不受影响'}
+        {' · '}教练选首发{nums ? ` ${f1(v.edge)}` : v.edge >= 0.4 ? '会加分' : v.edge <= -0.4 ? '会减分' : '不加不减'}（只在能力接近时起作用）
+      </p>
+      {call && <p className="tiny" style={{ margin: '6px 0 0' }}>{call}</p>}
+    </Panel>
+  )
+}
 
 /**
  * 威望, and the two things it lets you ask for.

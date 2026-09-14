@@ -1,0 +1,348 @@
+/**
+ * 指挥 and the room (decided 2026-09-14: 「让主角能当上指挥」「加大协同、沟通的影响」).
+ *
+ * 一 the career player is asked to call when every gate holds, and each gate on its own keeps the coach
+ *    from asking; a career left on 快进 with a caller's numbers is appointed, and only in a week every gate
+ *    held; the same career with a rookie's numbers is never asked
+ * 二 a yes makes him the club's caller in the match engine and in the coach's five, the old caller a deputy
+ *    with a worse bond (and a grievance if he was starting); the coach takes the calls back when his trust
+ *    goes or after a run of defeats, and leaving the club leaves them. A no keeps the old caller, the lineup's
+ *    指挥 term with him, and the coach does not ask again the next week
+ * 三 the room: 协同 and 沟通 move a bond, form and the coach's eye inside the ranges reported with
+ *    scripts/probe_igl.ts, at the career player's club only; between two players of the same level the coach
+ *    starts the easier one, and a clearly better player is not passed over for it
+ * 四 快进 and 托管 stay expectation-neutral: autoChance is what it was, and a caller's call made on autopilot
+ *    lands exactly as often as anyone's
+ * 五 the new-career screen names the caller path and the room only where they are true
+ *
+ *   npx tsx scripts/check_igl.ts
+ */
+import { createCareer, emptyTalents, talentShape, TALENT_PRESETS } from '../src/engine/me/career'
+import { AUTO_PENALTY, KEY_FAIL, KEY_OK, NODE_CALL, autoChance, nodeCallEdge, nodeChance } from '../src/engine/me/nodes'
+import {
+  CALLER_READ_MAX, COMM_FLOOR, IGL_FLOOR, IGL_TRUST, IGL_TRUST_LOST, IGL_WEEKS, OFFER_GAP, SKID_OF,
+  callerRead, clubCaller, declineIgl, iglBar, iglBlock, iglWeek, myCall, takeIgl,
+} from '../src/engine/me/igl'
+import { callerOf, squadOf } from '../src/engine/roster'
+import { IGL_EDGE, activePool, buildLineup } from '../src/engine/match'
+import { coachStarters, coachView } from '../src/engine/me/coach'
+import { ROOM_EDGE_MAX, ROOM_FORM_MAX, roomBond, roomEdge, roomForm } from '../src/engine/me/room'
+import { argueAt, bondBetween, liveEase, lossMul, rateMul, restOf, weeklyBonds, winMul } from '../src/engine/bonds'
+import { leaveClub } from '../src/engine/me/contract'
+import { autoWeek } from '../src/engine/me/auto'
+import { confidentRating } from '../src/engine/world'
+import { Rng } from '../src/engine/rng'
+import { recomputeOverall } from '../src/engine/player'
+import type { GameState, Player } from '../src/engine/types'
+
+const mem: Record<string, string> = {}
+;(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (k: string) => mem[k] ?? null,
+  setItem: (k: string, v: string) => { mem[k] = String(v) },
+  removeItem: (k: string) => { delete mem[k] },
+  clear: () => { for (const k of Object.keys(mem)) delete mem[k] },
+  key: (i: number) => Object.keys(mem)[i] ?? null,
+  get length() { return Object.keys(mem).length },
+} as Storage
+;(globalThis as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error('offline'))
+
+let fails = 0
+const fail = (m: string) => { fails++; console.log(`  ✗ ${m}`) }
+const ok = (c: boolean, m: string) => { if (!c) fail(m) }
+const t0 = Date.now()
+const f2 = (v: number) => v.toFixed(2)
+
+// one world, cloned for every case: building a world is the slow part
+const base = createCareer({ name: 'Caller', region: 'EMEA', role: '控场', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 7, year: 2026 })
+if (base.me!.phase !== 'pro') throw new Error('a Challengers start should open at a club')
+const fresh = (): GameState => structuredClone(base)
+const pending = (s: GameState) => s.me!.pending.some((x) => x.kind === 'igl')
+
+/** every gate held: in the five, a stage at the club, trusted, and a caller's 指挥 and 沟通 */
+function ready(s: GameState): Player {
+  const me = s.me!
+  const p = s.players[me.id]
+  const team = s.teams[s.myTeam]
+  me.trial = undefined
+  me.benchLock = undefined
+  me.pending = []
+  p.injuredUntil = 0
+  me.coachTrust = 70
+  me.igl = { club: s.myTeam, weeks: IGL_WEEKS, asked: 0, offers: 0, declines: 0, revokes: 0, calledWeeks: 0 }
+  const bar = iglBar(s)
+  p.attrs.igl = Math.max(p.attrs.igl, bar.igl)
+  p.attrs.communication = Math.max(p.attrs.communication, bar.comm)
+  if (!team.starters.includes(me.id)) {
+    const out = team.starters.map((id) => s.players[id]).find((x) => x && !x.isIgl && x.role === p.role)
+      ?? team.starters.map((id) => s.players[id]).find((x) => x && !x.isIgl)!
+    team.starters = team.starters.map((id) => (id === out.id ? me.id : id))
+  }
+  return p
+}
+
+console.log('一、什么时候教练会让你来喊')
+{
+  const s = fresh()
+  ready(s)
+  ok(iglBlock(s) === null, `条件都满足，教练却不问：${iglBlock(s)}`)
+  iglWeek(s, [])
+  ok(pending(s), '条件都满足，这一周却没有弹出指挥邀请')
+  ok(!myCall(s), '只是问了、还没答复，就已经是指挥了')
+}
+const breaks: [string, (s: GameState) => void][] = [
+  ['在队里不满一个赛段', (s) => { s.me!.igl!.weeks = IGL_WEEKS - 2 }],
+  ['教练信任不够', (s) => { s.me!.coachTrust = IGL_TRUST - 1 }],
+  ['指挥不够', (s) => { s.players[s.me!.id].attrs.igl = iglBar(s).igl - 1 }],
+  ['沟通不够', (s) => { s.players[s.me!.id].attrs.communication = iglBar(s).comm - 1 }],
+  ['不在首发', (s) => {
+    const t = s.teams[s.myTeam]
+    const bench = t.roster.find((id) => !t.starters.includes(id) && id !== s.me!.id)
+    t.starters = t.starters.map((id) => (id === s.me!.id ? bench ?? '' : id)).filter(Boolean)
+  }],
+  ['被换下场', (s) => { s.me!.benchLock = s.day + 7 }],
+  ['在试用期', (s) => { s.me!.trial = { left: 2, displaced: '', forgiven: false } }],
+  ['伤着', (s) => { s.players[s.me!.id].injuredUntil = s.day + 10 }],
+  ['教练刚问过', (s) => { s.me!.igl!.lastOffer = s.me!.week }],
+  ['指挥刚被收回', (s) => { s.me!.igl!.lastRevoke = s.me!.week }],
+  ['这支队已经问满了', (s) => { s.me!.igl!.asked = 99 }],
+]
+for (const [what, brk] of breaks) {
+  const s = fresh()
+  ready(s)
+  brk(s)
+  iglWeek(s, [])
+  ok(!pending(s) && !myCall(s), `${what}，教练还是来问了`)
+  ok(!!iglBlock(s), `${what}，却说不出为什么不问`)
+}
+{
+  // left on 快进 with a caller's numbers — and the line of the best man on the team, since the coach's trust
+  // reads where a player's line sits: appointed, and only in a week every gate held
+  const s = fresh()
+  const p = s.players[s.me!.id]
+  for (const k of Object.keys(p.attrs) as (keyof typeof p.attrs)[]) p.attrs[k] = 84
+  p.caps = Object.fromEntries(Object.keys(p.attrs).map((k) => [k, 90])) as typeof p.attrs
+  recomputeOverall(p)
+  let appointed = 0
+  let seen: unknown
+  let after = 0
+  for (let w = 0; w < 36 && s.me!.phase === 'pro' && after < 6; w++) {
+    autoWeek(s)
+    const since = s.me!.igl?.since
+    if (since && since !== seen) {
+      appointed++
+      ok(since.weeks >= IGL_WEEKS && since.trust >= IGL_TRUST && since.igl >= IGL_FLOOR && since.comm >= COMM_FLOOR,
+        `快进里接下指挥的那一周有条件没满足：${JSON.stringify(since)}`)
+    }
+    if (appointed) after++
+    seen = since
+  }
+  ok(appointed >= 1, '指挥、沟通都 84，快进三十多周也没当上指挥')
+  console.log(`  指挥、沟通 84 的快进生涯：${appointed ? `第 ${s.me!.igl?.since?.weeks ?? '?'} 周接下指挥` : '没当上'}`)
+}
+{
+  // the same career with a rookie's numbers: never asked
+  const s = fresh()
+  const p = s.players[s.me!.id]
+  p.attrs.igl = 55
+  p.attrs.communication = 55
+  p.caps = { ...p.caps!, igl: 55, communication: 55 }
+  for (let w = 0; w < 20 && s.me!.phase === 'pro'; w++) autoWeek(s)
+  ok((s.me!.igl?.offers ?? 0) === 0 && !myCall(s), `指挥、沟通只有 55，教练却问了 ${s.me!.igl?.offers} 次`)
+}
+
+console.log('二、接下、拒绝、收回')
+{
+  const s = fresh()
+  const p = ready(s)
+  p.attrs.igl = Math.max(p.attrs.igl, 80)
+  const team = s.teams[s.myTeam]
+  const prev = clubCaller(s)
+  const bondBefore = prev ? bondBetween(s, s.me!.id, prev.id) : 0
+  const grievanceBefore = prev?.grievance ?? 0
+  const prevStarting = !!prev && team.starters.includes(prev.id) && prev.injuredUntil <= s.day
+  iglWeek(s, [])
+  takeIgl(s)
+  ok(myCall(s) && callerOf(s, s.myTeam)?.id === s.me!.id && team.igl === s.me!.id, `接下之后喊的是 ${callerOf(s, s.myTeam)?.ign}`)
+  ok(!pending(s), '接下之后邀请还挂着')
+  if (prev) {
+    ok(prev.isIgl, `${prev.ign} 让出指挥以后连副指挥都不是了`)
+    ok(bondBetween(s, s.me!.id, prev.id) <= bondBefore - 7.9, `和让出指挥的 ${prev.ign} 关系没掉（${bondBefore} → ${bondBetween(s, s.me!.id, prev.id)}）`)
+    if (prevStarting) ok((prev.grievance ?? 0) >= grievanceBefore + 5.9, `${prev.ign} 首发被拿走指挥，却没有怨气`)
+  }
+  team.starters = coachStarters(s)
+  ok(team.starters.includes(s.me!.id), '指挥不在教练的首发名单里')
+  const lu = buildLineup(s, s.myTeam, activePool(s.seed)[0])
+  const want = (p.attrs.igl - 60) * IGL_EDGE
+  ok(lu.players.some((x) => x.id === s.me!.id) && Math.abs(lu.edge.igl - want) < 1e-9, `比赛里指挥一项是 ${f2(lu.edge.igl)}，应是 ${f2(want)}`)
+  ok(Math.abs(nodeCallEdge(s, 'teamwork') - (p.attrs.igl - 60) * NODE_CALL) < 1e-9 && Math.abs(nodeCallEdge(s, 'communication') - (p.attrs.igl - 60) * NODE_CALL) < 1e-9,
+    '关键回合里协同、沟通选项没有加上指挥')
+  ok(nodeCallEdge(s, 'aim') === 0 && nodeCallEdge(s, 'awareness') === 0, '关键回合里枪法、意识选项也加上了指挥')
+  ok(callerRead(s) === 0, '刚接指挥，俱乐部就已经把指挥算进评价')
+  s.me!.igl!.calledWeeks = 10
+  ok(callerRead(s) > 0 && callerRead(s) <= CALLER_READ_MAX, `喊了十周，俱乐部读到的指挥是 ${callerRead(s)}`)
+
+  // a run of defeats since taking the calls
+  const t = structuredClone(s)
+  const since = t.me!.igl!.since!
+  for (let i = 0; i < SKID_OF; i++) t.me!.matches.push({ year: since.year, day: since.day + i, started: true, won: i === 0, friendly: false } as never)
+  iglWeek(t, [])
+  ok(!myCall(t), `接指挥以来 ${SKID_OF} 场只赢 1 场，指挥还在你手里`)
+
+  // trust gone
+  s.me!.coachTrust = IGL_TRUST_LOST - 1
+  iglWeek(s, [])
+  ok(!myCall(s) && !s.players[s.me!.id].isIgl, '教练信任掉到底，指挥还在你手里')
+  if (prev && prev.teamId === s.myTeam) ok(callerOf(s, s.myTeam)?.id === prev.id, `收回指挥以后喊的是 ${callerOf(s, s.myTeam)?.ign}，不是 ${prev.ign}`)
+  ok(!!iglBlock(s), '刚被收回指挥，教练马上又能来问')
+}
+{
+  // leaving the club leaves the calls
+  const s = fresh()
+  ready(s)
+  iglWeek(s, [])
+  takeIgl(s)
+  const club = s.myTeam
+  leaveClub(s, '和你解约了')
+  ok(!s.players[s.me!.id].isIgl && callerOf(s, club)?.id !== s.me!.id && s.teams[club].igl !== s.me!.id, '离队以后还挂着原来那支队的指挥')
+}
+{
+  // a no keeps the caller
+  const s = fresh()
+  ready(s)
+  const map = activePool(s.seed)[0]
+  const callerBefore = callerOf(s, s.myTeam)?.id
+  const namedBefore = s.teams[s.myTeam].igl
+  const edgeBefore = buildLineup(s, s.myTeam, map).edge.igl
+  iglWeek(s, [])
+  declineIgl(s)
+  ok(!myCall(s) && !s.players[s.me!.id].isIgl, '拒绝以后还是成了指挥')
+  ok(callerOf(s, s.myTeam)?.id === callerBefore && s.teams[s.myTeam].igl === namedBefore, '拒绝以后队里换了人喊')
+  ok(buildLineup(s, s.myTeam, map).edge.igl === edgeBefore, '拒绝以后比赛里的指挥一项变了')
+  ok(!pending(s), '拒绝以后邀请还挂着')
+  iglWeek(s, [])
+  ok(!pending(s), `拒绝后的下一周教练又来问了（应等 ${OFFER_GAP} 周）`)
+}
+
+console.log('三、协同、沟通')
+{
+  const s = fresh()
+  const p = s.players[s.me!.id]
+  const mate = squadOf(s, s.myTeam).find((x) => x.id !== p.id)!
+  ok(liveEase(s, p, mate) != null, '主角队里，协同、沟通对关系没有额外作用')
+  const other = Object.values(s.players).find((x) => x.teamId && x.teamId !== s.myTeam && squadOf(s, x.teamId).length > 1)!
+  const otherMate = squadOf(s, other.teamId!).find((x) => x.id !== other.id)!
+  ok(liveEase(s, other, otherMate) === null, '别的队也吃到了主角队里的规则')
+  ok(liveEase({ ...s, me: undefined } as GameState, p, mate) === null, '没有生涯主角的存档（经理模式）规则也变了')
+  ok(winMul(null) === 1 && lossMul(null) === 1 && argueAt(null) === 0 && rateMul(null) === 1 && restOf(null) === 10, '规则之外的队伍，关系的涨落不再是原来的数')
+  // a pair of a fresh 2+2 player (ease −10) and a Challengers regular (0), against an 8+8 one (+8)
+  const lowPair = -10, highPair = 8
+  ok(winMul(lowPair) < 1 && winMul(highPair) > 1, `赢球后的关系：${f2(winMul(lowPair))} / ${f2(winMul(highPair))}`)
+  ok(lossMul(lowPair) > 1 && lossMul(highPair) < 1, `输球后的关系：${f2(lossMul(lowPair))} / ${f2(lossMul(highPair))}`)
+  ok(argueAt(lowPair) > 0 && argueAt(highPair) < 0, `起争执的线：${f2(argueAt(lowPair))} / ${f2(argueAt(highPair))}`)
+  ok(restOf(highPair) > restOf(lowPair) && rateMul(lowPair) > rateMul(highPair), '关系回落的去处和快慢没有跟着协同、沟通走')
+
+  // 2+2 against 8+8 at the start of a career: 协同 and 沟通 58 against 76, half a year of weeks
+  const setEase = (x: Player, v: number) => { x.attrs.teamwork = v; x.attrs.communication = v }
+  const measure = (v: number) => {
+    const t = fresh()
+    const q = t.players[t.me!.id]
+    setEase(q, v)
+    t.bonds = {}
+    const start = roomBond(t, q)
+    const r = new Rng(20260914)
+    for (let w = 0; w < 26; w++) weeklyBonds(t, r, [])
+    return { start, after: roomBond(t, q), edge: roomEdge(t, q), form: roomForm(t, q), view: coachView(t, q) - coachView(t, q, false) }
+  }
+  const lo = measure(58)
+  const hi = measure(76)
+  const d = { start: hi.start - lo.start, after: hi.after - lo.after, edge: hi.edge - lo.edge, form: hi.form - lo.form }
+  console.log(`  协同、沟通 58 → 76：开局关系 ${f2(lo.start)} → ${f2(hi.start)}（${f2(d.start)}），半年后 ${f2(lo.after)} → ${f2(hi.after)}（${f2(d.after)}）；状态 ${f2(lo.form)} → ${f2(hi.form)}（${f2(d.form)}）；教练眼里 ${f2(lo.edge)} → ${f2(hi.edge)}（${f2(d.edge)}）`)
+  ok(d.start >= 2 && d.start <= 8, `开局关系差 ${f2(d.start)}，应在 2–8`)
+  ok(d.after >= 4 && d.after <= 14, `半年后关系差 ${f2(d.after)}，应在 4–14`)
+  ok(d.form >= 1.2 && d.form <= 3, `状态差 ${f2(d.form)}，应在 1.2–3`)
+  ok(d.edge >= 0.8 && d.edge <= 1.6, `教练眼里差 ${f2(d.edge)}，应在 0.8–1.6`)
+  ok(Math.abs(lo.view - lo.edge) < 1e-9 && Math.abs(hi.view - hi.edge) < 1e-9, '教练眼里的加减和化学反应一项对不上')
+  for (const x of [lo, hi]) ok(Math.abs(x.edge) <= ROOM_EDGE_MAX && Math.abs(x.form) <= ROOM_FORM_MAX, '化学反应超出了上限')
+
+  // between two of a level the coach starts the easier one; a clearly better one is not passed over
+  const u = fresh()
+  const me = u.me!
+  const q = u.players[me.id]
+  const rival = squadOf(u, u.myTeam).find((x) => x.id !== me.id && x.role === q.role && !x.isIgl)
+  if (!rival) fail('这支队里没有同位置的队友可以比首发')
+  else {
+    me.proven = true
+    me.coachTrust = 60
+    q.contract = { ...q.contract!, promisedRole: 'rotation' }
+    q.form = rival.form
+    q.fatigue = rival.fatigue
+    q.injuredUntil = 0
+    rival.injuredUntil = 0
+    const level = confidentRating(rival)
+    const pick = (mine: number, his: number, gap: number) => {
+      setEase(q, mine)
+      setEase(rival, his)
+      q.overall = level + gap
+      u.bonds = {}
+      const five = coachStarters(u)
+      return { me: five.includes(me.id), him: five.includes(rival.id), plain: coachStarters(u, false) }
+    }
+    const a = pick(80, 55, 0)
+    ok(a.me, '能力一样、你更好相处，教练却没用你')
+    const b = pick(55, 80, 0)
+    ok(b.him, `能力一样、${rival.ign} 更好相处，教练却没用他`)
+    const c = pick(55, 80, 2 * ROOM_EDGE_MAX + 0.5)
+    ok(c.me, `你比 ${rival.ign} 强 ${2 * ROOM_EDGE_MAX + 0.5}，只因为不好相处就被放上替补席`)
+  }
+}
+
+console.log('四、快进和托管仍然期望中性')
+{
+  ok(AUTO_PENALTY === 0.1 && KEY_OK === 2.4 && KEY_FAIL === 1.8, `快进的常数变了：${AUTO_PENALTY} ${KEY_OK} ${KEY_FAIL}`)
+  let bad = 0
+  for (const decides of [false, true]) {
+    for (let m = 0.05; m <= 0.951; m += 0.05) {
+      for (let b = 0.2; b <= 0.801; b += 0.1) {
+        const neutral = decides ? b : KEY_FAIL / (KEY_OK + KEY_FAIL)
+        const want = Math.min(0.97, Math.max(0.03, Math.min(m - AUTO_PENALTY, neutral)))
+        if (Math.abs(autoChance(m, b, decides) - want) > 1e-12) bad++
+      }
+    }
+  }
+  ok(bad === 0, `autoChance 有 ${bad} 格和原来的规则不一样`)
+  const s = fresh()
+  const p = ready(s)
+  p.attrs.igl = 85
+  iglWeek(s, [])
+  takeIgl(s)
+  const neutral = KEY_FAIL / (KEY_OK + KEY_FAIL)
+  for (const dim of ['teamwork', 'communication'] as const) {
+    const opt = { t: '', dim, risk: 0.5 } as never
+    const called = nodeChance(s, opt)
+    p.iglSource = 'inferred'
+    const plain = nodeChance(s, opt)
+    p.iglSource = 'appointed'
+    ok(called > plain, `当上指挥以后，${dim} 选项的成功率没变（${f2(called)} / ${f2(plain)}）`)
+    for (const b of [0.3, 0.5, 0.7]) {
+      const a = autoChance(called, b, false)
+      if (plain - AUTO_PENALTY >= neutral) ok(a === autoChance(plain, b, false), `快进替指挥做的 ${dim} 决定比替别人做的更容易成`)
+      ok(a <= neutral + 1e-12 && a * KEY_OK - (1 - a) * KEY_FAIL <= 1e-9, `快进替指挥做的 ${dim} 决定期望为正（成功率 ${f2(a)}）`)
+    }
+  }
+}
+
+console.log('五、天赋页说的话')
+{
+  const line = (k: string) => talentShape(TALENT_PRESETS.find((x) => x.key === k)!.t)!.line
+  ok(line('igl').includes('主指挥'), `指挥型没有说到主指挥：${line('igl')}`)
+  for (const k of ['gun', 'util', 'clutch', 'even']) ok(!line(k).includes('主指挥'), `${k} 也说能当主指挥：${line(k)}`)
+  const lonely = talentShape({ aim: 8, reaction: 8, awareness: 4, utility: 0, clutch: 0, teamwork: 0, communication: 0, igl: 0 })!.line
+  ok(lonely.includes('关系掉得快'), `协同、沟通一点没点，却没说关系的事：${lonely}`)
+  const social = talentShape({ aim: 1, reaction: 1, awareness: 1, utility: 1, clutch: 0, teamwork: 8, communication: 8, igl: 0 })!.line
+  ok(social.includes('关系稳'), `协同、沟通 8+8，却没说关系的事：${social}`)
+  ok(!line('even').includes('关系'), `均衡型也在说关系：${line('even')}`)
+}
+
+const secs = ((Date.now() - t0) / 1000).toFixed(0)
+console.log(fails ? `\n✗ ${fails} 项不对 · ${secs}s` : `\n✓ 条件满足才会被任命、拒绝留住原指挥、收回和离队都对，协同、沟通的作用在范围内且只在主角队里，快进和托管仍然期望中性，天赋页只说真的 · ${secs}s`)
+process.exit(fails ? 1 : 0)

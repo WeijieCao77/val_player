@@ -366,7 +366,9 @@ export function ensureCaller(state: GameState, teamId: string): void {
   if (teamId !== managed && flagged.length <= 1) { delete team.igl; return }
   if (squad.some((p) => p.id === team.igl && p.isIgl)) return
   const had = team.igl
-  const best = flagged.sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
+  // a career player his coach named caller (engine/me/igl.ts) is not talked over by a man signed since
+  const best = flagged.find((p) => p.id === state.me?.id && p.iglSource === 'appointed')
+    ?? flagged.sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
   team.igl = best?.id ?? null
   if (teamId === state.myTeam && had && best) {
     state.news.push({

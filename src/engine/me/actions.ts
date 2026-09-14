@@ -29,7 +29,7 @@ export const ACTION_GROUP_CN: Record<ActionDef['group'], string> = {
  */
 export const ACTIONS: ActionDef[] = [
   { key: 'aim', label: '枪法训练', cost: 2, desc: '练枪法、反应', attrs: ['aim', 'reaction'], fatigue: 8, group: 'train' },
-  { key: 'vod', label: '复盘', cost: 2, desc: '练意识、残局', attrs: ['awareness', 'clutch'], fatigue: 3, group: 'train' },
+  { key: 'vod', label: '复盘', cost: 2, desc: '练意识、残局，也练一点指挥', attrs: ['awareness', 'clutch'], fatigue: 3, group: 'train' },
   { key: 'util', label: '道具与跑图', cost: 2, desc: '练道具、协同、沟通', attrs: ['utility', 'teamwork', 'communication'], fatigue: 6, group: 'train' },
   { key: 'ranked', label: '打排位', cost: 1, desc: '涨天梯，保手感', fatigue: 4, group: 'train' },
   { key: 'scrim', label: '跟队训练赛', cost: 3, desc: '教练看得见你；练协同、沟通', fatigue: 9, group: 'team' },

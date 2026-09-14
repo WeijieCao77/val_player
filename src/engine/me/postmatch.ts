@@ -28,8 +28,8 @@ export interface EdgeRow {
 
 const LABELS: Record<string, { label: string; advice: string }> = {
   base: { label: '五人能力', advice: '这是阵容本身的差距，靠成长和转会' },
-  igl: { label: '指挥', advice: '队内最高指挥值是全队乘数' },
-  chem: { label: '默契', advice: '合练、双排、少换人' },
+  igl: { label: '指挥', advice: '场上主指挥的指挥值，高于 60 加分；没人喊扣得最多' },
+  chem: { label: '默契', advice: '五个人的协同、沟通，加上队友之间的关系：合练、双排、少换人' },
   coach: { label: '教练组', advice: '俱乐部的事，你只能影响信任' },
   comp: { label: '阵容结构', advice: '缺哨卫或缺控场都会扣在这里' },
   shortHanded: { label: '人手不齐', advice: '有人受伤或停赛' },

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
-import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, talentShape, zeroTalents } from '../../engine/me/career'
+import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/career'
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
@@ -441,6 +441,8 @@ export default function NewCareer({
         </div>
         {/* what this spread means, in the engine's own terms (career.ts talentShape) — 破晓's 「当前加点路线」 */}
         {shape && <p className="talent-verdict"><b>{shape.label}</b>{shape.line}</p>}
+        {/* the three 综合 hardly counts, in what the engine does with them (career.ts TALENT_TEAM_HINT) */}
+        <p className="tiny faint" style={{ margin: '6px 0 0' }}>{TALENT_TEAM_HINT}</p>
       </Panel>
 
       <div className="row nc-go" style={{ gap: 10, justifyContent: 'flex-end' }}>

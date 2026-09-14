@@ -32,6 +32,17 @@ const MAP_SWING = 6
 /** the strength gap, in rating points, that moves a round from 50% to 73% */
 const ROUND_SENS = 30
 
+/**
+ * The caller (engine/roster.ts callerOf): each point of his 指挥 over 60 adds
+ * IGL_EDGE to his side's round strength and IGL_MID to its mid-round swing;
+ * nobody calling costs NO_CALLER_EDGE and NO_CALLER_MID. The same sum for every
+ * club — and for the career player's, once his coach names him (engine/me/igl.ts).
+ */
+export const IGL_EDGE = 0.09
+export const IGL_MID = 0.06
+export const NO_CALLER_EDGE = -4
+export const NO_CALLER_MID = -3
+
 /** How much each role tends to take kills / take deaths. */
 // 决斗者 was 1.15 while every real duelist in a fifth slot sat on a default
 // initiator with the off-role penalty; with real agent pools he plays his own
@@ -257,7 +268,7 @@ export function buildLineup(
   // club's named main caller if he is on the server, else the best deputy
   // who is (callerOf). The others neither stack nor clash.
   const igl = callerOf(state, team.id, players)
-  const iglBonus = igl ? (igl.attrs.igl - 60) * 0.09 : -4
+  const iglBonus = igl ? (igl.attrs.igl - 60) * IGL_EDGE : NO_CALLER_EDGE
   // attributes say how well they can play together; bonds say whether they are
   const rapport = squadHarmony(state, team.id)
   const chem = clamp((avg('teamwork') + avg('communication')) / 2 + (rapport - NEUTRAL) * 0.18, 20, 99)
@@ -304,7 +315,7 @@ export function buildLineup(
   const def = common + te.tacticsDef + styleDef + (avg('awareness') - 65) * 0.05 + 1.6
 
   const midRound =
-    (t.adaptability - 50) * DIAL_SCALE * 0.05 + (igl ? (igl.attrs.igl - 60) * 0.06 : -3) + (avg('clutch') - 65) * 0.05 +
+    (t.adaptability - 50) * DIAL_SCALE * 0.05 + (igl ? (igl.attrs.igl - 60) * IGL_MID : NO_CALLER_MID) + (avg('clutch') - 65) * 0.05 +
     te.styleMid + te.matchupMid
 
   const edge: EdgeBreakdown = {

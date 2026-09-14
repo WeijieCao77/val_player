@@ -16,6 +16,7 @@ import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto
 import { fixturesFor } from '../../engine/season'
 import { WAIT_CN, nextUp } from '../../engine/me/nextup'
 import { inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
+import { iglLine } from '../../engine/me/igl'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
 import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText } from '../../engine/me/rank'
@@ -346,6 +347,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               <p className="small" style={{ margin: 0 }}>
                 {me.proven ? '你已经是他认定的首发。' : '他还当你是新人：训练赛、对位、正赛都能改变这一点。'}
               </p>
+              {/* who calls, and what stands between me and the calls (engine/me/igl.ts) */}
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>{iglLine(game)}</p>
             </Panel>
             {recent.length > 0 && (
               <Panel title="最近的比赛" flush>

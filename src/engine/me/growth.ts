@@ -108,6 +108,15 @@ const SPLIT: Partial<Record<MeAction, Partial<Record<keyof Attrs, number>>>> = {
 /** my extra hours are worth this much of a club training week, per point */
 const EXTRA = 0.55
 
+/**
+ * 复盘 puts this share of an hour into 指挥 on top of 意识 and 残局, and the man
+ * who calls twice that (decided 2026-09-14). It went to a caller only, at 0.25,
+ * which left the career player's 指挥 where he started: now that his coach can
+ * name him caller (me/igl.ts), 指挥 has to be able to grow before he is.
+ */
+export const IGL_STUDY = 0.35
+export const IGL_CALL_STUDY = 0.5
+
 /** what ranked puts into each of the role's three heaviest attributes, per game night, of a training week (settleTraining) */
 const RANKED_SHARE = 0.18
 /** and a scrim into 协同 and 沟通 */
@@ -141,7 +150,7 @@ export function hourValues(state: GameState): HourValue[] {
     const mul = EXTRA * (pro ? 1 : 1.6)
     const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
     let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
-    if (key === 'vod' && p.isIgl && open('igl')) { v += 0.25 * EXTRA * worth('igl'); attrs.push('igl') }
+    if (key === 'vod' && open('igl')) { v += (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY) * EXTRA * worth('igl'); attrs.push('igl') }
     out.push({ key, perPoint: v / ACTIONS.find((a) => a.key === key)!.cost, attrs })
   }
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3).filter(open)
@@ -218,7 +227,8 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
         for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) {
           bump(k, g * EXTRA * n * share * alone)
         }
-        if (a.key === 'vod' && p.isIgl) bump('igl', g * EXTRA * n * 0.25)
+        // and 指挥 on top, twice as fast for the man who calls (IGL_STUDY)
+        if (a.key === 'vod') bump('igl', g * EXTRA * n * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY))
         // 复盘方法 (me/shop.ts): a loss looked at properly is a loss put down; the hours train what they always did
         if (a.key === 'vod' && me.courses.includes('review')) me.tilt = clamp(me.tilt - 2 * n, 0, 100)
         questProgress(state, 'train', n)

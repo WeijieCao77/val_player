@@ -20,6 +20,51 @@ import type { GameState, MatchResult, Player } from './types'
 
 export const NEUTRAL = 10
 
+/**
+ * How easy a player is to share a room with: 协同 and 沟通 against 68, halved.
+ * 68 is a Challengers regular (2026: p50 67 and 69), so the man a career player
+ * lines up beside sits near 0; a fresh 18-year-old with two talent points in
+ * each is about −10, one with eight about +8.
+ */
+export const ease = (p: Pick<Player, 'attrs'>): number => (p.attrs.teamwork + p.attrs.communication - 136) / 2
+
+/**
+ * The room is live at the career player's club (decided 2026-09-14,
+ * 「加大协同、沟通的影响」). A pair's ease is the sum of the two players' — two
+ * awkward men are worse than one — and there it moves every part of a bond:
+ *
+ *  - EASE_INIT: where the pair starts, per point of pair ease;
+ *  - EASE_REST, EASE_RATE: where a bond drifts back to when nothing happens,
+ *    and how fast — an easy pair settles warmer and fades slower;
+ *  - EASE_WIN, EASE_LOSS: how much a win builds and a loss costs;
+ *  - EASE_ARGUE: how far above zero a bad loss can still turn into an argument,
+ *    up to ARGUE_TOP.
+ *
+ * Measured with scripts/probe_igl.ts; checked by scripts/check_igl.ts. The
+ * terms compound — a colder pair loses more on a loss, argues sooner, and so
+ * gets colder — so each is small: twice these (EASE_WIN 0.015, EASE_LOSS 0.02,
+ * EASE_ARGUE 0.4 up to 8) sank a 2+2 duelist's average bond from 24 to 6 and
+ * had him arguing seventy-three times in six seasons against eight before.
+ *
+ * Every other club keeps the old rule. Only our club's bonds are ever played
+ * out (applyMatchBonds, weeklyBonds), so another club's chemistry is its
+ * opening value and stays what it was. In the manager game there is no career
+ * player, and none of this moves.
+ */
+export const EASE_INIT = 0.2
+export const EASE_REST = 0.3
+export const EASE_RATE = 0.01
+export const EASE_WIN = 0.01
+export const EASE_LOSS = 0.012
+export const EASE_ARGUE = 0.2
+export const ARGUE_TOP = 4
+
+/** The pair's ease where the room is live — both at the career player's club — else null. */
+export function liveEase(state: GameState, a: Player, b: Player): number | null {
+  if (!state.me || !state.myTeam || a.teamId !== state.myTeam || b.teamId !== state.myTeam) return null
+  return ease(a) + ease(b)
+}
+
 function key(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`
 }
@@ -99,6 +144,9 @@ export function initialBond(state: GameState, aId: string, bId: string): number 
   // some people are simply easier to play with
   v += (a.attrs.teamwork + b.attrs.teamwork - 140) * 0.05
   v += (a.attrs.communication + b.attrs.communication - 140) * 0.035
+  // and at the career player's club, where the room is live, it counts for more (EASE_INIT)
+  const live = liveEase(state, a, b)
+  if (live != null) v += live * EASE_INIT
 
   // a little grit so two similar pairs are not identical
   const jitter = (hashStr(`bond:${key(aId, bId)}`) % 7) - 3
@@ -149,6 +197,13 @@ export function notableBonds(
   return out.sort((x, y) => x.value - y.value)
 }
 
+/** How a win moves a pair where the room is live: an easy pair builds more on it (EASE_WIN). */
+export const winMul = (live: number | null): number => (live == null ? 1 : clamp(1 + live * EASE_WIN, 0.7, 1.3))
+/** And how hard a loss lands on it (EASE_LOSS). */
+export const lossMul = (live: number | null): number => (live == null ? 1 : clamp(1 - live * EASE_LOSS, 0.6, 1.5))
+/** The bond under which a bad loss turns into an argument: zero, or above it for an awkward pair (EASE_ARGUE). */
+export const argueAt = (live: number | null): number => (live == null ? 0 : clamp(-live * EASE_ARGUE, -ARGUE_TOP, ARGUE_TOP))
+
 /**
  * What a match did to the dressing room.
  *
@@ -187,9 +242,11 @@ export function applyMatchBonds(
     for (let j = i + 1; j < rated.length; j++) {
       const x = rated[i]
       const y = rated[j]
+      // at the career player's club, how easy the two are to play with moves all of it (EASE_*)
+      const live = liveEase(state, x.p, y.p)
       if (won) {
         // winning together is the cheapest team-building there is
-        shift(state, x.p.id, y.p.id, rng.range(0.6, 1.8))
+        shift(state, x.p.id, y.p.id, rng.range(0.6, 1.8) * winMul(live))
         continue
       }
       // A loss only costs them if one carried and the other didn't. Two players
@@ -197,7 +254,7 @@ export function applyMatchBonds(
       const gap = Math.abs(x.r - y.r)
       const bothPoor = x.r < avg && y.r < avg
       if (gap < 0.35 || bothPoor) {
-        shift(state, x.p.id, y.p.id, rng.range(-2, -0.3))
+        shift(state, x.p.id, y.p.id, rng.range(-2, -0.3) * lossMul(live))
         continue
       }
       const carrier = x.r > y.r ? x : y
@@ -208,13 +265,14 @@ export function applyMatchBonds(
       // already at odds lands far harder than the first time it happened.
       const standing = bondBetween(state, x.p.id, y.p.id)
       const grudge = 1 + Math.max(0, -standing) / 55
-      const damage = gap * rng.range(20, 34) * (1.35 - patience) * grudge
+      const damage = gap * rng.range(20, 34) * (1.35 - patience) * grudge * lossMul(live)
       const after = shift(state, x.p.id, y.p.id, -damage)
 
       // An argument is a thing that happens after a specific bad game, not a
       // hidden number crossing a line: one player carried, the other was well
-      // off it, and they were already not getting on.
-      if (gap >= 0.45 && after < 0) {
+      // off it, and they were already not getting on — or, for two awkward men,
+      // not getting on well enough.
+      if (gap >= 0.45 && after < argueAt(live)) {
         notes.push(
           `💢 ${carrier.p.ign} 和 ${passenger.p.ign} 在赛后起了争执（${carrier.p.ign} ${carrier.r.toFixed(2)} / ${passenger.p.ign} ${passenger.r.toFixed(2)}）。`,
         )
@@ -224,6 +282,11 @@ export function applyMatchBonds(
     }
   }
 }
+
+/** Where a pair's bond drifts back to when nothing happens, where the room is live (EASE_REST). */
+export const restOf = (live: number | null): number => NEUTRAL + (live == null ? 0 : live * EASE_REST)
+/** And how fast, against the old rate (EASE_RATE). */
+export const rateMul = (live: number | null): number => (live == null ? 1 : clamp(1 - live * EASE_RATE, 0.6, 1.6))
 
 /**
  * The week's drift, plus whatever the manager did about it.
@@ -240,9 +303,11 @@ export function weeklyBonds(state: GameState, rng: Rng, notes: string[]): void {
       const a = squad[i]
       const b = squad[j]
       const now = bondBetween(state, a.id, b.id)
+      // an easy pair settles warmer and fades slower; an awkward one cools fast (restOf, rateMul)
+      const live = liveEase(state, a, b)
       // a coach who is good with people pulls the room back together faster
       // 更衣室 is the manager's own lever on the room, alongside the coach's
-      const heal = (NEUTRAL - now) * (0.012 + coachPull * 0.03) *
+      const heal = (restOf(live) - now) * (0.012 + coachPull * 0.03) * rateMul(live) *
         (deskOf(state)?.clubMods(state).bondsHeal ?? 1)
       shift(state, a.id, b.id, heal + rng.range(-1, 1))
     }
@@ -250,7 +315,10 @@ export function weeklyBonds(state: GameState, rng: Rng, notes: string[]): void {
 
   // a feud that has festered starts costing the manager something visible
   for (const { a, b, value } of notableBonds(state, state.myTeam)) {
-    if (value > -40) break
+    if (value > -25) break
+    // two awkward men start to show it sooner, two easy ones later
+    const live = liveEase(state, a, b)
+    if (value > -40 + (live == null ? 0 : clamp(-live, -15, 15))) continue
     if (!rng.chance(0.18)) continue
     a.morale = clamp(a.morale - 3, 0, 100)
     b.morale = clamp(b.morale - 3, 0, 100)
