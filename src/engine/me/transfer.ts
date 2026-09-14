@@ -16,6 +16,8 @@ import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
 import { leaguePool, seasonBar } from './nights'
 import type { Invite } from './types'
+import { clubOpen, periodKey, rollWeight, windowAt, windowBlock } from './window'
+import type { RollKind } from './window'
 
 /**
  * How the market reads a professional: 破晓's proPerf, on this game's scale.
@@ -52,41 +54,6 @@ export function proPerf(state: GameState): number {
 export const perfWord = (v: number): string =>
   v >= 15 ? '整个赛区都在看你' : v >= 8 ? '有几家俱乐部在打听' : v >= 3 ? '偶尔有人提到你' : v >= -3 ? '没什么人注意' : '没人问，也不奇怪'
 
-/**
- * The season's transfer windows, by day. The career's own copy of the world's
- * calendar (engine/transfer.ts), so it reads no manager module to know when
- * the market is open.
- */
-const TRANSFER_WINDOWS: [number, number][] = [
-  [0, 20],    // 季前
-  [63, 90],   // the break before Masters I and its Swiss round
-  [165, 198], // the break before Masters II and its Swiss round
-  [323, 363], // 休赛期
-]
-
-export function inWindow(state: GameState): boolean {
-  return TRANSFER_WINDOWS.some(([a, b]) => state.day >= a && state.day <= b)
-}
-
-/** the two windows a player actually moves in: after Masters I, and the winter */
-export const PLAYER_WINDOWS = [TRANSFER_WINDOWS[2], TRANSFER_WINDOWS[3]]
-/** a window named by where it sits in the season, not by day numbers */
-export const windowLabel = ([a]: [number, number]): string =>
-  a === 165 ? '第一赛段结束后（第二站大师赛期间）' : a === 323 ? '休赛期' : a === 63 ? '揭幕赛结束后' : a === 0 ? '季前' : `第 ${a} 天起`
-
-/** the next player window from today: its name, and how many weeks away */
-export function nextWindow(state: GameState): { label: string; weeks: number } {
-  const day = state.day
-  const ahead = PLAYER_WINDOWS.filter(([a]) => a > day).sort((x, y) => x[0] - y[0])[0]
-  if (ahead) return { label: windowLabel(ahead), weeks: Math.ceil((ahead[0] - day) / 7) }
-  const first = PLAYER_WINDOWS.slice().sort((x, y) => x[0] - y[0])[0]
-  return { label: `明年${windowLabel(first)}`, weeks: Math.ceil((first[0] + 364 - day) / 7) }
-}
-
-export function windowOpensToday(state: GameState): boolean {
-  return PLAYER_WINDOWS.some(([a]) => state.day === a + 1)
-}
-
 /** At a stage's end: who was in the stands. */
 export function noteScoutInterest(state: GameState, rng: Rng): void {
   const me = state.me!
@@ -97,23 +64,26 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   me.playedThisStage = 0
   if (perf < 6) return
   if (!rng.chance(clamp(0.25 + (perf - 6) * 0.05, 0.25, 0.9))) return
-  const t = pickBuyer(state, rng)
+  const t = pickBuyer(state, rng, false, true)
   if (!t) return
   me.intents.push({ teamId: t.id, day: state.day })
-  pushLog(state, 'info', `${t.name} 的教练来看了你的比赛。转会窗开了再说。`)
+  pushLog(state, 'info', windowAt(state, t.id).open
+    ? `${t.name} 的教练来看了你的比赛，记下了你的名字。`
+    : `${t.name} 的教练来看了你的比赛。转会窗口开了再说。`)
 }
 
 /** Where a buyer plays, in the words an offer uses. */
 const leagueWord = (t: Team): string => t.league ?? (t.tier === 1 ? '一线' : '二线')
 
-function pickBuyer(state: GameState, rng: Rng, rut = false): Team | null {
+/** `anyWindow`: a scout in the stands writes a name down whatever his club's window says; an offer waits for it. */
+function pickBuyer(state: GameState, rng: Rng, rut = false, anyWindow = false): Team | null {
   const me = state.me!
   const p = state.players[me.id]
   const mine = state.teams[state.myTeam]
-  // a club with nowhere to play this year is not hiring
+  // a club with nowhere to play this year is not hiring, nor one whose window is shut or roster locked (me/window.ts)
   const no = declinedNow(state)
   const pool = Object.values(state.teams).filter((t) => t.id !== state.myTeam && t.roster.length <= 7 && !no.has(t.id)
-    && !t.dormant && hasPlace(state, t))
+    && !t.dormant && hasPlace(state, t) && (anyWindow || clubOpen(state, t.id)))
   const fit = rut
     ? pool.filter((t) => t.tier === 2 || t.rating <= mine.rating - 4)
     : pool.filter((t) => expectOf(t) <= p.overall + 4 && (t.tier === 1 || mine.tier === 2))
@@ -162,6 +132,13 @@ function foreignLeague(state: GameState, t: Team): boolean {
  * windows at a Challengers club 22 brought a VCT offer and 92 only Challengers
  * clubs; of 53 in which the market rated him highly and a VCT club of his league
  * had a starter in his job he out-rated, 10 brought one.
+ *
+ * Those were windows when the career moved only on its two market days. Since
+ * 2026-09-14 the count is by transfer period — the half-season a market day
+ * closes, whichever of its days the window was open (me/window.ts periodKey).
+ * Sixteen careers from club starts (scripts/probe_window.ts 8 6 2021 and 8 5 2026,
+ * seeds 4100–4471): 135 periods at a Challengers club, the window open at the end
+ * of 2,915 of their weeks; 10 brought a VCT club, 62 only other clubs.
  *
  * 破晓's rule for a second-team man is the model (tryout.ts rollProOffers): his
  * way out is the first tier, it comes when a window opens, and a club that has
@@ -278,7 +255,8 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
   const no = declinedNow(state)
   const out: VctNeed[] = []
   for (const team of vctClubsOf(state, league)) {
-    if (team.id === state.myTeam || no.has(team.id) || importBlock(state, team.id, p)) continue
+    // a club whose window is shut or roster locked signs nobody today (me/window.ts)
+    if (team.id === state.myTeam || no.has(team.id) || importBlock(state, team.id, p) || !clubOpen(state, team.id)) continue
     // a man this far under the club's bar is not asked (me/auto.ts turns such a tryout down)
     if (skill < expectOf(team) - 6) continue
     // a buyout still owed comes out of the buyer's budget; nothing is owed on a deal that runs out this winter
@@ -296,21 +274,25 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
 }
 
 /**
- * A player window opens on a Challengers man (me/week.ts): the VCT clubs of his
- * league that need him come first, on a draw of their own, before the market
- * turns over, and the market leaves the job alone while he answers (me/market.ts).
- * Returns how many came; with VCT clubs calling, nobody shops him to the
- * Challengers clubs that window (me/week.ts does not roll rollOffers).
+ * A moment his window is open, for a Challengers man (me/transfer.ts windowRoll):
+ * the VCT clubs of his league that need him — and whose own window is open — come
+ * first, on a draw of their own; on a market day before the market turns over, and
+ * the market leaves the job alone while he answers (me/market.ts). Returns how
+ * many came; with VCT clubs calling, nobody shops him to the Challengers clubs that
+ * transfer period (rollOffers reads `winGot`).
  */
-export function vctApproach(state: GameState, rng: Rng): number {
+export function vctApproach(state: GameState, rng: Rng, weight = 1): number {
   const me = state.me!
+  // once a transfer period, as once a window before (me/window.ts periodKey), and not with a move already agreed
+  if (me.moveAfter || me.flags.vctGot) return 0
   const read = vctRead(state)
   if (!read?.by || read.starts < VCT_SEEN) return 0
   const needs = vctNeeds(state, read.league)
   if (!needs.length) return 0
-  // not every window: a club has its own plans, and results alone convince fewer of them than a rating or a trophy
+  // not every period: a club has its own plans, and results alone convince fewer of them than a rating or a trophy;
+  // the chance is spread over the period's open moments, `weight` this one's share (me/window.ts rollWeight)
   const odds = read.by === 'results' ? Math.min(0.85, 0.7 + 0.05 * (needs.length - 1)) : 0.9
-  if (!rng.chance(odds)) return 0
+  if (!rng.chance(1 - Math.pow(1 - odds, weight))) return 0
   const p = state.players[me.id]
   const count = needs.length > 1 && rng.chance(0.25 + me.agentTier * 0.2) ? 2 : 1
   let pool = needs
@@ -325,7 +307,10 @@ export function vctApproach(state: GameState, rng: Rng): number {
     pool = pool.filter((x) => x !== pick)
     approach(state, read, pick, rng)
   }
-  // whoever wrote my name down this season has been answered, one way or the other (rollOffers)
+  // whoever wrote my name down this season has been answered, one way or the other (rollOffers); with VCT clubs
+  // calling, nobody shops him to the Challengers clubs this period
+  me.flags.vctGot = 1
+  me.flags.winGot = 1
   me.flags.dryWindows = 0
   me.intents = []
   return count
@@ -366,18 +351,31 @@ function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): voi
 }
 
 /**
- * The window opens: whoever wrote my name down comes with terms, and a bad
+ * A round of calls: whoever wrote my name down comes with terms, and a bad
  * year still gets a call from somewhere lower. A champion is never left
  * waiting. A player who asked to be listed is answered first.
+ *
+ * One round a transfer period (me/window.ts periodKey), as there was one a
+ * window when the career moved only on its two market days. `weight` is this
+ * moment's share of the period (me/window.ts rollWeight): the chance of the
+ * round is spread over the days the window is open, so a period open end to end
+ * brings one with the chance its market day alone used to carry — and a
+ * champion's still comes at the first open moment. Being listed is a round of
+ * its own, at full chance.
  */
-export function rollOffers(state: GameState, rng: Rng, listed = false): number {
+export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 1): number {
   const me = state.me!
-  if (me.phase !== 'pro') return 0
+  if (me.phase !== 'pro' || me.moveAfter) return 0
+  syncPeriod(state)
+  if (!listed && me.flags.winGot) return 0
   const perf = proPerf(state)
   const team = state.teams[state.myTeam]
   const benched = !team.starters.includes(me.id)
-  // a club does not shop a man who signed this season unless he is rotting on the bench
-  if (me.tenure < 1 && !benched && !listed) { me.intents = []; return 0 }
+  // a club does not shop a man who signed this season unless he is rotting on the bench; who wrote my name down waits for the period's end
+  if (me.tenure < 1 && !benched && !listed) return 0
+  me.flags.winRolled = 1
+  // this moment's share of the period's chance; a certainty stays one
+  const hit = (q: number): boolean => rng.chance(listed || q >= 1 ? q : 1 - Math.pow(1 - q, weight))
   let p = clamp(0.10 + perf * 0.03 + me.heat / 1500 + Math.min(me.intents.length, 3) * 0.12, 0.02, 0.85)
   if (me.titles.some((t) => t.year === state.year && isIntlComp(t.title))) p = 1
   else if (me.titles.some((t) => t.year === state.year)) p = Math.max(p, 0.96)
@@ -388,7 +386,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
   if (nowhere) p = Math.max(p, 0.6)
   const rut = nowhere || (perf < 3 && (me.benchedStages > 0 || state.teams[state.myTeam]?.tier === 2))
   let n = 0
-  const count = rng.chance(p) ? 1 + (rng.chance(0.3 + me.agentTier * 0.2) ? 1 : 0) : 0
+  const count = hit(p) ? 1 + (rng.chance(0.3 + me.agentTier * 0.2) ? 1 : 0) : 0
   for (let i = 0; i < count; i++) {
     const t = pickBuyer(state, rng, false)
     if (!t) break
@@ -399,7 +397,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
     pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${foreignLeague(state, t) ? '（外赛区）' : ''} 开价了。`)
     n++
   }
-  if (!n && rut && rng.chance(0.26)) {
+  if (!n && rut && hit(0.26)) {
     const t = pickBuyer(state, rng, true)
     if (t) {
       const deal = makeDeal(state, t.id, 'transfer', 'B', rng)
@@ -412,16 +410,73 @@ export function rollOffers(state: GameState, rng: Rng, listed = false): number {
       n++
     }
   }
-  me.flags.dryWindows = n ? 0 : (me.flags.dryWindows ?? 0) + 1
-  me.intents = []
+  if (n) {
+    // whoever wrote my name down has been answered, and the period's round has come
+    me.flags.winGot = 1
+    me.flags.dryWindows = 0
+    me.intents = []
+  }
   return n
 }
 
-/** Put myself on the market inside a window. The manager remembers. */
+/**
+ * The period a round of calls belongs to (me/window.ts periodKey): a save from
+ * before, or a man who has just turned professional, starts counting at today's.
+ */
+function syncPeriod(state: GameState): void {
+  const me = state.me!
+  const key = periodKey(state.year, state.day)
+  if (me.flags.winPeriod === key) return
+  me.flags.winPeriod = key
+  me.flags.winRolled = 0
+  me.flags.winGot = 0
+  me.flags.vctGot = 0
+}
+
+/**
+ * A moment a club can call (me/week.ts): a market day, a stage's end, a week's
+ * end. Nothing while my club's window is shut or its roster locked, nor while a
+ * move is already agreed; each buyer's own window is asked as it is picked. The
+ * VCT clubs that would start a Challengers man ask first (`vct`), then anyone
+ * (`rest`) — on a market day the world's market turns over between the two.
+ */
+export function windowRoll(state: GameState, rng: Rng, kind: RollKind, part: 'vct' | 'rest' | 'both' = 'both'): number {
+  const me = state.me!
+  if (me.phase !== 'pro' || me.moveAfter || !state.teams[state.myTeam] || !windowAt(state).open) return 0
+  syncPeriod(state)
+  const w = rollWeight(state, kind)
+  let n = part === 'rest' ? 0 : vctApproach(state, rng, w)
+  if (!n && part !== 'vct') n = rollOffers(state, rng, false, w)
+  return n
+}
+
+/**
+ * A market day closes the transfer period: one that had an open moment and
+ * brought no call is one more dry period (`dryWindows`, read by rollOffers), one
+ * that brought a call ends the run, and whoever wrote my name down in it has had
+ * his chance.
+ */
+export function endTransferPeriod(state: GameState): void {
+  const me = state.me
+  if (!me) return
+  if (me.phase === 'pro' && me.flags.winPeriod === periodKey(state.year, state.day)) {
+    if (me.flags.winGot) me.flags.dryWindows = 0
+    else if (me.flags.winRolled) me.flags.dryWindows = (me.flags.dryWindows ?? 0) + 1
+  }
+  me.intents = []
+  me.flags.winPeriod = periodKey(state.year, state.day + 1)
+  me.flags.winRolled = 0
+  me.flags.winGot = 0
+  me.flags.vctGot = 0
+}
+
+/** Put myself on the market while the window is open. The manager remembers. */
 export function listSelf(state: GameState): string {
   const me = state.me!
   if (me.phase !== 'pro') return '你现在没有合同可挂。'
-  if (!inWindow(state)) return '转会窗没开，挂牌没人看。'
+  if (me.moveAfter) return '已经谈妥了下一家，等名单锁定解除。'
+  const shut = windowBlock(state)
+  if (shut) return `${shut}。挂牌没人看。`
   if (me.listedYear === state.year) return '今年已经挂过牌了。'
   me.listedYear = state.year
   me.gmTrust = clamp(me.gmTrust - 8, 0, 100)

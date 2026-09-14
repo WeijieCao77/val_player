@@ -32,10 +32,11 @@ import { AGENTS } from './shop'
 import { questWeek } from './quests'
 import { fireEvent, tryRandomEvent } from './events'
 import { checkAchievements } from './achievements'
-import { PLAYER_WINDOWS, noteScoutInterest, rollOffers, seasonContractCheck, vctApproach, windowOpensToday } from './transfer'
+import { endTransferPeriod, noteScoutInterest, seasonContractCheck, windowRoll } from './transfer'
+import { WINTER_RENEWALS, marketDay } from './window'
 import { retirementTick } from './endings'
 import { compCn } from './compname'
-import { leaveClub } from './contract'
+import { leaveClub, settleMove } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
@@ -331,15 +332,19 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     me.weekDay++
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
     const rng = new Rng(hashStr(`me:day:${state.seed}:${state.year}:${state.day}`))
-    if (r.stageChanged) onStageChange(state, rng)
-    // A window opens. The VCT clubs that would start me ask first, and hold that job for me while I answer
-    // (me/transfer.ts vctApproach); then the market around me turns over (me/market.ts); then, if no VCT club
-    // came, whoever else wants me calls. Asked after the market, a club's job was often filled that same morning by
-    // the market's own promotions, which go for exactly the weakest man in a job.
-    const opens = windowOpensToday(state)
-    const asked = pro && opens ? vctApproach(state, new Rng(hashStr(`vct:${state.seed}:${state.year}:${state.day}`))) : 0
-    if (opens) marketWindow(state, new Rng(hashStr(`market:${state.seed}:${state.year}:${state.day}`)), state.day >= 300)
-    if (pro && opens && !asked) rollOffers(state, rng)
+    if (r.stageChanged) onStageChange(state, rng, state.year !== yearBefore)
+    // A market day (me/window.ts MARKET_DAYS): the market around me turns over, whatever my window says. If my
+    // window is open, the VCT clubs that would start me ask first, and hold that job for me while I answer
+    // (me/transfer.ts vctApproach); then the market; then, if no VCT club came, whoever else wants me calls. Asked
+    // after the market, a club's job was often filled that same morning by the market's own promotions, which go for
+    // exactly the weakest man in a job. The day closes the transfer period (endTransferPeriod).
+    const market = marketDay(state)
+    const asked = pro && market ? windowRoll(state, new Rng(hashStr(`vct:${state.seed}:${state.year}:${state.day}`)), 'market', 'vct') : 0
+    if (market) marketWindow(state, new Rng(hashStr(`market:${state.seed}:${state.year}:${state.day}`)), state.day >= 300)
+    if (pro && market && !asked) windowRoll(state, rng, 'market', 'rest')
+    if (market) endTransferPeriod(state)
+    // a move agreed under a roster lock, made the day it lifts (me/contract.ts)
+    settleMove(state)
     syncTitles(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)
@@ -449,7 +454,7 @@ export function syncTitles(state: GameState): void {
   }
 }
 
-function onStageChange(state: GameState, rng: Rng): void {
+function onStageChange(state: GameState, rng: Rng, newYear = false): void {
   const me = state.me!
   streamClauseCheck(state)
   // the stage's books close with the stage
@@ -463,6 +468,9 @@ function onStageChange(state: GameState, rng: Rng): void {
   const champs = Object.values(state.comps).find((c) => !!c.champion && compClass(c.name) === 'champions' && c.finished?.[1] === state.myTeam)
   if (champs && me.startedThisStage > 0) me.flags.champFinalLost = 1
   noteScoutInterest(state, rng)
+  // a stage over is a moment a club can call while my window is open (me/transfer.ts windowRoll) — not the turn
+  // of the year, which has its contract business first (onSeasonEnd)
+  if (!newYear) windowRoll(state, new Rng(hashStr(`offer:stage:${state.seed}:${state.year}:${state.day}`)), 'stage')
   // a stage's worth of evidence is enough to say who was carrying whom
   bondCloseStage(state)
   if (me.traits.includes('star')) me.coachTrust = clamp(me.coachTrust - 2, 0, 100)
@@ -523,8 +531,10 @@ export function settleWeek(state: GameState): void {
     if (me.benchLock && me.benchLock <= state.day) me.benchLock = undefined
     if (p.form >= 84) fireEvent(state, 'hot_week')
     else if (p.form <= 56) fireEvent(state, 'cold_week')
-    // once the winter window is open the club renews whoever it still uses, before the deals run out (me/club.ts)
-    clubWeek(state, rng, state.day >= PLAYER_WINDOWS[1][0])
+    // from the winter market on, the club renews whoever it still uses, before the deals run out (me/club.ts)
+    clubWeek(state, rng, state.day >= WINTER_RENEWALS)
+    // a week's end is a moment a club can call while my window is open: a small share of the period's round (me/window.ts rollWeight)
+    windowRoll(state, new Rng(hashStr(`offer:week:${state.seed}:${state.year}:${state.day}`)), 'week')
   }
   // a chain's next card, a seed coming back, or a new chain — before the draw, which steps aside for it
   storyWeek(state)
@@ -588,6 +598,8 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
   newcomersTurn(state)
   // and the world, my teammates with it, read on the ruler the book years were read on, so its scale holds; only I am left alone (engine/ruler.ts)
   if (!bookCovers(state.year)) holdScale(state)
+  // a move agreed under a roster lock that is still waiting: no event holds anybody across the turn of the year (me/contract.ts)
+  settleMove(state, true)
   if (pro) {
     if (me.flags.renewPending) me.flags.renewPending = 0
     seasonContractCheck(state, rng)

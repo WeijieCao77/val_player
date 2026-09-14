@@ -18,8 +18,9 @@ import { pushLog } from './log'
  * touches the player's own job at his own club. Nobody bids, lists or haggles:
  * a move happens or it does not, and it is in the news.
  *
- * Here the moments are the two windows a player moves in (me/transfer.ts
- * PLAYER_WINDOWS). A year the roster book covers is history's — every club out
+ * Here the moments are the career's two market days (me/window.ts MARKET_DAYS),
+ * the world's own, whatever the player's transfer window says — his window moved
+ * off them in 2026-09 and the market did not. A year the roster book covers is history's — every club out
  * of the player's reach takes the field with the people it really had
  * (engine/timeline.ts) — so only his own club looks for help that year, among
  * the free agents (me/club.ts clubWindow). Past the book there is no history

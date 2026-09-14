@@ -6,7 +6,7 @@ import { duoBonded } from '../bonds'
 import type { GameState, Player } from '../types'
 import { compCn } from './compname'
 import { pushLog } from './log'
-import { inWindow, nextWindow } from './transfer'
+import { clubOpen, windowAt, windowBlock } from './window'
 import { isIntlComp } from './compclass'
 import { leagueCurOf } from './currency'
 import { worldMoney } from './moneyfmt'
@@ -219,10 +219,9 @@ export function canSign(state: GameState): Gate {
   const gm = Math.round(me.gmTrust)
   if (c < SIGN_GATE.clout) return { ok: false, why: `威望不够（${c}/${SIGN_GATE.clout}）。这种要求得是队魂级别的人才提得动。` }
   if (gm < SIGN_GATE.gm) return { ok: false, why: `经理不认你（信任 ${gm}/${SIGN_GATE.gm}）。他要先看到你值这个钱。` }
-  if (!inWindow(state)) {
-    const w = nextWindow(state)
-    return { ok: false, why: `转会窗没开，签不了人。下一个窗口：${w.label}，还有 ${w.weeks} 周。` }
-  }
+  // the club's own window (me/window.ts); the other club's is asked of each name (signTargets, doSign)
+  const shut = windowBlock(state)
+  if (shut) return { ok: false, why: `${shut}。签不了人。` }
   if ((me.cloutCd?.sign ?? 0) > 0) return { ok: false, why: `本赛季已经提过，${me.cloutCd!.sign} 个赛段后再说。` }
   return { ok: true }
 }
@@ -251,7 +250,8 @@ export function signTargets(state: GameState): SignTarget[] {
   // the club in the red rather than one the manager turns down
   const purse = myTeam.budget
   const band = Object.values(state.players)
-    .filter((q) => q.teamId && q.teamId !== myTeam.id && !q.retiring)
+    // and his club has to be free to let him go: its window open, its roster not locked (me/window.ts)
+    .filter((q) => q.teamId && q.teamId !== myTeam.id && !q.retiring && clubOpen(state, q.teamId))
     .map((q) => ({ q, a: attrAvg(q) }))
     .filter((x) => x.a <= reach + 4 && x.a >= teamAvg - 1 && feeOf(x.q) <= purse)
     .sort((a, b) => b.a - a.a)
@@ -288,6 +288,8 @@ export function doSign(state: GameState, targetId: string): string {
   const target = state.players[targetId]
   const myTeam = state.teams[state.players[me.id].teamId ?? '']
   if (!target || !myTeam) return '找不到这个人。'
+  // his club's window too: a club under a roster lock lets nobody go (me/window.ts)
+  if (!windowAt(state, target.teamId ?? undefined).open) return `${state.teams[target.teamId ?? '']?.name ?? '他的俱乐部'}现在放不了人：${windowBlock(state, target.teamId ?? undefined)}。`
 
   const rng = new Rng(hashStr(`clout:sign:${state.seed}:${state.year}:${state.day}:${targetId}`))
   const p = signOdds(state, target)

@@ -7,6 +7,7 @@ import { push } from './pending'
 import { CUPS } from './cups'
 import { formatOf } from '../era'
 import { hasPlace } from '../timeline'
+import { clubOpen } from './window'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -162,7 +163,8 @@ function makeInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng):
 
 function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0): Team | null {
   const me = state.me!
-  const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id))
+  // a club whose window is shut or whose roster is locked is not holding tryouts (me/window.ts): with no club of my own, only its window counts
+  const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(state, t.id))
   if (!pool.length) return null
   const w = pool.map((t) => {
     let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
@@ -219,7 +221,8 @@ export const INVITE_FANS_T1 = 400
 /** The weekly channels: the ladder, the following, and being a known free agent. */
 export function rollInvites(state: GameState, rng: Rng): void {
   const me = state.me!
-  if (me.pre.invites.length) return
+  // a signing already agreed, waiting on a roster lock (me/contract.ts settleMove), takes no more calls
+  if (me.pre.invites.length || me.moveAfter) return
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
   const l = me.pre.ladder
