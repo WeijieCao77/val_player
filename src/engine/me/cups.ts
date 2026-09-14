@@ -8,6 +8,7 @@ import { pushLog } from './log'
 import { push, pop } from './pending'
 import { addMoney } from './money'
 import { fansCn } from './fans'
+import { cupInvite } from './prepro'
 
 /**
  * The amateur calendar: what a player with no club can enter, week by week.
@@ -285,7 +286,6 @@ export function forfeitCup(state: GameState, rng: Rng): CupRun | null {
 
 /** The run is over — lost, won, or given up on: the prize for the rounds won, the heat, what a five taught me. */
 function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, rng: Rng): CupRun {
-  void rng
   const me = state.me!
   const run = me.pre.cup!
   dropTempTeams(state)
@@ -305,6 +305,9 @@ function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, r
       ? `${cup.name}${at}弃权，到此为止${prize ? `，奖金 $${prize}` : ''}。`
       : `${cup.name}止步${at}${prize ? `，奖金 $${prize}` : ''}。`
   pushLog(state, rec.won ? 'good' : 'cup', line)
+  // and the deeper the run, the likelier a club's call (me/prepro.ts cupInvite). Once the run is over, as
+  // 破晓 has it (cup.ts: a call in the middle of one had players signing at the semi-final and skipping the rest)
+  cupInvite(state, rec, rng)
   return rec
 }
 

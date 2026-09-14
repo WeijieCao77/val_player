@@ -210,7 +210,14 @@ function offerInvite(state: GameState, team: Team, via: Invite['via'], rng: Rng)
   pushLog(state, 'good', `${team.name} 的人${how}，${inv.direct ? '直接给了报价' : '邀请你去试训'}。${INVITE_DAYS} 天内答复。`)
 }
 
-/** After a cup: a deep run is what gets a name written down. */
+/**
+ * After a cup: a deep run is what gets a name written down. Called when a run
+ * ends — lost, won or given up on (me/cups.ts endRun).
+ *
+ * Nothing called it until 2026-09-14: the week page's 「怎么被看见」 names the
+ * cups first of its three roads, and the help says a first spring's calls come
+ * only from cups, and a cup run never brought a single one.
+ */
 export function cupInvite(state: GameState, run: CupRun, rng: Rng): void {
   const me = state.me!
   const depth = run.rounds ? run.reached / run.rounds : 0

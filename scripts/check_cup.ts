@@ -1,14 +1,17 @@
 /**
- * Cups a round a week.
+ * Cups a round a week, and what a deep run brings.
  *
  * Reported 2026-09-14: once entered, a café cup was played to its end on the
  * day it was entered — every round back to back, no rest, no training, no shop
  * in between. It now runs the way 破晓's 城市争霸赛 does: a round a week, the
  * card up only on the round's own day, and the weeks between are ordinary weeks.
+ * And a run that goes deep can bring a club's call, which it never did:
+ * me/prepro.ts cupInvite was never called.
  *
  *   一、by hand: sign up, rest between rounds, play each round on its day
  *   二、on autopilot: pre-pro weeks as the bot plays them; fast-forward at a round
  *   三、forfeit, signing mid-run, and saves from the blocking model
+ *   四、the call a deep run can bring, once the run is over
  *
  *   npx tsx scripts/check_cup.ts
  */
@@ -17,24 +20,26 @@ const mem: Record<string, string> = {}
 ;(globalThis as any).fetch = () => Promise.reject(new Error('offline'))
 
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { advanceUntil, autoPlan, autoResolve, matchLoad, runAutoPilot, runBlocked } from '../src/engine/me/auto'
+import { advanceUntil, autoPlan, autoResolve, leftToMe, matchLoad, runAutoPilot, runBlocked } from '../src/engine/me/auto'
 import { advanceTurn, advanceWeek, planBlock, setPlan } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupFor, cupRng, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, skipCup } from '../src/engine/me/cups'
 import { buyRelax } from '../src/engine/me/shop'
+import { reachableClubs } from '../src/engine/me/prepro'
 import { migratePlayerSave } from '../src/engine/me/save'
 import { packState, unpackState } from '../src/engine/save'
 import { recomputeOverall } from '../src/engine/player'
 import { ATTR_KEYS } from '../src/engine/types'
 import type { GameState } from '../src/engine/types'
 import type { PendingItem } from '../src/engine/me/types'
-import { Rng } from '../src/engine/rng'
+import { Rng, hashStr } from '../src/engine/rng'
 
 let bad = 0
 const fail = (m: string) => { bad++; console.log(`  ✗ ${m}`) }
 const t0 = Date.now()
 const secs = () => `${((Date.now() - t0) / 1000).toFixed(0)} 秒`
 const clone = (s: GameState): GameState => JSON.parse(JSON.stringify(s))
+const pct = (x: number) => `${Math.round(x * 100)}%`
 const WEEKDAY = '日一二三四五六'
 const weekday = (s: GameState, day: number) => new Date(Date.UTC(s.year, 0, 1 + day)).getUTCDay()
 const date = (s: GameState, day: number) => {
@@ -336,14 +341,13 @@ else {
   const r2 = advanceUntil(st, 'stage')
   const played = st.me!.matches.some((x) => x.friendly && x.day === next)
   if (!played) fail(`快进到赛段末：路过 ${date(st, next)} 的杯赛没有替你打（停在 ${r2.stop.kind}，${r2.weeks} 周）`)
-  else console.log(`  快进「赛段末」：${r2.weeks} 周，路上替你打了杯赛：${r2.notes.filter((n) => /胜|负|弃权/.test(n)).slice(0, 3).join(' / ')}`)
+  else console.log(`  快进「赛段末」：${r2.weeks} 周，路上替你打了杯赛：${r2.notes.filter((n) => /胜|负|弃权/.test(n)).slice(0, 3).join(' / ')}${r2.stop.kind === 'pending' ? `；停在 ${r2.stop.item.kind}` : ''}`)
 }
 
 /* ---- 三、forfeit, signing, old saves ---- */
 console.log(`\n三、弃权、签约退赛、老存档 · ${secs()}`)
 {
   const s = make(CAREERS[0].o)
-  const me = s.me!
   const cup = cupFor(s, 'city')!
   if (signUp(s, '弃权') != null) {
     const entry = clone(s)
@@ -368,7 +372,6 @@ console.log(`\n三、弃权、签约退赛、老存档 · ${secs()}`)
       const after = advanceTurn(f)
       if (after.kind === 'pending' && after.item.kind === 'cup') fail('弃权之后推进还是弹杯赛卡')
     }
-    void me
     // signed to a club between rounds: the run is withdrawn from, as before
     const w = clone(entry)
     w.me!.phase = 'pro'
@@ -396,5 +399,49 @@ console.log(`\n三、弃权、签约退赛、老存档 · ${secs()}`)
   }
 }
 
-console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上。 · ${secs()}`)
+/* ---- 四、the call a deep run can bring ---- */
+console.log(`\n四、杯赛带来的试训邀请 · ${secs()}`)
+{
+  const s = make(CAREERS[1].o)
+  if (signUp(s, '邀请') != null) {
+    const cup = cupFor(s, 'city')!
+    // somebody a club could want: within reach of at least one bar (me/prepro.ts reachableClubs)
+    for (let i = 0; i < 20 && !reachableClubs(s).length; i++) stronger(s, 1)
+    if (!reachableClubs(s).length) fail('练到 20 点以上也没有够得着的俱乐部，测不了')
+    const N = 40
+    /** the share of runs ended at this round, this way, that bring a call */
+    const rate = (round: number, won: boolean): number => {
+      let calls = 0
+      for (let t = 0; t < N; t++) {
+        const c = clone(s)
+        c.me!.pre.invites = []
+        c.me!.pending = c.me!.pending.filter((x) => x.kind !== 'invite')
+        c.me!.pre.cup!.round = round
+        // seeded the way the game seeds it (me/cups.ts cupRng): a hashed tag, not neighbouring integers
+        afterCupMatch(c, won, won ? '2-1' : '0-2', new Rng(hashStr(`cupinv:${round}:${won}:${t}`)))
+        const over = !won || round === cup.rounds.length - 1
+        if (!!c.me!.pre.cup === over) { fail(`${cup.rounds[round].label}${won ? '赢了' : '输了'}，赛事${over ? '该结束却还在' : '不该结束却没了'}`); break }
+        const inv = c.me!.pre.invites.find((x) => x.via === 'cup')
+        if (!inv) continue
+        calls++
+        const card = c.me!.pending.find((x) => x.kind === 'invite' && x.id === inv.id)
+        if (!card) fail('杯赛带来的邀请没有卡片')
+        else if (!leftToMe(c, card)) fail('托管「生涯」没开，快进却不会停在杯赛带来的邀请上')
+      }
+      return calls / N
+    }
+    const champ = rate(cup.rounds.length - 1, true)
+    const semi = rate(2, false)
+    const first = rate(0, false)
+    // a round won with more to play: no call yet — 破晓 keeps them for the end of the cup
+    const mid = rate(0, true)
+    console.log(`  打完来电话的比例：夺冠 ${pct(champ)} · 四强出局 ${pct(semi)} · 首轮出局 ${pct(first)} · 赢了首轮还没打完 ${pct(mid)}（各 ${N} 次；被记下名字 ${s.me!.pre.scoutSeen} 次，够得着的俱乐部 ${reachableClubs(s).length} 家）`)
+    if (champ < 0.6) fail(`夺冠只有 ${pct(champ)} 带来邀请，cupInvite 写的是八成以上`)
+    if (first > 0.35) fail(`首轮出局也有 ${pct(first)} 带来邀请`)
+    if (!(champ > semi && semi > first)) fail('走得越远越容易被看到，这个次序没有成立')
+    if (mid > 0) fail('赛事还没打完，杯赛的邀请就来了')
+  }
+}
+
+console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上，走得远会有人来电话。 · ${secs()}`)
 if (bad) process.exit(1)
