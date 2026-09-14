@@ -6,6 +6,7 @@ import { migrateRuler } from './rulerMigrate'
 import { migrateStaff } from './staffMigrate'
 import type { SaveMeta } from './saveMeta'
 import { migrateToCny } from './cnyMigrate'
+import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -107,7 +108,12 @@ export function migratePlayerSave(state: GameState): GameState {
   const pre = state.me?.pre
   if (pre) {
     pre.ladder = Math.min(100, Math.max(0, Number.isFinite(pre.ladder) ? pre.ladder : 0))
-    pre.ladderPeak = Math.max(pre.ladder, Math.min(100, Number.isFinite(pre.ladderPeak) ? pre.ladderPeak : 0))
+    // the board's climb past a man who stopped playing (me/rank.ts boardWeek): a save from before it has none —
+    // its score stays exactly as it was, and the place slides only from here on
+    pre.rise = Math.min(BOARD_RISE_MAX, riseOf(pre))
+    // the best is a place held (me/prepro.ts notePeak): never under where I stand today, and never lifted to RR that a
+    // board which climbed past me reads further down — in a save from before, where I stand is the score, as it was
+    pre.ladderPeak = Math.max(standingOf(state), Math.min(100, Number.isFinite(pre.ladderPeak) ? pre.ladderPeak : 0))
   }
   // a coach the roster book once had as a player leaves the player pool, once per change of the data (me/staffMigrate.ts)
   if (state.me) migrateStaff(state)

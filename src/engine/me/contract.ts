@@ -17,6 +17,7 @@ import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { dateCn, lockDoing, lockLifts, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
+import { standAtLeast, standingOf } from './rank'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -69,7 +70,7 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
   const resume = me.pre.cups.reduce((s, c) => s + c.reached * 1.5 + (c.won ? 2 : 0), 0) + Math.min(me.pre.scoutSeen, 12) * 0.5
   const pro = me.seasons.reduce((s, x) => s + x.starts * 0.15, 0) + me.titles.length * 4
   const leverage = ({ 'A+': 26, A: 18, B: 10, C: 4, D: 0 }[grade] ?? 8) + Math.min(me.fans, 300) * 0.045 +
-    me.pre.ladder * 0.05 + resume + pro + me.agentTier * 6
+    standingOf(state) * 0.05 + resume + pro + me.agentTier * 6
   return {
     id: `deal:${state.year}:${state.day}:${teamId}:${kind}`, teamId, kind, tier: team.tier, role, cur,
     salary, signBonus, years, buyout, asks: [], blown: 0, leverage: Math.round(leverage), grade,
@@ -339,7 +340,9 @@ export function leaveClub(state: GameState, why: string): void {
   me.phase = 'free'
   me.pre.wasPro = true
   me.pre.year = 1
-  me.pre.ladder = Math.max(me.pre.ladder, clamp(45 + (p.overall - 60) * 1.7 - 6, 0, 100))
+  // back on the ladder where the skill puts it, less a season off the top — where I stand, a place the board has climbed
+  // past counting for what it reads: lifted to that line if it is under, and no RR taken (me/rank.ts standAtLeast)
+  standAtLeast(state, clamp(45 + (p.overall - 60) * 1.7 - 6, 0, 100))
   me.pre.invites = []
   // nobody's man any more: no tryout in the period I signed in is a rule for a man under contract (me/window.ts signedThisPeriod)
   me.flags.signedPeriod = 0

@@ -6,6 +6,7 @@ import { addMoney } from './money'
 import { cnySigned } from './moneyfmt'
 import type { EffectSpec } from './types'
 import { ATTR_CN } from '../types'
+import { PUT_OFF_CN, putOffRanked } from './rank'
 
 /**
  * One place that turns "what happened" into numbers, so an event, a quest and
@@ -46,7 +47,10 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
       out.push(rose ? `${ATTR_CN[k]} 涨到 ${p.attrs[k]}` : `${ATTR_CN[k]} ${num(v, '%')}（攒满 100% 涨 1 点）`)
     }
   }
-  if (e.ladder) { me.pre.ladder = clamp(me.pre.ladder + e.ladder, 0, 100); out.push(`天梯 ${num(e.ladder)}`) }
+  // more ranked played moves the score; ranked put off takes no score and no RR — from 神话 up the board climbs past
+  // me, a week of its climb for 「这周不排位」's two points, and below 神话 nothing happens at all (me/rank.ts putOffRanked)
+  if ((e.ladder ?? 0) > 0) { me.pre.ladder = clamp(me.pre.ladder + e.ladder!, 0, 100); out.push(`天梯 ${num(e.ladder!)}`) }
+  else if (e.ladder && putOffRanked(state, -e.ladder)) out.push(PUT_OFF_CN)
   if (e.scoutSeen) { me.pre.scoutSeen += e.scoutSeen; out.push('有俱乐部记下了你') }
   if (e.note) out.push(e.note)
   return out

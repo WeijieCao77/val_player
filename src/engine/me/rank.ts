@@ -23,11 +23,13 @@ import type { GameState, Region } from '../types'
  *   Episode 5 Act I (2022-06-22). The China server opened 2023-07-12; before it
  *   a Chinese player queued on 亚服.
  *
- * The engine keeps one number, `pre.ladder` 0–100 (me/prepro.ts), and every rule
- * that reads the ladder — invitations, tryouts, the talks, the following, the
- * events — keeps reading that number. This file only says what the number is:
- * how much of the ranked population stands above it, which division and RR
- * that makes, and from 神话 up the place on this server's board.
+ * The engine keeps one number, `pre.ladder` 0–100 (me/prepro.ts), my RR, and only
+ * ranked moves it. This file says what the number is: how much of the ranked
+ * population stands above it, which division and RR that makes, and from 神话 up
+ * the place on this server's board — a board that climbs past me in the weeks I do
+ * not play (`pre.rise`, boardWeek). Every rule that decides from the ladder —
+ * invitations, tryouts, the talks, the events — reads where I stand on that board
+ * today (standingOf); the following and the achievements read the best place held.
  */
 
 export type ServerKey = 'CN' | 'AP' | 'NA' | 'EU' | 'KR' | 'BR' | 'LATAM'
@@ -193,8 +195,16 @@ export interface Rank {
   order: number
 }
 
-export function rankAt(state: GameState, l: number = state.me?.pre?.ladder ?? 0, server: Server = serverOf(state)): Rank {
-  const x = clamp(Number.isFinite(l) ? l : 0, 0, 100)
+/**
+ * A score read on the board. With no score given, mine as it reads today: my RR, and from 神话 up the place on the
+ * board as it has climbed past me in the weeks I did not play (`pre.rise`, below) — the week's page, the overview's
+ * tile, the save card. A score given — a best, a line to aim at, what my skill is worth — is read on the board as it
+ * stands.
+ */
+export function rankAt(state: GameState, l?: number, server: Server = serverOf(state)): Rank {
+  const score = l ?? state.me?.pre?.ladder ?? 0
+  const rise = l === undefined ? riseOf(state.me?.pre) : 0
+  const x = clamp(Number.isFinite(score) ? score : 0, 0, 100)
   const rules = rulesAt(state.year, state.day)
   if (x < LADDER_IMM) {
     const list = rules.ascendant ? DIVS_MODERN : DIVS_OLD
@@ -208,15 +218,154 @@ export function rankAt(state: GameState, l: number = state.me?.pre?.ladder ?? 0,
   const ln = lnAbove(x)
   const pop = boardPop(state, server)
   const rr = Math.max(0, Math.floor(THETA * (LN_IMM - ln)))
-  // the players above me, and me: first only once nobody is left above
-  const pos = Math.max(1, Math.ceil(pop * Math.exp(ln)))
-  const board = Math.ceil(pop * IMM)
-  const radiant = pos <= RADIANT_SLOTS && rr >= server.radiantRR
   // smaller servers set every floor lower, as Riot sets their 辐能战魂 floor lower
   const scale = server.radiantRR / 300
-  const div = radiant || !rules.immortalDivs ? 0 : rr >= RR_I3 * scale ? 3 : rr >= RR_I2 * scale ? 2 : 1
+  // the players above me, and me: first only once nobody is left above. The RR is my score's; the place is read on
+  // the board as it has climbed past me (lnClimbed below)
+  const pos = Math.max(1, Math.ceil(pop * Math.exp(lnClimbed(ln, rise, { immortalDivs: rules.immortalDivs, scale }))))
+  const board = Math.ceil(pop * IMM)
+  const radiant = pos <= RADIANT_SLOTS && rr >= server.radiantRR
+  const div = radiant ? 0 : divByRR(rr, rules.immortalDivs, scale)
   const tier = radiant ? '辐能战魂' : '神话'
   return { server, tier, div, name: div ? `${tier} ${div}` : tier, rr, pos, board, radiant, order: 100_000 + rr }
+}
+
+/* ---- the board climbs past a man who stops ---- */
+
+/**
+ * Not playing ranked moves no score and no RR, at any tier; from 神话 up it costs the place. The author, 2026-09-14:
+ * 「不打排位分数也会掉，这不合理，我们的设定是不打会下滑，但是在辐能这个段位下滑的应该是排名但是分数不变，下滑是因为
+ * 别人分变高了」. A week without ranked used to take the score itself down — 0.4, and 6% of the way to where the skill
+ * would put it (me/prepro.ts ladderWeekly) — at every tier, 辐能战魂 with the rest, and could lift it with nothing played.
+ *
+ * Below 神话 a division is its RR, and a week off is nothing. From 神话 up the place is a place among people who keep
+ * playing, and `pre.rise` is how far their RR has climbed past mine: as many stand above me as above a score that much
+ * RR lower, and my RR and the division it holds stay as they are. A 辐能战魂 who stops slides down the board, and out
+ * of the 500 reads the 神话 division of his RR, with that RR.
+ *
+ * - A week with no ranked, on the board: the board climbs BOARD_CLIMB RR past me — a place e^(12/75), about 17%,
+ *   further down. On 国服 the 480th is out of the 500 after one week, the 300th after 4, the 100th after 11.
+ * - Every week, BOARD_SETTLE of what it has climbed settles back: the ones who climbed stop and slide too, and there are
+ *   no acts here to reset the board. A long break costs a little less each week, the climb never passes
+ *   BOARD_RISE_MAX, and every 辐能战魂 is still out of the 500 inside about a year of not playing — the 10th after 31
+ *   weeks, the first after 58.
+ * - Never further down than the last place of the division my RR holds: a 辐能战魂 who stops for good ends at the foot
+ *   of 神话 3, not under players his RR is far above (climbPast adds no climb past it; lnClimbed reads no place past it).
+ * - Playing ranked adds no climb and takes none off. The place comes back as my RR climbs past the risen board: a man
+ *   back from a break stands under what his play is worth, so he wins more than he loses (me/prepro.ts playRanked reads
+ *   the standing), and when his place is back his RR is higher than the day he stopped, because the board's is. The
+ *   week's settle is all that moves the place without RR: 1.5% of the climb, a couple of RR a week.
+ * - A score at the top of the scale (100, past every server's first) cannot rise, so there a win's RR goes to the climb
+ *   instead (payDownAtTop): a first place is not out of reach for a year after a break.
+ *
+ * Everything that decides from the ladder reads the standing (standingOf) — a club's call, a tryout, the talks, the
+ * week's events; the best reached keeps the place actually held (me/prepro.ts notePeak), and a tier's first card the
+ * tier the screen showed (me/moments.ts noteRankPeak). scripts/check_ladder_idle.ts holds it.
+ */
+export const BOARD_CLIMB = 12
+export const BOARD_SETTLE = 0.015
+export const BOARD_RISE_MAX = BOARD_CLIMB / BOARD_SETTLE
+/** under this much climb left, the rest settles too */
+const RISE_GONE = 0.5
+
+/** An event's answer that puts ranked off, on the board: the settlement's words and its button's (me/fx.ts, me/events.ts) */
+export const PUT_OFF_CN = '排行榜名次往后掉'
+
+/** On a leaderboard: 神话 or up, by the score. */
+export const onBoard = (l: number): boolean => l >= LADDER_IMM
+
+/** The board's climb past me as a save holds it: none in a save from before it, none for a value that is no number. */
+export const riseOf = (pre: { rise?: number } | undefined): number => {
+  const r = pre?.rise
+  return typeof r === 'number' && Number.isFinite(r) && r > 0 ? r : 0
+}
+
+/** 神话's division by RR alone; one 神话 before patch 3.05 (0) */
+const divByRR = (rr: number, immortalDivs: boolean, scale: number): number =>
+  !immortalDivs ? 0 : rr >= RR_I3 * scale ? 3 : rr >= RR_I2 * scale ? 2 : 1
+
+/** the RR a division of 神话 starts at: 神话 1, and 神话 before 3.05, start at the board's own floor */
+const divFloorRR = (div: number, scale: number): number => (div === 3 ? RR_I3 : div === 2 ? RR_I2 : 0) * scale
+
+interface BoardRules { immortalDivs: boolean; scale: number }
+const boardRules = (state: GameState): BoardRules =>
+  ({ immortalDivs: rulesAt(state.year, state.day).immortalDivs, scale: serverOf(state).radiantRR / 300 })
+
+/** the log share above the last place of the division a score of 神话 or up holds by its RR */
+function lnDivFoot(ln: number, b: BoardRules): number {
+  const rr = Math.max(0, Math.floor(THETA * (LN_IMM - ln)))
+  return LN_IMM - divFloorRR(divByRR(rr, b.immortalDivs, b.scale), b.scale) / THETA
+}
+
+/**
+ * A score of 神话 or up, as its log share, on a board that has climbed `rise` RR past it: as many above it as above a
+ * score that much lower, and never under the last place of the division its RR holds. Never above where it stands.
+ */
+const lnClimbed = (ln: number, rise: number, b: BoardRules): number => (rise > 0 ? Math.min(ln + rise / THETA, lnDivFoot(ln, b)) : ln)
+
+/**
+ * Where I stand today, as a score: the one whose place on the board as it stands is my place on the board as it has
+ * climbed past me. What everything that decides from the ladder reads — a club's call, a tryout, the talks, the week's
+ * events — so what counts is the place the week's page shows. With nothing climbed past me, or under 神话, the score.
+ */
+export function standingOf(state: GameState): number {
+  const pre = state.me?.pre
+  const x = clamp(pre && Number.isFinite(pre.ladder) ? pre.ladder : 0, 0, 100)
+  const rise = riseOf(pre)
+  if (!rise || x < LADDER_IMM) return x
+  return clamp(ladderAtLn(lnClimbed(lnAbove(x), rise, boardRules(state))), LADDER_IMM, x)
+}
+
+/** `rise` with `rr` more of the board's climb past my score: from 神话 up only, never past my division's last place or BOARD_RISE_MAX, never less than it was. */
+function climbPast(state: GameState, rise: number, rr: number): number {
+  const x = state.me!.pre.ladder
+  if (!(rr > 0) || !onBoard(x)) return rise
+  const ln = lnAbove(Math.min(100, x))
+  const room = THETA * (lnDivFoot(ln, boardRules(state)) - ln)
+  return Math.max(rise, Math.min(rise + rr, room, BOARD_RISE_MAX))
+}
+
+/**
+ * A week of the board for a man without a club, after the week's ranked (me/prepro.ts ladderWeekly). `played`: any
+ * ranked this week. What climbed settles back a little; a week without ranked climbs on. The score is not touched.
+ */
+export function boardWeek(state: GameState, played: boolean): void {
+  const pre = state.me!.pre
+  const r = climbPast(state, riseOf(pre) * (1 - BOARD_SETTLE), played ? 0 : BOARD_CLIMB)
+  pre.rise = r < RISE_GONE ? 0 : r
+}
+
+/**
+ * An event's answer that puts ranked off (天梯 −n, me/fx.ts): no score, and from 神话 up the board's climb — a week's
+ * for 「这周不排位」's two points, half of it for a night's one. Below 神话 nothing. Whether it touched the board.
+ */
+export function putOffRanked(state: GameState, points: number): boolean {
+  const pre = state.me!.pre
+  if (!(points > 0) || !onBoard(pre.ladder)) return false
+  pre.rise = climbPast(state, riseOf(pre), (BOARD_CLIMB * points) / 2)
+  return true
+}
+
+/** RR a point of score is worth at the top of the scale: 国服's 10th to its first, and on past it */
+const RR_TOP = (THETA * (KNOTS[KNOTS.length - 2][1] - KNOTS[KNOTS.length - 1][1])) / (KNOTS[KNOTS.length - 1][0] - KNOTS[KNOTS.length - 2][0])
+
+/** A session's score past 100, which the scale cannot hold (me/prepro.ts playRanked): its RR goes to the board's climb past me instead. */
+export function payDownAtTop(state: GameState, over: number): void {
+  const pre = state.me!.pre
+  const r = riseOf(pre)
+  if (over > 0 && r > 0) pre.rise = Math.max(0, r - over * RR_TOP)
+}
+
+/**
+ * My standing lifted to at least `floor`, a score, taking no RR (me/contract.ts leaveClub: back on the ladder where the
+ * skill puts it). A score under the line comes up to it with nothing climbed past it; a score over it keeps its RR,
+ * and as much of the climb goes as leaves my place on the line.
+ */
+export function standAtLeast(state: GameState, floor: number): void {
+  const pre = state.me!.pre
+  if (standingOf(state) >= floor) return
+  if (pre.ladder <= floor) { pre.ladder = floor; pre.rise = 0; return }
+  pre.rise = Math.max(0, THETA * (lnAbove(floor) - lnAbove(pre.ladder)))
 }
 
 const place = (r: Rank) => (r.pos === 1 ? `${r.server.name}第一` : `${r.server.name}第 ${(r.pos ?? 0).toLocaleString('en-US')} 名`)

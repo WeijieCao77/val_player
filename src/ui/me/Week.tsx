@@ -19,7 +19,7 @@ import { inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/windo
 import { iglLine } from '../../engine/me/igl'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
-import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText } from '../../engine/me/rank'
+import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, riseOf, standingOf } from '../../engine/me/rank'
 import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupView } from '../../engine/me/cups'
 import { FRIENDLY_MAP_FATIGUE } from '../../engine/me/matchplay'
 import { fansCn } from '../../engine/me/fans'
@@ -69,9 +69,14 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const est = opp && team ? 1 / (1 + Math.exp(-((team.rating - opp.rating) / 9))) : 0.5
   // the paper odds in words; the figures ride the 「数值」 switch
   const paper = est >= 0.65 ? '明显占优' : est >= 0.55 ? '略占优' : est > 0.45 ? '五五开' : est > 0.35 ? '略处下风' : '明显处下风'
-  // where the ladder is heading: ranked pulls the score toward the spot my skill is worth (prepro.ts playRanked)
+  // where the ladder is heading: ranked pulls where I stand toward the spot my skill is worth (prepro.ts playRanked);
+  // a week off moves no score, and from 神话 up the board climbs past me (rank.ts boardWeek)
   const aim = skillToLadder(p.overall)
-  const climb = aim > me.pre.ladder + 3 ? '还在往上爬' : aim < me.pre.ladder - 3 ? '打得比实力高，会往回掉' : '和实力相当'
+  const stand = standingOf(game)
+  const rise = riseOf(me.pre)
+  // the board has climbed past me far enough to cost a place: today's place against the one my RR holds on the board as it stands
+  const slid = (rankAt(game).pos ?? 0) > (rankAt(game, me.pre.ladder).pos ?? 0)
+  const climb = aim > stand + 3 ? (slid ? '实力比现在的名次高，打回去能追上' : '还在往上爬') : aim < stand - 3 ? '打得比实力高，接着打会往回掉' : '和实力相当'
   const week = Math.floor(game.day / 7)
   // 策划稿 §3.5 A: nothing of mine for four weeks — the clock can run a month at a time
   const quiet = quietAhead(game, 28)
@@ -413,18 +418,25 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               )
             })()}
             <Panel title="天梯" className="own">
-              {/* as the client shows it (engine/me/rank.ts): division, RR with 数值, and from 神话 up the place on my server's board */}
+              {/* as the client shows it (engine/me/rank.ts): division, RR with 数值, and from 神话 up the place on my
+                  server's board — the board as it has climbed past me in the weeks I did not play (rankAt with no score) */}
               <p style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>{nums ? rankFull(rankAt(game)) : rankText(rankAt(game))}</p>
               <p className="small" style={{ margin: '0 0 6px' }}>
                 {climb} · 最高 {rankText(rankAt(game, me.pre.ladderPeak))}{nums ? `（实力对应 ${rankAt(game, aim).name}）` : ''}
               </p>
+              {slid && (
+                <p className="small" style={{ margin: '0 0 6px' }}>
+                  {nums ? `停排的那些周，榜上的人比你多涨了约 ${Math.round(rise)} RR` : '停排的那些周，榜上的人还在涨分'}，名次按涨上去的榜单排，你的分数和 RR 没掉。
+                  {aim > stand + 3 ? '接着打排位，RR 追过涨上去的榜单，名次才回来。' : ''}
+                </p>
+              )}
               <p className="tiny faint" style={{ margin: '0 0 4px' }}>
-                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR ` : ''}才是辐能战魂。
+                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR ` : ''}才是辐能战魂。不打排位分数不掉；神话起别人还在打，名次会往后掉。
                 {me.region === 'China' && rankAt(game).server.key === 'AP' ? '国服 2023 年 7 月开服以前，都在亚服打。' : ''}
               </p>
               <p className="tiny faint" style={{ margin: 0 }}>
-                {/* the lines rollInvites actually opens at (prepro.ts INVITE_*), said on my server */}
-                打到{rankBar(game, INVITE_LADDER)}有俱乐部来看，打到{rankBar(game, INVITE_LADDER_T1)}一级俱乐部会看。
+                {/* the lines rollInvites actually opens at (prepro.ts INVITE_*), said on my server; a call reads where I stand today */}
+                打到{rankBar(game, INVITE_LADDER)}有俱乐部来看，打到{rankBar(game, INVITE_LADDER_T1)}一级俱乐部会看，看的是你现在的名次。
               </p>
             </Panel>
             <Panel title="今年的赛事">
@@ -449,7 +461,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </Panel>
             <Panel title="怎么被看见">
               <p className="tiny faint" style={{ margin: 0 }}>
-                三条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}。
+                三条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}。天梯看的是现在的名次，停排会被别人超过。
                 {me.pre.year >= 3 ? ` 这是第 ${me.pre.year} 年。四年没签到合同，就该想想别的了。` : ''}
               </p>
             </Panel>

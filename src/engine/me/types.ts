@@ -340,9 +340,17 @@ export interface PayTerms {
 export interface PreState {
   /** how many years I have been chasing a contract, 1-based */
   year: number
-  /** 0-100 ladder score */
+  /** 0-100 ladder score: my RR, read on the board by me/rank.ts. Only ranked moves it. */
   ladder: number
+  /** the best place held, as the score that holds that place on the board as it stands (me/rank.ts standingOf) */
   ladderPeak: number
+  /**
+   * How far, in RR, the board has climbed past my score in the weeks I did not play ranked
+   * (me/rank.ts boardWeek): from 神话 up the place reads that much further down, and a little of
+   * it settles back every week; the score and RR do not move. Absent in a save from before it:
+   * nothing climbed.
+   */
+  rise?: number
   cups: CupRun[]
   /** how many times a club's people wrote my name down */
   scoutSeen: number

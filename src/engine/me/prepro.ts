@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
 import type { CupRun, Invite } from './types'
 import { pushLog } from './log'
-import { rankAt, rankText } from './rank'
+import { boardWeek, payDownAtTop, rankAt, rankText, standingOf } from './rank'
 import { push } from './pending'
 import { CUPS } from './cups'
 import { formatOf, regionIn } from '../era'
@@ -22,17 +22,31 @@ export const skillToLadder = (overall: number): number => clamp(45 + (overall - 
 /**
  * The ladder in words: 「超凡入圣 2」, and from 神话 up the place on my server's
  * board, 「神话 3 · 国服第 2,431 名」 — 辐能战魂 only inside its top 500. What the
- * score is on the ladder is me/rank.ts's to say; everything that decides reads the score.
+ * score is on the ladder is me/rank.ts's to say; everything that decides reads where
+ * it stands today (me/rank.ts standingOf).
  *
  * It used to be a table on the score itself, and 52–62 read 「辐能战魂」 with no
  * place: a 辐能战魂 outside the 500 there are (reported 2026-09-14). That band is
  * 神话 3 now, with its place.
+ *
+ * With no score given, mine as it reads today, on the board as it has climbed past me
+ * while I was not playing (me/rank.ts boardWeek); a score given — a best, a line to
+ * aim at — is read on the board as it stands.
  */
-export function ladderLabel(state: GameState, l: number = state.me?.pre?.ladder ?? 0): string {
+export function ladderLabel(state: GameState, l?: number): string {
   return rankText(rankAt(state, l))
 }
 
-/** One action point of ranked: six games against the ladder's own pull. */
+/**
+ * One action point of ranked: six games against the ladder's own pull.
+ *
+ * The pull reads where I stand on today's board (me/rank.ts standingOf), not the bare
+ * score: a man back from a break, whose place the board climbed past, is better than
+ * his place — he wins more than he loses, and his RR climbs until his place is back
+ * where his play puts it. The place comes back as the RR does: playing takes none of the
+ * board's climb off (me/rank.ts). With nothing climbed past me the standing is the score,
+ * and every game is as it was.
+ */
 export function playRanked(state: GameState, rng: Rng): { wins: number; losses: number; delta: number } {
   const me = state.me!
   const p = state.players[me.id]
@@ -40,37 +54,59 @@ export function playRanked(state: GameState, rng: Rng): { wins: number; losses: 
   let wins = 0
   let losses = 0
   let delta = 0
+  const l = standingOf(state)
   for (let g = 0; g < 6; g++) {
-    const l = me.pre.ladder
     const pw = clamp(0.5 + (target - l) / 60, 0.2, 0.8)
     // the climb slows near the top and losing costs a little less than winning pays
     const step = clamp(2.2 - l * 0.012, 0.9, 2.2)
     if (rng.chance(pw)) { wins++; delta += step } else { losses++; delta -= step * 0.82 }
   }
-  me.pre.ladder = clamp(me.pre.ladder + delta, 0, 100)
-  const wasPeak = me.pre.ladderPeak
-  me.pre.ladderPeak = Math.max(me.pre.ladderPeak, me.pre.ladder)
-  // the first time the best reaches 超凡入圣 / 神话 / 辐能战魂 gets a card (me/moments.ts)
-  if (me.pre.ladderPeak > wasPeak) noteRankPeak(state, wasPeak)
+  const raw = me.pre.ladder + delta
+  me.pre.ladder = clamp(raw, 0, 100)
+  // what the scale cannot hold past its top goes to catching the board that climbed past me (me/rank.ts payDownAtTop)
+  if (raw > 100) payDownAtTop(state, raw - 100)
+  notePeak(state)
   return { wins, losses, delta }
 }
 
-/** A week without ranked leaks a little toward where the skill says it should sit. */
-export function ladderWeekly(state: GameState, played: boolean): void {
-  const me = state.me!
-  const p = state.players[me.id]
-  const target = skillToLadder(p.overall)
-  if (!played) me.pre.ladder = clamp(me.pre.ladder + (target - me.pre.ladder) * 0.06 - 0.4, 0, 100)
+/**
+ * The best place held: where I stand today (me/rank.ts standingOf), once it is over the best. RR won back over a
+ * board that climbed past me is no place I had, so the best reads the standing and not the score. The first time
+ * it reaches 超凡入圣 / 神话 / 辐能战魂 gets a card (me/moments.ts).
+ */
+function notePeak(state: GameState): void {
+  const pre = state.me!.pre
+  const was = pre.ladderPeak
+  pre.ladderPeak = Math.max(was, standingOf(state))
+  if (pre.ladderPeak > was) noteRankPeak(state, was)
 }
 
 /**
- * What a club's people see when they look at me: the eight, plus what a five taught me, plus the ladder —
+ * A week without a club, after its ranked (me/week.ts settleWeek). The author, 2026-09-14:
+ * 「不打排位分数也会掉，这不合理，我们的设定是不打会下滑，但是在辐能这个段位下滑的应该是
+ * 排名但是分数不变，下滑是因为别人分变高了」. A week without ranked used to take the score
+ * itself down — 0.4, and 6% of the way to where the skill would put it — at every tier,
+ * 辐能战魂 with the rest, and could lift it too with nothing played.
+ *
+ * Now no week moves the score or its RR, at any tier: only ranked does. From 神话 up a week
+ * without ranked costs the place instead, as the board climbs past me, and every week a little
+ * of what climbed settles back (me/rank.ts boardWeek) — which can lift my place over my best,
+ * and then that is my best.
+ */
+export function ladderWeekly(state: GameState, played: boolean): void {
+  boardWeek(state, played)
+  notePeak(state)
+}
+
+/**
+ * What a club's people see when they look at me: the eight, plus what a five taught me, plus the ladder — where I
+ * stand on it today (me/rank.ts standingOf), a place the board has climbed past counting for what it reads —
  * and, for a man who calls or has lately, his 指挥 (me/igl.ts callerRead, 2026-09-14): clubs sign callers for the calls.
  */
 export function tryoutSkill(state: GameState): number {
   const me = state.me!
   const p = state.players[me.id]
-  return p.overall + me.pre.tac * 0.15 + me.pre.ladder * 0.05 + callerRead(state)
+  return p.overall + me.pre.tac * 0.15 + standingOf(state) * 0.05 + callerRead(state)
 }
 
 /** What this club expects of a signing: a bench place at a VCT side, a starter at a Challengers one. */
@@ -399,7 +435,9 @@ export function rollInvites(state: GameState, rng: Rng): void {
   if (waiting(state) || inviteBlock(state)) return
   const weeksIn = me.pre.year === 1 ? me.week : 99
   if (weeksIn < PRE_EARLIEST && !me.pre.wasPro) return
-  const l = me.pre.ladder
+  // where I stand today (me/rank.ts standingOf): a place the board has climbed past while I was not playing is
+  // the place a club sees, so a 辐能战魂 who stops falls under the line as his place does, with his score where it was
+  const l = standingOf(state)
   // Both channels open where the screen already tells the player he is somebody: 辐能战魂前 500 on
   // 国服's ladder (me/rank.ts sets its places on it; a smaller server shows the same score further up the
   // board, and the week's page says the line on his own), 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500

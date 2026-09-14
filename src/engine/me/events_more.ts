@@ -1,6 +1,7 @@
 import type { GameState } from '../types'
 import type { EventDef } from './events'
 import { atIntl, clubTier, isBenched, isPre, isPro, isStarter, macroOf } from './story'
+import { standingOf } from './rank'
 
 const fans = (s: GameState, n: number) => s.me!.fans >= n
 const age = (s: GameState) => s.players[s.me!.id]?.age ?? 18
@@ -29,12 +30,12 @@ export const MORE_EVENTS: EventDef[] = [
     q: '国服开服了，所有人的段位从头打。', ctx: '第一周的榜单谁都有机会上。',
     a: [{ t: '第一周就冲榜', g: 'show', e: { ladder: 3, fatigue: 10, heat: 15 } },
       { t: '先练枪，等手感稳了再冲', g: 'grind', e: { xp: { aim: 12 }, ladder: -1 } }] },
-  { id: 'pre_fill', w: 5, max: 2, rec: 0, when: (s) => isPre(s) && s.me!.pre.ladder >= 50,
+  { id: 'pre_fill', w: 5, max: 2, rec: 0, when: (s) => isPre(s) && standingOf(s) >= 50,
     q: '一支二线队训练赛缺人，临时叫你去补位。', ctx: '他们缺的不是你打的位置。',
     a: [{ t: '去，打不熟的位置', g: 'hard', e: { fatigue: 6, xp: { utility: 10, teamwork: 8 }, scoutSeen: 1 }, seed: 'fill:off' },
       { t: '去，但只打自己的位置', g: 'show', e: { fatigue: 4, xp: { aim: 8 } }, seed: 'fill:own' },
       { t: '不去，这周要冲分', g: 'grind', e: { ladder: 1 } }] },
-  { id: 'cheat_accuse', w: 5, max: 1, rec: 1, when: (s) => isPre(s) && s.me!.pre.ladder >= 40,
+  { id: 'cheat_accuse', w: 5, max: 1, rec: 1, when: (s) => isPre(s) && standingOf(s) >= 40,
     q: '一个输给你的人在论坛发帖，说你开挂。', ctx: '帖子下面有人把你的击杀集锦一帧一帧放慢了。',
     a: [{ t: '开手部摄像头直播自证', g: 'show', e: { heat: 20, fatigue: 4 }, seed: 'cheat:cam' },
       { t: '不理，继续排', g: 'grind', e: { tilt: 4, ladder: 1 }, seed: 'cheat:quiet' },
@@ -44,7 +45,7 @@ export const MORE_EVENTS: EventDef[] = [
     a: [{ t: '逐条对着改', g: 'grind', e: { xp: { awareness: 14 }, tilt: 6 } },
       { t: '回帖跟他们吵', g: 'hard', e: { heat: 12, tilt: 8 } },
       { t: '关掉帖子，接着排', g: 'warm', e: { tilt: -3, ladder: 1 } }] },
-  { id: 'pre_five', w: 5, max: 1, rec: 1, when: (s) => isPre(s) && s.me!.pre.ladder >= 45,
+  { id: 'pre_five', w: 5, max: 1, rec: 1, when: (s) => isPre(s) && standingOf(s) >= 45,
     q: '网吧里认识的四个人想跟你组固定车队，一起报杯赛。', ctx: '其中两个的枪法比你差一截。',
     a: [{ t: '组，五个人一起练', g: 'warm', e: { xp: { teamwork: 12, communication: 8 }, ladder: -1 } },
       { t: '只一起打杯赛，平时各排各的', g: 'grind', e: { xp: { teamwork: 5 }, ladder: 1 } },

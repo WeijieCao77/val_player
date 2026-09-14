@@ -32,7 +32,8 @@ const years = Number(process.argv[6] ?? 4)
 const HOW: [RegExp, string][] = [
   [/看了你的杯赛/, 'cup'], [/在天梯上注意到你/, 'rank'], [/看了你的直播/, 'fans'], [/知道你在找队/, 'free'], [/教练组推荐/, 'scout'],
 ]
-const label = (s: ReturnType<typeof createCareer>, peak = false) => ladderLabel(s, peak ? s.me!.pre.ladderPeak : s.me!.pre.ladder)
+// today's reading is the place on the board as it has climbed past the score (me/rank.ts), the best one the place held
+const label = (s: ReturnType<typeof createCareer>, peak = false) => ladderLabel(s, peak ? s.me!.pre.ladderPeak : undefined)
 
 const rows: Record<string, number | string>[] = []
 for (const seed of SEEDS) {

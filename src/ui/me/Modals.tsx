@@ -360,7 +360,7 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
         {ev.a.map((o, i) => (
           <button key={i} onClick={() => choose(i)}>
             <span>{o.t}</span>
-            <span className="m">{[describeEffect(o.e), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
+            <span className="m">{[describeEffect(o.e, game), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
           </button>
         ))}
       </div>

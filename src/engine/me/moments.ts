@@ -35,14 +35,16 @@ export function takeMoment(state: GameState): void {
 }
 
 /**
- * The ladder's best just rose (me/prepro.ts): the first arrival in a big tier is a
- * moment, once a career. Kept in flags rather than read off the board, since the
- * board's size drifts and the same best can read 神话 one month and 辐能战魂 the next.
+ * The ladder's best just rose (me/prepro.ts notePeak): the first arrival in a big tier is a
+ * moment, once a career — the tier as the screen shows it that day, place and all (me/rank.ts
+ * rankAt): a score whose RR would read 辐能战魂 on a board that has climbed past its place is no
+ * 辐能战魂 (2026-09-14). Kept in flags rather than read off the board, since the board's size
+ * drifts and the same best can read 神话 one month and 辐能战魂 the next.
  */
 export function noteRankPeak(state: GameState, wasPeak: number): void {
   const me = state.me
   if (!me) return
-  const now = rankAt(state, me.pre.ladderPeak)
+  const now = rankAt(state)
   if (!BIG_TIERS.includes(now.tier) || rankAt(state, wasPeak).tier === now.tier) return
   const flag = `reached:${now.tier}`
   if (me.flags[flag]) return

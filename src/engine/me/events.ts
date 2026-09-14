@@ -11,6 +11,7 @@ import { storyChoice } from './story'
 import type { ChainOp } from './story'
 import { MORE_EVENTS } from './events_more'
 import { cnySigned } from './moneyfmt'
+import { PUT_OFF_CN, onBoard, standingOf } from './rank'
 
 export interface EventOpt {
   t: string
@@ -119,7 +120,8 @@ export const EVENTS: EventDef[] = [
   { id: 'boost', w: 5, max: 1, when: pre, rec: 1,
     q: '有人私信你：代练一单三千，一周内。', ctx: '钱是真的，风险也是。',
     a: [{ t: '接', g: 'hard', e: { money: 3000, fatigue: 8, mental: -1, note: '这件事以后可能被翻出来' }, seed: 'boost:took' }, { t: '不接', g: 'grind', e: { mental: 1 }, seed: 'boost:no' }] },
-  { id: 'scout_dm', w: 4, max: 2, when: (s) => pre(s) && s.me!.pre.ladder >= 60, rec: 0,
+  // a youth coach finds a name on the board as it reads today (me/rank.ts standingOf)
+  { id: 'scout_dm', w: 4, max: 2, when: (s) => pre(s) && standingOf(s) >= 60, rec: 0,
     q: '一个自称青训教练的人加你，说想看你打几把。', ctx: '真的假的不知道。',
     a: [{ t: '打给他看', g: 'show', e: { scoutSeen: 1, fatigue: 3 } }, { t: '先问清楚是哪家', g: 'hard', e: { scoutSeen: 1, mental: 1 } }, { t: '不理', g: 'grind', e: { tilt: -3, mental: 1, note: '真假都不重要，你把这周的排位打完了' } }] },
   { id: 'parents', w: 5, max: 2, when: (s) => pre(s) && s.me!.pre.year >= 2, rec: 0,
@@ -201,7 +203,7 @@ function canFire(state: GameState, ev: EventDef): boolean {
  * button, so a choice is a choice and not a guess. Random parts (who the bond
  * lands on, whether an attribute rises) are left out.
  */
-export function describeEffect(e: EffectSpec): string {
+export function describeEffect(e: EffectSpec, state?: GameState): string {
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
   const out: string[] = []
   // money the way every other screen writes it; followers, heat, nerve and the
@@ -219,7 +221,9 @@ export function describeEffect(e: EffectSpec): string {
   if (e.gmTrust) out.push(`经理信任 ${num(e.gmTrust)}`)
   if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
   if (e.xp) for (const k of Object.keys(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}有长进`)
-  if (e.ladder) out.push(`天梯 ${num(e.ladder)}`)
+  // more ranked moves the score; putting it off takes none — from 神话 up the place slides, below 神话 nothing (fx.ts, me/rank.ts putOffRanked)
+  if ((e.ladder ?? 0) > 0) out.push(`天梯 ${num(e.ladder!)}`)
+  else if (e.ladder && (!state?.me || onBoard(state.me.pre.ladder))) out.push(PUT_OFF_CN)
   if (e.scoutSeen) out.push('会有俱乐部记下你')
   if (e.quest) out.push('接一个待办')
   if (e.note) out.push(e.note)

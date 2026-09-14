@@ -461,7 +461,7 @@ export function createCareer(o: CareerOpts): GameState {
     log: [], matches: [], weekNotes: [], pending: [], seasons: [],
     seasonStart: { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 },
     benchedStages: 0, startedThisStage: 0, playedThisStage: 0,
-    pre: { year: 1, ladder: 0, ladderPeak: 0, cups: [], scoutSeen: origin.scoutSeen ?? 0, invites: [], seen: [], tac: origin.tac ?? 0, mates: [], wasPro: false },
+    pre: { year: 1, ladder: 0, ladderPeak: 0, rise: 0, cups: [], scoutSeen: origin.scoutSeen ?? 0, invites: [], seen: [], tac: origin.tac ?? 0, mates: [], wasPro: false },
     deals: [], intents: [], declined: [], tenure: 0, freeYears: 0, region: region, abroad: false,
     stream: { cut: 0, thisStage: 0, total: 0 }, gear: {}, courses: [], agentTier: 0, relaxUsed: 0,
     axes: { hard: 0, warm: 0, grind: 0, show: 0 }, traits: [], eventCounts: {}, quests: [], eventsSeen: 0,

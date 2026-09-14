@@ -18,6 +18,7 @@ import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
 import { INVITE_FANS, INVITE_LADDER, abroadClub, cupInvite, foreignLeague, holdAbroad, homeShare, inviteWeight, reachableClubs, rollInvites } from '../src/engine/me/prepro'
 import { rollOffers } from '../src/engine/me/transfer'
+import { standingOf } from '../src/engine/me/rank'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
 import { formatOf } from '../src/engine/era'
 import { Rng, hashStr } from '../src/engine/rng'
@@ -131,7 +132,8 @@ function poolRead(s: GameState, a: Acc): void {
 function drawInvites(s: GameState, seed: number, a: Acc): void {
   const me = s.me!
   if ((me.phase !== 'pre' && me.phase !== 'free') || me.pre.invites.length || me.tryout || inviteBlock(s)) return
-  const weekly = me.pre.ladder >= INVITE_LADDER || me.fans >= INVITE_FANS || me.pre.wasPro
+  // the ladder channel reads where the player stands today, as rollInvites does (me/rank.ts standingOf)
+  const weekly = standingOf(s) >= INVITE_LADDER || me.fans >= INVITE_FANS || me.pre.wasPro
   a.inviteMoments++
   poolRead(s, a)
   const snap = { pending: me.pending.slice(), log: me.log.slice(), flags: { ...me.flags }, courses: me.courses.slice(), scout: me.pre.scoutSeen }
