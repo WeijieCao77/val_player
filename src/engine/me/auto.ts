@@ -27,6 +27,7 @@ import { injuryHelpedBy, injuryStatus } from './injury'
 import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
 import { storyPlan } from './storyweek'
+import { mineBy } from './nextup'
 
 /** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
 export const WEEK_END_FATIGUE = 40
@@ -295,6 +296,9 @@ export function quietAhead(state: GameState, days = 28): boolean {
   const club = me.phase === 'pro' ? state.myTeam : null
   const until = state.day + days
   if (club && state.fixtures.some((f) => !f.played && f.day >= state.day && f.day <= until && (f.teamA === club || f.teamB === club))) return false
+  // nor a round of my club's whose tie is not written yet, nor an event opening that holds its place or may take it: the week
+  // offered a month three weeks before a Masters the club had qualified for, and days before its qualifier decider (me/nextup.ts)
+  if (club && mineBy(state, until)) return false
   const region = club ? state.teams[club]?.region : state.players[me.id]?.region
   const scene = club ? state.teams[club]?.scene : undefined
   return !Object.values(state.comps).some((c) => {
