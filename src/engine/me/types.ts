@@ -483,6 +483,8 @@ export interface EffectSpec {
   ladder?: number
   scoutSeen?: number
   quest?: string
+  /** an answer the career has to remember: written into me.flags as the year it was said, and read at the end (me/events_more.ts vet_staff) */
+  flag?: string
   note?: string
 }
 

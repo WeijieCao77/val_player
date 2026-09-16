@@ -355,6 +355,9 @@ export function retireRecap(state: GameState): string[] {
   // what the career earned, and some of where it went (me/outlets.ts)
   const earned = outletRecap(state)
   if (earned) lines.push(earned)
+  // the coach asked once, years ago, and you answered (me/events_more.ts vet_staff)
+  if (me.flags.staffYes) lines.push(`${me.flags.staffYes} 年教练私下问过你退役以后的事，你说会考虑——那个位置一直给你留着。`)
+  else if (me.flags.staffNo) lines.push(`${me.flags.staffNo} 年教练问你要不要退役后进教练组，你说你还能打。你又打了 ${Math.max(1, state.year - me.flags.staffNo)} 年。`)
   lines.push(...bondCardLines(state).slice(0, 2))
   return lines
 }

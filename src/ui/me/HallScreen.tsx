@@ -202,6 +202,8 @@ function CareerCard({ c, mine }: { c: HallCard; mine: boolean }) {
       {c.best && (
         <div className="tiny faint">最好的一季 {c.best.year} · {c.best.team}{c.best.titles ? ` · ${c.best.titles} 冠` : ''}{c.best.acs ? ` · ACS ${c.best.acs}` : ''}</div>
       )}
+      {/* the coach asked, years before the end, and he said yes (me/events_more.ts vet_staff) */}
+      {c.staff && <div className="tiny faint">退役后留在了教练组</div>}
       {hx.length > 0 && <div className="tiny hc-hx">殿堂 · 凑齐「{hx.join('」「')}」</div>}
     </div>
   )

@@ -46,6 +46,19 @@ export function endingFor(state: GameState): EndingDef {
   return ENDINGS_ME[ENDINGS_ME.length - 1]
 }
 
+/**
+ * 退役后留在教练组: the coach asked once (me/events_more.ts vet_staff) and the
+ * answer was taken down. It was asked and then forgotten — both answers wrote
+ * nothing at all (2026-09-16) — so the last card says which way it went. The
+ * year after retirement is not built here: this is one line, not a second life.
+ */
+const staffLines = (state: GameState): string[] => {
+  const me = state.me!
+  if (me.flags.staffYes) return ['退役第二天，你还是走进了那间训练室，只是坐到了教练组那一侧。']
+  if (me.flags.staffNo) return ['教练问过你要不要留下来带队。你说你还能打——你把那句话打到了最后一天。']
+  return []
+}
+
 /** Hang them up. What the money became off the stage (me/shop.ts LIFESTYLE, me/outlets.ts) is the ending's last words. */
 export function retire(state: GameState, why: string): void {
   const me = state.me!
@@ -53,7 +66,7 @@ export function retire(state: GameState, why: string): void {
   const e = endingFor(state)
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
-  me.ending = { key: e.key, title: e.title, text: `${e.text}${lifeLines(state).join('')}${outletLines(state).join('')}`, year: state.year }
+  me.ending = { key: e.key, title: e.title, text: `${e.text}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)

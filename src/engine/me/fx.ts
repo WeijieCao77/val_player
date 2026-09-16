@@ -52,6 +52,8 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
       out.push(rose ? `${ATTR_CN[k]} 涨到 ${p.attrs[k]}` : `${ATTR_CN[k]} ${num(v, '%')}（攒满 100% 涨 1 点）`)
     }
   }
+  // an answer that has to still be true years later: the year it was said (me/types.ts EffectSpec.flag)
+  if (e.flag) me.flags[e.flag] = state.year
   // more ranked played moves the score; ranked put off takes no score and no RR — from 神话 up the board climbs past
   // me, a week of its climb for 「这周不排位」's two points, and below 神话 nothing happens at all (me/rank.ts putOffRanked)
   if ((e.ladder ?? 0) > 0) { me.pre.ladder = clamp(me.pre.ladder + e.ladder!, 0, 100); out.push(`天梯 ${num(e.ladder!)}`) }

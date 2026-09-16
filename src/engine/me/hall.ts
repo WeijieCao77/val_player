@@ -90,6 +90,8 @@ export interface HallCard {
   at: string
   /** 殿堂成就 this career completed */
   hx?: string[]
+  /** said yes when the coach asked about staying on as staff (me/events_more.ts vet_staff) */
+  staff?: 1
 }
 
 export interface Hall {
@@ -212,6 +214,7 @@ function cleanCard(x: unknown): HallCard | null {
     ach: [...new Set(list(o.ach).filter((k): k is string => typeof k === 'string' && !!ACH_BY_KEY[k]))],
     at: DAY.test(at) ? at : '',
     ...(hx.length ? { hx } : {}),
+    ...(o.staff ? { staff: 1 as const } : {}),
   }
 }
 
@@ -326,6 +329,7 @@ function cardOf(state: GameState, id: string): HallCard {
     mvps: p?.career?.mvps ?? 0,
     ach: me.achievements.filter((k) => !!ACH_BY_KEY[k]),
     at: today(),
+    ...(me.flags.staffYes ? { staff: 1 as const } : {}),
   }
 }
 

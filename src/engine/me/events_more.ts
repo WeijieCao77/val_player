@@ -151,8 +151,9 @@ export const MORE_EVENTS: EventDef[] = [
       { t: '找教练要一句准话', g: 'grind', e: { coachTrust: -3, mental: 1 } }] },
   { id: 'vet_staff', w: 4, max: 1, rec: 0, when: (s) => isPro(s) && age(s) >= 27 && s.me!.seasons.filter((x) => x.tier > 0).length >= 4,
     q: '教练私下问你：退役以后愿不愿意留下来进教练组。', ctx: '他说不急，只是先问一句。',
-    a: [{ t: '说会考虑，这赛季先帮着带复盘', g: 'warm', e: { coachTrust: 5, xp: { igl: 8, awareness: 6 }, fatigue: 3 } },
-      { t: '「我还能打。」', g: 'hard', e: { mental: 2, tilt: 3, form: 1 } }] },
+    // the answer is kept and read out at the end: 退役仪式、结局、殿堂名片 (me/nights.ts, me/endings.ts, me/hall.ts)
+    a: [{ t: '说会考虑，这赛季先帮着带复盘', g: 'warm', e: { coachTrust: 5, xp: { igl: 8, awareness: 6 }, fatigue: 3, flag: 'staffYes', note: '教练把这句话记下了' } },
+      { t: '「我还能打。」', g: 'hard', e: { mental: 2, tilt: 3, form: 1, flag: 'staffNo', note: '这件事他不会再提' } }] },
 
   // ---- any year
   { id: 'map_pool', w: 5, max: 4, rec: 1, when: () => true,
