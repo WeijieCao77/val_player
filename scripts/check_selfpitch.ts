@@ -29,7 +29,7 @@ import { startTryout, tryoutChoose, tryoutDays } from '../src/engine/me/tryout'
 import { push } from '../src/engine/me/pending'
 import { migratePlayerSave } from '../src/engine/me/save'
 import { packState, unpackState } from '../src/engine/save'
-import { MARKET_DAYS, absDay, todayAbs, windowAt } from '../src/engine/me/window'
+import { MARKET_DAYS, absDay, clubOpen, todayAbs, windowAt } from '../src/engine/me/window'
 import { eventsOf } from '../src/engine/circuit'
 import type { CEvent } from '../src/engine/circuit'
 import { recomputeOverall } from '../src/engine/player'
@@ -71,6 +71,20 @@ function lift(s: GameState, level: number): void {
 /** a club a 自荐 can go to today, as the transfer screen lists it */
 const open = (s: GameState, f: (t: Team) => boolean = () => true): Team | undefined =>
   pitchTargets(s).rows.find((r) => !r.why && f(r.team))?.team
+
+/**
+ * The same, on the first day from today that one is open (`s.day` is left there); a club open today
+ * comes back with the day unchanged. From 2023 a club is shut on every day of every event it plays,
+ * mine included (me/window.ts), so a day in January has no VCT club to write to at all.
+ */
+function openSoon(s: GameState, f: (t: Team) => boolean = () => true): Team | undefined {
+  for (let d = s.day; d <= 330; d++) {
+    s.day = d
+    const t = pitchPool(s).find((x) => f(x) && clubOpen(s, x.id) && !pitchClubBlock(s, x))
+    if (t) return t
+  }
+  return undefined
+}
 
 /** refused: the button's own line, nothing spent, nothing sent */
 function refused(s: GameState, team: Team, want: RegExp, what: string): void {
@@ -149,16 +163,27 @@ console.log('一、闸：每一道都灰掉并写明原因（被拦下的不扣�
     me.declined = []
 
     console.log('三、窗口至少还开 7 天；外赛区要会外语')
-    const v = open(s, (x) => x.tier === 1)
+    // 2023 on, a club is shut every day of every event it plays (me/window.ts): the first day of the season
+    // with a VCT club open to a 自荐 — its window open, and open PITCH_LEAD days more
+    const v = openSoon(s, (x) => x.tier === 1)
     const w = v ? windowAt(s, v.id) : undefined
-    if (check(!!v && w?.closesOn != null, `VCT 俱乐部 ${v?.name ?? '（没找到）'} 的窗口开着，关窗日 ${w?.closesOn != null ? `第 ${w.closesOn - absDay(2026, 0)} 天` : '无'}`) && v && w?.closesOn != null) {
+    if (check(!!v && w?.closesOn != null, `VCT 俱乐部 ${v?.name ?? '（没找到）'} 的窗口开着（第 ${s.day} 天），关窗日 ${w?.closesOn != null ? `第 ${w.closesOn - absDay(2026, 0)} 天` : '无'}`) && v && w?.closesOn != null) {
       const close = w.closesOn - absDay(2026, 0)
       s.day = close - 3
       refused(s, v, /^窗口 3 天后关，来不及回复$/, `离关窗 3 天（第 ${s.day} 天）`)
       s.day = close - PITCH_LEAD
       check(!pitchClubBlock(s, v), `离关窗正好 ${PITCH_LEAD} 天（第 ${s.day} 天）：投得了`)
-      s.day = close + 16
-      refused(s, v, /^VCT 窗口 \d+月\d+日开/, `窗口关着（第 ${s.day} 天）`)
+      s.day = close
+      refused(s, v, /^窗口今天关，来不及回复$/, `关窗当天（第 ${s.day} 天）`)
+      // 2023 on, a shut window is the roster lock of the event holding the club (me/window.ts): its own words
+      const ev1 = eventsOf(2026).find((e) => e.stage === 'masters1' && e.region === null)
+      if (check(!!ev1, '2026 第一站大师赛在数据里') && ev1) {
+        const keep = s.comps
+        s.comps = { [`ev:${ev1.id}`]: comp(ev1, [v.id]) }
+        s.day = ev1.start! + 1
+        refused(s, v, /^正在打 .+，名单锁到 \d+月\d+日$/, `窗口关着、名单锁定（第 ${s.day} 天）`)
+        s.comps = keep
+      }
       s.day = 20
     }
     const far = pitchPool(s).find((x) => abroadClub(s, x) && x.roster.length < ROSTER_FULL)
@@ -210,22 +235,28 @@ console.log('一（续）、有合同：签约的转会期、自己名单锁定�
   me.ap = 8
   const mine = s.teams[s.myTeam]
   const to = Object.values(s.teams).find((x) => x.tier === 2 && x.id !== mine.id && !x.dormant && x.region === mine.region && x.roster.length < ROSTER_FULL)!
-  const t = open(s, (x) => x.id !== to.id)!
+  // 2023 on, a move needs both windows open and my own club is shut every day of every event it plays
+  // (me/window.ts): the first day of the season a contact can go out at all
+  const t = openSoon(s, (x) => x.id !== to.id)
+  const day0 = s.day
+  if (!check(!!t, `有能接触的俱乐部（${t?.name ?? '没找到'}，第 ${day0} 天）`)) throw new Error('no club to contact')
   joinClub(s, makeDeal(s, to.id, 'transfer', 'A', new Rng(2)))
-  refused(s, t, /^这个转会期刚签约，下个转会期（\d+月\d+日起）才能主动接触$/, '这个转会期刚签约')
+  refused(s, t!, /^这个转会期刚签约，下个转会期（\d+月\d+日起）才能主动接触$/, '这个转会期刚签约')
   me.flags.signedPeriod = 0
   const ev = eventsOf(2026).find((e) => e.stage === 'masters2' && e.region === null)
   if (check(!!ev, '2026 第二站大师赛在数据里') && ev) {
     const keep = s.comps
     s.comps = { [`ev:${ev.id}`]: comp(ev, [s.myTeam]) }
     s.day = ev.start! + 1
-    refused(s, t, /^你的俱乐部正在打 .+，名单锁到 \d+月\d+日$/, '自己的俱乐部名单锁定')
+    refused(s, t!, /^你的俱乐部正在打 .+，名单锁到 \d+月\d+日$/, '自己的俱乐部名单锁定')
     s.comps = keep
-    s.day = 20
+    s.day = day0
   }
-  const u = open(s)!
+  // my new club has its own events: the first day from here both its window and another club's are open
+  const u = openSoon(s)
+  if (!check(!!u, `签进 ${to.name} 之后有能接触的俱乐部（${u?.name ?? '没找到'}，第 ${s.day} 天）`)) throw new Error('no club to contact')
   const trust = me.gmTrust
-  check(sendPitch(s, u.id) === null && me.gmTrust === trust - CONTACT_TRUST && me.pitch?.out?.kind === 'contact', `接触 ${u.name}：经理信任 ${trust} → ${me.gmTrust}`)
+  check(sendPitch(s, u!.id) === null && me.gmTrust === trust - CONTACT_TRUST && me.pitch?.out?.kind === 'contact', `接触 ${u!.name}：经理信任 ${trust} → ${me.gmTrust}`)
   answer(s, 0)
   me.pending = []
   const v = open(s)
@@ -281,7 +312,7 @@ console.log('四、回复：3–7 天后到，按按钮上的把握抽；没成�
     return r ? `${r.why}:${whyText(s, r)}` : '（没有回复）'
   }
   const skill = Math.round(tryoutSkill(s))
-  const far = open(s, (x) => x.tier === 2 && Math.round(expectOf(x)) - skill >= 6)
+  const far = openSoon(s, (x) => x.tier === 2 && Math.round(expectOf(x)) - skill >= 6)
   if (far) {
     const gap = Math.round(expectOf(far)) - skill
     const r = reason(far)
@@ -292,18 +323,18 @@ console.log('四、回复：3–7 天后到，按按钮上的把握抽；没成�
   const r1 = reason(full, () => { while (full.roster.length < ROSTER_FULL) full.roster.push(`check:filler:${full.roster.length}`) }, () => { full.roster = keep })
   check(r1.startsWith('full:名单满了'), `等回复期间对方名单满了：「${r1}」`)
   lift(s, 90)
-  const vct = open(s, (x) => x.tier === 1 && pitchOdds(s, x).capped === 'nevpro' && pitchOdds(s, x).raw - NEVPRO_TOP > -Math.min(0, pitchOdds(s, x).parts.find((q) => q.key === 'gap')?.v ?? 0))
+  const vct = openSoon(s, (x) => x.tier === 1 && pitchOdds(s, x).capped === 'nevpro' && pitchOdds(s, x).raw - NEVPRO_TOP > -Math.min(0, pitchOdds(s, x).parts.find((q) => q.key === 'gap')?.v ?? 0))
   if (vct) {
     const r = reason(vct)
     check(r.startsWith('nevpro:') && r.includes('打过职业'), `没打过职业投 VCT（本来 ${pitchOdds(s, vct).raw}%，封顶 ${NEVPRO_TOP}%）：「${r}」`)
-  } else check(false, '没找到被「没打过职业最多 5%」压下来的 VCT 俱乐部')
-  const easy = open(s, (x) => x.tier === 2 && tryoutSkill(s) >= expectOf(x) && pitchOdds(s, x).need.kind === 'hole')
+  } else check(false, `没找到被「没打过职业最多 ${NEVPRO_TOP}%」压下来的 VCT 俱乐部`)
+  const easy = openSoon(s, (x) => x.tier === 2 && tryoutSkill(s) >= expectOf(x) && pitchOdds(s, x).need.kind === 'hole')
   if (easy) {
     const r = reason(easy)
     check(r.startsWith('luck:') && r.includes('把握'), `够格、他们缺人，还是没成：「${r}」`)
   } else check(false, '没找到够格又缺人的 Challengers 俱乐部')
   // a club with a place under six has a need of its own (me/selfpitch.ts PITCH_SQUAD): one of six or more, every 控场 starter it has raised past me
-  const steady = open(s, (x) => x.tier === 2 && tryoutSkill(s) >= expectOf(x) && x.roster.length >= 6 && !!pitchOdds(s, x).need.mate)
+  const steady = openSoon(s, (x) => x.tier === 2 && tryoutSkill(s) >= expectOf(x) && x.roster.length >= 6 && !!pitchOdds(s, x).need.mate)
   if (steady) {
     const role = s.players[me.id].role
     const inRole = steady.starters.map((id) => s.players[id]).filter((q) => !!q && (q.roles ?? [q.role]).includes(role))
@@ -370,8 +401,8 @@ console.log('七、有合同的主动接触：经理信任 −4，对方来谈�
   lift(s, 95)
   s.day = 20
   me.ap = 8
-  const t = open(s, (x) => tryoutSkill(s) >= expectOf(x) + 4)
-  if (check(!!t, `综合 ${s.players[me.id].overall} 的 Challengers 选手：找到一家能接触、高出门槛 4 以上的俱乐部（${t?.name ?? '无'}）`) && t) {
+  const t = openSoon(s, (x) => tryoutSkill(s) >= expectOf(x) + 4)
+  if (check(!!t, `综合 ${s.players[me.id].overall} 的 Challengers 选手：找到一家能接触、高出门槛 4 以上的俱乐部（${t?.name ?? '无'}，第 ${s.day} 天）`) && t) {
     const trust = me.gmTrust
     check(sendPitch(s, t.id) === null && me.gmTrust === trust - CONTACT_TRUST && me.ap === 8 - PITCH_AP, `接触 ${t.name}：信任 ${trust} → ${me.gmTrust}，行动点 8 → ${me.ap}`)
     answer(s, 100)
@@ -382,8 +413,8 @@ console.log('七、有合同的主动接触：经理信任 −4，对方来谈�
   lift(n, 70)
   n.day = 20
   n.me!.ap = 8
-  const v = open(n, (x) => tryoutSkill(n) < expectOf(x) + 4)
-  if (check(!!v, `找到一家离门槛不到 4 分的俱乐部（${v?.name ?? '无'}）`) && v) {
+  const v = openSoon(n, (x) => tryoutSkill(n) < expectOf(x) + 4)
+  if (check(!!v, `找到一家离门槛不到 4 分的俱乐部（${v?.name ?? '无'}，第 ${n.day} 天）`) && v) {
     sendPitch(n, v.id)
     answer(n, 100)
     const inv = n.me!.pre.invites.find((i) => i.via === 'self' && i.teamId === v.id)
