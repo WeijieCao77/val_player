@@ -31,7 +31,8 @@ export interface Origin {
 export const ORIGINS: Origin[] = [
   { key: 'netcafe', name: '网吧长大的', blurb: '从小在网吧里打，枪硬，身体一般。', attrs: { aim: 5, reaction: 3 }, body: -6, money: 10000 },
   { key: 'cs', name: 'CS 转型', blurb: '打了几年 CS 二线，枪法和意识都在，道具要从头学。', attrs: { aim: 4, awareness: 3, utility: -5 }, tac: 8, money: 30000 },
-  { key: 'streamer', name: '小主播', blurb: '直播间已经有一批固定观众，比赛打得少。', fans: 90, attrs: { teamwork: -3 }, money: 40000, flags: { streamer: 1 } },
+  // what the flag does is in me/stream.ts: a session pays half again and the heat comes faster
+  { key: 'streamer', name: '小主播', blurb: '直播间已经有一批固定观众，比赛打得少：直播挣得比别人多一半，热度也涨得快些。', fans: 90, attrs: { teamwork: -3 }, money: 40000, flags: { streamer: 1 } },
   { key: 'radiant', name: '国服高分路人王', blurb: '天梯上的名字，队伍里的新人。', attrs: { aim: 6, reaction: 2, teamwork: -4, communication: -3 }, ladder: 28, fans: 40 },
   { key: 'rich', name: '富裕家庭', blurb: '家里全力支持，也没什么人当回事。', money: 300000, fans: -10, mental: -4 },
   { key: 'academy', name: '青训营出身', blurb: '在这家俱乐部的青训营待过一年，被教练提了上来。', needsClub: true, attrs: { utility: 3, teamwork: 3, communication: 2 }, tac: 14, scoutSeen: 3, money: 8000 },

@@ -32,6 +32,8 @@ export interface EventDef {
   when: (s: GameState) => boolean
   q: string
   ctx: string
+  /** the line under the question where the career itself changes it — 小主播's room is older than his contract (me/origins.ts) */
+  ctxOf?: (s: GameState) => string
   a: EventOpt[]
   /** the steady choice — what 按推荐 and 托管 take */
   rec: number

@@ -123,6 +123,10 @@ export const MORE_EVENTS: EventDef[] = [
       { t: '不了，时间留给枪法', g: 'hard', e: { xp: { aim: 12 } }, seed: 'notes:no' }] },
   { id: 'bench_stream', w: 5, max: 2, rec: 1, when: (s) => isBenched(s) && streams(s),
     q: '直播时弹幕一直在问：你为什么不上场？', ctx: '房管问要不要先关弹幕。',
+    // 小主播 (me/origins.ts flags.streamer): 这批人比俱乐部还早认识你
+    ctxOf: (s) => (s.me!.flags.streamer
+      ? '房管问要不要先关弹幕。这批人从你还没签约的时候就在了，问起来一点都不客气。'
+      : '房管问要不要先关弹幕。'),
     a: [{ t: '实话实说：教练的决定', g: 'hard', e: { heat: 20, coachTrust: -3 }, seed: 'benchtalk:said' },
       { t: '笑着说在练新特工', g: 'show', e: { heat: 8 } },
       { t: '关弹幕，专心打', g: 'grind', e: { heat: -5, tilt: -2 } }] },

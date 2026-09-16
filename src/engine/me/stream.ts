@@ -25,6 +25,22 @@ export const STREAM_TIERS = {
 }
 export const MIN_STREAMS_PER_STAGE = 2
 export const CLAUSE_FINE = 10000
+
+/**
+ * 小主播 (me/origins.ts): the room was there before the career was, so a
+ * session pays half again and the following hears about it faster. The card set
+ * `flags.streamer` from the day it was written and nothing ever read it — the
+ * money read the origin's key instead, and the heat read nothing at all
+ * (2026-09-16). The flag is what both read now; a career made on that card
+ * carries it from its first day (me/career.ts).
+ */
+export const STREAMER_PAY = 1.5
+export const STREAMER_HEAT = 1.35
+export const isStreamer = (state: GameState): boolean => !!state.me?.flags.streamer
+/** what a session of his is worth against anyone else's */
+export const streamerPayMul = (state: GameState): number => (isStreamer(state) ? STREAMER_PAY : 1)
+/** and how much faster it is talked about */
+export const streamerHeatMul = (state: GameState): number => (isStreamer(state) ? STREAMER_HEAT : 1)
 const PLATFORMS = ['虎牙', '斗鱼', 'B 站', '快手', 'Twitch']
 
 export const clubPlatform = (team: Team | undefined): string =>
@@ -57,7 +73,7 @@ export function streamIncome(state: GameState, mul = 1): number {
   const gift = Math.pow(f / 40, 1.5) * 60 * streamCut(me.fans) * heatMul
   const base = f * 0.4
   const free = (base + gift) * mul * STREAM_CNY
-  const streamer = me.originKey === 'streamer' ? 1.5 : 1
+  const streamer = streamerPayMul(state)
   if (me.stream.deal) {
     const d = me.stream.deal
     return Math.round(Math.max(d.guarantee, free * (1 - d.clubCut)) * streamer)

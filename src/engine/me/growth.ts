@@ -11,7 +11,7 @@ import { pushLog } from './log'
 import { traitMul } from './traits'
 import { FLAT_RELIEF, RELIEF_FLOOR, courseMul, psychMul } from './shop'
 import { ladderLabel, playRanked } from './prepro'
-import { contentGross, mediaAfterCap, streamWeek } from './stream'
+import { contentGross, mediaAfterCap, streamWeek, streamerHeatMul } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
 import { cny } from './moneyfmt'
@@ -270,7 +270,8 @@ export function settleTraining(state: GameState, rng: Rng, notes: string[]): voi
       case 'stream': {
         const income = payMedia(streamWeek(state, n))
         addMoney(state, 'media', income)
-        me.heat += 9 * n
+        // 小主播's room was there before the career was: it pays more and talks faster (me/stream.ts)
+        me.heat += 9 * n * streamerHeatMul(state)
         me.stream.total += n
         me.stream.thisStage += n
         notes.push(`直播 ${n} 次，收入 ${cny(income)}${n > 1 ? '（同一周里看的是同一批人，后几场礼物少一些）' : ''}。`)

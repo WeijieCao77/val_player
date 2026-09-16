@@ -415,7 +415,8 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
     <Modal title={title} art={scene ? <Scene kind={scene} /> : undefined} onClose={() => {}} onBgClose={() => {}}>
       {tags.map((line) => <p key={line} className="tiny muted" style={{ margin: '0 0 4px' }}>{line}</p>)}
       <p className="q ev-q">{ev.q}</p>
-      <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctx}</p>
+      {/* the career's own line where the card has one (me/events.ts ctxOf) */}
+      <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctxOf?.(game) ?? ev.ctx}</p>
       <div className="node-opt">
         {ev.a.map((o, i) => (
           <button key={i} onClick={() => choose(i)}>
