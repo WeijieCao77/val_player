@@ -74,6 +74,45 @@ const HEARTBEAT_MS = 60 * 1000
  */
 const IDLE_MS = 3 * 60 * 1000
 
+/**
+ * The whole contract in one place: every event this game emits, and the props
+ * each is allowed to carry.
+ *
+ * The ingest side builds its whitelist by importing this rather than by copying
+ * the names, and scripts/check_stats.ts asserts the two agree. An event name
+ * that only one half knows about is dropped in silence — the dashboard renders
+ * an empty chart and nothing anywhere says why — so a rename has to fail a
+ * check instead of surfacing six weeks later as a board of zeroes.
+ * scripts/check_telemetry.ts asserts the other direction: nothing is emitted
+ * that is not declared here, prop keys included.
+ *
+ * The rolled-up events carry running totals and are read back as a max per
+ * session (see below); the one-off ones are a row each.
+ */
+export const TELEMETRY_EVENTS = {
+  // ── one-off: a row each ──
+  session_start: ['ref', 'host', 'w', 'h', 'new_id', 'had_save', 'theme'],
+  session_ping: ['active_s'],
+  session_end: ['active_s', 'reason'],
+  career_start: ['year', 'region', 'role', 'start', 'origin', 'talent_max', 'talent_spread', 'talent_points'],
+  career_resume: ['day', 'year', 'phase', 'tier', 'pro_seasons', 'age'],
+  season_done: ['n', 'year', 'tier', 'matches', 'starts', 'titles'],
+  ending: ['key', 'why', 'age', 'pro_seasons', 'titles', 'titles_started', 'peak_tier', 'year', 'entry_year'],
+  save_fail: ['what', 'kb', 'packed', 'year', 'day'],
+  // ── rolled up: running totals, and only the rows that moved since last time ──
+  screens: ['to', 'hits'],
+  turns: ['turns', 'many', 'day', 'year', 'phase', 'tier'],
+  matches: ['cls', 'played', 'skip', 'started'],
+  ceremonies: ['kind', 'played', 'skip', 'gold', 'bronze'],
+  cups: ['enter', 'skip', 'round', 'forfeit'],
+  offers: ['deal_in', 'invite_in', 'accept', 'decline', 'aside', 'expire', 'pitch', 'contact', 'pitch_ok', 'pitch_no'],
+  pitch_why: ['why', 'n'],
+  errors: ['n', 'at'],
+} as const satisfies Record<string, readonly string[]>
+
+/** One of the names above. */
+export type TelemetryEvent = keyof typeof TELEMETRY_EVENTS
+
 type Props = Record<string, string | number | boolean | null | undefined>
 
 interface Queued {

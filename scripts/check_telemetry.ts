@@ -32,7 +32,7 @@ import { retire } from '../src/engine/me/endings'
 import {
   _rollupNow, _rollupState, _stopTelemetry,
   countCeremony, countCup, countMatch, countOffer, countPitchWhy, countScreen, countTurn,
-  startTelemetry, track,
+  startTelemetry, track, TELEMETRY_EVENTS,
 } from '../src/engine/me/telemetry'
 
 /* ------------------------------------------------------------------ */
@@ -362,8 +362,51 @@ console.log('\n隐私：上报里不许有名字')
   check(!!ending && typeof ending.key === 'string' && !('title' in ending) && !('text' in ending),
     `生涯走到了结局，报的是 key「${ending?.key}」而不是结局的标题和正文`)
 
-  const off = rows(bs, 'offers')[0]
-  console.log(`  · 这三年里：转会计数 ${JSON.stringify(off ?? null)}`)
+  const seasons = rows(bs, 'season_done')
+  check(seasons.length >= 1 && typeof seasons[0]?.n === 'number' && typeof seasons[0]?.tier === 'number',
+    `打完赛季报了 ${seasons.length} 次 season_done（第一次 ${JSON.stringify(seasons[0] ?? null)}）`)
+  check(seasons.every((r, i) => r.n === i + 1),
+    `赛季编号是一路数上去的：${seasons.map((r) => r.n).join('、')}`)
+}
+
+/* ------------------------------------------------------------------ */
+/*  7. 两头对得上：发出去的东西都在契约里                               */
+/* ------------------------------------------------------------------ */
+
+console.log('\n事件契约')
+{
+  // Everything emitted anywhere in this run, against the one exported contract.
+  // The ingest side builds its whitelist from the same constant, so a name only
+  // one half knows about fails here instead of quietly emptying a chart.
+  fresh()
+  const seen = new Set<string>()
+  const stray: string[] = []
+  const declared = TELEMETRY_EVENTS as unknown as Record<string, readonly string[]>
+
+  // 天梯开局：2026 年的中国赛区没有二线俱乐部可以签，那扇门引擎本来就会拒绝
+  // （me/career.ts pickClub），这里要的是一段跑得通的生涯，不是去撞那个拒绝
+  const s = createCareer({
+    name: 'ContractRun', role: '控场', talents: emptyTalents(),
+    originKey: 'netcafe', seed: 5, year: 2026, region: 'China', start: 'pre',
+  } as CareerOpts)
+  countScreen('economy'); countTurn({ day: 7, year: 2026, phase: 'pro', tier: 2 })
+  countMatch('league', true, true); countCeremony('media', true, 'silver')
+  countCup('skip'); countOffer('aside'); countPitchWhy('full')
+  for (let i = 0; i < 70; i++) if (autoWeek(s).kind === 'game-over') break
+  fire('pagehide')
+
+  for (const e of events(await drain())) {
+    seen.add(e.name)
+    const allowed = declared[e.name]
+    if (!allowed) { stray.push(`事件 ${e.name}`); continue }
+    for (const k of Object.keys(e.props ?? {})) {
+      if (!allowed.includes(k)) stray.push(`${e.name}.${k}`)
+    }
+  }
+  check(stray.length === 0,
+    `发出去的 ${seen.size} 种事件、每一个字段名都在 TELEMETRY_EVENTS 里声明过${stray.length ? `（没声明的：${[...new Set(stray)].slice(0, 5).join('，')}）` : ''}`)
+  console.log(`  · 这一轮见到的事件：${[...seen].sort().join('、')}`)
+  console.log(`  · 契约里一共 ${Object.keys(declared).length} 种：${Object.keys(declared).join('、')}`)
 }
 
 def('setTimeout', realSetTimeout)

@@ -35,6 +35,7 @@ import { checkAchievements } from './achievements'
 import { endTransferPeriod, noteScoutInterest, seasonContractCheck, windowRoll } from './transfer'
 import { WINTER_RENEWALS, marketDay } from './window'
 import { retirementTick } from './endings'
+import { track } from './telemetry'
 import { compCn } from './compname'
 import { expireDeals, leaveClub, settleMove } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
@@ -600,6 +601,20 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
     acs: s.starts ? Math.round(s.acsSum / s.starts) : 0,
     overallFrom: s.overall, overallTo: p.overall, titles,
     ...(quals.length ? { quals } : {}), ...(intl.length ? { intl } : {}),
+  })
+  // 打完一个赛季 — the funnel's fourth step, which the cumulative turn counter
+  // cannot honestly answer. Reported where the season's record is written, not
+  // where its card is shown: a career that ends on this very season never gets
+  // the card (the 'season' push at the end of this function is skipped once
+  // retired), and that season was still played. The club goes out as its tier,
+  // never its name (engine/me/telemetry.ts).
+  track('season_done', {
+    n: me.seasons.length,
+    year,
+    tier: pro ? team.tier : 0,
+    matches: s.matches,
+    starts: s.starts,
+    titles: titles.length,
   })
   // the winter's ageing (engine/training.ts seasonRollover), said when it takes something: from 27 the hands go first
   const slipped = before ? ATTR_KEYS.filter((k) => p.attrs[k] < before[k]) : []
