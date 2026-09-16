@@ -281,6 +281,10 @@ export interface Invite {
   via: 'cup' | 'rank' | 'fans' | 'scout' | 'free' | 'self'
   day: number
   expires: number
+  /** the year `day` and `expires` count in: a winter call runs past the year's last day (me/aside.ts yearOf) */
+  year?: number
+  /** a run of several weeks has already handed the week back once for it running out while set aside (me/aside.ts) */
+  warned?: 1
   /** seen enough to skip the tryout */
   direct: boolean
   /** a club of another region that called on top of another club's call because I speak the language (me/prepro.ts LANG_EXTRA): it holds no place in the queue */
@@ -370,6 +374,10 @@ export interface Deal {
   grade: string
   day: number
   expires: number
+  /** the year `day` and `expires` count in: a winter offer runs past the year's last day (me/aside.ts yearOf) */
+  year?: number
+  /** a run of several weeks has already handed the week back once for it running out while set aside (me/aside.ts) */
+  warned?: 1
   /** a move abroad — language and distance come with it */
   abroad: boolean
   /** terms a club brought after I contacted it (me/selfpitch.ts) */

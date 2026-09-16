@@ -4,6 +4,7 @@ import type { CupRun, Invite } from './types'
 import { pushLog } from './log'
 import { boardWeek, payDownAtTop, rankAt, rankText, standingOf } from './rank'
 import { push } from './pending'
+import { daysLeft } from './aside'
 import { CUPS } from './cups'
 import { formatOf, regionIn } from '../era'
 import { hasPlace } from '../timeline'
@@ -108,6 +109,66 @@ export function tryoutSkill(state: GameState): number {
   const p = state.players[me.id]
   return p.overall + me.pre.tac * 0.15 + standingOf(state) * 0.05 + callerRead(state)
 }
+
+/** 战术素养's ceiling (me/cups.ts raises it a cup run at a time), so a screen can draw it as a bar */
+export const TAC_MAX = 60
+
+/**
+ * 「他们眼里的你」, taken apart.
+ *
+ * Reported 2026-09-14: 「我现在数值是 80，它显示我是 90」. The cards and the 转会 page printed tryoutSkill beside a
+ * club's bar as 「你现在 N」, and a player read it against the 综合 every other screen shows him. The sum was right
+ * — a club reads the eight, what playing with a five taught him (战术素养), the ladder, and a caller's 指挥 — but
+ * the label said the number was his own. Every screen that shows the comparison reads it from here, so what is on
+ * screen is always this sum and never a second copy of the formula.
+ */
+export interface SkillRead {
+  /** tryoutSkill itself */
+  total: number
+  /** the figure on screen — and exactly what the four parts below add up to */
+  shown: number
+  overall: number
+  tac: number
+  ladder: number
+  igl: number
+}
+
+export function skillRead(state: GameState): SkillRead {
+  const me = state.me!
+  const p = state.players[me.id]
+  const overall = Math.round(p.overall)
+  const raw = [me.pre.tac * 0.15, me.pre.ladder * 0.05, callerRead(state)]
+  const total = tryoutSkill(state)
+  const shown = Math.round(total)
+  // whole numbers that add up to the figure beside them: the floor of each part, then the points rounding
+  // left over to the biggest fractions — a make-up that does not add up teaches the player nothing
+  const ints = raw.map((v) => Math.floor(v))
+  let left = shown - overall - ints.reduce((s, v) => s + v, 0)
+  for (const o of raw.map((v, i) => ({ i, frac: v - Math.floor(v) })).sort((a, b) => b.frac - a.frac)) {
+    if (left <= 0) break
+    ints[o.i]++
+    left--
+  }
+  while (left < 0) {
+    const j = ints.indexOf(Math.max(...ints))
+    if (ints[j] <= 0) break
+    ints[j]--
+    left++
+  }
+  return { total, shown, overall, tac: ints[0], ladder: ints[1], igl: ints[2] }
+}
+
+/** 「综合 80 · 战术素养 +9 · 天梯 +4 · 指挥 +1」 — the parts worth a point, in the order they are added on */
+export function skillReadCn(r: SkillRead): string {
+  const out = [`综合 ${r.overall}`]
+  if (r.tac) out.push(`战术素养 +${r.tac}`)
+  if (r.ladder) out.push(`天梯 +${r.ladder}`)
+  if (r.igl) out.push(`指挥 +${r.igl}`)
+  return out.join(' · ')
+}
+
+/** the same read in words, for the screens with 数值 off */
+export const SKILL_READ_CN = '综合、战术素养、天梯和指挥'
 
 /** What this club expects of a signing: a bench place at a VCT side, a starter at a Challengers one. */
 /**
@@ -281,7 +342,7 @@ export function makeInvite(state: GameState, team: Team, via: Invite['via'], rng
   const me = state.me!
   const skill = tryoutSkill(state)
   const direct = skill >= expectOf(team) + 10 || (via === 'cup' && me.pre.cups.slice(-1)[0]?.won === true && team.tier === 2)
-  return { id: `inv:${state.year}:${state.day}:${team.id}`, teamId: team.id, via, day: state.day, expires: state.day + INVITE_DAYS, direct }
+  return { id: `inv:${state.year}:${state.day}:${team.id}`, teamId: team.id, via, day: state.day, year: state.year, expires: state.day + INVITE_DAYS, direct }
 }
 
 /**
@@ -459,10 +520,14 @@ export function rollInvites(state: GameState, rng: Rng): void {
   }
 }
 
-export function expireInvites(state: GameState): void {
+/**
+ * An invitation nobody answered — set aside on the 转会 page (me/aside.ts), or left to run out by 托管 — is gone
+ * the morning after its last day. `ahead`: the day it is counted from, 1 as tomorrow begins (me/week.ts runDays).
+ */
+export function expireInvites(state: GameState, ahead = 0): void {
   const me = state.me!
   for (const inv of me.pre.invites.slice()) {
-    if (inv.expires < state.day && !me.tryout) {
+    if (daysLeft(state, inv) < ahead && !me.tryout) {
       me.pre.invites = me.pre.invites.filter((x) => x.id !== inv.id)
       me.pending = me.pending.filter((x) => !(x.kind === 'invite' && x.id === inv.id))
       pushLog(state, 'bad', `${state.teams[inv.teamId]?.name ?? '那家俱乐部'} 的邀请过期了，他们没再来电话。`)

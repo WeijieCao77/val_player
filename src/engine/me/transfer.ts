@@ -341,7 +341,7 @@ function approach(state: GameState, read: VctRead, need: VctNeed, rng: Rng): voi
     pushLog(state, 'deal', `转会窗：${where} 来找你——${why}，${room}。${pay}，直接开了报价。`)
     return
   }
-  const inv: Invite = { id: `inv:${state.year}:${state.day}:${t.id}`, teamId: t.id, via: 'scout', day: state.day, expires: state.day + INVITE_DAYS, direct: false }
+  const inv: Invite = { id: `inv:${state.year}:${state.day}:${t.id}`, teamId: t.id, via: 'scout', day: state.day, year: state.year, expires: state.day + INVITE_DAYS, direct: false }
   me.pre.invites.push(inv)
   push(state, { kind: 'invite', id: inv.id })
   pushLog(state, 'deal', `转会窗：${where} 的教练组看过你这个赛季的比赛，想请你去试训——${why}，${room}。签下来的话${pay}。${INVITE_DAYS} 天内答复。`)

@@ -10,7 +10,8 @@ import { serverAt } from '../../engine/me/rank'
 import { cupOf, cupView } from '../../engine/me/cups'
 import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { ageNote } from '../../engine/me/growth'
-import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, useNumbers } from './words'
+import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, tacWord, useNumbers } from './words'
+import { TAC_MAX } from '../../engine/me/prepro'
 import RivalsPanel from './Rivals'
 import { wornTitle } from '../../engine/me/achievements'
 
@@ -111,8 +112,19 @@ export default function MeScreen() {
           <div className="attr-row">
             <span className="k" title="休息能回多少体力">体质</span><Bar value={me.body} color="var(--accent)" /><span className="v">{nums ? Math.round(me.body) : bodyWord(me.body)}</span><span className="xp" />
           </div>
+          {/* 战术素养 was on no screen at all, and a club adds it to my 综合 when it reads me
+              (engine/me/prepro.ts skillRead). Reported 2026-09-14: 「我现在数值是 80，它显示我是 90」 —
+              a number that moves a whole career cannot be the one number nobody can see. */}
+          <div className="attr-row">
+            <span className="k" title="跟一支队打出来的东西：杯赛走得越远涨得越多。俱乐部看你的时候把它算进去（「转会」页的「他们眼里的你」）">战术素养</span>
+            <Bar value={(me.pre.tac / TAC_MAX) * 100} color="var(--accent)" />
+            <span className="v">{nums ? Math.round(me.pre.tac) : tacWord(me.pre.tac)}</span><span className="xp" />
+          </div>
           <p className="tiny faint" style={{ margin: '10px 0 0' }}>
             {p.role}最看重：{p.role === '决斗者' ? '枪法、反应、残局' : p.role === '先锋' ? '意识、道具、枪法' : p.role === '控场' ? '道具、意识、协同' : '意识、枪法、残局'}。
+          </p>
+          <p className="tiny faint" style={{ margin: '6px 0 0' }}>
+            战术素养是跟人打出来的：杯赛走得越远涨得越多。俱乐部看你的时候，把它和综合、天梯、指挥一起算成「他们眼里的你」（在「转会」页）。
           </p>
           {ageNote(p.age, nums) && <p className="tiny faint" style={{ margin: '6px 0 0' }}>{ageNote(p.age, nums)}</p>}
         </Panel>

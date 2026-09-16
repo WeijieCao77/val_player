@@ -75,6 +75,9 @@ const MENTAL_TIERS: Tiers = [[90, '大心脏'], [75, '很稳'], [60, '稳'], [45
 const BODY_TIERS: Tiers = [[90, '铁打的'], [75, '很好'], [60, '不错'], [45, '一般'], [-Infinity, '容易累']]
 export const mentalWord = (v: number): string => MENTAL_TIERS[tierOf(MENTAL_TIERS, v)][1]
 export const bodyWord = (v: number): string => BODY_TIERS[tierOf(BODY_TIERS, v)][1]
+// 战术素养 runs 0–60 (me/prepro.ts TAC_MAX) and is what playing with a five teaches: its own plain words
+const TAC_TIERS: Tiers = [[45, '老道'], [30, '像样'], [15, '入门'], [-Infinity, '生手']]
+export const tacWord = (v: number): string => TAC_TIERS[tierOf(TAC_TIERS, v)][1]
 /** on the lines the 我的 page already names: training slows past 45, injuries climb past 70 */
 export const fatigueWord = (v: number): string => (v >= 70 ? '透支' : v >= 45 ? '累' : v >= 25 ? '有点累' : '精神')
 /** and play starts to drag past 55 */

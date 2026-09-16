@@ -4,11 +4,11 @@ import Rich from './rich'
 import { payOf } from '../../engine/me/paytable'
 import { VCT_SEEN, listSelf, perfWord, proPerf, vctRead } from '../../engine/me/transfer'
 import { absDay, dateCn, inviteBlock, listBlock, moveLifts, signedThisPeriod, windowLine } from '../../engine/me/window'
-import { abroadClub, awayWord, clubBars, declinedNow, expectOf, reachableClubs, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER } from '../../engine/me/prepro'
+import { abroadClub, awayWord, clubBars, declinedNow, expectOf, reachableClubs, skillRead, skillReadCn, tryoutSkill, CLUB_TIER_CN, INVITE_FANS, INVITE_LADDER, SKILL_READ_CN } from '../../engine/me/prepro'
 import { rankBar } from '../../engine/me/rank'
 import { ROLE_CN } from '../../engine/me/contract'
-import { push } from '../../engine/me/pending'
-import type { PendingItem } from '../../engine/me/types'
+import { daysLeft, reopen, withinCn } from '../../engine/me/aside'
+import type { AsideKind } from '../../engine/me/aside'
 import { fansCn } from '../../engine/me/fans'
 import {
   CONTACT_TRUST, PITCH_AP, PITCH_LEAD, PITCH_MAX, PITCH_SQUAD, REPLY_MAX, REPLY_MIN, ROSTER_FULL,
@@ -41,6 +41,9 @@ export default function TransferScreen() {
   // my contract as signed, in its club's league currency (engine/me/paytable.ts)
   const pay = payOf(game)
   const skill = tryoutSkill(game)
+  // the same number taken apart, so every row that compares me with a club's bar says whose number it is
+  // (engine/me/prepro.ts skillRead; reported 2026-09-14: 「我现在数值是 80，它显示我是 90」)
+  const read = skillRead(game)
   // my own 赛区's clubs first, as a call reads them (engine/me/prepro.ts abroadClub: from 2023 the whole VCT league):
   // with the language the rest of the world is listed below them, never in among them
   const away = new Set(Object.values(game.teams).filter((t) => abroadClub(game, t)).map((t) => t.id))
@@ -54,11 +57,10 @@ export default function TransferScreen() {
   const vct = pro ? vctRead(game) : null
   const top = game.year >= 2023 ? 'VCT' : '一线'
 
-  // the card of an offer or an invite, brought to the front now rather than waiting its turn in the list
-  const openCard = (kind: PendingItem['kind'], id: string) => {
-    push(game, { kind, id })
-    const i = me.pending.findIndex((x) => x.kind === kind && x.id === id)
-    if (i > 0) me.pending.unshift(...me.pending.splice(i, 1))
+  // the card of an offer or an invite, brought to the front now rather than waiting its turn in the list —
+  // the way back to one whose card was closed and set aside (engine/me/aside.ts)
+  const openCard = (kind: AsideKind, id: string) => {
+    reopen(game, kind, id)
     commit()
   }
 
@@ -125,29 +127,55 @@ export default function TransferScreen() {
         <Panel title="桌上的报价">
           {me.deals.length === 0
             ? <p className="muted small" style={{ margin: 0 }}>现在没有报价。来了会弹卡片，这里也会列着，过期之前随时可以回来谈。</p>
-            : me.deals.map((d) => (
-              <div key={d.id} className="tr-row">
-                <Crest id={d.teamId} size={22} />
-                <span className="tr-main">
-                  <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
-                  <small>{d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 · {Math.max(0, d.expires - game.day)} 天内答复</small>
-                </span>
-                <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
-              </div>
-            ))}
-        </Panel>
-        {!pro && (
-          <Panel title="邀请">
-            {me.pre.invites.length === 0 ? <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你；也可以在上面挑一家发自荐。</p>
-              : me.pre.invites.map((i) => (
-                <div key={i.id} className="tr-row">
-                  <Crest id={i.teamId} size={22} />
-                  <span className="tr-main"><b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b><small>{i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} · {Math.max(0, i.expires - game.day)} 天内答复</small></span>
-                  <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>
+            : me.deals.map((d) => {
+              const left = daysLeft(game, d)
+              return (
+                <div key={d.id} className="tr-row">
+                  <Crest id={d.teamId} size={22} />
+                  <span className="tr-main">
+                    <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
+                    <small>
+                      {d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 ·{' '}
+                      <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>
+                    </small>
+                  </span>
+                  <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
                 </div>
-              ))}
-            {declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
-            {me.moveAfter && (
+              )
+            })}
+          {/* the way back from a card closed to think it over (engine/me/aside.ts) */}
+          {me.deals.length > 0 && (
+            <p className="tiny faint" style={{ margin: '6px 0 0' }}>
+              卡片上点「关闭」就是先放着，报价一直留在这里；到期前一天「本周」页会提醒你。{me.auto.career ? '放着的报价托管「生涯」不会替你答复。' : ''}
+            </p>
+          )}
+        </Panel>
+        {/* a man under contract hears from clubs too (engine/me/transfer.ts vctApproach): his invitations were
+            listed nowhere, so one closed and set aside had no way back */}
+        {(!pro || me.pre.invites.length > 0) && (
+          <Panel title="邀请">
+            {me.pre.invites.length === 0
+              ? (!pro && <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你；也可以在上面挑一家发自荐。</p>)
+              : me.pre.invites.map((i) => {
+                const left = daysLeft(game, i)
+                // the tryout being played on it has its own card; this row is not a way back into it
+                const onTryout = me.tryout?.inviteId === i.id
+                return (
+                  <div key={i.id} className="tr-row">
+                    <Crest id={i.teamId} size={22} />
+                    <span className="tr-main">
+                      <b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b>
+                      <small>
+                        {i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} ·{' '}
+                        {onTryout ? '试训进行中' : <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>}
+                      </small>
+                    </span>
+                    {!onTryout && <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>}
+                  </div>
+                )
+              })}
+            {!pro && declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
+            {!pro && me.moveAfter && (
               <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 期间名单锁定，{dateCn(moveLifts(game) ?? absDay(game.year, me.moveAfter.until), game.year)}后正式签约。</p>
             )}
           </Panel>
@@ -189,7 +217,7 @@ export default function TransferScreen() {
         {/* the whole ladder on one card: what each rung asks and how far short
             you are. A locked door has to say what the lock is — grinding
             without seeing the target is what made the pre-pro stretch drag. */}
-        <Panel title="你离下一级还差多少" actions={<span className="tag t1">{nums ? Math.round(skill) : attrWord(skill)}</span>}>
+        <Panel title="你离下一级还差多少" actions={<span className="tag t1" title={`俱乐部眼里的你：${SKILL_READ_CN}，不只是综合`}>{nums ? read.shown : attrWord(skill)}</span>}>
           <div className="bars">
             {clubBars(game).map((b) => (
               <div key={b.key} className={`bar-row${b.ok ? ' ok' : ''}`}>
@@ -201,10 +229,14 @@ export default function TransferScreen() {
               </div>
             ))}
           </div>
-          <p className="tiny faint" style={{ margin: '8px 0 0' }}>差一点也能去试训。</p>
+          <p className="tiny faint" style={{ margin: '8px 0 0' }}>
+            差一点也能去试训。这里比的是<b>他们眼里的你</b>{nums ? `：${read.shown}（${skillReadCn(read)}）` : `：${SKILL_READ_CN}，不只是综合`}。
+          </p>
         </Panel>
       <Panel title="门槛 · 各档俱乐部要什么水平" flush>
-        <p className="tiny faint" style={{ padding: '8px 12px 0' }}>绿色是够得着的。</p>
+        <p className="tiny faint" style={{ padding: '8px 12px 0' }}>
+          绿色是够得着的。「差」比的是他们眼里的你{nums ? ` ${read.shown}（${skillReadCn(read)}）` : `（${SKILL_READ_CN}）`}。
+        </p>
         <div className="table-wrap">
         <table>
           <thead><tr><th>俱乐部</th><th>档</th>{nums && <><th>实力</th><th>要求</th></>}<th>差</th></tr></thead>

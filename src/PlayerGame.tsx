@@ -76,7 +76,7 @@ export default function PlayerGame() {
   const [fixture, setFixture] = useState<Fixture | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(null)
   // what a multi-week run did on my behalf, shown once it stops
-  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string } | null>(null)
+  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string; aside?: boolean } | null>(null)
   // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
   const [nums, setNums] = useNumbers()
   const mainRef = useRef<HTMLElement>(null)
@@ -189,7 +189,7 @@ export default function PlayerGame() {
   const advanceMany = useCallback((until: AdvanceUntil) => {
     const g = gameRef.current
     if (!g?.me) return
-    const { stop, weeks, notes } = advanceUntil(g, until)
+    const { stop, weeks, notes, aside } = advanceUntil(g, until)
     commit()
     if (stop.kind === 'match') {
       if (notes.length) toast(`推进了 ${weeks} 周，替你处理了 ${notes.length} 件事，到你的比赛了。`)
@@ -201,11 +201,12 @@ export default function PlayerGame() {
       toast(`${weeks ? `推进了 ${weeks} 周，` : ''}${stopLine(g, stop.item)}。`)
       return
     }
-    // stopped in front of a decision that is mine: the summary says which, and its card comes after it
-    const why = stop.kind === 'pending' && leftToMe(g, stop.item) ? stopLine(g, stop.item) : undefined
+    // stopped in front of a decision that is mine: the summary says which, and its card comes after it — or for
+    // an offer I set aside that is about to run out, which has no card and waits on the 转会 page (me/aside.ts)
+    const why = stop.kind === 'pending' && leftToMe(g, stop.item) ? stopLine(g, stop.item) : aside
     // it never started: the card is already in front
     if (why && !weeks && !notes.length) { toast(`没有推进：${why}。`); return }
-    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why })
+    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why, aside: !!aside })
   }, [commit, toast])
 
   /**
@@ -445,8 +446,10 @@ export default function PlayerGame() {
             {summary.notes.length === 0
               ? <p className="muted">{summary.why ? '路上没替你处理什么。' : '一路没有需要拿主意的事。'}</p>
               : <ul className="diary">{summary.notes.map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>}
-            <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-              <button className="primary" onClick={() => setSummary(null)}>{summary.why ? '去处理' : '继续'}</button>
+            <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 12 }}>
+              {/* stopped for an offer set aside: the page it is waiting on, one press away (engine/me/aside.ts) */}
+              {summary.aside && <button onClick={() => { setSummary(null); setScreen('transfer') }}>去「转会」页</button>}
+              <button className="primary" onClick={() => setSummary(null)}>{summary.aside ? '接着推进' : summary.why ? '去处理' : '继续'}</button>
             </div>
           </Modal>
         )}
@@ -465,7 +468,15 @@ export default function PlayerGame() {
           <PendingModal
             key={`${pending.kind}:${pending.id ?? ''}:${pending.day}`}
             item={pending}
-            onDone={() => {
+            onDone={(aside) => {
+              // set aside, not answered (engine/me/aside.ts): the week waits for the next press instead of running
+              // on by itself — it was closed to think it over — and the line saying where it went stays on screen
+              if (aside) {
+                const g = gameRef.current
+                if (g?.me) answerDials(g)
+                commit()
+                return
+              }
               // a week that stopped on this goes on once it is answered — a week of days only to close the week or play today's match
               afterStop()
             }}

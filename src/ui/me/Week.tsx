@@ -13,6 +13,7 @@ import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget, standingLine } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
+import { asideReminders } from '../../engine/me/aside'
 import { fixturesFor } from '../../engine/season'
 import { WAIT_CN, nextUp } from '../../engine/me/nextup'
 import { dateCn, inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
@@ -52,7 +53,7 @@ export function advanceOf(game: GameState): { label: string; title?: string } {
 }
 
 export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => void; onAdvanceUntil: (until: AdvanceUntil) => void }) {
-  const { game, commit, toast, openMatch } = useGame()
+  const { game, commit, toast, openMatch, go } = useGame()
   const [nums] = useNumbers()
   const me = game.me!
   const p = game.players[me.id]
@@ -106,6 +107,17 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
       {(() => {
         const line = chainLine(game)
         return line ? <div className="node-line" style={{ gridColumn: '1 / -1', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div> : null
+      })()}
+      {/* an offer set aside on the 转会 page that runs out before this week is over: a line over the button,
+          never a card that stops the week again (engine/me/aside.ts asideReminders) */}
+      {(() => {
+        const lines = asideReminders(game)
+        return lines.length ? (
+          <div className="node-line bad" style={{ gridColumn: '1 / -1', margin: 0, display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'center' }}>
+            <span>{lines.join('；')}。</span>
+            <button className="sm" onClick={() => go('transfer')}>去「转会」页</button>
+          </div>
+        ) : null
       })()}
       <div>
         <Panel

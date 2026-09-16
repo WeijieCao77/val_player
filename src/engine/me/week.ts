@@ -36,7 +36,7 @@ import { endTransferPeriod, noteScoutInterest, seasonContractCheck, windowRoll }
 import { WINTER_RENEWALS, marketDay } from './window'
 import { retirementTick } from './endings'
 import { compCn } from './compname'
-import { leaveClub, settleMove } from './contract'
+import { expireDeals, leaveClub, settleMove } from './contract'
 import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
@@ -327,6 +327,10 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   }
   let ran = 0
   while (me.weekDay < 7 && ran++ < days) {
+    // an offer or an invitation set aside on the 转会 page (me/aside.ts) whose last day was yesterday: off the
+    // table before the day is played, so a renewal left to run out frees me before the club draws up its day
+    expireDeals(state, 1)
+    expireInvites(state, 1)
     const yearBefore = state.year
     // the eight before the day: a turn of the year ages them, and a slip is said (onSeasonEnd)
     const attrsBefore = { ...p.attrs }

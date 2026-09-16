@@ -11,6 +11,7 @@ import { FRIENDLY_MAP_FATIGUE, MeMatch } from './matchplay'
 import { EDGE_NEED } from './coach'
 import type { PendingItem } from './types'
 import { pop } from './pending'
+import { asideItems, asideStop, lapsedSince } from './aside'
 import { cupFor, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng, forfeitCup, isCupRound } from './cups'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays } from './tryout'
 import { acceptDeal, declineDeal } from './contract'
@@ -376,7 +377,10 @@ export const RUN_DIAL: Partial<Record<PendingItem['kind'], 'career' | 'biz'>> = 
   stream: 'biz', cup: 'biz',
 }
 
-/** A card a run stops in front of (see RUN_DIAL). */
+/**
+ * A card a run stops in front of (see RUN_DIAL). An offer set aside has no card at all (me/aside.ts), so it is
+ * never one of these: it holds nothing back, and 托管 does not answer it either — it is mine to come back to.
+ */
 export function leftToMe(state: GameState, item: PendingItem): boolean {
   const me = state.me!
   if (item.kind === 'season') return !me.auto.career && !!me.retireAsk && (state.players[me.id]?.age ?? 0) >= 31
@@ -425,7 +429,7 @@ export function stopLine(state: GameState, item: PendingItem): string {
  * of the road — or at the boundary asked for. With such a decision already
  * waiting it does not start at all.
  */
-export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number; notes: string[] } {
+export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: WeekStop; weeks: number; notes: string[]; aside?: string } {
   const me = state.me!
   const stage0 = state.stage
   const year0 = state.year
@@ -452,8 +456,17 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     const wait = settle()
     if (wait) return { stop: { kind: 'pending', item: wait }, weeks, notes }
     if (me.phase === 'retired' || state.gameOver) return { stop: { kind: 'game-over' }, weeks, notes }
+    // An offer I set aside holds nothing back (me/aside.ts), but a run that reaches the week it runs out in hands
+    // the week back, once, with the week screen's reminder over the button. The week it was set aside in never
+    // stops, and a second press runs straight on: the offer then lapses on its own day, written down below.
+    if (weeks > 0 && me.weekDay === 0) {
+      const aside = asideStop(state)
+      if (aside) return { stop, weeks, notes, aside }
+    }
     if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
+    const onTable = asideItems(state)
     stop = advanceWeek(state)
+    notes.push(...lapsedSince(state, onTable))
     if (stop.kind === 'match') {
       // the next match is what "到下一场比赛" runs to; a longer run plays it
       // the skipped way — the coach's calls made for me, with nobody in the chair (me/matchplay.ts runOut)

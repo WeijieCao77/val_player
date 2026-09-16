@@ -5,7 +5,7 @@ import type { PendingItem } from '../../engine/me/types'
 import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
 import { FRIENDLY_MAP_FATIGUE, MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
-import { awayWord, expectOf, tryoutSkill, CLUB_TIER_CN } from '../../engine/me/prepro'
+import { awayWord, expectOf, skillRead, skillReadCn, tryoutSkill, CLUB_TIER_CN, SKILL_READ_CN } from '../../engine/me/prepro'
 import { doorsOf, formatOf } from '../../engine/era'
 import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
@@ -17,6 +17,7 @@ import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
 import { storyHint, storyTag } from '../../engine/me/story'
 import { AXIS_CN, traitOf } from '../../engine/me/traits'
 import { pop } from '../../engine/me/pending'
+import { daysLeft, dealWord, setAside, withinCn } from '../../engine/me/aside'
 import { retire } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
 import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
@@ -37,7 +38,7 @@ import { holdCard } from './hold'
 import './moment.css'
 
 /** Whatever the clock stopped on, as a card in front of everything. */
-export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: () => void }) {
+export default function PendingModal({ item, onDone }: { item: PendingItem; onDone: (aside?: boolean) => void }) {
   switch (item.kind) {
     case 'cup': return <CupModal cupKey={item.id!} onDone={onDone} />
     case 'invite': return <InviteModal inviteId={item.id!} onDone={onDone} />
@@ -186,22 +187,26 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
 }
 
 // ------------------------------------------------------------------ invite
-function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => void }) {
-  const { game, commit } = useGame()
+function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: (aside?: boolean) => void }) {
+  const { game, commit, toast } = useGame()
   const [nums] = useNumbers()
   const me = game.me!
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   if (!inv) { pop(game, 'invite', inviteId); onDone(); return null }
   const team = game.teams[inv.teamId]
   const skill = tryoutSkill(game)
+  const read = skillRead(game)
   const expect = expectOf(team)
   // 「外赛区」 by league, 「国外俱乐部」 by country: the word the offer's card and the transfer screen put on it (engine/me/prepro.ts awayWord)
   const away = awayWord(game, team)
   // 'self': a 自荐 that came good, or under a contract a contact answered with a tryout (engine/me/selfpitch.ts)
   const via = inv.via === 'self' && me.phase === 'pro' ? '回应了你的主动接触'
     : { cup: '看了你的杯赛', rank: '在天梯上注意到你', fans: '看了你的直播', scout: '教练组推荐', free: '知道你在找队', self: '看了你的自荐' }[inv.via]
+  // 关闭 ✕: put aside, not answered — the invitation waits on the 转会 页 until it runs out (engine/me/aside.ts).
+  // Reported 2026-09-14: 「关闭点不了…点了关闭弹窗之后也可以在转会栏目找到」
+  const putAside = () => { const line = setAside(game, 'invite', inviteId); onDone(true); if (line) toast(line) }
   return (
-    <Modal title={inv.direct ? `${team.name} 的报价` : `${team.name} 的试训邀请`} onClose={() => {}} onBgClose={() => {}}>
+    <Modal title={inv.direct ? `${team.name} 的报价` : `${team.name} 的试训邀请`} onClose={putAside} onBgClose={() => {}}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Crest id={team.id} size={40} />
         <div>
@@ -209,10 +214,17 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
           <div className="tiny muted">他们{via}</div>
         </div>
       </div>
+      {/* whose number this is (reported 2026-09-14: 「我现在数值是 80，它显示我是 90」) — a club reads more than
+          my 综合, and with 数值 on the card shows what the read is made of (engine/me/prepro.ts skillRead) */}
       <p className="small" style={{ margin: '12px 0 4px' }}>
-        你的水平：<b>{skill >= expect + 8 ? '绰绰有余' : skill >= expect ? '够格' : skill >= expect - 6 ? '差一点，试训里能补回来' : '差得不少'}</b>
-        {nums ? `（他们要 ${Math.round(expect)}，你现在 ${Math.round(skill)}）` : ''}
+        他们眼里的你：<b>{skill >= expect + 8 ? '绰绰有余' : skill >= expect ? '够格' : skill >= expect - 6 ? '差一点，试训里能补回来' : '差得不少'}</b>
+        {!nums && `（俱乐部看的是${SKILL_READ_CN}，不只是综合）`}
       </p>
+      {nums && (
+        <p className="tiny muted" style={{ margin: '0 0 4px' }}>
+          他们要 {Math.round(expect)}；他们眼里的你 {read.shown}（{skillReadCn(read)}）
+        </p>
+      )}
       {/* the most important line on an offer: which game you are signing up for */}
       <p className="small" style={{ margin: '4px 0' }}>接了之后头顶的门：<b>{doorsOf(team.region, game.year)}</b></p>
       {/* from 2023 the leagues are closed: say which one this club is in, or that it is in none */}
@@ -222,7 +234,10 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: () => voi
           {!hasPlace(game, team) && <span className="warn">（这家俱乐部今年没有联赛席位，签过去可能无赛可打）</span>}
         </p>
       )}
-      <p className="tiny faint">{inv.direct ? '他们看够了，免试训直接谈合同。' : `${tryoutDays(game).length === 3 ? '三' : '四'}天试训，每天一个选择。`}{inv.expires - game.day} 天内答复；回绝了今年不会再来。</p>
+      <p className="tiny faint">
+        {inv.direct ? '他们看够了，免试训直接谈合同。' : `${tryoutDays(game).length === 3 ? '三' : '四'}天试训，每天一个选择。`}
+        {withinCn(daysLeft(game, inv))}答复；回绝了今年不会再来。点右上角「关闭」可以先放着，它留在「转会」页。
+      </p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>
         <button onClick={() => { declineInvite(game, inv.id); commit(); onDone() }}>回绝</button>
@@ -283,7 +298,7 @@ function TryoutModal({ onDone }: { onDone: () => void }) {
 }
 
 // ------------------------------------------------------------------ deal
-function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
+function DealModal({ dealId, onDone }: { dealId: string; onDone: (aside?: boolean) => void }) {
   const { game, commit, toast } = useGame()
   const me = game.me!
   const [last, setLast] = useState<string | null>(null)
@@ -300,8 +315,11 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
     commit()
     if (r.blown && !game.me!.deals.find((x) => x.id === dealId)) { toast('谈崩了。'); onDone() }
   }
+  // 关闭 ✕: put aside, not answered — the offer waits on the 转会 页 until it runs out (engine/me/aside.ts).
+  // Reported 2026-09-14: 「转会报价的弹窗点不了关闭…玩家点了关闭弹窗之后也可以在转会栏目找到这次报价」
+  const putAside = () => { const line = setAside(game, 'deal', dealId); onDone(true); if (line) toast(line) }
   return (
-    <Modal title={title} onClose={() => {}} onBgClose={() => {}}>
+    <Modal title={title} onClose={putAside} onBgClose={() => {}}>
       <div className="row" style={{ gap: 10, alignItems: 'center' }}>
         <Crest id={team.id} size={40} />
         <div>
@@ -325,7 +343,9 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: () => void }) {
           : null
       })()}
       {d.via === 'contact' && <p className="tiny muted" style={{ margin: '6px 0' }}>这是你主动接触换来的：他们来和你的俱乐部谈转会，违约金他们付。</p>}
-      <p className="tiny faint" style={{ margin: '6px 0' }}>每还一次价都更难，第二次被拒就撤回。</p>
+      <p className="tiny faint" style={{ margin: '6px 0' }}>
+        每还一次价都更难，第二次被拒就撤回。{withinCn(daysLeft(game, d))}答复；点右上角「关闭」可以先放着，这份{dealWord(d)}留在「转会」页。
+      </p>
       <div className="row wrap" style={{ gap: 6 }}>
         {ASKS.filter((a) => a.can(d) && !d.asks.includes(a.key)).map((a) => (
           <button key={a.key} className="sm" onClick={() => ask(a.key)} title={a.blurb}>{a.label}</button>
@@ -530,7 +550,7 @@ function ReleasedModal({ why, onDone }: { why?: string; onDone: () => void }) {
   const close = () => { pop(game, 'released'); commit(); onDone() }
   return (
     <Modal title="自由人" onClose={close} onBgClose={close}>
-      <p className="small" style={{ marginTop: 0 }}>{why === 'fold' ? '俱乐部解散了，合同随之作废。' : '俱乐部没有续约。'}你回到了市场上：天梯、杯赛、跟着别的队打训练赛，等电话。两年没人打来，就是退役。</p>
+      <p className="small" style={{ marginTop: 0 }}>{why === 'fold' ? '俱乐部解散了，合同随之作废。' : why === 'lapse' ? '续约你放着没签，放到过期了，合同也就到期了。' : '俱乐部没有续约。'}你回到了市场上：天梯、杯赛、跟着别的队打训练赛，等电话。两年没人打来，就是退役。</p>
       <div className="row" style={{ justifyContent: 'center' }}><button className="primary" onClick={close}>知道了</button></div>
     </Modal>
   )

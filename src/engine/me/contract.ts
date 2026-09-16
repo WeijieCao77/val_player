@@ -4,7 +4,8 @@ import type { GameState, SquadRole } from '../types'
 import { expectedSalary } from '../player'
 import type { Deal } from './types'
 import { pushLog } from './log'
-import { pop } from './pending'
+import { pop, push } from './pending'
+import { daysLeft, dealWord } from './aside'
 import { awayWord, expectOf, markDeclined, tryoutSkill } from './prepro'
 import { coachStarters } from './coach'
 import { makeRoom } from './club'
@@ -75,8 +76,9 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
   return {
     id: `deal:${state.year}:${state.day}:${teamId}:${kind}`, teamId, kind, tier: team.tier, role, cur,
     salary, signBonus, years, buyout, asks: [], blown: 0, leverage: Math.round(leverage), grade,
-    // a move abroad is by country (「出海按国家」); the card's 「外赛区」 or 「国外俱乐部」 is by league (me/prepro.ts awayWord)
-    day: state.day, expires: state.day + DEAL_DAYS, abroad: team.region !== me.region,
+    // a move abroad is by country (「出海按国家」); the card's 「外赛区」 or 「国外俱乐部」 is by league (me/prepro.ts awayWord).
+    // `year` is the year `day` and `expires` count in: a winter offer runs past the year's last day (me/aside.ts yearOf)
+    day: state.day, year: state.year, expires: state.day + DEAL_DAYS, abroad: team.region !== me.region,
   }
 }
 
@@ -140,6 +142,35 @@ export function declineDeal(state: GameState, dealId: string): string {
     pushLog(state, 'info', `你拒绝了 ${state.teams[d.teamId]?.name} 的报价。今年他们不会再来。`)
   }
   return '已拒绝。'
+}
+
+/**
+ * An offer nobody answered, on the morning after its last day. A card in front of me never ages — the clock does
+ * not move while one is up — so this is for the offers set aside on the 转会 page (me/aside.ts): it comes off the
+ * table, the club does not come back this year, and the 转会动态 says so. A renewal left to run out goes the way
+ * a refused one goes (renewalGone): the contract it was to replace has run out, and I am a free agent — with the
+ * 自由人 card of my own to say it, since nobody chose it.
+ *
+ * `ahead`: the day it is counted from — 0 today, 1 as tomorrow begins (me/week.ts runDays).
+ */
+export function expireDeals(state: GameState, ahead = 0): void {
+  const me = state.me
+  if (!me) return
+  for (const d of me.deals.slice()) {
+    if (daysLeft(state, d) >= ahead) continue
+    me.deals = me.deals.filter((x) => x.id !== d.id)
+    pop(state, 'deal', d.id)
+    const name = state.teams[d.teamId]?.name ?? '那家俱乐部'
+    if (d.kind === 'renew') {
+      pushLog(state, 'deal', `${name} 的续约过期了。`)
+      const mine = me.phase === 'pro' && state.myTeam === d.teamId
+      renewalGone(state, d, '的续约放到过期，你没有签')
+      if (mine && me.phase !== 'pro') push(state, { kind: 'released', id: 'lapse' })
+    } else {
+      markDeclined(state, d.teamId)
+      pushLog(state, 'deal', `${name} 的${dealWord(d)}过期了，今年他们不会再来。`)
+    }
+  }
 }
 
 /**
