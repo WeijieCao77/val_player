@@ -327,13 +327,19 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: (aside?: boolea
           <div className="tiny muted">评级 {d.grade}</div>
         </div>
       </div>
-      <table style={{ margin: '12px 0' }}>
-        <tbody>
-          <tr><td className="muted">身份</td><td><b>{ROLE_CN[d.role]}</b></td><td className="muted">年限</td><td><b>{d.years} 年</b></td></tr>
-          <tr><td className="muted">年薪</td><td><b>{moneyIn(d.salary, d.cur, game.year)}</b></td><td className="muted">签字费</td><td><b>{moneyIn(d.signBonus, d.cur, game.year)}</b></td></tr>
-          <tr><td className="muted">违约金</td><td><b>{moneyIn(d.buyout, d.cur, game.year)}</b></td><td /><td /></tr>
-        </tbody>
-      </table>
+      {/* 375 宽实测（scripts/offer_preview.tsx 拿真报价量的）：这张四列的合同表是 482px，
+          而卡片正文只有 358px，宽出 124px。它没有把整页推宽，只是因为 .modal 上有
+          overflow-y: auto——按 CSS 规范 overflow-x 会跟着变成 auto——于是这张表在卡片里
+          横着跑，一点提示都没有。全站另外 18 张表都裹在 .table-wrap 里，这张也该有。 */}
+      <div className="table-wrap" style={{ margin: '12px 0' }}>
+        <table>
+          <tbody>
+            <tr><td className="muted">身份</td><td><b>{ROLE_CN[d.role]}</b></td><td className="muted">年限</td><td><b>{d.years} 年</b></td></tr>
+            <tr><td className="muted">年薪</td><td><b>{moneyIn(d.salary, d.cur, game.year)}</b></td><td className="muted">签字费</td><td><b>{moneyIn(d.signBonus, d.cur, game.year)}</b></td></tr>
+            <tr><td className="muted">违约金</td><td><b>{moneyIn(d.buyout, d.cur, game.year)}</b></td><td /><td /></tr>
+          </tbody>
+        </table>
+      </div>
       {last && <div className="node-line">{last}</div>}
       {(() => {
         // signed under a roster lock, the move is made once the event is over (engine/me/contract.ts settleMove)
