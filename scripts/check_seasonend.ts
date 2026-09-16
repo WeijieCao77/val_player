@@ -43,6 +43,7 @@ import type { StartPoint } from '../src/engine/me/career'
 import { advanceTurn } from '../src/engine/me/week'
 import { advanceUntil, autoPlan, autoResolve, runAutoPilot } from '../src/engine/me/auto'
 import { MeMatch } from '../src/engine/me/matchplay'
+import { takeMoment } from '../src/engine/me/moments'
 import { isIntlComp } from '../src/engine/me/compclass'
 import { compCn } from '../src/engine/me/compname'
 import type { GameState, Region } from '../src/engine/types'
@@ -50,6 +51,8 @@ import type { GameState, Region } from '../src/engine/types'
 const seed = Number(process.argv[2] ?? 11)
 /** campaigns of my club's that must turn up, or the check is passing on nothing */
 const SAMPLE_MIN = 4
+/** and 打进大赛 cards, for the same reason */
+const CARDS_MIN = 8
 
 interface Scn { label: string; region: string; start: StartPoint; year: number; years: number }
 const SCN: Scn[] = [
@@ -73,8 +76,27 @@ interface Row {
   mine: number
 }
 
+/** a 打进大赛 card the screen showed (engine/me/moments.ts noteQualify, ui/me/MomentQueue.tsx) */
+interface Card { year: number; key: string; comp: string }
+
 let bad = 0
 const fail = (m: string): void => { bad++; if (bad <= 30) console.log(`  ✗ ${m}`) }
+
+/**
+ * The screen takes the cards one at a time; here they are taken every morning, so
+ * none is lost to the queue's cap (me/moments.ts MOMENTS_CAP) and every card the
+ * player would have been shown is counted.
+ */
+function drain(state: GameState, cards: Card[]): void {
+  const me = state.me
+  if (!me?.moments?.length) return
+  let guard = 0
+  while (me.moments.length && guard++ < 40) {
+    const m = me.moments[0]
+    if (m.kind === 'qualify') cards.push({ year: m.year, key: m.key.replace(/^qualify:/, ''), comp: m.comp ?? '?' })
+    takeMoment(state)
+  }
+}
 
 function rowsOf(state: GameState, book: Map<string, Row>): void {
   const me = state.me
@@ -145,20 +167,23 @@ const t0 = Date.now()
 let sample = 0
 let inSummary = 0
 let played = 0
+let cardsSeen = 0
 
 for (const o of SCN) {
   const born = createCareer({
     name: 'Check', region: o.region as Region, role: '决斗者', talents: emptyTalents(),
     originKey: 'netcafe', start: o.start, seed, year: o.year,
   })
-  const runs: { label: string; book: Map<string, Row>; notes: string[]; state: GameState }[] = []
+  const runs: { label: string; book: Map<string, Row>; notes: string[]; cards: Card[]; state: GameState }[] = []
   for (const mode of ['周推', '快进到赛季末'] as const) {
     const state = clone(born)
     const book = new Map<string, Row>()
-    watchDays(state, () => rowsOf(state, book))
+    const cards: Card[] = []
+    watchDays(state, () => { drain(state, cards); rowsOf(state, book) })
     rowsOf(state, book)
     const notes = mode === '周推' ? (weekly(state, o.year + o.years), []) : fastForward(state, o.year + o.years)
-    runs.push({ label: mode, book, notes, state })
+    drain(state, cards)
+    runs.push({ label: mode, book, notes, cards, state })
   }
 
   for (const run of runs) {
@@ -178,6 +203,23 @@ for (const o of SCN) {
       if (!said) {
         fail(`${o.label} · ${run.label}：${r.year} ${compCn(r.name)} 打了 ${r.fxPlayed} 场，`
           + `赛季总结里一个字都没写（生涯行写的是「${[...row.titles, ...(row.intl ?? [])].join('、') || '空的'}」）`)
+      }
+    }
+
+    // 「打进大赛」 never for an event my club has no tie in — the card used to be raised off
+    // history's booking, months before the draw (reported 2026-09-16, scripts/probe_qualcard.ts)
+    for (const c of run.cards) {
+      const r = run.book.get(`${c.year}:${c.key}`)
+      if (!r || !r.fx) {
+        fail(`${o.label} · ${run.label}：${c.year} 弹了「打进${compCn(c.comp)}」的卡，我队整届一场都没打`)
+      }
+      cardsSeen++
+    }
+    // and never missing from one it really played
+    for (const r of run.book.values()) {
+      if (!r.seated || !r.sim || !r.mine || !r.fxPlayed) continue
+      if (!run.cards.some((c) => c.key === r.key && c.year === r.year)) {
+        fail(`${o.label} · ${run.label}：${r.year} ${compCn(r.name)} 打了 ${r.fxPlayed} 场，却没弹「打进大赛」的卡`)
       }
     }
   }
@@ -216,11 +258,13 @@ for (const o of SCN) {
 }
 
 if (sample < SAMPLE_MIN) fail(`只查到 ${sample} 项我队打过的大师赛 / 冠军赛，样本太少（至少 ${SAMPLE_MIN} 项）`)
+if (cardsSeen < CARDS_MIN) fail(`只弹出 ${cardsSeen} 张「打进大赛」的卡，样本太少（至少 ${CARDS_MIN} 张）`)
 if (!inSummary) fail('「快进到赛季末」的推进总结里，一场大师赛 / 冠军赛都没写')
 
 console.log(bad
   ? `\n✗ ${bad} 项不对。`
   : `\n✓ 我队打过的 ${sample} 项大师赛 / 冠军赛，两条路（周推、快进到赛季末）打出的场次和结果一样，`
-    + `每一项都真打了、也都写进了赛季总结；推进总结里写到了其中 ${inSummary} 项，我自己的记录共 ${played} 场`
+    + `每一项都真打了、也都写进了赛季总结；推进总结里写到了其中 ${inSummary} 项，我自己的记录共 ${played} 场；`
+    + `${cardsSeen} 张「打进大赛」的卡，每一张都是我队真打了的赛事，真打了的也都弹了卡`
     + ` · ${((Date.now() - t0) / 1000).toFixed(0)}s`)
 process.exit(bad ? 1 : 0)

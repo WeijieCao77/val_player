@@ -53,23 +53,42 @@ export function noteRankPeak(state: GameState, wasPeak: number): void {
 }
 
 /**
- * My club is in a Masters', Champions' or LOCK//IN's field (circuit.ts `begin` writes it
- * the day before) — the author's 出线大师赛 / 冠军赛. Read each day (me/week.ts), once a
- * career per event. An event already played or finished when first seen — a save
- * loaded in the middle of one, or one from before this card — is noted and not shown.
+ * My club is in a Masters', Champions' or LOCK//IN's field — the author's 出线大师赛 /
+ * 冠军赛. Read each day (me/week.ts), once a career per event. An event my club is
+ * already playing when it is first seen — a save loaded in the middle of one, a club
+ * joined mid-event — is noted and not shown.
+ *
+ * The field has to be this world's, and it is this world's only from the day the event is
+ * drawn here (circuit.ts begin). Until then `comp.teams` is history's booking, written
+ * when the season is set up (circuit.ts bookEvent): the clubs that really played it. Read
+ * before the draw, the card announced those. Reported 2026-09-16 — 「有成就弹窗我打进了
+ * 冠军赛」 with no match ever following — and reproduced by scripts/probe_qualcard.ts:
+ * 6 of 30 cards were for an event the club never played a tie in, among them 「打进伦敦
+ * 大师赛」 on the first day of the season, 155 days before it opened and before anybody
+ * had been drawn into it.
+ *
+ * A 'history' event is one this world keeps as it really went and plays no match of, and
+ * its field is never the player's — begin makes it 'sim' whenever the draw seats him —
+ * so 'sim' is the whole of the condition.
  */
 export function noteQualify(state: GameState): void {
   const me = state.me
-  if (!me || me.phase !== 'pro' || !state.myTeam) return
+  const club = state.myTeam
+  if (!me || me.phase !== 'pro' || !club) return
   for (const comp of Object.values(state.comps)) {
-    if (!comp.teams.includes(state.myTeam)) continue
+    // history's booking until the draw is made here — see above
+    if (comp.circuit && comp.circuit.mode !== 'sim') continue
+    if (!comp.teams.includes(club)) continue
     const cls = compClass(comp.name)
     if (cls !== 'masters' && cls !== 'champions' && cls !== 'lockin') continue
     const flag = `qual:${comp.key}`
     if (me.flags[flag]) continue
     me.flags[flag] = state.year
     if (comp.finished.length || comp.champion) continue
-    if (state.fixtures.some((f) => (f.comp === comp.key || f.comp === comp.name) && f.played)) continue
-    pushMoment(state, { kind: 'qualify', key: `qualify:${comp.key}`, comp: comp.name, teamId: state.myTeam })
+    // already playing in it: my club's own matches, not the event's — a club that comes up
+    // through a qualifier plays its decider in this very competition (circuit.ts offerPlayIn)
+    if (state.fixtures.some((f) => (f.comp === comp.key || f.comp === comp.name) && f.played
+      && (f.teamA === club || f.teamB === club))) continue
+    pushMoment(state, { kind: 'qualify', key: `qualify:${comp.key}`, comp: comp.name, teamId: club })
   }
 }
