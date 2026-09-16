@@ -225,6 +225,9 @@ for (const o of SCN) {
   // what a club's international record looks like in the summary the player reads
   const seatedB = [...b.book.values()].filter((r) => r.seated && (r.cls === 'masters' || r.cls === 'champions'))
   for (const r of seatedB) {
+    // a campaign of the club's from before I signed for it — 2023's 东京大师赛, five ties played by
+    // the club the career joined that winter — is not mine, and has no business in my own summary
+    if (!r.mine) continue
     if (r.fxPlayed === 0) { console.log(`  ✗ 快进：${r.year} ${r.name} 我队在列，却一场都没打`); bad++ }
     else if (!b.notes.some((n) => n.includes(r.name))) { console.log(`  ✗ 快进：${r.year} ${r.name} 打了 ${r.fxPlayed} 场，推进总结里一行都没写`); bad++ }
   }
