@@ -44,6 +44,8 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
       {step === 0 && (
         <>
           <p className="cer-story">{def.story(game, cer.about ?? '')}</p>
+          {/* a night with no game has no result screen, so what it means is read here (me/ceremony.ts farewell) */}
+          {def.game === 'none' && def.after && <p className="cer-story">{def.after(game, cer)}</p>}
           <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 14 }}>
             {def.game === 'none'
               ? <button className="primary" onClick={close}>知道了</button>

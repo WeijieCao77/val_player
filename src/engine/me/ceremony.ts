@@ -68,6 +68,33 @@ export interface CerDef {
   after?: (state: GameState, cer: Ceremony) => string
 }
 
+/**
+ * 最后一个赛季 hangs on no little game: a 32-year-old's last year is not
+ * something a pair of hands can do well or badly. Its three lines were left
+ * empty, so the night said the story and then nothing at all — and `game:
+ * 'none'` closes on 银档, which meant the other two could never be read either
+ * (2026-09-16).
+ *
+ * The grade is the career instead of a reflex, and all three are reachable:
+ * what the stands know him for on the day he walks out for the last first time.
+ * A trophy he started in or a year-end award won is the loud one; a man who
+ * never held a place is the quiet one. It is still only words — a night with no
+ * game hands out nothing, the way skipping any of them costs nothing.
+ */
+const FAREWELL_STARTS = 40
+export const FAREWELL_BLURB: Record<CerTier, string> = {
+  gold: '客场的看台上也开始有人举你的名字。没有人问你还能打多久——他们只想再看你赢一次。',
+  silver: '没有人替你宣布什么。照常训练，照常上场，只是你自己心里开始数了。',
+  bronze: '没有人给你办告别。名单还是每周贴出来，位置还是得自己去争——最后这一年也一样。',
+}
+
+/** What this last season is, read off the career itself. */
+export function farewellTier(state: GameState): CerTier {
+  const me = state.me!
+  if (me.titles.some((t) => t.started) || (me.awards ?? []).some((a) => a.won)) return 'gold'
+  return me.seasons.reduce((s, x) => s + x.starts, 0) >= FAREWELL_STARTS ? 'silver' : 'bronze'
+}
+
 export const CEREMONIES: Record<CerKind, CerDef> = {
   draw: {
     kind: 'draw', name: '抽签之夜', game: 'focus',
@@ -120,8 +147,10 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
   },
   farewell: {
     kind: 'farewell', name: '最后一个赛季', game: 'none',
-    story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段开始，每一个赛场都会有人举着你的名字。`,
-    blurb: { gold: '', silver: '', bronze: '' },
+    story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段起，剩下的每一场都是数得清的。`,
+    blurb: FAREWELL_BLURB,
+    // no game to grade, so the career is the grade (farewellTier); the screen reads this at the story, the log says the same
+    after: (s) => FAREWELL_BLURB[farewellTier(s)],
   },
   // 年度颁奖夜、表演赛之夜、版本发布会、试训第一天、退役仪式 — me/nights.ts
   ...NIGHTS,
@@ -283,7 +312,7 @@ export function cerApply(state: GameState, tier: CerTier, skipped: boolean): voi
   }
 
   const text = kind === 'farewell'
-    ? `<b>最后一个赛季。</b>${def.story(state, cer?.about ?? '')}`
+    ? `<b>最后一个赛季。</b>${def.story(state, cer?.about ?? '')}${FAREWELL_BLURB[farewellTier(state)]}`
     : kind === 'media'
       ? `${def.name}：${def.blurb[tier]}`
       : skipped
