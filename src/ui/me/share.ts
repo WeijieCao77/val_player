@@ -5,6 +5,7 @@ import { originName, originOf } from '../../engine/me/origins'
 import { rankAt, rankShort, serverAt } from '../../engine/me/rank'
 import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
 import { compCn } from '../../engine/me/compname'
+import { compClass } from '../../engine/me/compclass'
 import { cny } from '../../engine/me/moneyfmt'
 
 /**
@@ -112,7 +113,18 @@ function drawQr(g: CanvasRenderingContext2D, x: number, y: number, size: number)
   }
 }
 
-const tierOf = (t: string) => (/Champions/i.test(t) ? 3 : /Masters/i.test(t) ? 2 : 1)
+/**
+ * 冠军赛 > 大师赛 > 赛区冠军, off what the event is rather than off an English
+ * word in its name. It used to be `/Champions/i` and `/Masters/i`, and the
+ * timeline books a competition under its Chinese name (engine/circuit.ts:
+ * `${year} 全球冠军赛`) — so on every modern save the picture ranked a world
+ * title level with a Challengers stage, and named it first only by luck of the
+ * year. Only the pre-2023 English names ever matched.
+ */
+const tierOf = (t: string) => {
+  const c = compClass(t)
+  return c === 'champions' ? 3 : c === 'masters' || c === 'lockin' ? 2 : 1
+}
 
 /**
  * The ending's first sentence: the verdict in words, under its headline. The
