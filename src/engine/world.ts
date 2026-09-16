@@ -7,6 +7,7 @@ import { AGENTS, MAPS, SPONSOR_NAMES } from './content'
 import { defaultTactics, emptyStats, ROLES } from './types'
 import type { Attrs, GameState, Player, Role, Sponsor, Team, WorldState } from './types'
 import { freeAgentPool } from './prospects'
+import { dateOf, offPool, offPoolOn } from './staffStints'
 import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
 import { currentRuleset } from './ruleset'
@@ -220,7 +221,12 @@ export function createWorld(
   const s = seed ?? (hashStr(myTeamId + String(Date.now())) >>> 0)
 
   const players: Record<string, Player> = {}
-  for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) players[rp.id] = playerFromRaw(rp, year, s)
+  // the day the world opens, for the men who by then were already on a staff (engine/staffStints.ts)
+  const opened = dateOf(year, 0)
+  for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) {
+    if (offPool(rp.id, opened)) continue
+    players[rp.id] = playerFromRaw(rp, year, s)
+  }
 
   // The rest of the professional scene: real players from below the simulated
   // leagues, without a club. They are ordinary free agents from day one — AI
@@ -229,7 +235,8 @@ export function createWorld(
   // 2026's prospects are 2026's: a 2021 world has its own free agents in its file
   if (year >= 2026) {
     for (const p of freeAgentPool(2026)) {
-      if (!players[p.id]) players[p.id] = p
+      // a prospect carries his vlr id behind one letter, as today.ts reads it
+      if (!players[p.id] && !offPoolOn(p.id.slice(1), opened)) players[p.id] = p
     }
   }
 

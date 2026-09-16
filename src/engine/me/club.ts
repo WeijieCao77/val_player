@@ -5,6 +5,7 @@ import type { GameState, Player, Role, Team } from '../types'
 import { squadOf } from '../roster'
 import { importBlock } from '../imports'
 import { releaseForHistory, signForHistory } from '../timeline'
+import { dateOf, offPool } from '../staffStints'
 import { autoStarters, ensureCaller } from '../world'
 import { coachStarters } from './coach'
 import { pushLog } from './log'
@@ -115,8 +116,11 @@ function fillSquad(state: GameState, team: Team, rng: Rng): void {
     const others = team.roster.filter((id) => id !== me.id).map((id) => state.players[id]).filter((p): p is Player => !!p)
     const have = new Set(others.flatMap(jobsOf))
     const missing = ROLES.filter((r) => r !== '自由人' && !have.has(r))
+    // my own club fills its seat from the players, never from a man who has gone to a staff (engine/staffStints.ts)
+    const today = dateOf(state.year, state.day)
     const free = Object.values(state.players)
-      .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && !importBlock(state, team.id, p))
+      .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && !importBlock(state, team.id, p)
+        && !offPool(p.id, today))
     if (!free.length) break
     const score = (p: Player) =>
       p.overall + (p.region === team.region ? 6 : 0) + (jobsOf(p).some((r) => missing.includes(r)) ? 12 : 0)
@@ -204,10 +208,13 @@ export function clubWindow(state: GameState, rng: Rng): void {
   const wages = squadOf(state, team.id).reduce((s, p) => s + p.salary, 0)
   const room = team.budget - wages * 0.6
   const value = (p: Player) => p.overall + Math.max(0, p.potential - p.overall) * 0.5
+  const today = dateOf(state.year, state.day)
   const target = Object.values(state.players)
     .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && p.role === role
       && p.overall >= need!.strength + UPGRADE && expectedSalary(p, team.tier) < Math.max(40000, room * 0.25)
-      && !importBlock(state, team.id, p))
+      && !importBlock(state, team.id, p)
+      // an upgrade is a player, not a man who has gone to a staff (engine/staffStints.ts)
+      && !offPool(p.id, today))
     .sort((a, b) => value(b) - value(a))[0]
   if (!target) return
   if (team.roster.length >= CLUB_CEILING) {

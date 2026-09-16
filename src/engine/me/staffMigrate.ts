@@ -1,7 +1,7 @@
 import { Rng, hashStr } from '../rng'
 import { ensureMinimumRosters } from '../season'
-import { STAFF_STAMP, dateOf, staffPeople, staffStintOn } from '../staffStints'
-import { lastYearOf, releaseForHistory } from '../timeline'
+import { STAFF_STAMP, dateOf, offPoolOn, staffPeople, staffPersonOf, staffStintOn } from '../staffStints'
+import { releaseForHistory } from '../timeline'
 import type { GameState } from '../types'
 import { clubWeek, leaveRoster } from './club'
 import { pushLog } from './log'
@@ -14,10 +14,11 @@ import { pushLog } from './log'
  * A save carries its own copy of every person, so the corrected book reaches the
  * seasons still to come — nobody from inside a staff stint is signed, rated or
  * kept on — and not the people a save already holds. Here each person the file
- * names leaves the player pool if, on the save's day, he is on a staff, or the
- * book no longer has him as a player in any year (he only ever stood in). A
- * player of the book in a year he is on nobody's staff stays: Reita in 2024 is
- * Murash Gaming's player, and in 2026 their coach.
+ * names leaves the player pool if, on the save's day, he is off it — he never
+ * played professionally at all, he had already gone to a staff for good, or a
+ * stint of his covers the day (engine/staffStints.ts offPoolOn, the one
+ * predicate every path asks). A player of the book on a day he is none of those
+ * stays: Reita in 2024 is Murash Gaming's player, and in 2026 their coach.
  *
  * Quietly: he is not retired — no farewell card, no line in the news — he was
  * never a professional to take his leave. An AI club short of five fills the
@@ -53,15 +54,17 @@ export function migrateStaff(state: GameState): StaffMove | null {
   for (const vlr of staffPeople()) {
     const p = state.players[`V${vlr}`]
     if (!p || p.id === me?.id) continue
+    if (!offPoolOn(vlr, today)) continue
     const stint = staffStintOn(vlr, today)
-    if (!stint && lastYearOf(p) !== undefined) continue
     const team = p.teamId ? state.teams[p.teamId] : undefined
     if (team && team.id === myClub) {
       leaveRoster(state, p)
       out.mine.push(p.ign)
       pushLog(state, 'team', stint
         ? `${p.ign} 在真实历史里这时是 ${stint.club} 的${ROLE_CN[stint.role] ?? '教练组成员'}，不是职业选手，已经从队伍名单上拿掉；俱乐部会从自由市场补人。`
-        : `${p.ign} 在真实历史里是教练组成员，只替补上过场，不是职业选手，已经从队伍名单上拿掉；俱乐部会从自由市场补人。`)
+        : staffPersonOf(vlr)?.played
+          ? `${p.ign} 在真实历史里这时已经转做教练，不再是职业选手，已经从队伍名单上拿掉；俱乐部会从自由市场补人。`
+          : `${p.ign} 在真实历史里是教练组成员，只替补上过场，不是职业选手，已经从队伍名单上拿掉；俱乐部会从自由市场补人。`)
     } else if (team) {
       releaseForHistory(state, p)
       touched.add(team.id)

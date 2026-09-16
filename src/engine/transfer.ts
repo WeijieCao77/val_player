@@ -2,6 +2,7 @@ import { Rng, clamp, hashStr } from './rng'
 import { contractLength, expectedSalary, marketValue, refreshValue } from './player'
 import { autoStarters, ensureCaller } from './world'
 import { squadOf, wageBill } from './roster'
+import { dateOf, offPool } from './staffStints'
 import { SQUAD_ROLE_CN, defaultContract } from './types'
 import { importBlock } from './imports'
 import { skillMod } from './manager'
@@ -498,7 +499,9 @@ export function aiTransferTick(state: GameState, rng: Rng, _notes?: string[]): v
   const teams = Object.values(state.teams).filter((t) => t.id !== state.myTeam && !t.dormant)
   // a free agent on his farewell season is done job-hunting
   // the human, while still unsigned, is not on the market for AI clubs — see engine/me
-  const agents = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
+  // and a man who has gone to a staff is not on it at all (engine/staffStints.ts)
+  const today = dateOf(state.year, state.day)
+  const agents = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id && !offPool(p.id, today))
 
   for (const team of teams) {
     if (!rng.chance(0.1)) continue

@@ -6,6 +6,7 @@ import { realName } from './names'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
 import { rulerClubRating, rulerOn, rulerShift } from './ruler'
+import { offPoolOn } from './staffStints'
 import type { RawTeam } from './teams'
 import type { Attrs, GameState, Player, Region, Role, Team } from './types'
 import { autoStarters, ensureCaller, playerFromRaw, teamFromRaw } from './world'
@@ -206,6 +207,11 @@ const knownTo = (state: GameState, vlr: string, year: number): boolean =>
 function ensurePlayer(state: GameState, vlr: string, year: number, region: Region): Player | null {
   const id = `V${vlr}`
   if (state.players[id]) return state.players[id]
+  // A man who had already gone to a staff is never made a player again (engine/staffStints.ts).
+  // Asked on the year's first day, so the year he stopped in is still his: oderus played for
+  // Moist x Shopify to November 2024 and has been on a staff since December, so 2024 makes him
+  // and 2025 does not.
+  if (offPoolOn(vlr, `${year}-01-01`)) return null
   const found = nearest(year, (Y) => Y.debuts[vlr])
   if (!found) return null
   const d = found.value

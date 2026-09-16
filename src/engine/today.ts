@@ -2,6 +2,7 @@ import idsRaw from '../data/bridge_2026.json'
 import { freeAgentPool } from './prospects'
 import { WORLD_TEAMS } from './teams'
 import { reachOf } from './timeline'
+import { dateOf, offPoolOn } from './staffStints'
 import type { GameState, Region } from './types'
 
 /**
@@ -53,9 +54,12 @@ export function arrive2026(state: GameState, notes: string[]): { coaches: number
     coaches++
   }
   let prospects = 0
+  const today = dateOf(state.year, state.day)
   for (const p of freeAgentPool(2026)) {
     // someone the book has already met is here under his vlr id
     if (state.players[p.id] || state.players[`V${p.id.slice(1)}`]) continue
+    // and one of these is on a staff by 2026, not below the leagues (engine/staffStints.ts)
+    if (offPoolOn(p.id.slice(1), today)) continue
     p.region = NAT_REGION[p.nat ?? ''] ?? p.region
     state.players[p.id] = p
     prospects++

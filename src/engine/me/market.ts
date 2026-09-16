@@ -4,6 +4,7 @@ import type { GameState, Player, Role, Team } from '../types'
 import { regionIn } from '../era'
 import { importBlock } from '../imports'
 import { bookCovers, hasPlace, inVctLeague, isTimelineWorld, pastTheBook } from '../timeline'
+import { dateOf, offPool } from '../staffStints'
 import { clubWindow, feeOf, joinRoster } from './club'
 import { pushLog } from './log'
 
@@ -290,7 +291,9 @@ export function marketTurn(state: GameState, rng: Rng): void {
   if (!me || !isTimelineWorld(state) || bookCovers(state.year) || me.flags.freeAgency === state.year) return
   me.flags.freeAgency = state.year
   const myClub = me.phase === 'pro' ? state.myTeam : null
-  const free = Object.values(state.players).filter((p) => !p.teamId && !p.retiring && p.id !== me.id)
+  // a man who has gone to a staff is not in New Year's free agency either (engine/staffStints.ts)
+  const today = dateOf(state.year, state.day)
+  const free = Object.values(state.players).filter((p) => !p.teamId && !p.retiring && p.id !== me.id && !offPool(p.id, today))
   const clubs = Object.values(state.teams)
     .filter((t) => !t.dormant && t.id !== myClub && t.roster.length >= 5 && inVctLeague(state, t))
     .sort((a, b) => b.rating - a.rating)

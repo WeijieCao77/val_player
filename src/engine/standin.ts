@@ -1,6 +1,7 @@
 import type { Fixture, GameState, MatchResult, Player, Region, Role, StageKey, Team } from './types'
 import { regionIn } from './era'
 import { inVctLeague } from './timeline'
+import { dateOf, offPool } from './staffStints'
 
 /**
  * Who takes the floor when a club cannot put five fit men of its own on it.
@@ -97,7 +98,9 @@ function freeAgents(state: GameState): Player[] {
   const key = `${state.year}:${state.day}`
   const hit = FREE.get(state)
   if (hit?.key === key) return hit.list
-  const list = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring)
+  // a club short of five calls up a player, never a man who has gone to a staff (engine/staffStints.ts)
+  const today = dateOf(state.year, state.day)
+  const list = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && !offPool(p.id, today))
   FREE.set(state, { key, list })
   return list
 }

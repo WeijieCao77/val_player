@@ -12,6 +12,7 @@ import { mapCn } from './content'
 import { FAM_MATCH, FAM_SCRIM, learnComp } from './comp'
 import { CHAMPIONS, MASTERS_1, MASTERS_2 } from './era'
 import { hostCity } from './hosts'
+import { dateOf, offPool } from './staffStints'
 import { applyMatchBonds } from './bonds'
 import { titleLoyalty } from './attachment'
 import { applyMatchFatigue, seasonRollover, weeklyTick } from './training'
@@ -1620,11 +1621,13 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
 
 export function ensureMinimumRosters(state: GameState, rng: Rng, only?: ReadonlySet<string>, quiet = false): void {
   const short: string[] = []
+  // an empty seat is filled by a player: never by a man who has gone to a staff (engine/staffStints.ts)
+  const today = dateOf(state.year, state.day)
   for (const team of Object.values(state.teams)) {
     if (team.id === managedClub(state) || team.dormant || (only && !only.has(team.id))) continue
     let guard = 0
     while (team.roster.length < 5 && guard++ < 10) {
-      const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id)
+      const free = Object.values(state.players).filter((p) => p.teamId === null && !p.retiring && p.id !== state.me?.id && !offPool(p.id, today))
       // under the import rule a club refills from its own region first;
       // fielding five still outranks the rule when the pool runs dry
       const legal = free.filter((p) => !importBlock(state, team.id, p))

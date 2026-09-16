@@ -3,9 +3,254 @@
   "about": "People the roster book must not use as players on these dates: vlr.gg lists them on the club's staff (coach, head coach, assistant coach, analyst, manager), and they took the server only to stand in. Their statlines stay in the raw data; they give no roster seat, rating or book entry inside a stint. Each person was checked seat by seat against his vlr team history.",
   "dates": "from/to are YYYY-MM and cover whole months; null is an end vlr does not give (joined in / left in)",
   "source": "vlr.gg player pages, team history with role labels",
-  "checked": "2026-09-14",
-  "readBy": "scripts/staff.py (build_circuit.py, build_timeline.py, build_world_2021.py), src/engine/staff.ts, scripts/check_staff.ts"
+  "checked": "2026-09-16",
+  "readBy": "scripts/staff.py (build_circuit.py, build_timeline.py, build_world_2021.py), src/engine/staffStints.ts, scripts/check_staff.ts",
+  "people": "One row per person, beside his stints. `played` is whether he was ever a professional player at all — false is a man vlr only ever lists on a staff, and he is never in the player pool on any day. `coachFrom` is the month he went to a staff and never went back on a roster: from its first day he is never in the pool again, whether or not a stint covers that day. A man still playing has null, and so does one whose last playing month cannot be pinned down — he is kept out only inside his stints, as before (see `note`)."
  },
+ "people": [
+  {
+   "vlr": "29401",
+   "ign": "Muggle",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/29401",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "36223",
+   "ign": "Stackmandu",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/36223",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "9804",
+   "ign": "alecks",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/9804",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "13109",
+   "ign": "Stunner",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/13109",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "12335",
+   "ign": "Jumpy",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/12335",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "21264",
+   "ign": "Shy Jim",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/21264",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "8729",
+   "ign": "supppppp",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/8729",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1642",
+   "ign": "mcn",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/1642",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "7456",
+   "ign": "Zeus",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/7456",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "3477",
+   "ign": "Evo",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/3477",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "11216",
+   "ign": "Fayde",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/11216",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1943",
+   "ign": "simoz",
+   "played": false,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/1943",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1874",
+   "ign": "steady",
+   "played": true,
+   "coachFrom": "2022-02",
+   "source": "https://www.vlr.gg/player/1874",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "7416",
+   "ign": "skye",
+   "played": true,
+   "coachFrom": "2022-07",
+   "source": "https://www.vlr.gg/player/7416",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "3387",
+   "ign": "Biscoit1n",
+   "played": true,
+   "coachFrom": "2022-09",
+   "source": "https://www.vlr.gg/player/3387",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "2345",
+   "ign": "Fidelwow",
+   "played": true,
+   "coachFrom": "2022-11",
+   "source": "https://www.vlr.gg/player/2345",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1296",
+   "ign": "WKN",
+   "played": true,
+   "coachFrom": "2022-12",
+   "source": "https://www.vlr.gg/player/1296",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "4846",
+   "ign": "nekoJ",
+   "played": true,
+   "coachFrom": "2023-01",
+   "source": "https://www.vlr.gg/player/4846",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1045",
+   "ign": "SylFy",
+   "played": true,
+   "coachFrom": "2023-08",
+   "source": "https://www.vlr.gg/player/1045",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1742",
+   "ign": "Asteriskk",
+   "played": true,
+   "coachFrom": "2024-01",
+   "source": "https://www.vlr.gg/player/1742",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1323",
+   "ign": "RAINMAKER",
+   "played": true,
+   "coachFrom": "2024-02",
+   "source": "https://www.vlr.gg/player/1323",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "726",
+   "ign": "Pule",
+   "played": true,
+   "coachFrom": "2024-03",
+   "source": "https://www.vlr.gg/player/726",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1348",
+   "ign": "hvoya",
+   "played": true,
+   "coachFrom": "2024-03",
+   "source": "https://www.vlr.gg/player/1348",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "6021",
+   "ign": "York",
+   "played": true,
+   "coachFrom": "2024-10",
+   "source": "https://www.vlr.gg/player/6021",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1851",
+   "ign": "oderus",
+   "played": true,
+   "coachFrom": "2024-12",
+   "source": "https://www.vlr.gg/player/1851",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "7243",
+   "ign": "Dolar",
+   "played": true,
+   "coachFrom": "2025-01",
+   "source": "https://www.vlr.gg/player/7243",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "1003",
+   "ign": "Reita",
+   "played": true,
+   "coachFrom": "2025-12",
+   "source": "https://www.vlr.gg/player/1003",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "3157",
+   "ign": "gaabxx",
+   "played": true,
+   "coachFrom": "2026-01",
+   "source": "https://www.vlr.gg/player/3157",
+   "checked": "2026-09-16"
+  },
+  {
+   "vlr": "10975",
+   "ign": "Naero",
+   "played": true,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/10975",
+   "checked": "2026-09-16",
+   "note": "vlr 的任期里 S2G Esports 助理教练（2023-05 起）和 TFT Demons 的选手身份重叠，收手的月份查不准，先只按任期算"
+  },
+  {
+   "vlr": "586",
+   "ign": "sickLy",
+   "played": true,
+   "coachFrom": null,
+   "source": "https://www.vlr.gg/player/586",
+   "checked": "2026-09-16",
+   "note": "vlr 上 2022-05 之后只有教练组身份，但名册里 2024 年仍有他的参赛席位，两边对不上，先只按任期算"
+  }
+ ],
  "stints": [
   {
    "vlr": "29401",

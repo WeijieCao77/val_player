@@ -13,6 +13,13 @@
  *    player pool quietly, both clubs fill the seat, a real player of that year stays, loading
  *    again changes nothing — and the day decides: Reita is Murash Gaming's player in 2024 and
  *    their coach in 2026
+ *  - the people: each of the thirty is either a man who never played professionally or one who
+ *    did and then went to a staff, with the month he stopped
+ *  - a man who turned coach never appears as a player in any later year, in the book or in a
+ *    world built out to 2026; a man who never played is nobody's player on any day; and an
+ *    ex-professional's playing years are exactly as they were
+ *  - 2026's coaching staff in world.json: Bilibili Gaming's Anaks, Titan Esports Club's AfteR,
+ *    Karmine Corp's assistant simoz, and Muggle on nobody's roster
  *
  *   npx tsx scripts/check_staff.ts
  */
@@ -22,7 +29,7 @@ import { CLUB_FLOOR } from '../src/engine/me/club'
 import { migratePlayerSave } from '../src/engine/me/save'
 import { migrateStaff } from '../src/engine/me/staffMigrate'
 import { packState, unpackState } from '../src/engine/save'
-import { STAFF_STAMP, STAFF_STINTS, dateOf, staffPeople, staffStintOn } from '../src/engine/staffStints'
+import { STAFF_PEOPLE, STAFF_STAMP, STAFF_STINTS, dateOf, offPoolOn, staffPeople, staffStintOn } from '../src/engine/staffStints'
 import type { GameState, Player } from '../src/engine/types'
 
 const mem: Record<string, string> = {}
@@ -233,6 +240,125 @@ console.log('读档：老存档里的教练组成员')
   delete s26.staffSync
   const move = migrateStaff(s26)
   check(!s26.players.V1003 && !!move?.gone.includes('Reita'), '放到 2026 年 5 月：Reita 已是 Murash Gaming 的教练（2025 年 12 月起），离开选手池')
+}
+
+console.log('人：当过选手的和纯教练')
+{
+  const ym = /^\d{4}-(0[1-9]|1[0-2])$/
+  const ok = STAFF_PEOPLE.filter((p) => /^\d+$/.test(p.vlr) && !!p.ign && typeof p.played === 'boolean'
+    && (p.coachFrom === null || ym.test(p.coachFrom))
+    // 从没打过职业的人不需要「哪个月收手」
+    && (p.played || p.coachFrom === null)
+    && p.source === `https://www.vlr.gg/player/${p.vlr}` && /^\d{4}-\d{2}-\d{2}$/.test(p.checked))
+  const named = new Set(STAFF_PEOPLE.map((p) => p.vlr))
+  check(ok.length === STAFF_PEOPLE.length && named.size === STAFF_PEOPLE.length
+    && staffPeople().every((v) => named.has(v)) && STAFF_PEOPLE.length === staffPeople().length,
+    `${STAFF_PEOPLE.length} 人各一行，和 ${staffPeople().length} 位有任期的人一一对应，都注明了 vlr 页面和查证日期`)
+  const pure = STAFF_PEOPLE.filter((p) => !p.played)
+  check(pure.length === 12, `其中 ${pure.length} 人从没打过职业：${pure.map((p) => p.ign).join('、')}`)
+  const noDate = STAFF_PEOPLE.filter((p) => p.played && !p.coachFrom)
+  check(noDate.every((p) => !!p.note),
+    `当过选手但收手月份查不准的 ${noDate.length} 人都写明了原因，只按任期算：${noDate.map((p) => p.ign).join('、')}`)
+}
+
+// 名册给过的每一个出场日子，按人分
+const playedOn = new Map<string, string[]>()
+for (const [y, evs] of Object.entries(circuit)) {
+  for (const e of evs) {
+    if (e.start == null) continue
+    const date = dateOf(Number(y), e.start)
+    for (const ids of Object.values(e.rosters ?? {})) {
+      for (const pid of ids) playedOn.set(pid, [...(playedOn.get(pid) ?? []), date])
+    }
+  }
+}
+for (const [y, Y] of Object.entries(book.years)) {
+  for (const [club, ids] of Object.entries(Y.rosters)) {
+    const date = dateOf(Number(y), Y.clubs[club].d)
+    for (const pid of ids) playedOn.set(pid, [...(playedOn.get(pid) ?? []), date])
+  }
+}
+
+console.log('转教练之后，再也不当选手')
+{
+  const dated = STAFF_PEOPLE.filter((p) => !!p.coachFrom)
+  const after: string[] = []
+  for (const p of dated) {
+    const from = `${p.coachFrom}-01`
+    for (const d of playedOn.get(p.vlr) ?? []) if (d >= from) after.push(`${p.ign} ${d}（${p.coachFrom} 起是教练）`)
+    for (const [y, Y] of Object.entries(book.years)) if (Number(y) > Number(p.coachFrom!.slice(0, 4)) && Y.ratings[p.vlr]) after.push(`${p.ign} ${y} 年有评分`)
+  }
+  check(dated.length === 16 && !after.length,
+    `${dated.length} 位查得到收手月份的人，那个月之后名册里再没有他们的席位和评分${after.length ? '：' + after.slice(0, 6).join('；') : ''}`)
+  // 引擎问的就是这一条，任期之外也算数
+  check(offPoolOn('1851', '2024-06-01') === false && offPoolOn('1851', '2025-11-15') === true,
+    'oderus：2024 年 6 月还是 Moist x Shopify 的选手；2025 年 11 月 Apeks 那段任期已结束，但他仍是教练，不回选手池')
+  check(offPoolOn('6021', '2024-08-01') === false && offPoolOn('6021', '2024-11-01') === true,
+    'York：2024 年 6—10 月又回 Titan Esports Club 打了一段，10 月之后才彻底转教练')
+  check(offPoolOn('1003', '2024-05-01') === false && offPoolOn('1003', '2026-05-01') === true,
+    'Reita：2024 年 5 月是 Murash Gaming 的选手，2026 年 5 月是他们的教练')
+  check(offPoolOn('7456', '2025-06-01') === true && offPoolOn('12335', '2024-01-01') === true,
+    'Zeus 和 Jumpy 最后一段任期结束之后仍然不是选手（两人从没打过职业）')
+}
+
+console.log('纯教练：从来不是选手')
+{
+  const pure = STAFF_PEOPLE.filter((p) => !p.played)
+  const seen: string[] = []
+  for (const p of pure) {
+    if ((playedOn.get(p.vlr) ?? []).length) seen.push(`${p.ign} 有 ${playedOn.get(p.vlr)!.length} 个席位`)
+    if (book.last[p.vlr] !== undefined) seen.push(`${p.ign} 有最后在役年份`)
+    if (Object.values(book.years).some((Y) => Y.ratings[p.vlr] || Y.debuts[p.vlr])) seen.push(`${p.ign} 有评分或新面孔`)
+    if (w21.players.some((x) => x.id === `V${p.vlr}`)) seen.push(`${p.ign} 在 2021 的世界里`)
+    if (!offPoolOn(p.vlr, '2021-01-01') || !offPoolOn(p.vlr, '2030-01-01')) seen.push(`${p.ign} 有某一天算选手`)
+  }
+  check(!seen.length, `${pure.length} 位纯教练在任何一年都不是选手${seen.length ? '：' + seen.slice(0, 6).join('；') : ''}`)
+}
+
+console.log('当过选手的人，打球的年份原样保留')
+{
+  const exPro = STAFF_PEOPLE.filter((p) => p.played)
+  const empty = exPro.filter((p) => !(playedOn.get(p.vlr) ?? []).length
+    && !Object.values(book.years).some((Y) => Y.ratings[p.vlr]) && !w21.players.some((x) => x.id === `V${p.vlr}`))
+  check(exPro.length === 18 && !empty.length,
+    `${exPro.length} 位当过选手的人，名册里都还留着他们打球的记录${empty.length ? '（少了：' + empty.map((p) => p.ign).join('、') + '）' : ''}`)
+  const reita = (playedOn.get('1003') ?? []).length
+  check(reita > 0 && (playedOn.get('1003') ?? []).every((d) => d < '2025-12-01'),
+    `Reita 打球的 ${reita} 个席位都在 2025 年 12 月他转教练之前，一个都没少`)
+  const od = (playedOn.get('1851') ?? []).length
+  check(od > 0 && (playedOn.get('1851') ?? []).every((d) => d < '2024-12-01'),
+    `oderus 打球的 ${od} 个席位都在 2024 年 12 月之前（其中有他 2024 年回 Moist x Shopify 的那一段）`)
+}
+
+console.log('2026 的教练组（world.json）')
+{
+  const world = read<{
+    teams: { tag: string; name: string; coach: { name: string; assistants?: string[] } | null }[]
+    players: { ign: string }[]
+  }>('world.json')
+  const at = (tag: string) => world.teams.find((t) => t.tag === tag)
+  check(at('BLG')?.coach?.name === 'Anaks', `Bilibili Gaming 的主教练是 Anaks：${at('BLG')?.coach?.name}`)
+  check(at('TEC')?.coach?.name === 'AfteR', `Titan Esports Club 的主教练是 AfteR：${at('TEC')?.coach?.name}`)
+  check(!!at('KC')?.coach?.assistants?.includes('simoz'),
+    `Karmine Corp 的助理教练里有 simoz：${at('KC')?.coach?.assistants?.join('、')}`)
+  const staffNames = world.teams.flatMap((t) => (t.coach ? [t.coach.name, ...(t.coach.assistants ?? [])] : []))
+  check(!staffNames.includes('Muggle') && !world.players.some((p) => p.ign === 'Muggle'),
+    'Muggle 不占 world.json 的任何教练席位，也不在选手里')
+}
+
+console.log('世界里没有教练组成员')
+{
+  const s21 = createCareer({ name: 'Y21', region: 'Europe', role: '控场', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 11, year: 2021 })
+  const pureIn21 = STAFF_PEOPLE.filter((p) => !p.played && !!s21.players[`V${p.vlr}`])
+  check(!pureIn21.length, `2021 年开局的世界里没有一位纯教练${pureIn21.length ? '：' + pureIn21.map((p) => p.ign).join('、') : ''}`)
+  check(!!s21.players.V1003, 'Reita 2021 年在世界里，是选手')
+
+  const s26 = createCareer({ name: 'Y26', region: 'EMEA', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 11, year: 2026 })
+  const left = staffPeople().filter((v) => !!s26.players[`V${v}`])
+  check(!left.length, `2026 年开局的世界（2021 一路推到 2026）里，这 ${staffPeople().length} 人一个都不在选手池里${left.length ? '：' + left.map((v) => ignOf.get(v)).join('、') : ''}`)
+  const free = Object.values(s26.players).filter((p) => p.teamId === null)
+  check(!free.some((p) => staffPeople().includes(p.id.replace(/^[A-Z]/, ''))),
+    `2026 年的 ${free.length} 名自由人里没有教练组成员`)
 }
 
 console.log(bad ? `\n${bad} 项没过` : '\n全部通过')
