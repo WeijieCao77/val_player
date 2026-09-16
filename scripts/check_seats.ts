@@ -43,6 +43,7 @@ import { autoResolve, autoWeek } from '../src/engine/me/auto'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { declineDeal, joinClub, makeDeal } from '../src/engine/me/contract'
 import { pop } from '../src/engine/me/pending'
+import { periodKey } from '../src/engine/me/window'
 import { declineInvite } from '../src/engine/me/tryout'
 import { retirementTick } from '../src/engine/me/endings'
 import { advanceWeek } from '../src/engine/me/week'
@@ -294,6 +295,14 @@ function oq(): void {
   })
   const club = state.myTeam
   console.log(`\n== 公开资格赛：2026 入口，${nameOf(state, club)}（${state.teams[club]?.tier === 1 ? '一线' : '二线'}），队友顶满`)
+  // 这一段查的是「没有联赛席位的俱乐部自己的那条路」，而进 11 月公开资格赛的报名机会只给玩家当时所在的
+  // 俱乐部（engine/circuit.ts begin 读 playerClub，交给 planPlayIn）。2023 年起的窗口规矩让 VCT 俱乐部
+  // 在两项赛事之间的空档也能签人，秋天真的会有 VCT 俱乐部来把人买走（seed 11：第 266 天 ULF Esports
+  // 直接开价，autoWeek 不看自动挡开关、一律 autoResolve，二线转一线照单全收）——人一走，这条路跟着走，
+  // 这一段就什么也没查到了。所以这里用游戏自己的那道闸把他留在原队：每周都算「这个转会期刚签约」，
+  // me/window.ts moveBlock 就不会有俱乐部来找他报价或试训。查的是俱乐部的路，不是他的去向。
+  const me = state.me!
+  const keep = (): void => { me.flags.signedPeriod = periodKey(state.year, state.day) }
   const mates = () => {
     const t = state.teams[club]
     if (!t) return
@@ -320,6 +329,7 @@ function oq(): void {
     try {
       while ((state.year < year || (state.year === year && state.day < day)) && !state.gameOver && guard++ < 120) {
         if (boost) mates()
+        keep()
         autoWeek(state)
       }
     } catch (e) {
