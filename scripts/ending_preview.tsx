@@ -75,8 +75,10 @@ const CASES: Record<string, Case> = {
       { year: y - 1, title: 'VCT Europe · Stage 1', started: true },
     ],
   },
-  // 泯然众人 — a real career with nothing on the shelf
-  none: { label: '泯然众人（无冠）', titles: () => [] },
+  // 泯然众人 — a real career with nothing on the shelf. The autopilot tends to
+  // take a spell abroad, and 远征 outranks 泯然众人 (me/endings.ts), so this case
+  // stays home: the archetypal no-trophy ending is the one worth looking at.
+  none: { label: '泯然众人（无冠）', titles: () => [], flags: { abroadSeasons: 0 } },
   // 没能上岸 — never signed at all
   shore: { label: '没能上岸', titles: () => [], seasons: 0 },
 }
@@ -121,18 +123,16 @@ function Harness() {
       openPlayer: () => {}, openMatch: () => {}, go: () => {}, startTutorial: () => {},
     }}>
       {!bare && (
-        <div style={{ padding: '12px 16px' }}>
-          <p className="small" style={{ margin: 0 }}>
-            <b>{kase.label}</b> · 「{me.ending?.title}」 · {me.seasons.length} 季 · {me.titles.length} 冠 ·
-            {Object.keys(CASES).map((k) => (
-              <a key={k} href={`?case=${k}&theme=${theme}`} style={{ marginLeft: 8 }}>{k}</a>
-            ))}
-            <span style={{ marginLeft: 14 }}>
-              {(['dark', 'light', 'cream'] as Theme[]).map((t) => (
-                <a key={t} href={`?case=${key}&theme=${t}`} style={{ marginLeft: 8 }}>{t}</a>
-              ))}
-            </span>
-          </p>
+        // wraps, so the preview's own chrome never widens the page past the
+        // phone the card is being checked at
+        <div className="small" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'baseline', padding: '12px 16px' }}>
+          <b>{kase.label}</b>
+          <span>「{me.ending?.title}」</span>
+          <span>{me.seasons.length} 季 · {me.titles.length} 冠</span>
+          {Object.keys(CASES).map((k) => <a key={k} href={`?case=${k}&theme=${theme}`}>{k}</a>)}
+          {(['dark', 'light', 'cream'] as Theme[]).map((t) => (
+            <a key={t} href={`?case=${key}&theme=${t}`}>{t}</a>
+          ))}
         </div>
       )}
       {bare

@@ -20,9 +20,12 @@ const OUT = '.cache/endcard'
 
 const CASES = pick('cases', 'champ,breaker,ring,regional,none')
 const THEMES = pick('themes', 'dark,light,cream')
+// the phone viewport is a real 375, but tall enough that the whole card paints
+// in one pass — an element screenshot of something taller than the window comes
+// back with the unpainted tail as black
 const SIZES = [
   { w: 1280, h: 1000, tag: 'desktop' },
-  { w: 375, h: 812, tag: '375' },
+  { w: 375, h: 2600, tag: '375' },
 ]
 
 mkdirSync(OUT, { recursive: true })
