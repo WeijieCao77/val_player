@@ -7,8 +7,9 @@ import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine, Player } from '../types'
 import { deskLine } from './press'
 import {
-  HINT_EDGE, KEY_MOMENTUM,
+  HINT_EDGE, KEY_MOMENTUM, WEAK_SHARE,
   autoChance, keyCandidates, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout, nodeText, pickKeyNode,
+  weakCandidates, weakDim,
 } from './nodes'
 import { coachReads, pickHint } from './hints'
 import type { Hint } from './hints'
@@ -213,6 +214,7 @@ export class MeMatch {
       isIntl: !comp?.region, role: this.me.role, form: this.me.form,
       agent: this.myAgent(),
       attack: this.mineIsA === aAttack, slot, shortBuy: m.bank(this.side!) < ECO_BANK,
+      weak: weakDim(this.me),
     }
   }
 
@@ -283,7 +285,11 @@ export class MeMatch {
       const side = this.side!
       // the round this call is about, played out on copies the four ways it can go, before anything is claimed about it (me/keyround.ts)
       const c = this.ctxOf(slot, roundBranches(m, side, this.state.me!.id, KEY_MOMENTUM))
-      const cands = keyCandidates(c)
+      const plain = keyCandidates(c)
+      // now and then this is the round that tests the weakest thing about me (me/nodes.ts WEAK_SHARE).
+      // The draw is made only where such a round fits, so every other key round runs exactly as before
+      const weak = weakCandidates(c)
+      const cands = weak.length && (!plain.length || this.nodeRng.chance(WEAK_SHARE)) ? weak : plain
       if (cands.length) {
         const { node, standing } = pickKeyNode(cands, this.seen, this.nodeRng)
         const alive: [number, number] | undefined = node.premise?.alive && standing[0] >= 0

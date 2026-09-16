@@ -1,6 +1,8 @@
 import { clamp } from '../rng'
 import type { Rng } from '../rng'
-import type { GameState, Role } from '../types'
+import { ATTR_KEYS } from '../types'
+import type { Attrs, GameState, Player, Role } from '../types'
+import { weightsFor } from '../player'
 import type { NodeDim } from './types'
 import { tiltDrag } from './growth'
 import { injuryHit } from './injury'
@@ -166,6 +168,8 @@ export interface NodeCtx {
   branches: Record<BranchKey, RoundBranch>
   /** for a node that says who is standing: me and my side's count, and theirs, as asked */
   alive?: [number, number]
+  /** the attribute a call can be judged on that I am worst at (weakDim) */
+  weak: keyof Attrs
 }
 
 /**
@@ -213,8 +217,11 @@ export interface NodeDef {
   /**
    * 'fallback': asked only when no node written for the moment of the round fits.
    * 'retired': never asked again; kept so the calls in old saves keep their lines.
+   * 'weak': written for one attribute, asked only where that is the one I am
+   *   worst at, and only on the WEAK_SHARE of those key rounds that go to it
+   *   (me/matchplay.ts) — so it never crowds out the round the moment implies.
    */
-  tier?: 'fallback' | 'retired'
+  tier?: 'fallback' | 'retired' | 'weak'
   a: NodeOpt[]
   /** the steady choice — the coach's pick when there is no hint to read */
   rec: number
@@ -325,6 +332,29 @@ function premiseMoment(p: Premise | undefined, c: NodeCtx): boolean {
   return true
 }
 
+/**
+ * The attribute a key round can put on the line that I am worst at: of the
+ * eight, the seven a call is ever judged on — 指挥 is not one of them — and of
+ * those, the ones my role is actually judged on (engine/player.ts ROLE_WEIGHT
+ * at WEAK_RELEVANT or above), so a 决斗者 is never told his 沟通 is the hole in
+ * his game when nothing he is asked to do leans on it.
+ */
+export const WEAK_RELEVANT = 0.07
+const WEAK_DIMS = ATTR_KEYS.filter((k) => k !== 'igl')
+export function weakDim(p: Player): keyof Attrs {
+  const w = weightsFor(p)
+  const pool = WEAK_DIMS.filter((k) => w[k] >= WEAK_RELEVANT)
+  return (pool.length ? pool : WEAK_DIMS).slice().sort((a, b) => p.attrs[a] - p.attrs[b])[0]
+}
+
+/**
+ * How often a key round that could test the weakest thing about me does
+ * (2026-09-16). Small on purpose: a weakness should be something a player runs
+ * into in a match now and then and recognises, not the shape of every match.
+ * Every other key round is what it always was — whatever the round implies.
+ */
+export const WEAK_SHARE = 0.2
+
 /** A node that fits the key round, with the counts of theirs it may say are standing ([-1] when it says nothing about that). */
 export interface KeyCandidate { node: NodeDef; standing: number[] }
 
@@ -337,7 +367,7 @@ export interface KeyCandidate { node: NodeDef; standing: number[] }
 export function keyCandidates(c: NodeCtx): KeyCandidate[] {
   const out: KeyCandidate[] = []
   for (const n of NODES) {
-    if (n.tier === 'retired') continue
+    if (n.tier === 'retired' || n.tier === 'weak') continue
     if (!PHASE_SLOT[n.phase].includes(slotKind(c.slot))) continue
     if (!premiseMoment(n.premise, c)) continue
     try { if (n.when && !n.when(c)) continue } catch { continue }
@@ -346,6 +376,24 @@ export function keyCandidates(c: NodeCtx): KeyCandidate[] {
   }
   const written = out.filter((x) => x.node.tier !== 'fallback')
   return written.length ? written : out
+}
+
+/**
+ * The rounds written for the weakest thing about me that fit this one — the
+ * same premise test keyCandidates makes, over the 'weak' tier alone.
+ * me/matchplay.ts goes to these on WEAK_SHARE of the key rounds where any fits.
+ */
+export function weakCandidates(c: NodeCtx): KeyCandidate[] {
+  const out: KeyCandidate[] = []
+  for (const n of NODES) {
+    if (n.tier !== 'weak') continue
+    if (!PHASE_SLOT[n.phase].includes(slotKind(c.slot))) continue
+    if (!premiseMoment(n.premise, c)) continue
+    try { if (n.when && !n.when(c)) continue } catch { continue }
+    const standing = n.premise ? standingOptions(n.premise, c.branches, c.attack, n.decides) : [-1]
+    if (standing.length) out.push({ node: n, standing })
+  }
+  return out
 }
 
 /**

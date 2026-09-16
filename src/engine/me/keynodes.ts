@@ -141,6 +141,46 @@ export const KEY_NODES: NodeDef[] = [
     premise: { point: 'ot', side: 'def' }, rec: 0,
     lean: { streakUs: 1, streakThem: 0, duelUp: 1, duelDown: 0, theyHot: 0, meHot: 1 },
     a: [{ t: '守住站位，别送', dim: 'teamwork', risk: 0.45 }, { t: '前压抢第一个', dim: 'reaction', risk: 0.9 }] },
+
+  // ---------------------------------------------------------------- weak: the round that asks the one thing I am worst at
+  // Asked only where that attribute is my weakest (me/nodes.ts weakDim) and only on WEAK_SHARE of those
+  // key rounds. Each is written as a thing that happens in a round: nothing in the words says it was
+  // picked for a number, and the way out is always a real option, not a forfeit.
+  { id: 'weak_gun', phase: 'entry', tier: 'weak', q: '对面这张图有一条又长又直的枪线，正对着你守的位置。',
+    ctx: '架住它靠的是一枪，让出去就得把这条路整个交给队友。',
+    when: (c) => c.weak === 'aim', premise: { side: 'def' }, rec: 1,
+    lean: { duelUp: 0, duelDown: 1, longLines: 0, teamUp: 0, teamDown: 1, theyHot: 1 },
+    a: [{ t: '我架这条线', dim: 'aim', risk: 0.85 }, { t: '让出这条线，缩回点里和队友一起守', dim: 'teamwork', risk: 0.45 }] },
+  { id: 'weak_react', phase: 'entry', tier: 'weak', q: '烟刚落稳，进点的第一步谁先迈出去。',
+    ctx: '第一个进去的人要在半秒里看清里面站着几个。',
+    when: (c) => c.weak === 'reaction', premise: { side: 'atk', buyMine: ['full', 'force'] }, rec: 1,
+    lean: { duelUp: 0, duelDown: 1, theirBroke: 0, theirSaved: 1, meHot: 0, meCold: 1 },
+    a: [{ t: '我第一个进', dim: 'reaction', risk: 0.9 }, { t: '让先锋先进，我跟第二个', dim: 'awareness', risk: 0.5 }] },
+  { id: 'weak_read', phase: 'mid', tier: 'weak', q: '技能声从中路过去了，可脚步声停在你这一侧。',
+    ctx: '判断错了你就守一个空点，判断对了他们这一波正撞在你枪口上。',
+    when: (c) => c.weak === 'awareness', premise: { side: 'def' }, rec: 1,
+    lean: { threeSites: 1, teleporter: 1, streakUs: 0, streakThem: 1, teamUp: 1, teamDown: 0 },
+    a: [{ t: '信自己的判断，留在这一侧', dim: 'awareness', risk: 0.75 }, { t: '按指挥说的转过去', dim: 'teamwork', risk: 0.45 }] },
+  { id: 'weak_util', phase: 'entry', tier: 'weak', q: '这一波的烟要你来放，位置差半个身位就封不住。',
+    ctx: '封住了队友走得进去，封偏了他们正面就是一条空枪线。',
+    when: (c) => c.weak === 'utility', premise: { side: 'atk', buyMine: ['full', 'force'] }, rec: 0,
+    lean: { theirBroke: 1, theirSaved: 0, teamUp: 0, teamDown: 1, threeSites: 0 },
+    a: [{ t: '这颗烟我来放', dim: 'utility', risk: 0.7 }, { t: '不靠这颗烟，改成快打', dim: 'reaction', risk: 0.8 }] },
+  { id: 'weak_last', phase: 'clutch', tier: 'weak', q: '你和一个队友还站着，对面也是两个。',
+    ctx: '两个人的残局，谁先犯错谁就交出这一回合。',
+    when: (c) => c.weak === 'clutch', premise: { alive: { mine: 2, theirs: [2, 2] } }, rec: 1,
+    lean: { evenMen: 1, duelUp: 0, duelDown: 1, meHot: 0, theyHot: 1 },
+    a: [{ t: '我去找人，先手在我', dim: 'clutch', risk: 0.95 }, { t: '和队友贴在一起，打同一个方向', dim: 'teamwork', risk: 0.5 }] },
+  { id: 'weak_hold', phase: 'post', tier: 'weak', q: '辐能芯片装好了，你的角度和队友的差一点就接不上。',
+    ctx: '枪线搭上了谁也靠不近芯片，搭不上就是各打各的。',
+    when: (c) => c.weak === 'teamwork', premise: { side: 'atk', planted: true }, rec: 0,
+    lean: { teamUp: 0, teamDown: 1, theirBroke: 1, theirSaved: 0, longLines: 1 },
+    a: [{ t: '按队友的位置把枪线接上', dim: 'teamwork', risk: 0.5 }, { t: '自己挑个角度，等回防的第一个', dim: 'reaction', risk: 0.85 }] },
+  { id: 'weak_call', phase: 'mid', tier: 'weak', q: '只有你一个人看见了对面的整队，语音里正乱着。',
+    ctx: '报得清楚这一波就是以多打少，报得含糊队友各跑各的。',
+    when: (c) => c.weak === 'communication', rec: 0,
+    lean: { streakUs: 1, streakThem: 0, teamUp: 0, teamDown: 1, threeSites: 0, teleporter: 1 },
+    a: [{ t: '把位置和人数一口气报清楚', dim: 'communication', risk: 0.7 }, { t: '不多说，先退回去和队友会合', dim: 'awareness', risk: 0.45 }] },
 ]
 
 export const KEY_HL: Record<string, HlOpt[]> = {
@@ -497,6 +537,104 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '加时开局你前压被逼了回来，这回合丢了。',
     },
   ],
+  weak_gun: [
+    {
+      okWin: { k0: '你把那条长枪线架住了，对面在那头探了两次都缩了回去，这回合拿下。', k1: '你架住那条长枪线，第一个探头的被你放倒，这回合拿下。', k2: '你架住那条长枪线，连着放倒两个，那条路再没人敢走，这回合拿下。' },
+      okLoss: { k0: '你把那条线架得死死的，一步没让，可对面换了别的路进来，这回合丢了。', k1: '你在那条线上放倒一个，可对面换了别的路进来，这回合丢了。' },
+      failWin: '那条线你没架住，被逼着退了回来，好在队友在点里顶住了，这回合拿下。',
+      failLoss: '那条线你没架住，对面顺着它一路走了进来，这回合丢了。',
+    },
+    {
+      okWin: '你把那条线让了出去，五个人缩在点里互相照应，对面进来的时候人已经散了，这回合拿下。',
+      okLoss: '你让出那条线，和队友在点里站好了位置，可他们的枪就是更准，这回合丢了。',
+      failWin: '你让出那条线，缩得太深，点里被压得很难受，好在队友的枪够硬，这回合拿下。',
+      failLoss: '你让出那条线，缩得太深，对面几乎是走进点的，这回合丢了。',
+    },
+  ],
+  weak_react: [
+    {
+      okWin: { k0: '你第一个迈进烟里，把里面的人逼得往后缩，队友跟着涌了进来，这回合拿下。', k1: '你第一个迈进烟里，抢先放倒一个，队友跟着涌了进来，这回合拿下。', k2: '你第一个迈进烟里，连着放倒两个，点几乎是空着让出来的，这回合拿下。' },
+      okLoss: { k0: '你第一个进去逼出了枪位，可后面的人慢了一步，这回合丢了。', k1: '你第一个进去放倒一个，可后面的人慢了一步，这回合丢了。' },
+      failWin: '你第一个进去就被架住，只能退出来，好在队友换了个方向把点打开，这回合拿下。',
+      failLoss: '你第一个进去就被架住，这波进点停在了门口，这回合丢了。',
+    },
+    {
+      okWin: '先锋先一步进去把里面翻了个遍，你跟在第二个，位置站得干干净净，这回合拿下。',
+      okLoss: '先锋先进，你跟第二个，进点的顺序没出错，可对面回防来得太快，这回合丢了。',
+      failWin: '你跟得太靠后，进去的时候点里已经打起来了，好在队友撑住了，这回合拿下。',
+      failLoss: '你跟得太靠后，进去的时候队友已经倒在了里面，这回合丢了。',
+    },
+  ],
+  weak_read: [
+    {
+      okWin: '你没动，脚步声果然是从你这一侧上来的，他们一头撞进了你的枪线，这回合拿下。',
+      okLoss: '你没动，人也确实是从你这一侧来的，可他们的技能把你的角度全封死了，这回合丢了。',
+      failWin: '你留在这一侧守了个空，真打的是另一个点，好在回防赶得及，这回合拿下。',
+      failLoss: '你留在这一侧守了个空，真打的是另一个点，这回合丢了。',
+    },
+    {
+      okWin: '你按指挥说的转了过去，那边的人数正好补齐，这回合拿下。',
+      okLoss: '你按指挥说的转了过去，人数也补齐了，可那边的技能太多，这回合丢了。',
+      failWin: '你一转走，你原来的那一侧就空了，好在队友回头补得快，这回合拿下。',
+      failLoss: '你一转走，对面走的正是你原来守的那一侧，这回合丢了。',
+    },
+  ],
+  weak_util: [
+    {
+      okWin: '你的烟正好落在该落的地方，架枪的位置被整个封住，队友一步一步走了进去，这回合拿下。',
+      okLoss: '你的烟封得很正，队友也进去了，可点里的对枪没打赢，这回合丢了。',
+      failWin: '你的烟偏了半个身位，架枪的人还看得见路，好在队友的枪更快，这回合拿下。',
+      failLoss: '你的烟偏了半个身位，那条枪线一直空着，队友一个一个倒在了进点的路上，这回合丢了。',
+    },
+    {
+      okWin: { k0: '不等烟了，五个人一口气压上去，对面还没站好位置，这回合拿下。', k1: '不等烟了，你跟着快打的节奏放倒一个，这回合拿下。', k2: '不等烟了，你在这一波里连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '快打的时机挑得很好，可对面这一回合的反应比你们更快，这回合丢了。', k1: '快打里你放倒了一个，可对面的反应更快，这回合丢了。' },
+      failWin: '快打的节奏没跟上，前后脱了节，好在队友把场面收了回来，这回合拿下。',
+      failLoss: '快打的节奏没跟上，五个人一个一个撞了上去，这回合丢了。',
+    },
+  ],
+  weak_last: [
+    {
+      okWin: { k0: '你主动去找，把他们逼得不敢露头，队友从另一边接上，这回合拿下。', k1: '你主动去找，抢先放倒一个，剩下那个被队友收拾了，这回合拿下。', k2: '你主动去找，一个人连着放倒两个，这回合拿下。' },
+      okLoss: { k0: '你主动去找，位置也摸对了，可最后那一枪慢了半拍，这回合丢了。', k1: '你主动去找，放倒了一个，可剩下那个把你和队友都收了，这回合丢了。' },
+      failWin: '你主动去找却扑了空，还暴露了位置，好在队友把剩下的都等了出来，这回合拿下。',
+      failLoss: '你主动去找却扑了空，还把位置暴露了，这回合丢了。',
+    },
+    {
+      okWin: '你和队友贴在一起打同一个方向，一枪补一枪，谁也没被单独抓住，这回合拿下。',
+      okLoss: '你和队友贴得很紧，谁也没落单，可对面的交叉火力更狠，这回合丢了。',
+      failWin: '你们贴得太近，被一发技能同时逼了出来，好在队友的枪够快，这回合拿下。',
+      failLoss: '你们贴得太近，一发技能把两个人一起逼了出来，这回合丢了。',
+    },
+  ],
+  weak_hold: [
+    {
+      okWin: '你挪了半步，把枪线和队友的接在了一起，回防的人在芯片外面绕了一圈也没进来，这回合拿下。',
+      okLoss: '你们的枪线接得很齐，可对面把技能全砸在了这一侧，这回合丢了。',
+      failWin: '你的角度和队友始终差着一点，回防从中间穿了进来，好在队友补得快，这回合拿下。',
+      failLoss: '你的角度和队友始终差着一点，回防从中间穿了进来，这回合丢了。',
+    },
+    {
+      okWin: { k0: '你挑了个自己顺手的角度，回防的第一个人一露头就被逼了回去，这回合拿下。', k1: '你挑了个自己顺手的角度，回防的第一个人一露头就被你放倒，这回合拿下。', k2: '你挑的那个角度把路封死了，连着放倒两个回防的人，这回合拿下。' },
+      okLoss: { k0: '你守住了自己那个角度，可芯片另一侧没人看，这回合丢了。', k1: '你在自己那个角度放倒一个，可芯片另一侧没人看，这回合丢了。' },
+      failWin: '你挑的角度被对面先看到，只能挪地方，好在队友守住了芯片，这回合拿下。',
+      failLoss: '你挑的角度被对面先看到，芯片旁边就这么空了出来，这回合丢了。',
+    },
+  ],
+  weak_call: [
+    {
+      okWin: '你把人数和位置一口气报清楚，队友按着你说的站位收拢，对面这一波撞了个正着，这回合拿下。',
+      okLoss: '你报得又快又清楚，队友也都听明白了，可这一波正面还是没顶住，这回合丢了。',
+      failWin: '你报得有点乱，队友听了个半懂，好在他们自己把位置站对了，这回合拿下。',
+      failLoss: '你报得有点乱，队友往三个方向散开，这回合丢了。',
+    },
+    {
+      okWin: '你没多说，退回去和队友会合，五个人站到一起，对面找不到落单的，这回合拿下。',
+      okLoss: '你退回去和队友会合，位置都站对了，可谁也不知道对面整队在哪，这回合丢了。',
+      failWin: '你退得太急，路上被对面追着走，好在队友把这一波扛了下来，这回合拿下。',
+      failLoss: '你退得太急，看到的东西一句也没留下，这回合丢了。',
+    },
+  ],
 }
 
 /** Pool lines, for a call where none of the facts a node reads is true: KEY_HINTS[id][i] favour option i. */
@@ -525,4 +663,11 @@ export const KEY_HINTS: Record<string, string[][]> = {
   mp_theirs_def: [['对面这张图一到赛点就只打一个点。'], ['对面暂停之后换了进攻的点，赌哪边都不稳。']],
   ot_atk: [['对面加时的防守比常规回合更靠前。'], ['对面加时的第一回合总是缩在点里。']],
   ot_def: [['对面加时的进攻喜欢等防守先犯错。'], ['对面加时第一回合出门很急，站位很散。']],
+  weak_gun: [['对面这张图习惯在那条线的尽头架一个人，很久才动一次。'], ['对面这几回合都绕开那条线走近路。']],
+  weak_react: [['对面守这个点的人站得很靠里，进门那一下不会马上撞上。'], ['对面在门口留了个人架枪，第一个进去的正对着他。']],
+  weak_read: [['对面这张图做假打的时候，技能总比脚步先到。'], ['技能声和脚步声几乎是一起过去的，那边是真打。']],
+  weak_util: [['对面架枪的位置很固定，一颗烟就能把它挡住。'], ['对面这张图守点的人换位置很勤，封住的那一个多半已经走了。']],
+  weak_last: [['对面剩下的两个人分在两条路上，谁也照应不到谁。'], ['对面剩下的两个人一直贴着走。']],
+  weak_hold: [['对面回防总是从同一个口子进来，两条枪线接上就堵死了。'], ['对面回防的人到得很散，一个接一个。']],
+  weak_call: [['队友都在等一句准话，语音里没人抢着说。'], ['语音里已经有两个人在同时报点，再多一句只会更乱。']],
 }
