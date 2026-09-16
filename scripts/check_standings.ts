@@ -252,9 +252,24 @@ function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTa
         if ((r.marks[k] === 'yes') !== s.seated.includes(r.team)) fail(`${where}：${state.teams[r.team]?.name ?? r.name} 的「${s.name}」名额标记和抽签不一致`)
       }
     }
+    // The N above the line are not always the N this event seats. A club above it may already hold
+    // a place in that field by another road, and the draw skips a club it has already seated
+    // (engine/circuit.ts seedsFor: c.finished.find((t) => !used.has(t) && inLeague(t))), so the
+    // seat cascades to the next finisher. 2021 EMEA 挑战者赛 1: Guild finished 3rd and was already
+    // in 挑战者决赛 by another seed, so the seat it would have taken went to G2, the 5th. Compare
+    // against that rule, not against a raw prefix of the table — a prefix only ever agreed because
+    // no side above a line had yet qualified twice, which is fixture luck and not a rule.
+    //
+    // Keyed on the outcome rather than on a second copy of the engine's route order (winner /
+    // points / top before 2023, winner / top / rest / points after): whichever order the seats are
+    // filled in, a club taken by an earlier road ends up holding one of that field's other seeds.
+    // Read off the drawn field, this cannot drift the way a copy of the order table would.
     if (over && s.seated && !s.league && t.lines.some((l) => l.after === hi)) {
-      const above = new Set(t.rows.slice(s.places[0] - 1, hi).map((r) => r.team))
-      if (!same(above, new Set(s.seated))) fail(`${where}：${s.name} 的线以上是 ${names(state, above)}，抽签给了 ${names(state, s.seated)}`)
+      const seated = s.seated
+      const field = (s.event ? state.comps[`ev:${s.event}`]?.circuit?.seeds : undefined) ?? []
+      const elsewhere = new Set(field.filter((x): x is string => !!x && !seated.includes(x)))
+      const want = new Set(t.rows.map((r) => r.team).filter((x) => !elsewhere.has(x)).slice(s.places[0] - 1, hi))
+      if (!same(want, new Set(seated))) fail(`${where}：${s.name} 该坐的是 ${names(state, want)}（线以上、还没从别的路进去的），抽签给了 ${names(state, seated)}`)
     }
   })
 }
