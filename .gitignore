@@ -33,3 +33,6 @@ tsconfig.tsbuildinfo
 # 13.5 MB of raw per-event statlines; rebuild with scripts/fetch_stats.py
 # (the aggregate scripts/build_stats.py produces IS committed)
 src/data/stats_history.json
+
+# 后台统计本地跑出来的数据（线上在 Railway Volume 上，见 server.js 的 DATA_DIR）
+.data/
