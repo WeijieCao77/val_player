@@ -41,6 +41,16 @@
   /* brand accent — reserved for identity, primary actions, own club */
   --accent:      #ff4655;
   --accent-hot:  #ff6371;
+  /* The red as a FILL under white text.
+     #ff4655 is the brand and stays the brand: borders, text, 「你的队伍」 — on a
+     panel it reads 4.9:1 and is fine there. But WHITE on it is 3.35:1, and on
+     the dark ground that was every primary control in the game (主按钮, the
+     chosen segment, 推进, the skip link). Deepened just far enough for white to
+     clear AA (4.85:1), and used only where a filled control carries white text.
+     The two light grounds already pass with their own accents, so there this
+     resolves straight back to the accent and nothing changes. */
+  --accent-fill:     #d4323f;
+  --accent-fill-hot: #c22b38;
   --accent-wash: rgba(255, 70, 85, .10);
   --accent-wash-2: rgba(255, 70, 85, .16);
   /* --panel under --accent-wash, flattened: a sticky cell has to be opaque or
@@ -123,6 +133,9 @@
 
   --accent:      #d92a39;
   --accent-hot:  #c11f2d;
+  /* white on these is 4.84:1 and 6.2:1 — the fill can stay the accent */
+  --accent-fill:     var(--accent);
+  --accent-fill-hot: var(--accent-hot);
   --accent-wash: rgba(217, 42, 57, .08);
   --accent-wash-2: rgba(217, 42, 57, .14);
   --accent-line: rgba(217, 42, 57, .38);
@@ -177,6 +190,9 @@
 
   --accent:      #cf2a38;
   --accent-hot:  #b81f2c;
+  /* white on these is 5.0:1 and 6.6:1 — the fill can stay the accent */
+  --accent-fill:     var(--accent);
+  --accent-fill-hot: var(--accent-hot);
   --accent-wash: rgba(207, 42, 56, .08);
   --accent-wash-2: rgba(207, 42, 56, .14);
   --accent-line: rgba(207, 42, 56, .38);
@@ -278,13 +294,13 @@ button.primary:disabled {
 }
 
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: #fff;
   font-weight: 650;
   letter-spacing: .02em;
 }
-button.primary:hover:not(:disabled) { background: var(--accent-hot); border-color: var(--accent-hot); }
+button.primary:hover:not(:disabled) { background: var(--accent-fill-hot); border-color: var(--accent-fill-hot); }
 
 /* something is waiting to be collected — the one button on the shelf that
    should pull the eye */
@@ -739,7 +755,7 @@ tr.cut-dash > td { border-bottom: 2px dashed var(--accent); }
   flex: none; white-space: nowrap;
 }
 .seg button:hover { background: var(--panel-2); }
-.seg button.on { background: var(--accent); color: #fff; font-weight: 650; }
+.seg button.on { background: var(--accent-fill); color: #fff; font-weight: 650; }
 
 /* A labelled control in a row of them. A <select> and a .seg are built
    differently — one border and inner padding versus a border around buttons —
@@ -910,10 +926,10 @@ tr.cut-dash > td { border-bottom: 2px dashed var(--accent); }
 }
 .advance-main {
   font-size: 16px; font-weight: 700; padding: 13px 30px;
-  background: var(--accent); border-color: var(--accent); color: #fff;
+  background: var(--accent-fill); border-color: var(--accent-fill); color: #fff;
   letter-spacing: .5px;
 }
-.advance-main:hover:not(:disabled) { background: var(--accent-hot); border-color: var(--accent-hot); }
+.advance-main:hover:not(:disabled) { background: var(--accent-fill-hot); border-color: var(--accent-fill-hot); }
 .advance-alt { padding: 11px 16px; }
 .advance-note { flex: 1; min-width: 220px; font-size: 12px; color: var(--muted); line-height: 1.6; }
 @media (max-width: 720px) {
@@ -2328,7 +2344,7 @@ h1, h2, h3 { text-wrap: balance; }
 .skip-link {
   position: absolute; left: 12px; top: -48px; z-index: 200;
   padding: 8px 14px; border-radius: var(--radius);
-  background: var(--accent); color: #fff; font-weight: 650;
+  background: var(--accent-fill); color: #fff; font-weight: 650;
   text-decoration: none; transition: top .15s ease;
 }
 .skip-link:focus-visible { top: 10px; outline-offset: 3px; }
@@ -2497,7 +2513,8 @@ tr.other td .club span { color: var(--faint); }
 }
 .poster-band {
   position: absolute; inset: 0 0 auto 0; height: 128px;
-  background: linear-gradient(100deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #000));
+  /* the eyebrow on this band is 13.5px white: the band takes the fill red too */
+  background: linear-gradient(100deg, var(--accent-fill), color-mix(in srgb, var(--accent-fill) 62%, #000));
   clip-path: polygon(0 0, 100% 0, 100% 64%, 0 100%);
 }
 .poster-eyebrow { position: relative; color: #fff; font-size: var(--t-small); letter-spacing: .2em; margin-bottom: 14px; }
@@ -2597,8 +2614,8 @@ button.primary .faint, button.primary .muted { color: rgba(255, 255, 255, .78); 
 .bgm-ib:hover:not(:disabled) { color: var(--text); background: var(--panel-3); border-color: transparent; }
 .bgm-ib:disabled { opacity: .3; }
 .bgm-ib svg { width: 18px; height: 18px; }
-.bgm-ib.main { width: 34px; height: 34px; background: var(--accent); border-color: var(--accent); color: #fff; }
-.bgm-ib.main:hover:not(:disabled) { background: var(--accent-hot); border-color: var(--accent-hot); color: #fff; }
+.bgm-ib.main { width: 34px; height: 34px; background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.bgm-ib.main:hover:not(:disabled) { background: var(--accent-fill-hot); border-color: var(--accent-fill-hot); color: #fff; }
 .bgm-ib.fold svg { width: 16px; height: 16px; }
 .bgm-loop {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
