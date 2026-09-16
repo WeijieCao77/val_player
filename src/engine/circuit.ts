@@ -1876,7 +1876,7 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
     const seat = outsideSeat(state, ev, c)
     const rival = seat == null ? null : c.seeds[seat]
     if (seat != null && rival && rival !== club) {
-      const f = makeFixture(state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:升降级 · 决胜局')
+      const f = makeFixture(state, state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:升降级 · 决胜局')
       f.node = -1
       state.fixtures.push(f)
       c.playin = { key: `s:${seat}`, fixture: f.id }
@@ -1889,7 +1889,7 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   const key = `${best.ui}:${best.rank}`
   const rival = teamOf(state, ev, u.ranked?.[best.rank - 1]) ?? c.fill?.[key] ?? null
   if (!rival || rival === club) return
-  const f = makeFixture(Math.max(u.last ?? 0, state.day), comp.stage, comp.key, club, rival, 3, 'KO:0:海选 · 决胜局')
+  const f = makeFixture(state, Math.max(u.last ?? 0, state.day), comp.stage, comp.key, club, rival, 3, 'KO:0:海选 · 决胜局')
   f.node = -1
   state.fixtures.push(f)
   c.playin = { key, fixture: f.id }
@@ -1914,7 +1914,7 @@ function planPlayIn(state: GameState, comp: Competition, ev: CEvent, club: strin
     return
   }
   const rival = c.seeds[open[0].i]!
-  const f = makeFixture(state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:公开资格赛 · 决胜局')
+  const f = makeFixture(state, state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:公开资格赛 · 决胜局')
   f.node = -1
   state.fixtures.push(f)
   c.playin = { key: `s:${open[0].i}`, fixture: f.id }
@@ -2319,7 +2319,7 @@ function playOn(state: GameState, comp: Competition, ev: CEvent): boolean {
       const bo = tieBo(ev.units[n.unit], n)
       // on its real day: a tie fed by one played this morning is played this
       // evening, the way Reykjavík opened (see advanceDay's second pass)
-      const f = makeFixture(Math.max(n.day, state.day), comp.stage, comp.key, a, b, bo, rr ? n.round : `KO:${n.at + 1}:${n.round}`)
+      const f = makeFixture(state, Math.max(n.day, state.day), comp.stage, comp.key, a, b, bo, rr ? n.round : `KO:${n.at + 1}:${n.round}`)
       f.node = n.at
       state.fixtures.push(f)
       fx.set(n.at, f)

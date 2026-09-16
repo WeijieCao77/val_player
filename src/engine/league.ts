@@ -33,17 +33,77 @@ export function roundRobin(ids: string[], rng: Rng): [string, string][][] {
   return rounds
 }
 
-let fixtureSeq = 0
-export function resetFixtureSeq(n = 0) {
-  fixtureSeq = n
+/**
+ * Fixture ids, counted per world.
+ *
+ * A fixture is `F` and a number that starts again at 0 each season
+ * (setupSeason), and a match is played off its id (season.ts fixtureRng), so
+ * the count is part of the world. It used to be one counter for the whole
+ * module, moved only by setupSeason: a save loaded on a fresh page numbered its
+ * next fixtures from F0 again, beside the F0… already on its books. A 2021
+ * career reloaded at day 112 held seven ids twice a week later, a lookup by id
+ * (me/week.ts dueToday, me/hurtplay.ts) could find the wrong match, and every
+ * match from there on was played off another stream than in the same career
+ * never reloaded. Two careers in one process moved each other's count as well.
+ *
+ * So each world keeps its own count — beside it, not in it: the save is as it
+ * was. A world this process has not numbered yet (read from a save, imported,
+ * built by a script) counts on from the highest id this season holds, which is
+ * where its count stood: nothing is taken off the books mid-season but a
+ * play-in decider dropped the moment it is made, and that one never is
+ * (circuit.ts begin). scripts/check_reload.ts holds a career against itself
+ * saved and loaded, week by week.
+ */
+const fixtureSeqs = new WeakMap<GameState, number>()
+
+const fixtureNo = (id: string | undefined): number => {
+  const m = /^F(\d+)$/.exec(id ?? '')
+  return m ? Number(m[1]) : -1
+}
+
+/**
+ * The highest fixture number this season holds: its fixtures, my matches of
+ * this year, a qualifier's play-in decider. A reference that carries no season
+ * (me.pendingFixture, me.dueFixture, a hurt card's match) is not counted: it
+ * points at a fixture on the books, or at last season's, whose number this
+ * season's count reaches again with or without a reload.
+ */
+export function highestFixtureNo(state: GameState): number {
+  let top = -1
+  for (const f of state.fixtures ?? []) top = Math.max(top, fixtureNo(f.id))
+  for (const m of state.me?.matches ?? []) if (m.year === state.year) top = Math.max(top, fixtureNo(m.fixtureId))
+  for (const c of Object.values(state.comps ?? {})) top = Math.max(top, fixtureNo(c.circuit?.playin?.fixture))
+  return top
+}
+
+/** A new season's books: its fixtures start again at F0 (setupSeason). */
+export function resetFixtureSeq(state: GameState): void {
+  fixtureSeqs.set(state, 0)
+}
+
+/** Count on from what the world holds now: read from a save (save.ts migrateWorld), or put back in place (ui/Tutorial.tsx). */
+export function syncFixtureSeq(state: GameState): void {
+  fixtureSeqs.set(state, highestFixtureNo(state) + 1)
+}
+
+/** The number the world's next fixture takes. */
+export function nextFixtureNo(state: GameState): number {
+  let n = fixtureSeqs.get(state)
+  if (n === undefined) {
+    n = highestFixtureNo(state) + 1
+    fixtureSeqs.set(state, n)
+  }
+  return n
 }
 
 export function makeFixture(
-  day: number, stage: StageKey, comp: string,
+  state: GameState, day: number, stage: StageKey, comp: string,
   teamA: string, teamB: string, bo: 1 | 2 | 3 | 5, label: string,
 ): Fixture {
+  const n = nextFixtureNo(state)
+  fixtureSeqs.set(state, n + 1)
   return {
-    id: `F${fixtureSeq++}`, day, stage, comp, teamA, teamB, bo, label, played: false,
+    id: `F${n}`, day, stage, comp, teamA, teamB, bo, label, played: false,
   }
 }
 
@@ -61,7 +121,7 @@ export function cyclesFor(teamCount: number, targetGames = 10): number {
 
 /** Spread round-robin rounds across the days available in a stage window. */
 export function scheduleRegularSeason(
-  comp: Competition, stage: StageKey, startDay: number, endDay: number,
+  state: GameState, comp: Competition, stage: StageKey, startDay: number, endDay: number,
   bo: 1 | 2 | 3 | 5, rng: Rng, labelPrefix = '常规赛', targetGames = 10,
 ): Fixture[] {
   // An odd league gives one club a bye every round, so a schedule cut off
@@ -94,7 +154,7 @@ export function scheduleRegularSeason(
   rounds.forEach((pairs, i) => {
     const day = startDay + Math.round(i * step)
     pairs.forEach(([a, b]) => {
-      out.push(makeFixture(day, stage, comp.key, a, b, bo, `${labelPrefix} 第${i + 1}轮`))
+      out.push(makeFixture(state, day, stage, comp.key, a, b, bo, `${labelPrefix} 第${i + 1}轮`))
     })
   })
   return out
@@ -134,7 +194,7 @@ export function respaceRounds(unplayed: Fixture[], startDay: number, endDay: num
  * play the same days. Labels carry the group so the schedule can say which.
  */
 export function scheduleGroupSeason(
-  comp: Competition, group: string[], groupName: string, stage: StageKey,
+  state: GameState, comp: Competition, group: string[], groupName: string, stage: StageKey,
   startDay: number, endDay: number, bo: 1 | 2 | 3 | 5, rng: Rng,
 ): Fixture[] {
   const rounds = roundRobin(group, rng)
@@ -144,7 +204,7 @@ export function scheduleGroupSeason(
   const out: Fixture[] = []
   rounds.forEach((pairs, i) => {
     const day = startDay + Math.round(i * step)
-    for (const [a, b] of pairs) out.push(makeFixture(day, stage, comp.key, a, b, bo, `常规赛 第${i + 1}轮 · ${groupName}`))
+    for (const [a, b] of pairs) out.push(makeFixture(state, day, stage, comp.key, a, b, bo, `常规赛 第${i + 1}轮 · ${groupName}`))
   })
   return out
 }
@@ -266,7 +326,7 @@ export function advanceBracket(
   // BO3 is over in forty minutes, and no real circuit plays it that way
   const roundBo = advancing.length === 2 ? 5 : bo
   return pairs.map(([a, b]) =>
-    makeFixture(day, comp.stage, comp.key, a, b, roundBo, `KO:${lastRound + 1}:${label}`),
+    makeFixture(state, day, comp.stage, comp.key, a, b, roundBo, `KO:${lastRound + 1}:${label}`),
   )
 }
 
@@ -275,7 +335,7 @@ export function advanceBracket(
  * two give the top seeds a bye into round 2.
  */
 export function startBracket(
-  comp: Competition, seeds: string[], stage: StageKey, day: number, bo: 1 | 2 | 3 | 5,
+  state: GameState, comp: Competition, seeds: string[], stage: StageKey, day: number, bo: 1 | 2 | 3 | 5,
 ): Fixture[] {
   comp.bracketStarted = true
   const n = seeds.length
@@ -294,7 +354,7 @@ export function startBracket(
   // a two-team field opens straight onto the final, so it opens as a BO5
   const roundBo = playing.length === 2 ? 5 : bo
   return pairSeeds(playing).map(([a, b]) =>
-    makeFixture(day, stage, comp.key, a, b, roundBo, `KO:1:${label}`),
+    makeFixture(state, day, stage, comp.key, a, b, roundBo, `KO:1:${label}`),
   )
 }
 

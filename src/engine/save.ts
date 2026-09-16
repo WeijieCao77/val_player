@@ -1,4 +1,5 @@
 import { canonAgents } from './content'
+import { syncFixtureSeq } from './league'
 import { pruneMatchDetail, stripToTheBone } from './match'
 import { WORLD_TEAMS } from './teams'
 import { emptyStats } from './types'
@@ -286,6 +287,9 @@ export function migrateWorld(state: GameState): GameState {
     if (p.injuredUntil > state.day + 45) p.injuredUntil = state.day + 10
   }
   pruneMatchDetail(state)
+  // the world's fixture numbering counts on from what it holds, whatever numbered it
+  // before this page (engine/league.ts): every way in here is a state read back
+  syncFixtureSeq(state)
   return state
 }
 

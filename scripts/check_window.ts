@@ -349,7 +349,7 @@ lk.me!.phase = 'pro'
   at(lk, vct, { year: 2023, day: lockin.end! + 1 }, { open: true, lock: false }, 'LOCK//IN 打完')
   // played here: a tie of its own to play holds it; out of it — another side's title — it is held to the last day all the same, and the line says so
   c.circuit!.mode = 'sim'
-  lk.fixtures = [makeFixture(lockin.start! + 3, 'kickoff', c.key, vct.id, chal.id, 3, 'KO:1:首轮')]
+  lk.fixtures = [makeFixture(lk, lockin.start! + 3, 'kickoff', c.key, vct.id, chal.id, 3, 'KO:1:首轮')]
   at(lk, vct, { year: 2023, day: lockin.start! + 1 }, { open: false, lock: true }, 'LOCK//IN 还有比赛')
   lk.fixtures = []
   c.champion = chal.id
@@ -418,7 +418,7 @@ lk.me!.phase = 'pro'
   const ev = find(2025, (e) => !!e.scene && (e.start ?? 0) > 5 && e.units.some((u) => u.type !== 'open') && mainSeeds(e).length >= 2, 'Challengers 赛事')
   const rival = Object.values(lk.teams).find((t) => t.id !== chal.id && t.id !== vct.id && t.tier === 2 && !t.dormant)!
   const c = drawn(ev, [rival.id], 'sim')
-  const f = makeFixture(ev.start! - 1, c.stage, c.key, chal.id, rival.id, 3, 'KO:0:升降级 · 决胜局')
+  const f = makeFixture(lk, ev.start! - 1, c.stage, c.key, chal.id, rival.id, 3, 'KO:0:升降级 · 决胜局')
   c.circuit!.playin = { key: `s:${mainSeeds(ev)[0]}`, fixture: f.id }
   lk.comps = { [c.key]: c }
   lk.fixtures = [f]
@@ -458,7 +458,7 @@ lk.me!.phase = 'pro'
     const rival = Object.values(lk.teams).find((t) => t.id !== chal.id && t.id !== vct.id && t.tier === 2 && !t.dormant && !ev.seeds.includes(vlrOf(t.id)))!
     const c = drawn(ev, [], 'sim')
     c.circuit!.fill = { [`${ui}:${rank}`]: rival.id }
-    const f = makeFixture(q.last!, c.stage, c.key, chal.id, rival.id, 3, 'KO:0:海选 · 决胜局')
+    const f = makeFixture(lk, q.last!, c.stage, c.key, chal.id, rival.id, 3, 'KO:0:海选 · 决胜局')
     c.circuit!.playin = { key: `${ui}:${rank}`, fixture: f.id }
     lk.comps = { [c.key]: c }
     lk.fixtures = [f]

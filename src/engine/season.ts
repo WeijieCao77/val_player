@@ -137,7 +137,7 @@ const tier2Of = (state: GameState, region: Region) =>
 export function setupSeason(state: GameState, notes?: string[]): void {
   // a manager's save: his contract for the new season (engine/desk.ts)
   deskOf(state)?.seasonSetup(state, notes)
-  resetFixtureSeq(0)
+  resetFixtureSeq(state)
   state.fixtures = []
   state.comps = {}
   // a world that entered in 2021: the season that really happened, event by event,
@@ -164,9 +164,9 @@ export function setupSeason(state: GameState, notes?: string[]): void {
       s2.grouped = true
       if (t2.length >= 2) {
         const c1 = makeComp(state, 'challengers1', `Challengers ${region} · 第一赛段`, t2, region, 2)
-        state.fixtures.push(...scheduleRegularSeason(c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
+        state.fixtures.push(...scheduleRegularSeason(state, c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
         const c2 = makeComp(state, 'challengers2', `Challengers ${region} · 第二赛段`, t2, region, 2)
-        state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
+        state.fixtures.push(...scheduleRegularSeason(state, c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
       }
       continue
     }
@@ -176,23 +176,23 @@ export function setupSeason(state: GameState, notes?: string[]): void {
     // quarter-final against a club you had never played, and the standings
     // stayed empty all the way through because knockouts do not build a table.
     const kc = makeComp(state, 'kickoff', `${region} Kickoff`, t1, region, 1)
-    state.fixtures.push(...scheduleRegularSeason(kc, 'kickoff', ...LEAGUE_DAYS.kickoff, 3, rng, '小组赛', 5))
+    state.fixtures.push(...scheduleRegularSeason(state, kc, 'kickoff', ...LEAGUE_DAYS.kickoff, 3, rng, '小组赛', 5))
 
     // ---- Stage 1 & Stage 2: full round robin, playoffs seeded from the table
     const s1 = makeComp(state, 'stage1', `VCT ${region} · Stage 1`, t1, region, 1)
-    state.fixtures.push(...scheduleRegularSeason(s1, 'stage1', ...LEAGUE_DAYS.stage1, 3, rng))
+    state.fixtures.push(...scheduleRegularSeason(state, s1, 'stage1', ...LEAGUE_DAYS.stage1, 3, rng))
 
     const s2 = makeComp(state, 'stage2', `VCT ${region} · Stage 2`, t1, region, 1)
-    state.fixtures.push(...scheduleRegularSeason(s2, 'stage2', ...LEAGUE_DAYS.stage2, 3, rng))
+    state.fixtures.push(...scheduleRegularSeason(state, s2, 'stage2', ...LEAGUE_DAYS.stage2, 3, rng))
 
     // ---- Challengers: two splits, running alongside the tier-1 calendar
     // even a two-club Challengers league is playable now that small leagues cycle
     if (t2.length >= 2) {
       const c1 = makeComp(state, 'challengers1', `Challengers ${region} · 第一赛段`, t2, region, 2)
-      state.fixtures.push(...scheduleRegularSeason(c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
+      state.fixtures.push(...scheduleRegularSeason(state, c1, 'challengers1', ...LEAGUE_DAYS.challengers1, 3, rng, '常规赛'))
 
       const c2 = makeComp(state, 'challengers2', `Challengers ${region} · 第二赛段`, t2, region, 2)
-      state.fixtures.push(...scheduleRegularSeason(c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
+      state.fixtures.push(...scheduleRegularSeason(state, c2, 'challengers2', ...LEAGUE_DAYS.challengers2, 3, rng, '常规赛'))
     }
   }
 }
@@ -453,7 +453,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       const days = LEAGUE_DAYS[stage]
       const rng = new Rng(hashStr(`season:${state.seed}:${state.year}:${comp.key}:groups`))
       groups.forEach((g, i) => {
-        state.fixtures.push(...scheduleGroupSeason(comp, g, comp.groupNames![i], stage, days[0], days[1], 3, rng))
+        state.fixtures.push(...scheduleGroupSeason(state, comp, g, comp.groupNames![i], stage, days[0], days[1], 3, rng))
       })
       state.news.push({
         day: state.day, kind: 'league', important: mine(comp.teams),
@@ -464,7 +464,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
     case 'masters-swiss': {
       const round = Number(ev.phase?.match(/swiss-r(\d)/)?.[1] ?? 1)
       state.fixtures.push(...(ev.outcome.pairs ?? []).map(([a, b]) =>
-        makeFixture(ev.playDay, comp.stage, comp.key, a, b, 3, `SW:${round}:瑞士轮 第${round}轮`)))
+        makeFixture(state, ev.playDay, comp.stage, comp.key, a, b, 3, `SW:${round}:瑞士轮 第${round}轮`)))
       state.news.push({
         day: state.day, kind: 'league', important: mine(comp.teams),
         text: `${comp.name} 瑞士轮第 ${round} 轮抽签：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
@@ -735,7 +735,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
         const { template, places } = doubleFor(seeds.length)
         state.fixtures.push(...advanceTemplate(state, comp, template, places, seeds, when, 3))
       } else {
-        state.fixtures.push(...startBracket(comp, seeds, comp.stage, state.day + 4, 3))
+        state.fixtures.push(...startBracket(state, comp, seeds, comp.stage, state.day + 4, 3))
       }
       state.news.push({
         day: state.day, kind: 'league',
@@ -1739,7 +1739,7 @@ export function scrimReply(
 export function makeScrim(
   state: GameState, oppId: string, day: number, map: string, format: ScrimFormat,
 ): Fixture {
-  const f = makeFixture(day, state.stage, 'scrim', state.myTeam, oppId, 1, '训练赛')
+  const f = makeFixture(state, day, state.stage, 'scrim', state.myTeam, oppId, 1, '训练赛')
   f.scrim = { map, format }
   state.fixtures.push(f)
   return f

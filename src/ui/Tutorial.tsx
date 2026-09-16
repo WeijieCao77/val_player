@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useGame } from './ctx'
 import type { GameState } from '../engine/types'
 import { packState, TUTORIAL_SNAPSHOT, unpackState } from '../engine/save'
+import { syncFixtureSeq } from '../engine/league'
 import { FINAL_YEAR, MID_YEAR } from '../engine/endings'
 
 /**
@@ -268,6 +269,9 @@ export default function Tutorial({
     const live = game as unknown as Record<string, unknown>
     for (const k of Object.keys(live)) delete live[k]
     Object.assign(game, before)
+    // the same object with the pre-trial world back inside it: its fixture numbering
+    // counts on from that world's books, not from the trial day's (engine/league.ts)
+    syncFixtureSeq(game)
     try { localStorage.removeItem(TUTORIAL_SNAPSHOT) } catch { /* best effort */ }
     markSeen()
     commit()

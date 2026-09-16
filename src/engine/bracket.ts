@@ -295,7 +295,7 @@ export function advanceTemplate(
       const a = resolve(slot.a, seeds, ko)
       const b = resolve(slot.b, seeds, ko)
       if (!a || !b) continue
-      out.push(makeFixture(day, stage ?? comp.stage, comp.key, a, b, slot.bo ?? bo, `KO:${offset + done + 1}:${round.name}`))
+      out.push(makeFixture(state, day, stage ?? comp.stage, comp.key, a, b, slot.bo ?? bo, `KO:${offset + done + 1}:${round.name}`))
     }
   }
   return out
@@ -417,7 +417,7 @@ export function swissNext(state: GameState, comp: Competition, seeds: string[], 
     }
     pairs = [...byRecord.values()].flatMap((pool) => pairPool(pool, played))
   }
-  return pairs.map(([a, b]) => makeFixture(day, comp.stage, comp.key, a, b, 3, swissLabel(round + 1)))
+  return pairs.map(([a, b]) => makeFixture(state, day, comp.stage, comp.key, a, b, 3, swissLabel(round + 1)))
 }
 
 /** Who came through the Swiss and who went home, each best first. */
