@@ -292,7 +292,7 @@ console.log('三、协同、沟通')
   ok(d.start >= 2 && d.start <= 8, `开局关系差 ${f2(d.start)}，应在 2–8`)
   ok(d.after >= 4 && d.after <= 14, `半年后关系差 ${f2(d.after)}，应在 4–14`)
   ok(d.form >= 1.2 && d.form <= 3, `状态差 ${f2(d.form)}，应在 1.2–3`)
-  ok(d.edge >= 0.8 && d.edge <= 1.6, `教练眼里差 ${f2(d.edge)}，应在 0.8–1.6`)
+  ok(d.edge >= 1.6 && d.edge <= 3.2, `教练眼里差 ${f2(d.edge)}，应在 1.6–3.2`)
   ok(Math.abs(lo.view - lo.edge) < 1e-9 && Math.abs(hi.view - hi.edge) < 1e-9, '教练眼里的加减和化学反应一项对不上')
   for (const x of [lo, hi]) ok(Math.abs(x.edge) <= ROOM_EDGE_MAX && Math.abs(x.form) <= ROOM_FORM_MAX, '化学反应超出了上限')
 

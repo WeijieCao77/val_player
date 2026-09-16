@@ -32,10 +32,22 @@ import { squadOf } from '../roster'
  * cost that club three to four points of form (scripts/probe_igl.ts).
  */
 
-/** the coach's eye: per point of ease over the squad's, per point of bond over the squad's, and the most it moves a player */
-export const ROOM_EDGE_EASE = 0.05
-export const ROOM_EDGE_BOND = 0.02
-export const ROOM_EDGE_MAX = 1.5
+/**
+ * The coach's eye: per point of ease over the squad's, per point of bond over
+ * the squad's, and the most it can move a player.
+ *
+ * Doubled 2026-09-16. The room was put in to settle a close call for a place,
+ * and it was settling almost nothing: over 1,871 weeks at a club
+ * (scripts/probe_room.ts) the term ran p10 −0.50 · p50 −0.01 · p90 +0.47, and
+ * in all of them not one reading sat at the cap. So the cap was never what
+ * bound this — the rates were, and the rates are what moved. The cap is raised
+ * with them to go back to being what it should have been all along: the outer
+ * guard on the tail, not the mechanism. A clearly better player is still never
+ * passed over for it (scripts/check_igl.ts 三 reads that case as 2 × MAX).
+ */
+export const ROOM_EDGE_EASE = 0.1
+export const ROOM_EDGE_BOND = 0.04
+export const ROOM_EDGE_MAX = 3
 /** form: the same two, the most, and the weekly share of it applied */
 export const ROOM_FORM_EASE = 0.1
 export const ROOM_FORM_BOND = 0.05
