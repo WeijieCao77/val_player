@@ -147,29 +147,64 @@ for (const [what, brk] of breaks) {
   ok(!!iglBlock(s), `${what}，却说不出为什么不问`)
 }
 {
-  // left on 快进 with a caller's numbers — and the line of the best man on the team, since the coach's trust
-  // reads where a player's line sits: appointed, and only in a week every gate held
-  const s = fresh()
-  const p = s.players[s.me!.id]
-  for (const k of Object.keys(p.attrs) as (keyof typeof p.attrs)[]) p.attrs[k] = 84
-  p.caps = Object.fromEntries(Object.keys(p.attrs).map((k) => [k, 90])) as typeof p.attrs
-  recomputeOverall(p)
-  let appointed = 0
-  let seen: unknown
-  let after = 0
-  for (let w = 0; w < 36 && s.me!.phase === 'pro' && after < 6; w++) {
-    autoWeek(s)
-    const since = s.me!.igl?.since
-    if (since && since !== seen) {
-      appointed++
-      ok(since.weeks >= IGL_WEEKS && since.trust >= IGL_TRUST && since.igl >= IGL_FLOOR && since.comm >= COMM_FLOOR,
-        `快进里接下指挥的那一周有条件没满足：${JSON.stringify(since)}`)
+  // Left on 快进 with a caller's numbers: appointed, and only in a week every gate held. Asked of
+  // several worlds, because the bar is not a number this career can be measured against on its own.
+  //
+  // iglBar is relative — max(IGL_FLOOR, caller.attrs.igl - (real ? IGL_MARGIN : 0)) — and a stand-in
+  // caller ('inferred') is given no margin at all, so the bar is his raw 指挥 and 沟通. A career
+  // pinned at 84 cannot clear a club whose stand-in reads 85/92, and one of these worlds is exactly
+  // that: seed 7's club has Cloud calling at 指挥 85 inferred, so its bar stands at 85/92 and the
+  // career sat 24 weeks with the 指挥 gate shut while seven other worlds were appointed in week 10.
+  // Who a club has calling comes from its squad, and the squad comes from the world, so a single
+  // fixed seed tests the world it happened to draw rather than the rule.
+  //
+  // So a world is asked only where the coach would actually ask: the weeks iglBlock says nothing is
+  // in the way. A seed that holds such a week for WINDOW running weeks and still goes unappointed is
+  // a real break; a seed whose bar was never reachable says nothing either way and is not asked.
+  // The count at the end is what keeps this from going quiet — if appointment stopped working at
+  // all, every world would pile up weeks with nothing in the way and none would be appointed, which
+  // is the 「主角再也当不上指挥」 this section exists to catch.
+  const CALLER_SEEDS = [7, 8, 9, 11, 12]
+  // enough running weeks that the coach's own cadence (OFFER_GAP and his three asks) cannot explain the silence
+  const WINDOW = 5
+  let asked = 0
+  const said: string[] = []
+  for (const seed of CALLER_SEEDS) {
+    const s = createCareer({ name: 'Caller', region: 'EMEA', role: '控场', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2026 })
+    if (s.me!.phase !== 'pro') { said.push(`${seed}:没开在俱乐部`); continue }
+    const p = s.players[s.me!.id]
+    for (const k of Object.keys(p.attrs) as (keyof typeof p.attrs)[]) p.attrs[k] = 84
+    p.caps = Object.fromEntries(Object.keys(p.attrs).map((k) => [k, 90])) as typeof p.attrs
+    recomputeOverall(p)
+    let appointed = 0
+    let seen: unknown
+    let after = 0
+    let open = 0
+    let widest = 0
+    for (let w = 0; w < 36 && s.me!.phase === 'pro' && after < 6; w++) {
+      autoWeek(s)
+      // the weeks the coach had nothing left to wait for: gates, his cadence, all of it (me/igl.ts iglBlock)
+      if (!appointed && s.me!.phase === 'pro' && s.myTeam) {
+        open = iglBlock(s) === null ? open + 1 : 0
+        if (open > widest) widest = open
+      }
+      const since = s.me!.igl?.since
+      if (since && since !== seen) {
+        appointed++
+        ok(since.weeks >= IGL_WEEKS && since.trust >= IGL_TRUST && since.igl >= IGL_FLOOR && since.comm >= COMM_FLOOR,
+          `种子 ${seed}：接下指挥的那一周有条件没满足：${JSON.stringify(since)}`)
+      }
+      if (appointed) after++
+      seen = since
     }
-    if (appointed) after++
-    seen = since
+    if (appointed || widest >= WINDOW) {
+      asked++
+      ok(appointed >= 1, `种子 ${seed}：连着 ${widest} 周教练没有任何理由不问，快进三十多周还是没当上指挥`)
+    }
+    said.push(appointed ? `${seed}:第 ${s.me!.igl?.since?.weeks ?? '?'} 周接下` : `${seed}:没当上（最长 ${widest} 周没拦着，卡在「${iglBlock(s) ?? '没拦着'}」）`)
   }
-  ok(appointed >= 1, '指挥、沟通都 84，快进三十多周也没当上指挥')
-  console.log(`  指挥、沟通 84 的快进生涯：${appointed ? `第 ${s.me!.igl?.since?.weeks ?? '?'} 周接下指挥` : '没当上'}`)
+  ok(asked >= 3, `${CALLER_SEEDS.length} 个世界里不到 3 个够得着指挥的门槛，这一节已经测不到「当得上指挥」了`)
+  console.log(`  指挥、沟通 84 的快进生涯（${asked}/${CALLER_SEEDS.length} 个世界够得着）：${said.join('；')}`)
 }
 {
   // the same career with a rookie's numbers: never asked
