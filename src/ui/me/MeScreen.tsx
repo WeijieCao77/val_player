@@ -223,7 +223,13 @@ export default function MeScreen() {
                     <td>{x.year}</td><td>{x.team}{x.tier === 2 ? ' (CHAL)' : ''}</td>
                     <td className="num">{x.tier ? `${x.starts}/${x.matches}` : '—'}</td>
                     <td>{nums ? `${x.overallFrom}→${x.overallTo}` : `${attrWord(x.overallFrom)}→${attrWord(x.overallTo)}`}</td>
-                    <td className="tiny">{x.titles.join('、') || '—'}</td>
+                    {/* the 大师赛 / 冠军赛 the club played that year under the trophies, won or not (engine/me/intl.ts) */}
+                    <td className="tiny">
+                      {x.titles.join('、') || (x.intl?.length ? '' : '—')}
+                      {x.intl?.length ? x.intl.map((line, i) => (
+                        <span key={i} className="faint" style={{ display: 'block' }}>{line}</span>
+                      )) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

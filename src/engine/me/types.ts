@@ -252,6 +252,25 @@ export interface MeSeason {
   titles: string[]
   /** qualifiers won that season — 出线, not titles; absent in older saves */
   quals?: string[]
+  /**
+   * The 大师赛 / 冠军赛 / LOCK//IN my club played that season and how far it got,
+   * in words — see me/intl.ts. Absent in older saves and in a season with none.
+   */
+  intl?: string[]
+}
+
+/** One 大师赛 / 冠军赛 campaign of my club's, written down the day it ended — see me/intl.ts. */
+export interface MeIntlRun {
+  year: number
+  /** `year:compKey`, so a campaign is written down once */
+  key: string
+  /** the competition's stored name (me/compname.ts turns it into words) */
+  comp: string
+  /** the line the season's row and the 赛季结束 card show */
+  line: string
+  matches: number
+  starts: number
+  wins: number
 }
 
 /** A generated team-mate for a cup run — five strangers, one of them me. */
@@ -711,6 +730,8 @@ export interface MeState {
   pending: PendingItem[]
   /** big moments waiting for their full-screen card — me/moments.ts; absent in older saves */
   moments?: MomentItem[]
+  /** my club's 大师赛 / 冠军赛 campaigns, each written down the day it ended — see me/intl.ts; absent in older saves */
+  intlRuns?: MeIntlRun[]
   seasons: MeSeason[]
   seasonStart: { year: number; overall: number; matches: number; starts: number; wins: number; acsSum: number }
   lastLineupIn?: boolean

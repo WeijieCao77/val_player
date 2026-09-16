@@ -516,6 +516,16 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
           {s.titles.length ? ` · 冠军：${s.titles.join('、')}` : ''}{s.quals?.length ? ` · 出线：${s.quals.join('、')}` : ''}
         </p>
       )}
+      {/* 大师赛 / 冠军赛 the club played, won or not (engine/me/intl.ts): a club that went and lost
+          used to leave no trace of it on this card at all (reported 2026-09-16) */}
+      {s?.intl?.length ? (
+        <div className="panel" style={{ marginBottom: 8 }}>
+          <div className="panel-body">
+            <p className="small" style={{ margin: '0 0 4px' }}><b>大师赛 / 冠军赛</b></p>
+            {s.intl.map((line, i) => <p key={i} className="small" style={{ margin: '0 0 2px' }}>{line}</p>)}
+          </div>
+        </div>
+      ) : null}
       <p className="small muted">你 {p.age} 岁了。{me.phase === 'pro' ? `合同还剩 ${p.contractYears} 年。` : me.phase === 'free' ? '还是自由身。' : '还没有合同。'}</p>
       {me.retireAsk && me.phase !== 'retired' && (
         <div className="panel alert" style={{ marginTop: 8 }}>

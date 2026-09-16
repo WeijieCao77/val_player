@@ -44,6 +44,7 @@ import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
 import { noteQualify, pushMoment } from './moments'
+import { intlLinesOf, noteIntlRun } from './intl'
 import { iglWeek } from './igl'
 import { roomWeek } from './room'
 import { pitchDay } from './selfpitch'
@@ -358,6 +359,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     syncTitles(state)
     // my club in a Masters', Champions' or LOCK//IN's field, the day it is drawn: a big moment's card (me/moments.ts)
     noteQualify(state)
+    // and the day one of them ends, how my club did there, for the season's own line (me/intl.ts)
+    noteIntlRun(state)
     closingClub(state)
     if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)
     // a team-mate's birthday, a year at the club, my age at the year's turn (me/life.ts)
@@ -588,11 +591,15 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
   const titles = me.titles.filter((h) => h.year === year).map((h) => h.title)
   // qualifiers won that year: 出线, said beside the titles and never among them
   const quals = (me.quals ?? []).filter((h) => h.year === year).map((h) => h.title)
+  // the 大师赛 / 冠军赛 my club played that year, won or not (me/intl.ts): a club that
+  // went and lost used to leave no trace of it anywhere (reported 2026-09-16)
+  const intl = intlLinesOf(me, year)
   me.seasons.push({
     year, team: pro ? (team?.name ?? '?') : '自由身', tier: pro ? team.tier : 0,
     matches: s.matches, starts: s.starts, wins: s.wins,
     acs: s.starts ? Math.round(s.acsSum / s.starts) : 0,
-    overallFrom: s.overall, overallTo: p.overall, titles, ...(quals.length ? { quals } : {}),
+    overallFrom: s.overall, overallTo: p.overall, titles,
+    ...(quals.length ? { quals } : {}), ...(intl.length ? { intl } : {}),
   })
   // the winter's ageing (engine/training.ts seasonRollover), said when it takes something: from 27 the hands go first
   const slipped = before ? ATTR_KEYS.filter((k) => p.attrs[k] < before[k]) : []
@@ -600,7 +607,7 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
     pushLog(state, 'bad', `休赛期：${p.age} 岁了，${slipped.map((k) => `${ATTR_CN[k]} ${before[k]} → ${p.attrs[k]}`).join('、')}。年纪上来以后手上的东西先走；意识还会随经验涨。`)
   }
   if (pro) {
-    pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}${quals.length ? `，出线：${quals.join('、')}` : ''}。`)
+    pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}${quals.length ? `，出线：${quals.join('、')}` : ''}${intl.length ? `。大师赛 / 冠军赛：${intl.join('；')}` : ''}。`)
     if (me.abroad) me.flags.abroadSeasons = (me.flags.abroadSeasons ?? 0) + 1
   } else {
     pushLog(state, 'season', `${year} 年过去了：天梯最高 ${ladderLabel(state, me.pre.ladderPeak)}，杯赛 ${me.pre.cups.filter((c) => c.year === year).length} 项，综合 ${s.overall} → ${p.overall}。${me.phase === 'pre' ? '还没有合同。' : '还是自由身。'}`)
