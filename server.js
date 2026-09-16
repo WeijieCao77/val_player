@@ -15,11 +15,13 @@
    后台只记游戏自己的枚举值和数字，别的一概不记：
 
    · IP 地址只在内存里做限流，一秒都不落盘——不进 JSONL、不进 stats.json、不进日志。
-     JSONL 的每一行都是先过一遍白名单再写的，写进去的字段就是下面 EVENTS / PROP_KEYS
-     列着的那些，IP 不在里面，也没有任何地方把它传进 record()。
+     JSONL 的每一行都是先过一遍白名单再写的，写进去的字段就是 stats-contract.js
+     列着的那些，IP 不在里面，也没有任何地方把它传进 record()。错误日志还多过一道
+     scrubIp：socket 出错时 Node 会把对端地址写进 message，那一行也不许带出来。
    · 不记 User-Agent，不记精确位置（只有浏览器自报的时区偏移和窗口宽高档位）。
-   · 不记玩家打进去的任何文字：选手名、战队名、存档名都不收。属性名走白名单，
-     白名单外的属性直接丢掉——客户端就算哪天不小心把名字塞进来，也写不进盘。
+   · 不记玩家打进去的任何文字。选手的 IGN 是全游戏唯一一个玩家自己打的字段，客户端
+     那边就不让它出门；这里是第二道闸：属性名走白名单，表外的键直接丢掉。
+     报错只报出错的文件和行号，不报报错信息本身——引擎的信息会把拿到的东西原样插进去。
    · 身份是浏览器第一次打开时自己生成的随机 id（vid）。清了站点数据就是新的人，
      一台手机两个人用就是一个人。要回答「有没有人第二天又来了」，这比 IP 准得多：
      国内运营商几百个用户共用一个出口地址，一个用户一晚上还会换好几个。
@@ -32,6 +34,8 @@ import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+// 事件词表和客户端共用一份，见 stats-contract.js
+import { EVENTS, EVENT_PROPS, ROLLUPS } from './stats-contract.js'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(ROOT, 'dist')
@@ -76,13 +80,13 @@ function resolve(pathname) {
 
 /* ================= 统计与后台看板 =================
 
-   回答作者四个问题：多少人来、来了几次、玩了多久、走到哪一步、走到哪个结局。
+   回答作者几个问题：多少人来、来了几次、玩了多久、走到哪一步、走到哪个结局。
    照 破晓 的结构来，两个已知的毛病不再犯：
 
    · 破晓 的 end 事件不带结局标识，「大家最后打出的是哪个结局」永远答不了——
-     这里 career_end 必带 ending（engine/me/endings.ts 的 key），结局分布是看板的一节；
+     这里 ending 事件必带 key（engine/me/endings.ts 的那 14 个），结局分布是看板的一节；
    · 破晓 的 view 事件 98% 带着 v:"undefined"，因为版本常量在第一次上报之后才赋值——
-     这里服务端不依赖客户端上报版本号；真要看版本，看的是每条都带的枚举字段。
+     这里服务端不依赖客户端上报任何版本常量，看板只认每条事件自带的枚举字段。
 
    设计取舍（和 破晓 一致）：
    · 事实源是按北京时间分天追加的 JSONL（追加写天然崩溃安全）；stats.json 只是它的缓存，
@@ -107,51 +111,37 @@ const STATS_FILE = path.join(DATA_DIR, 'stats.json')
 const DEV_FILE = path.join(DATA_DIR, 'devices.log')
 const evFile = (day) => path.join(DATA_DIR, `ev-${day}.jsonl`)
 
+/* 日志里绝不许出现 IP。限流用的地址只活在内存的那张表里，错误信息也不许把它带出来：
+   socket 出错时 Node 会把对端地址写进 message，那一行要是进了日志，就等于写盘了。
+   lastErr 还会显示在看板页脚上，所以这一层也护着那里。 */
+const scrubIp = (s) => String(s)
+  .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[ip]')
+  .replace(/\b(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}\b/gi, '[ip]')
+
 /** 出错只记一行，绝不往上抛：统计的任何毛病都不该变成游戏打不开 */
 let errCount = 0
 let lastErr = ''
 function logErr(where, e) {
   errCount++
-  lastErr = `${where}: ${e && e.message ? e.message : String(e)}`
+  lastErr = scrubIp(`${where}: ${e && e.message ? e.message : String(e)}`)
   if (errCount <= 50) console.error(`[stats] ${lastErr}`)
 }
 
-/* ---------- 收得下的词表 ----------
-   事件名白名单：不在表里的名字直接丢。没有这一层，谁都能往作者的数据里写自己的词。 */
-const EVENTS = new Set([
-  // 会话骨架（engine/telemetry.ts 自己发的）
-  'session_start', 'session_ping', 'session_end', 'screens', 'turns',
-  // 选手生涯：漏斗的五级 + 结局
-  'career_start', 'week_done', 'season_done', 'career_end', 'career_resume',
-  // 比赛是打完的还是快进的
-  'match_done', 'match_watched', 'match_skipped',
-  // 存档
-  'save_fail', 'save_size',
-  // 杂项
-  'error', 'unlock', 'theme', 'home_go', 'account', 'action_spend', 'mid_review',
-  // 退役的经理/卡牌模式：老包还缓存在浏览器里，收下但看板不展示
-  'game_over', 'card_start', 'card_match', 'card_pull', 'card_signin', 'card_challenge',
-])
-
-/** 属性名白名单。这是「不记玩家打进去的文字」那条线的执行处：表外的键一律丢掉。 */
-const PROP_KEYS = new Set([
-  'ref', 'host', 'w', 'h', 'new_id', 'had_save', 'theme', 'active_s', 'reason',
-  'to', 'hits', 'turns', 'fast', 'quiet', 'day', 'year', 'sim_ms',
-  'kind', 'key', 'name', 'shrunk', 'kb', 'msg', 'act',
-  'club', 'tier', 'region', 'origin', 'age', 'start', 'role',
-  'ending', 'seasons', 'season', 'week', 'watched',
-  'mode', 'won', 'div', 'rating', 'title', 'round', 'bo', 'scrim', 'stage',
-  'ok', 'go', 'settle', 'honours', 'streak', 'fresh', 'cloud', 'owned',
-  'finished', 'dynasty', 'story', 'phase',
-])
+/* 收得下的事件名和属性名都在 stats-contract.js 里，是客户端 TELEMETRY_EVENTS 的镜像。
+   名字对不上的事件会被静悄悄丢掉、对应的那一节永远空着，而空图表看着和「没人玩」
+   一模一样——所以 scripts/check_stats.ts 会把两边逐项对一遍，哪边改了名字都让核查挂掉。 */
 
 /* 体积与条数的封顶。公网是敌意的：一个批次最多这么大、这么多条、每条这么多属性。 */
 const MAX_BODY = 32 * 1024
 const MAX_EVENTS = 40
-const MAX_PROPS = 12
+const MAX_PROPS = 16
 const MAX_KEY = 24
 const MAX_STR = 48
 const MAX_ID = 64
+
+/** 每个事件各自允许的属性名（= 客户端 TELEMETRY_EVENTS 的那一行）。
+    按事件收窄，不是一张大表：ending 的 key 不该能出现在 session_start 上。 */
+const ALLOWED = new Map(Object.entries(EVENT_PROPS).map(([e, ks]) => [e, new Set(ks)]))
 
 /* ---------- 归日：北京时间 ----------
    玩家几乎全在国内，看板上的「一天」要和他们的一天对齐。 */
@@ -193,7 +183,8 @@ function blankDay() {
     f: { profile: [], week1: [], season1: [], ending: [] },   // 漏斗四级（打开 = act）
     end: {},          // 结局分布
     st: {}, yr: {}, rg: {}, rl: {},                            // 开局构成
-    m: { watched: 0, skipped: 0 },                             // 打完 / 快进
+    m: { watched: 0, skipped: 0, started: 0 },                 // 打完 / 快进 / 其中我首发
+    er: {},                                                    // 前端报错：按出错的文件行号
     sf: 0,                                                     // 存档失败
     // 下面两个和 sec 一样，与 act 一一对齐：存的是「这台设备的档位」而不是当天的计数。
     // 存计数的话，跨天求和会把一台常来的设备算成好几台（核查脚本抓到过一次）。
@@ -203,17 +194,18 @@ function blankDay() {
 }
 
 /* 当天在内存里用 Map/Set 攒，落盘时再摊平成上面的样子。
-   sess: sid -> {vi, sec}；scr: sid screen -> 见过的最大 hits；
+   sess: sid -> {vi, sec}；
+   roll: (会话, 组, 行键, 字段) -> 见过的最大值（累计量事件全走这张表）；
    seen: sid -> 已收过的事件号（(sid, n) 认一条事件，重发的信标因此是空操作）。 */
 function newLive(day) {
   return {
     day,
-    seen: new Map(), sess: new Map(), scr: new Map(),
+    seen: new Map(), sess: new Map(), roll: new Map(),
     act: new Map(),                                  // vi -> 在线秒数
     f: { profile: new Set(), week1: new Set(), season1: new Set(), ending: new Set() },
     dv: new Map(), wd: new Map(),                    // vi -> 档位（按设备去重，最后一次为准）
-    end: {}, st: {}, yr: {}, rg: {}, rl: {},
-    m: { watched: 0, skipped: 0 }, sf: 0, pv: 0,
+    end: {}, st: {}, yr: {}, rg: {}, rl: {}, er: {},
+    m: { watched: 0, skipped: 0, started: 0 }, sf: 0, pv: 0,
   }
 }
 
@@ -234,6 +226,7 @@ function fresh(sid, n) {
 }
 
 const bump = (o, k) => { if (k) o[k] = (o[k] || 0) + 1 }
+const bumpBy = (o, k, n) => { if (k) o[k] = (o[k] || 0) + n }
 const widthBucket = (w) => {
   const n = Number(w)
   if (!Number.isFinite(n) || n <= 0) return ''
@@ -261,47 +254,65 @@ function applyEvent(L, o) {
 
   if (o.dev) L.dv.set(vi, o.dev)
 
+  /* 累计量的那几组（stats-contract.js 的 ROLLUPS）：客户端每次报的是「这个会话到
+     目前为止的总数」，不是增量。按 (会话, 组, 行键, 字段) 记住见过的最大值，只把
+     涨出来的那一截计进当天——同一个总数再来一遍加的是 0，所以重发的信标无害，
+     迟到的那份（比已见过的还小）也一秒都不加。 */
+  const R = ROLLUPS[e]
+  if (R) {
+    const rowKey = R.key ? String(p[R.key] ?? '') : ''
+    for (const f of R.nums) {
+      const v = Number(p[f])
+      if (!Number.isFinite(v) || v < 0) continue
+      const k = JSON.stringify([o.sid, e, rowKey, f])
+      const prev = L.roll.get(k) || 0
+      if (v <= prev) continue
+      const add = v - prev
+      L.roll.set(k, v)
+      if (e === 'screens' && f === 'hits') L.pv += add
+      else if (e === 'turns' && f === 'turns') L.f.week1.add(vi)   // 推完过第一周
+      else if (e === 'matches') {
+        if (f === 'played') L.m.watched += add
+        else if (f === 'skip') L.m.skipped += add
+        else if (f === 'started') L.m.started += add
+      } else if (e === 'errors' && f === 'n') {
+        // 只有出错的文件和行号，永远没有报错信息本身
+        bumpBy(L.er, typeof p.at === 'string' && p.at ? p.at : '（未报位置）', add)
+      }
+    }
+    return
+  }
+
   if (e === 'session_start') {
     const b = widthBucket(p.w)
     if (b) L.wd.set(vi, b)
   } else if (e === 'session_ping' || e === 'session_end') {
-    // 心跳是累计量而且会重发：一个会话只认它见过的最大 active_s，按差值加进设备的在线秒数
+    // 心跳同样是累计量而且会重发：一个会话只认它见过的最大 active_s，按差值加进设备的在线秒数
     const s = L.sess.get(o.sid)
     const v = Number(p.active_s)
     if (s && Number.isFinite(v) && v > s.sec) {
       L.act.set(vi, (L.act.get(vi) || 0) + (v - s.sec))
       s.sec = v
     }
-  } else if (e === 'screens') {
-    // hits 同样是累计量：按 (会话, 页面) 取最大，差值计进浏览量
-    const k = `${o.sid} ${p.to}`
-    const v = Number(p.hits)
-    const prev = L.scr.get(k) || 0
-    if (Number.isFinite(v) && v > prev) { L.pv += v - prev; L.scr.set(k, v) }
   } else if (e === 'career_start') {
     L.f.profile.add(vi)
     bump(L.st, typeof p.start === 'string' ? p.start : '')
     bump(L.yr, p.year === undefined || p.year === null ? '' : String(p.year))
     bump(L.rg, typeof p.region === 'string' ? p.region : '')
     bump(L.rl, typeof p.role === 'string' ? p.role : '')
-  } else if (e === 'week_done') {
-    L.f.week1.add(vi)
   } else if (e === 'season_done') {
+    // 客户端挂在赛季「记录」上而不是赛季卡上：卡在退役之后会被跳过，
+    // 挂记录才让第四级对那些真走到第五级的人也算得准
     L.f.season1.add(vi)
-  } else if (e === 'career_end') {
+  } else if (e === 'ending') {
     L.f.ending.add(vi)
-    // 破晓 的 end 没带结局标识，这一问永远答不了。这里必带。
-    bump(L.end, typeof p.ending === 'string' && p.ending ? p.ending : '（未报结局）')
-  } else if (e === 'match_watched') {
-    L.m.watched++
-  } else if (e === 'match_skipped') {
-    L.m.skipped++
-  } else if (e === 'match_done') {
-    if (p.watched === true || p.watched === 1) L.m.watched++
-    else L.m.skipped++
+    // 破晓 的 end 不带结局标识，「大家最后打出的是哪个结局」那一问永远答不了。
+    // 这里认的是 engine/me/endings.ts 的 key —— 事件名是 ending，键名是 key。
+    bump(L.end, typeof p.key === 'string' && p.key ? p.key : '（未报结局）')
   } else if (e === 'save_fail') {
     L.sf++
   }
+  // career_resume：只算这台设备活跃过，不进漏斗（它是回访，不是新建档）
 }
 
 /** 摊平成能进 stats.json 的样子 */
@@ -321,7 +332,7 @@ function serialise(L) {
     ending: [...L.f.ending].sort((a, b) => a - b),
   }
   d.end = { ...L.end }; d.st = { ...L.st }; d.yr = { ...L.yr }; d.rg = { ...L.rg }; d.rl = { ...L.rl }
-  d.m = { ...L.m }; d.sf = L.sf
+  d.m = { ...L.m }; d.er = { ...L.er }; d.sf = L.sf
   d.dv = act.map((vi) => L.dv.get(vi) || '')
   d.wd = act.map((vi) => L.wd.get(vi) || '')
   return d
@@ -496,19 +507,30 @@ function rateOk(ip) {
 const idOk = (s) => typeof s === 'string' && s.length > 0 && s.length <= MAX_ID && /^[A-Za-z0-9._:-]+$/.test(s)
 const DEVS = new Set(['phone', 'tablet', 'desktop'])
 
-/** 属性：白名单里的键、只认标量、字符串掐到 48 字并去掉控制字符、数字必须有限 */
-function cleanProps(raw) {
+/** 控制字符一律去掉（按码点挑，不用正则，省得源码里出现不可见字符） */
+function plain(v) {
+  let s = ''
+  for (const ch of v) {
+    const c = ch.codePointAt(0)
+    if (c > 31 && c !== 127) s += ch
+    if (s.length >= MAX_STR) break
+  }
+  return s
+}
+
+/** 属性：这个事件自己声明过的键、只认标量、字符串掐到 48 字并去掉控制字符、数字必须有限 */
+function cleanProps(raw, allowed) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  if (!allowed) return undefined
   const out = {}
   let n = 0
   for (const k of Object.keys(raw)) {
     if (n >= MAX_PROPS) break
-    if (k.length > MAX_KEY || !PROP_KEYS.has(k)) continue
+    if (k.length > MAX_KEY || !allowed.has(k)) continue
     const v = raw[k]
     if (v === null || v === undefined) continue
     if (typeof v === 'string') {
-      // eslint-disable-next-line no-control-regex
-      const s = v.replace(/[ -]/g, '').slice(0, MAX_STR)
+      const s = plain(v)
       if (!s) continue
       out[k] = s
     } else if (typeof v === 'number') {
@@ -543,7 +565,7 @@ function ingest(text) {
     const o = { t: Date.now(), e: ev.name, vid: b.vid, sid: b.sid, n: ev.n }
     if (dev) o.dev = dev
     if (tz) o.tz = tz
-    const p = cleanProps(ev.props)
+    const p = cleanProps(ev.props, ALLOWED.get(ev.name))
     if (p) o.p = p
     record(o)
     took++
@@ -572,12 +594,11 @@ function handleIngest(req, res) {
 }
 
 /* ---------- 看板鉴权 ----------
-   · 没配 STATS_KEY：404，当这页不存在
+   · 没配 STATS_KEY：404，当这页不存在——对谁都不存在，这才是 404 的意思
    · 没带 Authorization：401 + WWW-Authenticate，浏览器弹密码框（不弹就没法登录）
-   · 钥匙不对：404。一个承认自己存在的入口会把人招回来——所以猜错和没配是同一副面孔
-     （破晓 这里回 401；作者在核查记录里也更认 401。这份按交给我的口径走：错也 404。
-      代价是打错一次得刷新页面才能再弹框。）
-   · 同一来源 10 分钟里错 30 次就 429 十分钟 */
+   · 钥匙不对：也是 401，再弹一次框。破晓 就是这么做的，作者在核查记录里也写明了
+     「没配 STATS_KEY 才 404；钥匙错或没带头是 401」——按他的来
+   · 同一来源 10 分钟里错 30 次就 429 十分钟，别让人拿密码框慢慢猜 */
 function sameSecret(a, b) {
   const x = Buffer.from(String(a || ''))
   const y = Buffer.from(String(b || ''))
@@ -597,7 +618,7 @@ const authBlocked = (ip) => {
   const r = AUTH_FAILS.get(ip)
   return !!(r && Date.now() - r.t0 <= AUTH_FAIL_WIN && r.n >= AUTH_FAIL_MAX)
 }
-/** 'ok' 放行 / 'ask' 弹密码框 / 'blocked' 猜太多次 / '' 装作没有这页 */
+/** 'ok' 放行 / 'ask' 弹密码框（没带钥匙、或钥匙不对）/ 'blocked' 猜太多次 / '' 装作没有这页 */
 function dashAuth(req) {
   if (!STATS_KEY) return ''
   const ip = clientIp(req)
@@ -617,7 +638,7 @@ function dashAuth(req) {
   }
   if (sameSecret(given, STATS_KEY)) return 'ok'
   authFail(ip)
-  return ''
+  return 'ask'
 }
 
 /* ---------- 看板 ---------- */
@@ -773,6 +794,7 @@ function dashHtml() {
   const m = merge((a) => a.m)
   const mSum = (m.watched || 0) + (m.skipped || 0)
   const sf = win.reduce((t, a) => t + (a.sf || 0), 0)
+  const errs = merge((a) => a.er)
 
   const tblRows = lastDays(14).reverse().map((r) => {
     const a = r.a
@@ -814,6 +836,7 @@ ${VOLATILE ? '<div class="warn">⚠ 未检测到持久化卷——数据现在�
 <table><tr><th>日期</th><th class="num">新设备</th><th class="num">活跃设备</th><th class="num">会话数</th><th class="num">浏览量</th><th class="num">人均在线</th><th class="num">中位在线</th></tr>${tblRows}</table>
 <h2>漏斗（近 ${D} 天 · 按设备去重）</h2>
 <table><tr><th>阶段</th><th class="num">设备数</th><th class="num">转化</th><th class="num">占打开</th></tr>${fnRows}</table>
+<div class="sub">建档 = career_start，推完第一周 = turns，打完第一个赛季 = season_done，走到结局 = ending。</div>
 <h2>留存（按首见日分群 · 回访 = 那天有事件）</h2>
 <table><tr><th>首见日</th><th class="num">人数</th><th class="num">次日</th><th class="num">第 3 日</th><th class="num">第 7 日</th></tr>${retRows || '<tr><td colspan="5">还没有满一天的群</td></tr>'}</table>
 <div class="sub">次日 = 首见日 + 1 天，第 3 日 = +3，第 7 日 = +7；那一天还没过完就显示「—」。</div>
@@ -829,10 +852,13 @@ ${endTable}
 <div><h2>位置</h2>${countTable(merge((a) => a.rl), '位置', null)}</div>
 </div>
 <h2>比赛：打完还是快进（近 ${D} 天）</h2>
-<div class="grid">${stat(m.watched || 0, '打完', '比赛:打完')}${stat(m.skipped || 0, '快进', '比赛:快进')}${stat(pct(m.watched || 0, mSum), '打完占比')}</div>
+<div class="grid">${stat(m.watched || 0, '打完', '比赛:打完')}${stat(m.skipped || 0, '快进', '比赛:快进')}${stat(pct(m.watched || 0, mSum), '打完占比')}${stat(m.started || 0, '其中我首发', '比赛:首发')}</div>
 <h2>存档失败（近 ${D} 天）</h2>
 <div class="grid">${stat(sf, '存档失败次数', '存档:失败')}</div>
 <div class="sub">iPhone 的存储配额问题会先在这里露头，然后才会有人来报。</div>
+<h2>前端报错（近 ${D} 天）</h2>
+${countTable(errs, '出错位置', null)}
+<div class="sub">只有出错的文件和行号，没有报错信息本身——引擎的报错会把拿到的东西原样插进去，那可以是任何东西。</div>
 <h2>设备与屏幕（近 ${D} 天 · 按设备去重）</h2>
 <div class="two">
 <div>${countTable(perDev((a) => a.dv), '设备类型', DEV_CN)}</div>
