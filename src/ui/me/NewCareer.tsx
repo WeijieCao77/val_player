@@ -13,6 +13,7 @@ import type { SaveMeta } from '../../engine/me/saveMeta'
 import { fanTier, fansCn } from '../../engine/me/fans'
 import { compCn } from '../../engine/me/compname'
 import { HallView } from './HallScreen'
+import ThemeToggle from './ThemeToggle'
 import { ENTRY_CN, ENTRY_YEARS, formatOf, regionIn } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
 import { Crest, Panel, money } from './common'
@@ -266,7 +267,9 @@ export default function NewCareer({
       <div className="newcareer nc-home">
         {cover}
         <SaveCard info={save} busy={busy} bad={bad} onContinue={cont} onNew={askNew} />
-        <div className="row nc-tools">{hallButton('home')}</div>
+        {/* 配色开关在生涯壳的侧栏底部，而开局页在壳外面：一个觉得黑底看着晕的人，
+            本来得先开一局生涯才够得着米色。这里放一颗同样的（安静地靠右） */}
+        <div className="row nc-tools">{hallButton('home')}<div className="right row"><ThemeToggle compact /></div></div>
         <p className="muted small nc-intro">{intro}</p>
         {asking && <ConfirmNew who={save.meta?.ign} onOk={confirmNew} onCancel={() => setAsking(false)} />}
       </div>
@@ -336,6 +339,7 @@ export default function NewCareer({
       <div className="row wrap nc-tools">
         {save && <button className="sm ghost" onClick={() => setView('home')}>← 回到存档</button>}
         {hallButton('form')}
+        <div className="right row"><ThemeToggle compact /></div>
       </div>
 
       <Panel title="从哪一年开始" actions={<span className="tiny faint">同一条时间线，两个入口</span>}>
