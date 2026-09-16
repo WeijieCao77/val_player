@@ -52,7 +52,7 @@ export default function Poster() {
   const benchN = trophies.length - startedN
   // every trophy on the shelf was watched from the bench — the 「板凳上的冠军」 ending
   const benchOnly = trophies.length > 0 && startedN === 0
-  const runs = deepRuns(me.seasons)
+  const runs = deepRuns(me)
 
   return (
     <div className="poster-me">
@@ -175,19 +175,49 @@ function short(cn: string): string {
   return parts.length > 2 ? parts.slice(-2).join(' · ') : cn
 }
 
+/** One 大师赛 / 冠军赛 campaign, as me/intl.ts writes it down. */
+interface IntlRunLike {
+  year: number
+  comp: string
+  /** the sentence the season card and this block show */
+  line: string
+  /** compClass()'s own call — the same rule the wall above ranks by, so the two cannot drift */
+  cls?: string
+  /** final placing, 夺冠 recorded as 1. Genuinely absent for a side outside the placing order — the group exit. */
+  place?: number
+}
+
+const CLS_RANK: Record<string, number> = { champions: 0, masters: 1, lockin: 2 }
+/** a side that never placed sits below every side that did, rather than above them or hidden */
+const placeKey = (r: IntlRunLike): number => r.place ?? Number.MAX_SAFE_INTEGER
+
 /**
- * The 大师赛 / 冠军赛 campaigns that ended without the trophy.
+ * The 大师赛 / 冠军赛 campaigns that ended without the trophy, hardest first.
  *
- * The lines come from the season-end work on `seasonend-a1506a2`
- * (engine/me/intl.ts, `MeSeason.intl`), which writes down every international
- * the club played — 11 of 13 used to leave no trace anywhere. Read structurally
- * so this card compiles and renders on both sides of that merge and fills in
- * the moment it lands; the ones that ended 夺冠 are on the wall already.
+ * From the season-end work on `seasonend-a1506a2` (engine/me/intl.ts), which
+ * writes down every international the club played — 11 of 13 used to leave no
+ * trace anywhere. `me.intlRuns` is the structured record and the thing to sort
+ * on; `MeSeason.intl` is display prose and is never parsed.
+ *
+ * Read structurally so the card compiles and renders on both sides of that
+ * merge, and so a save from before the structured fields still renders from
+ * `line` — its class is derived with the same compClass() the wall uses, and
+ * with no placing to go on it falls back to year order.
+ *
+ * Ranked 冠军赛 > 大师赛 > LOCK//IN, then by placing, so a 3–4 at the 冠军赛
+ * stands above a group exit at a 大师赛. The ones that ended 夺冠 are already
+ * tiles on the wall.
  */
-function deepRuns(seasons: MeSeason[]): string[] {
-  return seasons
-    .flatMap((s) => (s as MeSeason & { intl?: string[] }).intl ?? [])
-    .filter((l) => !l.includes('夺冠'))
+function deepRuns(me: MeState): string[] {
+  const runs = (me as MeState & { intlRuns?: IntlRunLike[] }).intlRuns ?? []
+  return runs
+    .filter((r) => (r.place !== undefined ? r.place !== 1 : !r.line.includes('夺冠')))
+    .slice()
+    .sort((a, b) =>
+      ((CLS_RANK[a.cls ?? compClass(a.comp)] ?? 3) - (CLS_RANK[b.cls ?? compClass(b.comp)] ?? 3))
+      || (placeKey(a) - placeKey(b))
+      || (a.year - b.year))
+    .map((r) => r.line)
 }
 
 /** A career with an empty shelf still got somewhere. Say where, best fact first. */
