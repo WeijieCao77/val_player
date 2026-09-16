@@ -178,12 +178,40 @@ function checkRows(s: GameState, rows: Row[], tag: string, o: { entered?: number
   if (!rows.every((r, i) => i === rows.length - 1 || r.won)) fail(`${tag}：输了还接着打`)
 }
 
+/**
+ * What must hold for a cup that played rounds inside the window, in the two
+ * states that are both legitimate — and which one a run lands in is not this
+ * check's to pin down.
+ *
+ * Pre-pro cup results move with the RNG stream. Any key round that draws shifts
+ * it (me/nodes.ts WEAK_SHARE is one such consumer), so a group match lost on one
+ * commit is won on the next; a win keeps the run alive to its next round where
+ * a loss closes it. Both readings are correct play.
+ *
+ * So the rule is keyed to the cup being examined, and never asks whether some
+ * *other* run is idle. When a 22-week window ends, another cup may legitimately
+ * still be attached to me.pre.cup — that says nothing about this one, and a
+ * check that fails on it is asserting fixture luck, not an invariant.
+ *
+ *   ended   — detached from me.pre.cup, written into me.pre.cups, the pickup
+ *             fives dropped and the card gone
+ *   running — still attached, so not yet written down as finished, and with a
+ *             round genuinely left to play
+ */
 function ended(s: GameState, key: string, tag: string): void {
   const me = s.me!
-  if (me.pre.cup) fail(`${tag}：赛事还挂着`)
+  if (me.pre.cup?.key === key) fail(`${tag}：赛事还挂着`)
   if (!me.pre.cups.some((c) => c.key === key && c.year === s.year)) fail(`${tag}：结束了却没有记录`)
   if (s.teams[TEMP_MINE] || s.teams[TEMP_OPP]) fail(`${tag}：临时队伍没撤`)
   if (cupCards(s).some((x) => x.id === key)) fail(`${tag}：结束后杯赛卡还挂着`)
+}
+
+/** The other legitimate state: this cup is the one still attached, mid-run. */
+function running(s: GameState, key: string, rounds: number, tag: string): void {
+  const me = s.me!
+  const run = me.pre.cup!
+  if (me.pre.cups.some((c) => c.key === key && c.year === s.year)) fail(`${tag}：还挂着，却已经记下了战绩`)
+  if (run.round >= rounds) fail(`${tag}：${rounds} 轮都打完了，赛事还挂着`)
 }
 
 const line = (rows: Row[]) => rows.map((r) => `${r.label} BO${r.bo} ${r.won ? '胜' : '负'} ${r.score}（体力 ${r.before}→${r.after}）`).join(' · ')
@@ -311,7 +339,9 @@ for (const c of AUTO) {
     const key = k.split(':')[1]
     const cup = cupFor(s, key)!
     checkRows(s, rs, `${c.label} ${cup.name}`)
-    if (me.pre.cup?.key !== key) ended(s, key, `${c.label} ${cup.name}`)
+    // whichever state this run is in, it is asserted — never skipped (see ended/running)
+    if (me.pre.cup?.key === key) running(s, key, cup.rounds.length, `${c.label} ${cup.name}`)
+    else ended(s, key, `${c.label} ${cup.name}`)
     console.log(`  ${c.label} ${cup.name}：${rs.map((r) => date(s, r.day)).join('、')} · ${line(rs)}`)
   }
   if (!Object.keys(rows).length) console.log(`  ${c.label}：22 周里没有打杯赛`)
