@@ -373,7 +373,22 @@ export const WEAK_SHARE = 0.2
  * weeks at 「信任」 or better ran 17.0% → 23.4% with it switched on. Testing a
  * weakness is meant to be a gamble on a question that is unfair by design:
  * cheaper than fumbling something he is good at, never the risk-free option.
- * So three quarters, −0.45.
+ * So three quarters, −0.45 — and this is where that landed, measured the same
+ * way: the tax at the low end stays gone (weeks at 50 or below, 21.5% with
+ * these rounds off against 21.2% with them on, a gap of 0.3), the content
+ * effect is untouched (the call judged on the weak attribute 15.4% → 17.6%,
+ * offered 34.8% → 39.3%), but the weeks at 「信任」 or better still run
+ * 17.0% → 21.1% — a gap of 4.1 where the aim was 2.
+ *
+ * We stopped there rather than walk the constant until both numbers looked
+ * right. One price cannot settle both ends, because what sets these rounds
+ * apart is not only what a miss costs but how often they miss: they are judged
+ * on the attribute the player is worst at, so they land less often than the
+ * rest by construction. Pricing them properly means matching what a weak round
+ * is worth on average to what an ordinary one is worth, off its own land rate
+ * and not off a flat multiplier. That is a design change and it is not done
+ * here. Of the two tried, −0.45 is the closer on both counts; what it trades
+ * away is that a weak round is still a slightly safer call than an ordinary one.
  */
 export const CALL_TRUST_OK = 0.3
 export const CALL_TRUST_MISS = 0.6
