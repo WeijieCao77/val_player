@@ -19,7 +19,7 @@ import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { wageCny } from './paytable'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
-import { TRUST_PULL, coachAfterTitle, refreshMyRounds, runDuel, weeklyLineup } from './coach'
+import { TRUST_DOWN, TRUST_UP, coachAfterTitle, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
 import { pushLog } from './log'
@@ -541,7 +541,7 @@ export function settleWeek(state: GameState): void {
     if (cup) offerCup(state, cup.key)
   } else {
     // the coach's regard settles back toward neutral; a substitute he never sees drifts down
-    me.coachTrust = clamp(me.coachTrust + (60 - me.coachTrust) * TRUST_PULL, 0, 100)
+    me.coachTrust = clamp(me.coachTrust + (60 - me.coachTrust) * (me.coachTrust < 60 ? TRUST_UP : TRUST_DOWN), 0, 100)
     const starter = state.teams[state.myTeam].starters.includes(me.id)
     if (!starter && !(me.plan.scrim ?? 0) && !(me.plan.duel ?? 0)) me.coachTrust = clamp(me.coachTrust - 1, 0, 100)
     if (me.benchLock && me.benchLock <= state.day) me.benchLock = undefined

@@ -17,13 +17,26 @@ export const TRIAL_MATCHES = 2
 
 /**
  * How hard a week pulls the coach's regard back toward 60 (me/week.ts
- * settleWeek). Halved 2026-09-16: at 3% a week, trust earned by playing well
- * was half gone in 23 weeks — inside a single season, and usually before the
- * next selection decision it was meant to weigh on, so a good run stopped
- * counting for anything before the player could feel it. At 1.5% it is half
- * gone in 46 weeks, and a run is still there when the coach next picks a five.
+ * settleWeek) — and why the two directions are not the same rate (2026-09-16).
+ *
+ * It used to be 3% whichever side of 60 the regard sat on. Halving it to 1.5%
+ * both ways was tried first, to make trust earned by playing well last long
+ * enough to be felt, and measured worse than what it replaced: a career
+ * player's regard sits under 60 far more often than over it, so that pull is
+ * mostly the way back up, and halving it halved the recovery along with the
+ * decay. Over the same careers (scripts/probe_room.ts) the weeks at 「信任」 or
+ * better fell 10.0% → 4.5% and the weeks at 50 or worse rose 23.5% → 32.6% —
+ * the opposite of what the change was for. A man on the bench shows why: the
+ * week takes 1 off a substitute the coach never sees, so his regard settles
+ * where the pull balances that, which is 27 at 3% and the floor at 1.5%.
+ *
+ * So the directions are split. Below 60 the way back is what it always was;
+ * above it, what a player earned by playing well leaks away at half the old
+ * rate — half gone in 46 weeks instead of 23, which is what wanting trust to
+ * last until the next selection decision actually asked for.
  */
-export const TRUST_PULL = 0.015
+export const TRUST_UP = 0.03
+export const TRUST_DOWN = 0.015
 
 /**
  * A player as the head coach sees him for selection.
