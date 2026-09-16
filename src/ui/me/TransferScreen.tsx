@@ -285,7 +285,7 @@ function PitchList({ contract }: { contract: boolean }) {
         <span className="tr-main">
           <b>{r.team.name}</b>
           <small>
-            {groupCn(game, r.group)}{r.abroad ? ' · 外赛区' : ''} · 名单 {r.team.roster.length}/{ROSTER_FULL}{need(r)} · {nums ? `要 ${o.expect}，你 ${o.skill}` : gapWord(-o.gap)}
+            {groupCn(game, r.group)}{awayWord(game, r.team) ? ` · ${awayWord(game, r.team)}` : ''} · 名单 {r.team.roster.length}/{ROSTER_FULL}{need(r)} · {nums ? `要 ${o.expect}，你 ${o.skill}` : gapWord(-o.gap)}
             {contract && o.fee > 0 ? (o.short ? ' · 预算付不起你的违约金' : ' · 付得起你的违约金') : ''}
           </small>
         </span>
