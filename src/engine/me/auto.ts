@@ -363,7 +363,7 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     case 'igl': takeIgl(state); return '接下了队内指挥'
     case 'season': {
       pop(state, 'season', item.id)
-      if (me.retireAsk && p.age >= 31) retire(state, `${p.age} 岁，你决定退役`)
+      if (me.retireAsk && p.age >= 31) retire(state, `${p.age} 岁，你决定退役`, 'chose')
       return ''
     }
     case 'ending': pop(state, 'ending'); return ''

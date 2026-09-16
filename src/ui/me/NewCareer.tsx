@@ -19,6 +19,7 @@ import type { EntryYear } from '../../engine/era'
 import { Crest, Panel, money } from './common'
 import { toCny } from '../../engine/me/currency'
 import { attrWord, useNumbers } from './words'
+import { track } from '../../engine/me/telemetry'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
@@ -328,6 +329,21 @@ export default function NewCareer({
   const go = () => {
     if (blocked) return
     const ign = name.trim() || 'Rookie'
+    // What was chosen on this screen, and nothing that was typed into it: the
+    // IGN is the one free-text field in the whole game and it never leaves
+    // (engine/me/telemetry.ts). The talent goes out as its shape — the most on
+    // any one attribute, and how many got any — which is what 「天赋怎么点的」
+    // asks and carries no text at all.
+    track('career_start', {
+      year,
+      region,
+      role,
+      start,
+      origin: originKey,
+      talent_max: ATTR_KEYS.reduce((m, k) => Math.max(m, talents[k]), 0),
+      talent_spread: ATTR_KEYS.filter((k) => talents[k] > 0).length,
+      talent_points: TALENT_POINTS - left,
+    })
     // a club start is placed by the game, off the career's seed (career.ts pickClub)
     onStart(createCareer({ name: ign, region, role, talents, originKey, start, year }))
   }

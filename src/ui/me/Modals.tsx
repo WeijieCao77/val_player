@@ -23,6 +23,7 @@ import { DIM_CN } from '../../engine/me/nodes'
 import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
 import { PITCH_MAX, closePitchReply, oddsWord, whyText } from '../../engine/me/selfpitch'
 import { pitchBook } from '../../engine/me/pitchbook'
+import { countCup } from '../../engine/me/telemetry'
 import { attrWord, gapWord } from './words'
 import { fansCn } from '../../engine/me/fans'
 import MatchPlay from './MatchPlay'
@@ -138,12 +139,13 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
             <p className="small" style={{ color: 'var(--loss)' }}>弃权就是这一轮不上场：{cup.name}到此为止，奖金按已经赢下的 {run.round} 轮算{prize ? `（${money(prize)}）` : '，没有奖金'}。</p>
             <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
               <button className="primary" onClick={() => setQuit(false)}>还是去打</button>
-              <button onClick={() => { forfeitCup(game, cupRng(game, 'forfeit')); commit(); onDone() }}>确认弃权</button>
+              <button onClick={() => { countCup('forfeit'); forfeitCup(game, cupRng(game, 'forfeit')); commit(); onDone() }}>确认弃权</button>
             </div>
           </>
         ) : (
           <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
             <button className="primary" onClick={() => {
+              countCup('round')
               const m = mountCupMatch(game, cup, run.round, cupRng(game, `r${run.round}`))
               setLive(new MeMatch(game, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }))
             }}>打这一轮</button>
@@ -159,7 +161,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
     : me.money < cup.fee ? `报名费 ${money(cup.fee)}，你只有 ${money(Math.max(0, me.money))}`
       : me.fans < cup.minFans ? `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}` : null
   return (
-    <Modal title={cup.name} onClose={() => { skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
+    <Modal title={cup.name} onClose={() => { countCup('skip'); skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
       <p className="small" style={{ marginTop: 0 }}>{cup.blurb}</p>
       <p className="small muted">
         {cup.rounds.length} 轮 · 报名费 {cup.fee ? money(cup.fee) : '免费'} · 奖金最高 {money(cup.prize[cup.prize.length - 1])}
@@ -174,12 +176,13 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
         <button className="primary" onClick={() => {
           const w = enterCup(game, cupKey, cupRng(game, 'enter'))
           if (w) { toast(w); commit(); return }
+          countCup('enter')
           const r0 = game.me!.pre.cup
           if (r0?.next != null) toast(`报名成功：${cup.rounds[0].label}在 ${cupDateCn(game, r0.next)}。`)
           commit()
           onDone()
         }} disabled={!!why}>报名</button>
-        <button onClick={() => { skipCup(game, cupKey); commit(); onDone() }}>不打</button>
+        <button onClick={() => { countCup('skip'); skipCup(game, cupKey); commit(); onDone() }}>不打</button>
       </div>
       {why && <p className="tiny" style={{ textAlign: 'center', color: 'var(--loss)', margin: '6px 0 0' }}>{why}</p>}
     </Modal>
@@ -537,7 +540,7 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
         <div className="panel alert" style={{ marginTop: 8 }}>
           <div className="panel-body">
             <p className="small" style={{ marginTop: 0 }}>五个赛季了。可以就此收官拿一个结局，也可以继续。</p>
-            <button className="warn sm" onClick={() => { retire(game, `${p.age} 岁，你决定退役`); commit(); onDone() }}>退役</button>
+            <button className="warn sm" onClick={() => { retire(game, `${p.age} 岁，你决定退役`, 'chose'); commit(); onDone() }}>退役</button>
           </div>
         </div>
       )}

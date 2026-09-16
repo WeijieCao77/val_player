@@ -1,6 +1,7 @@
 import type { GameState } from '../types'
 import type { Deal, Invite } from './types'
 import { pop, push } from './pending'
+import { countOffer } from './telemetry'
 
 /**
  * 放着的报价 — a card closed without being answered.
@@ -95,6 +96,7 @@ export function setAside(state: GameState, kind: AsideKind, id: string): string 
   const x = offerOf(state, kind, id)
   pop(state, kind, id)
   if (!x) return ''
+  countOffer('aside')
   const when = withinCn(daysLeft(state, x))
   if (kind === 'deal') return `这份${dealWord(x as Deal)}放在「转会」页，${when}回来谈。`
   return `${(x as Invite).direct ? '这份报价' : '试训邀请'}放在「转会」页，${when}回复。`

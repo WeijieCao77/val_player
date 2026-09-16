@@ -9,8 +9,19 @@ import { retireNight } from './nights'
 import { compClass, isIntlComp } from './compclass'
 import { lifeLines } from './shop'
 import { outletLines } from './outlets'
+import { track } from './telemetry'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
+
+/**
+ * Why a career ended, as one of a fixed list.
+ *
+ * `why` itself is a sentence built for the screen — it carries an age and a
+ * year in it — and a sentence is not something to report (engine/me/telemetry.ts:
+ * only this game's own enumerated values go out). So every caller says which of
+ * these it is, and that is what the record gets.
+ */
+export type RetireWhy = 'world_end' | 'pre_unsigned' | 'free_uncalled' | 'age_cap' | 'age_decline' | 'chose' | 'other'
 
 // by what the event is, not by an English word in its name: on the timeline Masters is 「伦敦大师赛」
 const intl = (s: GameState, kind: 'masters' | 'champions') => s.me!.titles.filter((t) => compClass(t.title) === kind)
@@ -60,7 +71,7 @@ const staffLines = (state: GameState): string[] => {
 }
 
 /** Hang them up. What the money became off the stage (me/shop.ts LIFESTYLE, me/outlets.ts) is the ending's last words. */
-export function retire(state: GameState, why: string): void {
+export function retire(state: GameState, why: string, kind: RetireWhy = 'other'): void {
   const me = state.me!
   if (me.phase === 'retired') return
   const e = endingFor(state)
@@ -75,6 +86,22 @@ export function retire(state: GameState, why: string): void {
   // the night of it goes on screen before the card (me/nights.ts)
   retireNight(state)
   push(state, { kind: 'ending' })
+  // Which of the fifteen endings a career reached, and what it took to get
+  // there — every road out goes through this one function. The ending's key,
+  // never its title or its text: those are sentences (engine/me/telemetry.ts).
+  const seasons = me.seasons.filter((x) => x.tier > 0)
+  track('ending', {
+    key: e.key,
+    why: kind,
+    age: state.players[me.id]?.age ?? 0,
+    pro_seasons: seasons.length,
+    titles: me.titles.length,
+    titles_started: me.titles.filter((t) => t.started).length,
+    // the best rung ever stood on: 1 是 VCT，2 是 Challengers，0 是从没签上
+    peak_tier: seasons.some((x) => x.tier === 1) ? 1 : seasons.some((x) => x.tier === 2) ? 2 : 0,
+    year: state.year,
+    entry_year: me.entryYear ?? 0,
+  })
 }
 
 /**
@@ -87,11 +114,11 @@ export function retirementTick(state: GameState, rng: Rng): void {
   const p = state.players[me.id]
   if (me.phase === 'retired') return
   // the world line itself ends: whatever the career is, it ends with it
-  if (state.year >= WORLD_END) { retire(state, `${WORLD_END - 1} 赛季结束，这条世界线到这里为止`); return }
-  if (me.phase === 'pre' && me.pre.year >= 4) { retire(state, '四年没有签到合同，你放弃了'); return }
-  if (me.phase === 'free' && me.freeYears >= 2) { retire(state, '两年没有俱乐部来电话，你宣布退役'); return }
-  if (p.age >= 33) { retire(state, '33 岁，你宣布退役'); return }
-  if (p.age >= 30 && me.phase === 'pro' && rng.chance(0.25 + (p.age - 30) * 0.1)) { retire(state, `${p.age} 岁，手已经跟不上眼了，你宣布退役`); return }
+  if (state.year >= WORLD_END) { retire(state, `${WORLD_END - 1} 赛季结束，这条世界线到这里为止`, 'world_end'); return }
+  if (me.phase === 'pre' && me.pre.year >= 4) { retire(state, '四年没有签到合同，你放弃了', 'pre_unsigned'); return }
+  if (me.phase === 'free' && me.freeYears >= 2) { retire(state, '两年没有俱乐部来电话，你宣布退役', 'free_uncalled'); return }
+  if (p.age >= 33) { retire(state, '33 岁，你宣布退役', 'age_cap'); return }
+  if (p.age >= 30 && me.phase === 'pro' && rng.chance(0.25 + (p.age - 30) * 0.1)) { retire(state, `${p.age} 岁，手已经跟不上眼了，你宣布退役`, 'age_decline'); return }
   const pro = me.seasons.filter((x) => x.tier > 0).length
   me.retireAsk = pro >= 5
 }

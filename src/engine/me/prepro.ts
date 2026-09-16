@@ -11,6 +11,7 @@ import { hasPlace } from '../timeline'
 import { clubOpen, inviteBlock } from './window'
 import { noteRankPeak } from './moments'
 import { callerRead } from './igl'
+import { countOffer } from './telemetry'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -530,6 +531,7 @@ export function expireInvites(state: GameState, ahead = 0): void {
     if (daysLeft(state, inv) < ahead && !me.tryout) {
       me.pre.invites = me.pre.invites.filter((x) => x.id !== inv.id)
       me.pending = me.pending.filter((x) => !(x.kind === 'invite' && x.id === inv.id))
+      countOffer('expire')
       pushLog(state, 'bad', `${state.teams[inv.teamId]?.name ?? '那家俱乐部'} 的邀请过期了，他们没再来电话。`)
     }
   }

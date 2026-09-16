@@ -8,6 +8,7 @@ import type { SaveMeta } from './saveMeta'
 import { migrateToCny } from './cnyMigrate'
 import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
 import { normalizePitch } from './pitchbook'
+import { track } from './telemetry'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -262,6 +263,20 @@ function setTrouble(t: SaveTrouble | null): void {
 }
 
 /**
+ * A save that did not go in, reported once per stretch of trouble rather than
+ * once per failed write — a browser with no room left fails on every commit.
+ *
+ * This is how a quota problem gets noticed at all instead of waiting for
+ * somebody to report it, the way the iPhone one had to be (2026-09-14: a 2021
+ * career 「卡在」 Masters Bangkok). What goes out is the size in KB and which
+ * half failed; never the save, which is the career itself.
+ */
+function noteSaveFail(what: 'pack' | 'write', year: number, day: number, kb: number): void {
+  if (trouble) return
+  track('save_fail', { what, kb, packed: canPack(), year, day })
+}
+
+/**
  * 'saved' went in; 'behind' was refused because another tab's career is
  * further along; 'failed' did not go in; 'stale' was dropped because a newer
  * snapshot is already on disk.
@@ -292,6 +307,7 @@ export function autosave(state: GameState): void {
   try {
     snap = { seq: ++taken, json: packState(state), year: state.year, day: state.day, meta: buildSaveMeta(state) }
   } catch {
+    noteSaveFail('pack', state.year, state.day, 0)
     setTrouble({ year: state.year, day: state.day, kept: keptDate })
     return
   }
@@ -343,6 +359,7 @@ function settle(snap: Snapshot, result: AutosaveResult): AutosaveResult {
     // the guard doing its job, not a save that failed: what is on disk is further along, and 再试一次 could not change that
     setTrouble(null)
   } else if (result === 'failed' && snap.seq > landed) {
+    noteSaveFail('write', snap.year, snap.day, Math.round(snap.json.length / 1024))
     setTrouble({ year: snap.year, day: snap.day, kept: keptDate })
   }
   return result

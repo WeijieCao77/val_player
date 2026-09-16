@@ -16,6 +16,7 @@ import type { Rank } from './rank'
 import { dateCn, lockDoing, lockLifts, moveBlock, nextPeriodAbs, todayAbs, windowAt } from './window'
 import type { WindowState } from './window'
 import { pitchBook, pitchBookMut, tallyOf } from './pitchbook'
+import { countOffer, countPitchWhy } from './telemetry'
 
 /**
  * 自荐 and 主动接触: writing to a club instead of waiting to be called.
@@ -383,6 +384,8 @@ export function sendPitch(state: GameState, teamId: string): string | null {
     book.sent.push(team.id)
     pushLog(state, 'deal', `自荐：给 ${team.name}（${label}）发了自荐，把握${oddsWord(odds.pct)}（${odds.pct}%），${when}前回复。`)
   }
+  // 自荐 or 主动接触 went out — which of the two, never to whom
+  countOffer(pro ? 'contact' : 'pitch')
   return null
 }
 
@@ -429,6 +432,7 @@ export function pitchDay(state: GameState): void {
 
 function pitchYes(state: GameState, team: Team, out: PitchOut): void {
   const me = state.me!
+  countOffer('pitch_ok')
   const skill = tryoutSkill(state)
   const where = `${team.name}（${groupCn(state, groupOf(state, team))}）`
   const rng = new Rng(hashStr(`pitch:yes:${state.seed}:${out.id}`))
@@ -460,6 +464,9 @@ function pitchYes(state: GameState, team: Team, out: PitchOut): void {
 function pitchNo(state: GameState, team: Team, out: PitchOut): void {
   const book = pitchBookMut(state)
   const r = pitchWhy(state, team)
+  // the no, and the one reason that weighed most — one of seven (me/types.ts PitchWhy)
+  countOffer('pitch_no')
+  countPitchWhy(r.why)
   const reply: PitchReply = { id: out.id, teamId: team.id, kind: out.kind, odds: out.odds, why: r.why, year: state.year, day: state.day }
   if (r.gap != null) reply.gap = r.gap
   if (r.mate) reply.mate = r.mate

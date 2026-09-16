@@ -4,6 +4,7 @@ import { Modal } from './common'
 import { CEREMONIES, TIER_CN, cerClose, cerFinish, cerNext, cerSkip, mediaMoment } from '../../engine/me/ceremony'
 import { speechOf } from '../../engine/me/nights'
 import type { CerTier } from '../../engine/me/types'
+import { countCeremony } from '../../engine/me/telemetry'
 import { AceGame, PickGame, SpeechGame } from './CeremonyGames'
 import { Medal } from './art/fx'
 import { Scene } from './art/scenes'
@@ -34,8 +35,11 @@ export default function CeremonyModal({ onDone }: { onDone: () => void }) {
   const step = cer.step
 
   const bump = () => { force((n) => n + 1); commit() }
-  const close = () => { cerClose(game); commit(); onDone() }
-  const skip = () => { cerSkip(game); commit(); onDone() }
+  // played through, at whatever it landed on; 直接过去 and the × are a skip, which
+  // lands on silver by design (me/ceremony.ts cerSkip) and is counted as a skip
+  // rather than as a grade nobody earned
+  const close = () => { countCeremony(cer.kind, true, cer.tier ?? 'silver'); cerClose(game); commit(); onDone() }
+  const skip = () => { countCeremony(cer.kind, false, 'silver'); cerSkip(game); commit(); onDone() }
 
   return (
     // the × walks past it too, which is silver — never a dead end

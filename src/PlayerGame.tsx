@@ -46,6 +46,7 @@ import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
 import Tour from './ui/me/Tour'
 import { openTour, weekTourOf } from './ui/me/guide'
+import { countScreen, countTurn, track } from './engine/me/telemetry'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
@@ -60,6 +61,18 @@ const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = 
   { key: 'auto', label: '托管', sep: true },
   { key: 'help', label: '帮助' },
 ]
+
+/**
+ * How far into a career the clock has got, as numbers and enumerated words —
+ * what a turn and a resume report (engine/me/telemetry.ts). The tier is the
+ * rung, never the club: 1 是 VCT，2 是 Challengers，0 是还没有俱乐部。
+ */
+const turnShape = (g: GameState) => ({
+  day: g.day,
+  year: g.year,
+  phase: g.me?.phase ?? 'pre',
+  tier: g.me?.phase === 'pro' ? g.teams[g.myTeam]?.tier ?? 0 : 0,
+})
 
 /**
  * The player career, whole: a game of its own, drawn only from src/ui/me/
@@ -131,6 +144,17 @@ export default function PlayerGame() {
     window.setTimeout(() => setToastMsg((cur) => (cur === msg ? null : cur)), 3200)
   }, [])
 
+  /**
+   * Every nav switch goes through here, so a screen is counted once and rolled
+   * up per key rather than a row a click (engine/me/telemetry.ts countScreen).
+   * The two resets — a career opening, and 回到首页 — set the screen directly:
+   * neither is somebody navigating.
+   */
+  const goScreen = useCallback((key: string) => {
+    countScreen(key)
+    setScreen(key)
+  }, [])
+
   const start = useCallback((g: GameState) => {
     gameRef.current = g
     claimAutosave(g)
@@ -157,6 +181,8 @@ export default function PlayerGame() {
     const inDays = weekInDays(g)
     const stop = advanceTurn(g)
     runAutoPilot(g)
+    // one press of 推进一周, and how deep the career is by it
+    countTurn(turnShape(g))
     commit()
     if (stop.kind === 'match') {
       setLive(new MeMatch(g, stop.fixture))
@@ -190,6 +216,9 @@ export default function PlayerGame() {
     const g = gameRef.current
     if (!g?.me) return
     const { stop, weeks, notes, aside } = advanceUntil(g, until)
+    // a multi-week run is not the same act as a single press: counted apart, or
+    // an average over both would say nothing about either
+    countTurn({ ...turnShape(g), many: true })
     commit()
     if (stop.kind === 'match') {
       if (notes.length) toast(`推进了 ${weeks} 周，替你处理了 ${notes.length} 件事，到你的比赛了。`)
@@ -243,7 +272,7 @@ export default function PlayerGame() {
     toast,
     openPlayer: (id: string) => setPlayerId(id),
     openMatch: setFixture,
-    go: setScreen,
+    go: goScreen,
     // the week screen's tour for where the career is now (ui/me/guide.ts); 帮助 opens the others
     startTutorial: () => openTour(weekTourOf(gameRef.current)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -270,6 +299,13 @@ export default function PlayerGame() {
           // a save from before the eight ceilings gets them now, not at the end of its first week
           resumeTimeline(g)
           ensureCeilings(g)
+          // a career came back, and how far in it already is — the other half of
+          // 「有没有人第二天又回来了」
+          track('career_resume', {
+            ...turnShape(g),
+            pro_seasons: g.me!.seasons.filter((s) => s.tier > 0).length,
+            age: g.players[g.me!.id]?.age ?? 0,
+          })
           // and its first autosave writes the summary a save from before it lacks
           start(g)
           return true
@@ -310,7 +346,7 @@ export default function PlayerGame() {
     <GameCtx.Provider value={ctxValue}>
       <div className="app career">
         <header className="topbar">
-          <button className="brand as-link" onClick={() => setScreen('week')}>
+          <button className="brand as-link" onClick={() => goScreen('week')}>
             VAL<span>选手生涯</span><em className="by">demo</em>
           </button>
           <div className="spacer" />
@@ -376,7 +412,7 @@ export default function PlayerGame() {
               {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
                 <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
               )}
-              <button className="sm ghost to-me" onClick={() => setScreen('me')}>看八项属性 →</button>
+              <button className="sm ghost to-me" onClick={() => goScreen('me')}>看八项属性 →</button>
             </>
           )}
           <button className={`sm ghost num-switch${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
@@ -394,7 +430,7 @@ export default function PlayerGame() {
               return shown.map((s) => (
                 <div key={s.key} className={bar.has(s.key) ? 'nav-bar' : 'nav-rest'}>
                   {s.sep && <div className="nav-group">—</div>}
-                  <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => { setScreen(s.key); setMore(false) }}>{s.label}</button>
+                  <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => { goScreen(s.key); setMore(false) }}>{s.label}</button>
                 </div>
               ))
             })()}
@@ -451,7 +487,7 @@ export default function PlayerGame() {
               : <ul className="diary">{summary.notes.map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>}
             <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 12 }}>
               {/* stopped for an offer set aside: the page it is waiting on, one press away (engine/me/aside.ts) */}
-              {summary.aside && <button onClick={() => { setSummary(null); setScreen('transfer') }}>去「转会」页</button>}
+              {summary.aside && <button onClick={() => { setSummary(null); goScreen('transfer') }}>去「转会」页</button>}
               <button className="primary" onClick={() => setSummary(null)}>{summary.aside ? '接着推进' : summary.why ? '去处理' : '继续'}</button>
             </div>
           </Modal>
@@ -488,7 +524,7 @@ export default function PlayerGame() {
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
         {/* an answer's result, up until it is closed (ui/me/hold.tsx) */}
         <Held />
-        <Tour screen={screen} go={setScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || moments > 0 || unlocks > 0 || heldNow()} />
+        <Tour screen={screen} go={goScreen} blocked={!!live || !!pending || !!summary || !!playerId || !!fixture || moments > 0 || unlocks > 0 || heldNow()} />
         {/* a title, a signing, an award, a new tier: a card each, before anything else takes its turn (ui/me/MomentQueue.tsx) */}
         {!live && !summary && <MomentQueue />}
         {/* what just unlocked waits for the match, the run's summary and those cards, and goes before any card (unlocks above) */}

@@ -17,6 +17,8 @@ import { RivalNode, RivalPost, RivalPre } from './Rivals'
 import Face, { Mug } from './Face'
 import { playsHurt } from '../../engine/me/hurtplay'
 import { injuryStatus } from '../../engine/me/injury'
+import { compClass } from '../../engine/me/compclass'
+import { countMatch } from '../../engine/me/telemetry'
 
 type Phase = 'pre' | 'live' | 'node' | 'break' | 'done'
 const TICK_MS = 380
@@ -111,6 +113,9 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const opp = game.teams[oppId]
   // playing through an injury I said I would, or a cup entered hurt, is still starting (engine/me/hurtplay.ts)
   const starterNow = mine.starters.includes(me.id) && (game.players[me.id].injuredUntil <= game.day || playsHurt(game, f.id, !!mm.friendly))
+  // the competition as a class, never its name: a name is a real event in a real
+  // year (engine/me/compclass.ts), and the class is all 「他们在打什么」 needs
+  const compCls = mm.friendly ? 'cup' : compClass(game.comps[f.comp]?.name ?? f.comp)
 
   // bring the first map up before kickoff so the pre-match screen can read
   // the engine's own estimate, not a guess from team ratings
@@ -128,9 +133,10 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
     if (k === 'node') { setPhase('node'); rerender(); return }
     // a map just ended and another is to come: the clock stops until the player starts it
     if (k === 'map-end') { setPhase('break'); rerender(); return }
-    if (k === 'done') { finishUp(); return }
+    // played all the way through, rather than fast-forwarded (skip)
+    if (k === 'done') { countMatch(compCls, true, starterNow); finishUp(); return }
     rerender()
-  }, [mm, finishUp, rerender])
+  }, [mm, finishUp, rerender, compCls, starterNow])
 
   useEffect(() => {
     if (phase !== 'live') return
@@ -147,6 +153,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const startedAt = useRef(0)
   const skip = () => {
     if (startedAt.current && Date.now() - startedAt.current < 1000) return
+    // 快进到结果 / 快进剩余: the rest of it was not watched
+    countMatch(compCls, false, starterNow)
     mm.runOut()
     finishUp()
   }

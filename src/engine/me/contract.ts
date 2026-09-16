@@ -20,6 +20,7 @@ import { dateCn, lockLifts, lockSaid, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
 import { standAtLeast, standingOf } from './rank'
 import { dropPitch } from './pitchbook'
+import { countOffer } from './telemetry'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -133,6 +134,7 @@ export function declineDeal(state: GameState, dealId: string): string {
   const me = state.me!
   const d = me.deals.find((x) => x.id === dealId)
   if (!d) return '这份报价已经不在了。'
+  countOffer('decline')
   me.deals = me.deals.filter((x) => x.id !== dealId)
   pop(state, 'deal', dealId)
   if (d.kind === 'renew') {
@@ -160,6 +162,7 @@ export function expireDeals(state: GameState, ahead = 0): void {
     if (daysLeft(state, d) >= ahead) continue
     me.deals = me.deals.filter((x) => x.id !== d.id)
     pop(state, 'deal', d.id)
+    countOffer('expire')
     const name = state.teams[d.teamId]?.name ?? '那家俱乐部'
     if (d.kind === 'renew') {
       pushLog(state, 'deal', `${name} 的续约过期了。`)
@@ -198,6 +201,7 @@ export function acceptDeal(state: GameState, dealId: string): string {
   const me = state.me!
   const d = me.deals.find((x) => x.id === dealId)
   if (!d) return '这份报价已经不在了。'
+  countOffer('accept')
   me.deals = me.deals.filter((x) => x.id !== dealId)
   pop(state, 'deal', dealId)
   // a signed deal clears the table

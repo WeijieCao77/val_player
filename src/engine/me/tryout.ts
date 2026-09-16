@@ -7,6 +7,7 @@ import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
 import { tryoutNight } from './nights'
+import { countOffer } from './telemetry'
 
 export interface TryoutOpt {
   t: string
@@ -105,6 +106,7 @@ export function startTryout(state: GameState, inviteId: string): string | null {
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   if (!inv) return '这份邀请已经不在了。'
   if (me.tryout) return '你正在另一家试训。'
+  countOffer('accept')
   pop(state, 'invite', inviteId)
   if (inv.direct) {
     me.pre.invites = me.pre.invites.filter((i) => i.id !== inviteId)
@@ -124,6 +126,7 @@ export function startTryout(state: GameState, inviteId: string): string | null {
 
 export function declineInvite(state: GameState, inviteId: string): void {
   const me = state.me!
+  countOffer('decline')
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   me.pre.invites = me.pre.invites.filter((i) => i.id !== inviteId)
   pop(state, 'invite', inviteId)
