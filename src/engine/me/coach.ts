@@ -16,6 +16,16 @@ export const EDGE_NEED = 3
 export const TRIAL_MATCHES = 2
 
 /**
+ * How hard a week pulls the coach's regard back toward 60 (me/week.ts
+ * settleWeek). Halved 2026-09-16: at 3% a week, trust earned by playing well
+ * was half gone in 23 weeks — inside a single season, and usually before the
+ * next selection decision it was meant to weigh on, so a good run stopped
+ * counting for anything before the player could feel it. At 1.5% it is half
+ * gone in 46 weeks, and a run is still there when the coach next picks a five.
+ */
+export const TRUST_PULL = 0.015
+
+/**
  * A player as the head coach sees him for selection.
  *
  * Everyone is read on the engine's own rule — rating, discounted while the
