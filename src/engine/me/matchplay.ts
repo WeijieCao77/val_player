@@ -7,7 +7,7 @@ import { ratingOf } from '../player'
 import type { Fixture, GameState, MapLine, Player } from '../types'
 import { deskLine } from './press'
 import {
-  HINT_EDGE, KEY_MOMENTUM, WEAK_SHARE,
+  CALL_TRUST_MISS, CALL_TRUST_OK, HINT_EDGE, KEY_MOMENTUM, WEAK_MISS_MUL, WEAK_SHARE,
   autoChance, keyCandidates, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout, nodeText, pickKeyNode,
   weakCandidates, weakDim,
 } from './nodes'
@@ -382,9 +382,14 @@ export class MeMatch {
     // playing to what just worked: a little momentum, and the next rounds run through me — a bigger share of the
     // kills when we take them. The same landing every copy of this round was played with when its premise was read
     if (ok) landCall(m, side, me.id, KEY_MOMENTUM)
-    // the coach was watching: a call that lands earns a little of his trust, one that
-    // misses costs twice that (破晓's +0.3 / −0.6). A cup's temporary five has no coach of mine
-    if (!this.friendly) me.coachTrust = clamp(me.coachTrust + (ok ? 0.3 : -0.6), 0, 100)
+    // the coach was watching: a call that lands earns a little of his trust, one that misses
+    // costs twice that (破晓's +0.3 / −0.6). A round written for what I am worst at lands less
+    // often by design, so missing one of those costs less than fumbling something I am good at
+    // (me/nodes.ts WEAK_MISS_MUL). A cup's temporary five has no coach of mine
+    if (!this.friendly) {
+      const miss = CALL_TRUST_MISS * (pend.node.tier === 'weak' ? WEAK_MISS_MUL : 1)
+      me.coachTrust = clamp(me.coachTrust + (ok ? CALL_TRUST_OK : -miss), 0, 100)
+    }
     const ro = nodeReadout(this.state, opt, this.myTeamId, this.oppTeamId)
     const shown = Math.round(before * 100)
     const entry: NodeLogEntry = {
