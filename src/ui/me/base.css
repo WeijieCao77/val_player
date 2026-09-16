@@ -94,7 +94,11 @@
   --t-body: 14.5px;
   --t-small: 13.5px;
   --t-tiny: 12px;
-  --t-label: 10.5px;
+  /* 10.5px 是给拉丁字母的小标签定的，而这个界面的标签是中文：「从哪一年开始」
+     「冠军」「常规赛」在 10.5px 上已经糊了。作者自己在手机版里把下限定在 12px
+     （me.css 的手机段：「守作者要的 12px」），于是出现了反过来的情况——手机上的
+     标签比桌面上的大。这里把桌面抬到同一条下限上。 */
+  --t-label: 11.5px;
 }
 /* ------------------------------------------------------------- 浅色
    The stat sheet. Panels are white on a cool grey so they keep their edges;
@@ -207,7 +211,7 @@
 
 /* a real monitor has the room */
 @media (min-width: 1100px) {
-  :root { --t-body: 15px; --t-small: 14px; --t-tiny: 12.5px; --t-label: 11px; }
+  :root { --t-body: 15px; --t-small: 14px; --t-tiny: 12.5px; --t-label: 12px; }
 }
 /* a phone does not, and its tables already scroll sideways */
 @media (max-width: 720px) {
@@ -262,7 +266,16 @@ button {
 }
 button:hover:not(:disabled) { background: var(--panel-3); border-color: var(--line-hi); }
 button:active:not(:disabled) { background: var(--line); }
-button:disabled { opacity: .38; cursor: not-allowed; }
+/* 禁用是一种要读的状态，不是一层要眯着眼看的雾。
+   开局页把「下一步该干什么」写在了主按钮的标签上——「先选一个出身」「还需分配
+   N 点天赋」——而 .38 的透明度压在浅色底上，这行字量出来只有 1.87:1，等于把
+   唯一的指路牌调暗到看不清。普通按钮仍然只是变暗（.62 在三套配色下都还在
+   4.5:1 以上）；主按钮改成退掉那块红填充，字留得住，又没有任何地方像是能按。 */
+button:disabled { opacity: .62; cursor: not-allowed; }
+button.primary:disabled {
+  opacity: 1;
+  background: var(--panel-2); border-color: var(--line); color: var(--muted);
+}
 
 button.primary {
   background: var(--accent);
@@ -2011,7 +2024,7 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
 /* the two endings on the game-over screen, one per track */
 .ending { margin: 0 0 16px; }
 .ending .k {
-  display: block; color: var(--faint); font-size: 11px; letter-spacing: .1em;
+  display: block; color: var(--faint); font-size: var(--t-tiny); letter-spacing: .1em;
   margin-bottom: 3px;
 }
 .ending b { display: block; font-size: 22px; letter-spacing: -.01em; margin-bottom: 6px; }
@@ -2108,7 +2121,7 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
 .rules-card { width: min(620px, calc(100vw - 32px)); }
 .rules-body { display: flex; flex-direction: column; gap: 4px; }
 .rules-h {
-  margin: 12px 0 2px; font-size: 11px; font-weight: 700;
+  margin: 12px 0 2px; font-size: var(--t-tiny); font-weight: 700;
   letter-spacing: .12em; color: var(--faint);
 }
 .rules-h.up { color: var(--win); }
@@ -2144,7 +2157,7 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
   font-size: var(--t-small); line-height: 1.7; color: var(--muted);
 }
 .log-kind {
-  flex: none; font-size: 10.5px; line-height: 1.6; padding: 1px 6px;
+  flex: none; font-size: var(--t-tiny); line-height: 1.6; padding: 1px 6px;
   border-radius: 2px; letter-spacing: .04em;
 }
 .k-新增 { background: var(--win-wash); color: var(--win); }
@@ -2220,7 +2233,7 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
 .unlock-mark { font-size: 22px; line-height: 1.2; flex: none; }
 .unlock-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .unlock-body .k {
-  color: var(--warn); font-size: 10.5px; letter-spacing: .12em;
+  color: var(--warn); font-size: var(--t-tiny); letter-spacing: .12em;
 }
 .unlock.hard .unlock-body .k { color: var(--accent); }
 .unlock-body .k em { font-style: normal; opacity: .8; }
