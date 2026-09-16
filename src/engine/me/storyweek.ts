@@ -1,6 +1,6 @@
 import { Rng, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
-import { bondBetween } from '../bonds'
+import { BOND_TIGHT, bondBetween, duoBonded } from '../bonds'
 import { regionIn } from '../era'
 import { hasPlace } from '../timeline'
 import type { EffectSpec, MeAction } from './types'
@@ -111,10 +111,24 @@ interface ChainDef {
   valid: (s: GameState, c: ChainLive) => boolean
   gone?: string
   onOpen?: (s: GameState, c: ChainLive) => void
+  /** what the card itself does to the room, the moment it is on screen */
+  onFire?: (s: GameState, c: ChainLive, id: string) => void
 }
 
 /** weeks between the end of one chain and the start of the next */
 export const CHAIN_GAP = 14
+
+/**
+ * 队内矛盾 flaring up costs the pair (decided 2026-09-16, 「队伍界面显示和队友关系很铁但还是会爆发矛盾」).
+ *
+ * The chain opens with a team-mate the screen does not call 很铁 (engine/bonds.ts BOND_TIGHT), but
+ * the weeks between its cards can warm the pair back up — my own answers are worth +5 and +8, and a
+ * winning run pulls everyone together. The row coming to a head anyway was then a card about two men
+ * who were not falling out any more. Now the escalation itself is what it says it is: the pair drops
+ * at least RIFT_FLARE, and always under the 很铁 line, before its card is on screen, and the week says so.
+ */
+export const RIFT_FLARE = 8
+const RIFT_ROWS = ['ch_rift_boil', 'ch_rift_bad']
 
 const aged = (s: GameState, key: string, v: string[], weeks: number): boolean => {
   const r = seedLive(s, key, v)
@@ -196,14 +210,31 @@ const CHAINS: ChainDef[] = [
       const team = s.teams[s.myTeam]
       const mates = (team?.roster ?? []).filter((id) => id !== me.id && s.players[id])
       if (mates.length < 4) return null
+      // one of the two I get on worst with — and never a man the team screen calls 很铁
+      // (engine/bonds.ts BOND_TIGHT): two who would follow each other anywhere do not stop
+      // speaking over one round of a practice match. A whole room that close has no rift in it.
       const sorted = mates.sort((a, b) => bondBetween(s, me.id, a) - bondBetween(s, me.id, b))
-      return { mate: sorted[rng.int(0, 1)], from: aged(s, 'blame', ['fight'], 1) ? 'blame' : undefined }
+        .filter((id) => bondBetween(s, me.id, id) < BOND_TIGHT)
+      if (!sorted.length) return null
+      return { mate: sorted[rng.int(0, Math.min(1, sorted.length - 1))], from: aged(s, 'blame', ['fight'], 1) ? 'blame' : undefined }
     },
     chance: (_s, c) => (c.from ? 0.3 : 0.025),
     opener: () => 'ch_rift_open',
     next: (_s, c, met) => (c.step === 1 ? (met ? 'ch_rift_thaw' : 'ch_rift_boil') : met ? 'ch_rift_ok' : 'ch_rift_bad'),
     valid: (s, c) => isPro(s) && !!c.mate && !!s.teams[s.myTeam]?.roster.includes(c.mate),
     gone: '「队内矛盾」没来得及解开：他已经不在队里了。',
+    // the row coming to a head is what it says it is: RIFT_FLARE off the pair, and under the 很铁 line
+    onFire: (s, c, id) => {
+      const me = s.me!
+      const mate = c.mate ? s.players[c.mate] : undefined
+      if (!RIFT_ROWS.includes(id) || !mate) return
+      const now = bondBetween(s, me.id, mate.id)
+      const drop = Math.min(-RIFT_FLARE, BOND_TIGHT - 1 - now)
+      duoBonded(s, me.id, mate.id, drop)
+      const line = `你和 ${mate.ign} 的矛盾闹大了，关系 ${Math.round(drop)}。`
+      pushLog(s, 'bad', line)
+      me.weekNotes.push(line)
+    },
   },
 ]
 const CHAIN_BY_ID: Record<string, ChainDef> = Object.fromEntries(CHAINS.map((c) => [c.id, c]))
@@ -276,6 +307,7 @@ function chainTick(state: GameState, rng: Rng): boolean {
   if (!id) { closeChain(state, met ? 'ok' : 'miss'); return false }
   if (!fireEvent(state, id)) { closeChain(state, 'expired'); return false }
   c.asked = id
+  def.onFire?.(state, c, id)
   return true
 }
 
@@ -291,6 +323,7 @@ export function openChain(state: GameState, id: string, rng: Rng, setup?: Partia
   const opener = def.opener(state, c)
   if (!fireEvent(state, opener)) { me.chain = undefined; return false }
   c.asked = opener
+  def.onFire?.(state, c, opener)
   me.flags[`chain_${id}`] = (me.flags[`chain_${id}`] ?? 0) + 1
   // a chain grown from a seed is that seed's echo
   const seed = c.from ? me.seeds?.[c.from] : undefined

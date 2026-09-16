@@ -21,6 +21,26 @@ import type { GameState, MatchResult, Player } from './types'
 export const NEUTRAL = 10
 
 /**
+ * What a bond is called, and the line the room's own friction reads (decided 2026-09-16,
+ * 「队伍界面显示和队友关系很铁但还是会爆发矛盾」).
+ *
+ * The words and the rules used to live apart. The team screen called a pair 很铁 from 45 up
+ * (ui/me/TeamScreen.tsx had the ladder to itself), while an argument after a defeat asked only
+ * where the pair ended that night, and 队内矛盾 (me/storyweek.ts) picked whichever team-mate I
+ * got on worst with — however well that was. A career opens with every team-mate at 47–52
+ * (initialBond), so the story could put me in a row with a man the screen called 很铁 in the
+ * very same week.
+ *
+ * One ladder now says both. A pair at BOND_TIGHT or above does not fall out over a defeat or a
+ * background beat; a story beat that does flare up takes them under the line first, so the screen
+ * says what happened before the card does.
+ */
+export const BOND_TIGHT = 45
+export const BOND_GOOD = 20
+export const bondWord = (v: number): string =>
+  v >= BOND_TIGHT ? '很铁' : v >= BOND_GOOD ? '不错' : v >= 0 ? '一般' : v >= -30 ? '有点疏远' : '闹掰了'
+
+/**
  * How easy a player is to share a room with: 协同 and 沟通 against 68, halved.
  * 68 is a Challengers regular (2026: p50 67 and 69), so the man a career player
  * lines up beside sits near 0; a fresh 18-year-old with two talent points in
@@ -272,7 +292,13 @@ export function applyMatchBonds(
       // hidden number crossing a line: one player carried, the other was well
       // off it, and they were already not getting on — or, for two awkward men,
       // not getting on well enough.
-      if (gap >= 0.45 && after < argueAt(live)) {
+      //
+      // And they have to have been not getting on *before* the game: two men the
+      // team screen calls 很铁 (BOND_TIGHT) do not fall out over one defeat, however
+      // far apart their lines were. The defeat still costs them the whole damage
+      // above — a run of them takes a pair under the line, and then the next one
+      // is said. Where there is no career player (the manager game), the old rule.
+      if (gap >= 0.45 && after < argueAt(live) && (live == null || standing < BOND_TIGHT)) {
         // where the room is live, the same two do not argue again inside ARGUE_GAP days; the defeat above still cost the bond
         const today = state.year * 400 + state.day
         const k = key(x.p.id, y.p.id)

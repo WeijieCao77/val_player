@@ -1,7 +1,7 @@
 import { useGame } from './ctx'
 import { Condition, OvrBadge, Panel, Roles } from './common'
-import { bondBetween } from '../../engine/bonds'
-import { callerOf } from '../../engine/roster'
+import { bondBetween, bondWord } from '../../engine/bonds'
+import { callerOf, squadOf } from '../../engine/roster'
 import { attrWord, trustLabel, useNumbers } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, roomCall, standingLine } from '../../engine/me/coach'
@@ -17,7 +17,9 @@ import { leagueCurOf } from '../../engine/me/currency'
 import { useState } from 'react'
 import Face from './Face'
 
-const bondWord = (v: number) => v >= 45 ? '很铁' : v >= 20 ? '不错' : v >= 0 ? '一般' : v >= -30 ? '有点疏远' : '闹掰了'
+// 很铁 / 不错 / 一般 …: the ladder is the engine's (engine/bonds.ts bondWord), because the room's own
+// friction reads it — a pair this screen calls 很铁 does not argue over a defeat and is not who
+// 队内矛盾 comes for
 
 export default function TeamScreen() {
   const { game, openPlayer } = useGame()
@@ -189,10 +191,19 @@ function RoomPanel() {
   const call = roomCall(game)
   const f1 = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`
   const vsMates = v.ease - v.mates
+  // 你和队友 is one number over four of them, so it can read 很铁 while one pair is nowhere near it —
+  // and that pair is the one a row comes from. Name him where the word for him is not the word above.
+  const me = game.me!
+  const cool = squadOf(game, game.myTeam)
+    .filter((x) => x.id !== me.id)
+    .map((x) => ({ x, v: bondBetween(game, me.id, x.id) }))
+    .sort((a, b) => a.v - b.v)[0]
+  const odd = cool && bondWord(cool.v) !== bondWord(v.mine)
   return (
     <Panel title="化学反应">
       <p className="small" style={{ margin: '0 0 6px' }}>
-        你和队友：<b>{bondWord(v.mine)}</b>{nums ? `（${Math.round(v.mine)}）` : ''} · 全队之间：<b>{bondWord(v.squad)}</b>{nums ? `（${Math.round(v.squad)}）` : ''}
+        你和队友：<b>{bondWord(v.mine)}</b>{nums ? `（${Math.round(v.mine)}）` : ''}
+        {odd ? <span className="muted">（和 {cool.x.ign} 只算{bondWord(cool.v)}）</span> : null} · 全队之间：<b>{bondWord(v.squad)}</b>{nums ? `（${Math.round(v.squad)}）` : ''}
       </p>
       <p className="small" style={{ margin: '0 0 6px' }}>
         你的协同、沟通{vsMates >= 3 ? '比队里多数人高' : vsMates <= -3 ? '比队里多数人低' : '和队里差不多'}

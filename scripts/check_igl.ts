@@ -12,7 +12,9 @@
  *    scripts/probe_igl.ts, at the career player's club only; between two players of the same level the coach
  *    starts the easier one, and a clearly better player is not passed over for it; a feud that stays past the
  *    line is said at most once every FEUD_GAP days, and at once again after it has been above the line; the
- *    same two do not argue again inside ARGUE_GAP days, and the defeat still costs their bond
+ *    same two do not argue again inside ARGUE_GAP days, and the defeat still costs their bond; and a pair the
+ *    team screen calls 很铁 (engine/bonds.ts bondWord, BOND_TIGHT) neither argues over a defeat nor is who
+ *    队内矛盾 comes for, while the row that does come to a head takes the pair under the line first
  * 四 快进 and 托管 stay expectation-neutral: autoChance is what it was, and a caller's call made on autopilot
  *    lands exactly as often as anyone's
  * 五 the new-career screen names the caller path and the room only where they are true
@@ -20,7 +22,8 @@
  *    ceilings; the week's pick follows the lean past 均衡型, 均衡型's plan is the role's to the point, and the
  *    talent's session adds one of its own practice in place of one other — never a session a live break counts
  * 七 how often the balanced duelist is in a 💢 line on 托管 over six seasons, on three seeds: ARGUE_BAND
- *    (decided 2026-09-14: about twice the 7.7 before the room was live)
+ *    (decided 2026-09-14: about twice the 7.7 before the room was live) — and never one with a team-mate the
+ *    team screen called 很铁 that week, card of 队内矛盾 included
  *
  *   npx tsx scripts/check_igl.ts
  */
@@ -34,7 +37,9 @@ import { callerOf, squadOf } from '../src/engine/roster'
 import { IGL_EDGE, activePool, buildLineup } from '../src/engine/match'
 import { coachStarters, coachView } from '../src/engine/me/coach'
 import { ROOM_EDGE_MAX, ROOM_FORM_MAX, roomBond, roomEdge, roomForm } from '../src/engine/me/room'
-import { ARGUE_GAP, FEUD_GAP, applyMatchBonds, argueAt, bondBetween, duoBonded, liveEase, lossMul, rateMul, restOf, weeklyBonds, winMul } from '../src/engine/bonds'
+import { ARGUE_GAP, BOND_TIGHT, FEUD_GAP, applyMatchBonds, argueAt, bondBetween, bondWord, duoBonded, liveEase, lossMul, rateMul, restOf, weeklyBonds, winMul } from '../src/engine/bonds'
+import { openChain, storyWeek } from '../src/engine/me/storyweek'
+import { resolveEvent } from '../src/engine/me/events'
 import { leaveClub } from '../src/engine/me/contract'
 import { LEAN_FULL, autoPlan, autoWeek, duoMate, talentLean, talentPick, talentSessions } from '../src/engine/me/auto'
 import type { Practice } from '../src/engine/me/auto'
@@ -360,6 +365,47 @@ console.log('三、协同、沟通')
   const m = { ...fresh(), me: undefined, argueSaid: undefined } as GameState
   ok(argue(m).said && argue(m).said && m.argueSaid === undefined, '没有生涯主角的存档，同一对队友的争执也被隔开了')
 }
+{
+  // 很铁: the word on the team screen is the line the room reads (engine/bonds.ts bondWord)
+  const s = fresh()
+  const [a, b] = squadOf(s, s.myTeam).filter((x) => x.id !== s.me!.id)
+  const line = (kills: number, deaths: number) => ({ rounds: 24, kills, deaths, assists: 0, firstKills: 0, firstDeaths: 0, damage: 0, clutches: 0 })
+  const loss = { mapsWonA: 0, mapsWonB: 2, lineups: { a: [a.id, b.id], b: [] }, maps: [{ lines: { [a.id]: line(30, 10), [b.id]: line(4, 22) } }] } as unknown as MatchResult
+  duoBonded(s, a.id, b.id, BOND_TIGHT + 15 - bondBetween(s, a.id, b.id))
+  const before = bondBetween(s, a.id, b.id)
+  const notes: string[] = []
+  applyMatchBonds(s, loss, s.myTeam, true, new Rng(20260916), notes)
+  const after = bondBetween(s, a.id, b.id)
+  ok(bondWord(before) === '很铁', `（检查本身）关系 ${f2(before)} 在队伍界面上不写作「很铁」`)
+  ok(!notes.some((n) => n.includes('赛后起了争执')), `队伍界面写着「很铁」的一对（${f2(before)}），一场有人扛有人没扛的败仗就吵起来了`)
+  ok(after < before - 5, `「很铁」的一对输了这场球，关系只掉了 ${f2(before - after)}`)
+  console.log(`  「很铁」的一对（${f2(before)}）输掉一场一个人扛的比赛：没起争执，关系掉到 ${f2(after)}`)
+
+  // 队内矛盾 does not come for a team-mate the screen calls 很铁
+  const t = fresh()
+  const me = t.me!
+  const mates = squadOf(t, t.myTeam).filter((x) => x.id !== me.id)
+  for (const x of mates) duoBonded(t, me.id, x.id, BOND_TIGHT + 10 - bondBetween(t, me.id, x.id))
+  ok(!openChain(t, 'rift', new Rng(7)), '全队都「很铁」，「队内矛盾」还是找上了其中一个')
+  const cold = mates[mates.length - 1]
+  duoBonded(t, me.id, cold.id, 5 - bondBetween(t, me.id, cold.id))
+  const opened = openChain(t, 'rift', new Rng(7))
+  ok(opened && me.chain?.mate === cold.id,
+    `「队内矛盾」没有找关系最淡的 ${cold.ign}：${me.chain?.mate ? t.players[me.chain.mate].ign : '一张卡都没开'}`)
+  // the weeks between the cards warmed them back up, and the task went undone: the row itself takes them under the line
+  resolveEvent(t, 'ch_rift_open', 0)
+  duoBonded(t, me.id, cold.id, BOND_TIGHT + 10 - bondBetween(t, me.id, cold.id))
+  me.chain!.due = me.week
+  me.chain!.got = 0
+  me.weekNotes = []
+  storyWeek(t)
+  const card = me.pendingEvent
+  const now = bondBetween(t, me.id, cold.id)
+  ok(card === 'ch_rift_boil', `矛盾没解决，弹出来的却是「${card ?? '没有卡'}」`)
+  ok(now < BOND_TIGHT, `「队内矛盾」闹大了，和 ${cold.ign} 的关系还写作「${bondWord(now)}」（${f2(now)}）`)
+  ok(me.weekNotes.some((n) => n.includes(cold.ign) && n.includes('关系')), '矛盾闹大了，这一周却没有一行说关系掉了')
+  console.log(`  矛盾闹大的那一张（${card}）：和 ${cold.ign} 的关系从 ${f2(BOND_TIGHT + 10)} 掉到 ${f2(now)}，写作「${bondWord(now)}」`)
+}
 
 console.log('四、快进和托管仍然期望中性')
 {
@@ -499,12 +545,16 @@ function roomy(t: Record<keyof Attrs, number>): GameState {
   ok(JSON.stringify(e1.me!.plan) === JSON.stringify(e2.me!.plan), `均衡型托管的一周和原来不一样：${JSON.stringify(e1.me!.plan)} / ${JSON.stringify(e2.me!.plan)}`)
 }
 
-console.log('七、均衡型决斗者托管六个赛季的争执')
+console.log('七、均衡型决斗者托管六个赛季的争执，以及闹矛盾的都不是「很铁」的队友')
 {
   const ARGUE_BAND = [10, 20]
   const REGION_OF: Record<number, Region> = { 7: 'Americas', 8: 'Pacific', 9: 'EMEA' }
+  // the cards of 队内矛盾 that are a row rather than a thaw (me/events_more.ts)
+  const ROWS = ['ch_rift_open', 'ch_rift_boil', 'ch_rift_bad']
   const per: string[] = []
   let total = 0
+  let tight = 0
+  const tightSaid: string[] = []
   for (const seed of [7, 8, 9]) {
     const s = createCareer({ name: `P${seed}`, region: REGION_OF[seed], role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2026 })
     const me = s.me!
@@ -512,6 +562,9 @@ console.log('七、均衡型决斗者托管六个赛季的争执')
     let weeks = 0, argues = 0, feuds = 0, all = 0
     // as scripts/probe_igl.ts counts them: the 💢 lines of a professional week that name me
     while (s.year < 2032 && me.phase !== 'retired' && weeks < 360) {
+      // what the team screen said about each of them when the week began (engine/bonds.ts bondWord)
+      const seen: Record<string, number> = {}
+      if (me.phase === 'pro' && s.myTeam) for (const x of squadOf(s, s.myTeam)) if (x.id !== me.id) seen[x.ign] = bondBetween(s, me.id, x.id)
       const stop = autoWeek(s)
       weeks++
       if (me.phase === 'pro' && s.myTeam) {
@@ -519,6 +572,22 @@ console.log('七、均衡型决斗者托管六个赛季的争执')
         all += mine.length
         argues += mine.filter((n) => n.includes('赛后起了争执')).length
         feuds += mine.filter((n) => n.includes('关系还没缓和')).length
+        for (const n of mine) {
+          const m = n.match(/^💢 (.+?) [和与] (.+?) (在赛后起了争执|的关系还没缓和)/)
+          const other = m ? (m[1] === p.ign ? m[2] : m[1]) : ''
+          if (seen[other] != null && seen[other] >= BOND_TIGHT) {
+            tight++
+            tightSaid.push(`种子 ${seed}：${n.slice(0, 34)}…（周初 ${seen[other].toFixed(0)}）`)
+          }
+        }
+        // and the card of a row that is on screen now names a man the screen does not call 很铁 either
+        const card = me.pendingEvent
+        const mate = me.chain?.mate
+        const bond = mate ? bondBetween(s, me.id, mate) : 0
+        if (card && ROWS.includes(card) && mate && bond >= BOND_TIGHT) {
+          tight++
+          tightSaid.push(`种子 ${seed}：${card} 找上了 ${s.players[mate]?.ign}（${bond.toFixed(0)}）`)
+        }
       }
       if (stop.kind === 'game-over') break
     }
@@ -526,8 +595,9 @@ console.log('七、均衡型决斗者托管六个赛季的争执')
     total += all
   }
   const avg = total / 3
-  console.log(`  ${per.join('；')}；平均 ${avg.toFixed(1)}`)
+  console.log(`  ${per.join('；')}；平均 ${avg.toFixed(1)}；其中队伍界面写着「很铁」的 ${tight} 次`)
   ok(avg >= ARGUE_BAND[0] && avg <= ARGUE_BAND[1], `均衡型决斗者六个赛季平均 ${avg.toFixed(1)} 条 💢，应在 ${ARGUE_BAND[0]}–${ARGUE_BAND[1]}`)
+  ok(tight === 0, `和队伍界面写着「很铁」的队友闹了 ${tight} 次：${tightSaid.slice(0, 3).join('；')}`)
 }
 
 const secs = ((Date.now() - t0) / 1000).toFixed(0)
