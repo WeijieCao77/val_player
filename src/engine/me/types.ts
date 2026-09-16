@@ -516,6 +516,8 @@ export interface BottleneckState {
   rev?: number
   /** true once what a save from before banked at its ceilings (「存点数」, gone 2026-09-14) has been dropped (me/bottleneck.ts dropBank) */
   noBank?: boolean
+  /** sessions events have handed each counted path since its last break, against evtCap (me/bottleneck.ts ceilingXp); absent in older saves */
+  evt?: Partial<Record<keyof Attrs, number>>
 }
 
 /** What can be wrong with me - see me/injury.ts. */

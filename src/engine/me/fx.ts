@@ -2,6 +2,7 @@ import { Rng, clamp } from '../rng'
 import type { GameState } from '../types'
 import { duoBonded } from '../bonds'
 import { addXp } from './growth'
+import { atCeiling, takeCeilingXp } from './bottleneck'
 import { addMoney } from './money'
 import { cnySigned } from './moneyfmt'
 import type { EffectSpec } from './types'
@@ -42,6 +43,10 @@ export function applyEffect(state: GameState, e: EffectSpec, rng?: Rng): string[
   }
   if (e.xp && p) {
     for (const [k, v] of Object.entries(e.xp) as [keyof typeof ATTR_CN, number][]) {
+      // at his own ceiling the bar takes nothing and nothing is banked: the hours
+      // count toward breaking it where the path is one a week could have planned,
+      // and are refused in plain words where it is not (me/bottleneck.ts ceilingXp)
+      if (p.caps && atCeiling(p, k)) { out.push(takeCeilingXp(state, k, v)); continue }
       const rose = addXp(p, k, v)
       // the bar under each attribute: 100% is one more point
       out.push(rose ? `${ATTR_CN[k]} 涨到 ${p.attrs[k]}` : `${ATTR_CN[k]} ${num(v, '%')}（攒满 100% 涨 1 点）`)

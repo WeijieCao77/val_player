@@ -1,6 +1,7 @@
 import { Rng, hashStr } from '../rng'
-import type { GameState } from '../types'
+import type { Attrs, GameState } from '../types'
 import { ATTR_CN } from '../types'
+import { ceilingXp } from './bottleneck'
 import type { Axis, EffectSpec } from './types'
 import { pushLog } from './log'
 import { push, pop } from './pending'
@@ -202,6 +203,11 @@ function canFire(state: GameState, ev: EventDef): boolean {
  * What an option would do, in the words the settlement uses — shown on the
  * button, so a choice is a choice and not a guess. Random parts (who the bond
  * lands on, whether an attribute rises) are left out.
+ *
+ * With the career in hand it also says what practice is worth on an attribute
+ * already at its ceiling: the same sentence the result line will (me/fx.ts,
+ * me/bottleneck.ts ceilingXp). Without it the option promised 「枪法有长进」
+ * where the xp had nowhere to go.
  */
 export function describeEffect(e: EffectSpec, state?: GameState): string {
   const num = (v: number, unit = '') => `${v > 0 ? '+' : ''}${Math.round(v)}${unit}`
@@ -220,7 +226,12 @@ export function describeEffect(e: EffectSpec, state?: GameState): string {
   if (e.coachTrust) out.push(`教练信任 ${num(e.coachTrust)}`)
   if (e.gmTrust) out.push(`经理信任 ${num(e.gmTrust)}`)
   if (e.bond) out.push(`队友关系 ${num(e.bond)}`)
-  if (e.xp) for (const k of Object.keys(e.xp)) out.push(`${ATTR_CN[k as keyof typeof ATTR_CN]}有长进`)
+  if (e.xp) {
+    for (const [k, v] of Object.entries(e.xp) as [keyof Attrs, number][]) {
+      const at = state ? ceilingXp(state, k, v) : { add: 0, text: '' }
+      out.push(at.text || `${ATTR_CN[k]}有长进`)
+    }
+  }
   // more ranked moves the score; putting it off takes none — from 神话 up the place slides, below 神话 nothing (fx.ts, me/rank.ts putOffRanked)
   if ((e.ladder ?? 0) > 0) out.push(`天梯 ${num(e.ladder!)}`)
   else if (e.ladder && (!state?.me || onBoard(state.me.pre.ladder))) out.push(PUT_OFF_CN)

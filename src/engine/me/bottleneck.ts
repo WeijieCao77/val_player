@@ -479,6 +479,68 @@ export function breakInfo(state: GameState, k: K): BreakInfo {
   return { how: P.how, prog: P.prog(state), dead, locked: !dead && !!P.pro && state.me!.phase !== 'pro' }
 }
 
+/**
+ * 事件里的练习，落在已经卡在瓶颈上的一项上。
+ *
+ * An option that says 「练枪 +10」 was worth exactly nothing there: addXp
+ * (me/growth.ts) drops xp at a ceiling, the bar is already empty, and the card
+ * had promised progress anyway — so a player read the cards as noise and started
+ * answering at random (reported 2026-09-16). Nothing is banked, that rule stands
+ * (「卡在瓶颈时不再存点」), so the hours go where the week's own hours go: into
+ * the count that breaks the ceiling, which the 「怎么破」 card shows.
+ *
+ * Only on the paths a player could have planned himself — breakCount reads the
+ * week board for these four: 排位, 复盘, 道具与跑图, 训练赛. 残局 and 指挥 count
+ * what a match gave (clutches won, maps called), and 枪法 counts weeks in a row,
+ * not sessions; an event cannot honestly add to those, so it says so and takes
+ * nothing.
+ */
+export const EVT_PATHS: K[] = ['reaction', 'awareness', 'utility', 'teamwork']
+/** the word for one session of each, as the count is read out */
+const EVT_CN: Partial<Record<K, string>> = { reaction: '排位', awareness: '复盘', utility: '道具与跑图', teamwork: '训练赛' }
+/** xp an event has to carry to be worth one session of the path it joins */
+export const EVT_XP_PER = 10
+/** the most of a path's count events may ever hand it, as a share of what it needs — a third, so an event can help and never replace the practice */
+export const EVT_SHARE = 1 / 3
+export const evtCap = (need: number): number => Math.max(1, Math.round(need * EVT_SHARE))
+
+export interface CeilingXp {
+  /** sessions this xp adds to the path's count; 0 = nothing happens */
+  add: number
+  /** the one sentence the option's button says before and the result line says after */
+  text: string
+}
+
+/**
+ * What an event's xp does to an attribute that is already at its ceiling,
+ * worked out without changing anything — so what the player reads before
+ * choosing is what happens after (me/events.ts describeEffect, me/fx.ts).
+ * Empty text for an attribute with room under it: that xp is ordinary progress.
+ */
+export function ceilingXp(state: GameState, k: K, xp: number): CeilingXp {
+  const me = state.me
+  const p = me ? state.players[me.id] : undefined
+  if (!me || !p?.caps || !atCeiling(p, k) || xp <= 0) return { add: 0, text: '' }
+  const cn = ATTR_CN[k]
+  const c = EVT_PATHS.includes(k) ? breakCount(state, k) : null
+  if (!c || !chasing(state, k)) return { add: 0, text: `${cn}到头了，先破瓶颈` }
+  const room = Math.min(evtCap(c.need) - (me.bottleneck?.evt?.[k] ?? 0), c.need - c.have)
+  if (room <= 0) return { add: 0, text: `${cn}到头了：这条路上事件能顶的已经顶满，剩下的要自己练` }
+  const add = Math.min(room, Math.max(1, Math.round(xp / EVT_XP_PER)))
+  return { add, text: `${cn}卡在瓶颈，这次算进${EVT_CN[k]} ${c.have + add}/${c.need}` }
+}
+
+/** Take it: the count moves, the 「怎么破」 card shows it, and the line says the same thing the button did. */
+export function takeCeilingXp(state: GameState, k: K, xp: number): string {
+  const plan = ceilingXp(state, k, xp)
+  if (plan.add <= 0) return plan.text
+  const bn = ensureCeilings(state)
+  if (!bn) return plan.text
+  bn.count[k] = (bn.count[k] ?? 0) + plan.add
+  bn.evt = { ...(bn.evt ?? {}), [k]: (bn.evt?.[k] ?? 0) + plan.add }
+  return plan.text
+}
+
 /** The attribute each week-board action trains and breaks. */
 const ACTION_ATTR: Partial<Record<string, K>> = { aim: 'aim', vod: 'awareness', util: 'utility', ranked: 'reaction', scrim: 'teamwork' }
 
@@ -604,6 +666,8 @@ export function bottleneckWeek(state: GameState): void {
     if (paid > 0) {
       if (k === 'aim') bn.aimStreak = 0
       bn.count[k] = 0
+      // what events handed this path is spent with it: the next ceiling is worked at from zero (ceilingXp)
+      if (bn.evt?.[k]) bn.evt[k] = 0
     } else {
       // chasing asked planBreak first, so this is not expected — said, and the count kept, never emptied in silence
       say(state, 'info', `${ATTR_CN[k]}的「怎么破」做满了，但这次没能破开：${pathDead(state, k) ?? '瓶颈这回没有松动'}。计数留着。`)
