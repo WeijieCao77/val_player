@@ -21,9 +21,26 @@
  * 六 托管's training follows the talent: a career keeps its talent and an older save reads it back off its
  *    ceilings; the week's pick follows the lean past 均衡型, 均衡型's plan is the role's to the point, and the
  *    talent's session adds one of its own practice in place of one other — never a session a live break counts
- * 七 how often the balanced duelist is in a 💢 line on 托管 over six seasons, on three seeds: ARGUE_BAND
- *    (decided 2026-09-14: about twice the 7.7 before the room was live) — and never one with a team-mate the
- *    team screen called 很铁 that week, card of 队内矛盾 included
+ * 七 how often the balanced duelist is in a 💢 line on 托管 over six seasons, on five seeds: ARGUE_GUARD —
+ *    and never one with a team-mate the team screen called 很铁 that week, card of 队内矛盾 included
+ *
+ *    The band this replaces was 10–20 on the mean of three seeds, written as 「about twice the 7.7 before
+ *    the room was live」. It measured one career. Over 16 seeds (scripts/probe_argue.ts) the count per
+ *    career is 1 2 3 3 3 4 5 9 10 13 13 17 18 32 34 38: seven at or under 5, three at or over 32, and
+ *    nothing at all between 18 and 32 — a heavy right tail with a detached upper cluster, median 9.5,
+ *    mean 12.81. The three seeds 7/8/9 rode seed 8's 38 to a mean of 14.67 and passed; the five seeds
+ *    below gave 9.00 in the world that wrote the band (28917bc) and 9.20 here.
+ *
+ *    No location statistic survives. The median is 9.5 here against 2 in that same world, so any band is
+ *    calibrated to whichever world wrote it and breaks at the next data or me/auto.ts change. Nor is
+ *    leave-one-out stability a property of the distribution: the median moves 2.50 at n=6 and n=8, 2.00
+ *    at n=9, 0.50 at n=10, 1.50 at n=11, 0.50 at n=12, 1.50 at n=14, 0.50 at n=16 — stable only where the
+ *    middle pair happens to miss a gap, so picking the n that scores well is fitting the sample. And a
+ *    six-season career with no arguments at all is a real outcome (that world's seed 11 scored 0), so
+ *    nothing here may require every seed to argue.
+ *
+ *    What is left is the honest limit: arguments have not been switched off, and have not become weekly.
+ *    Re-derive with npx tsx scripts/probe_argue.ts before touching ARGUE_GUARD.
  *
  *   npx tsx scripts/check_igl.ts
  */
@@ -547,15 +564,19 @@ function roomy(t: Record<keyof Attrs, number>): GameState {
 
 console.log('七、均衡型决斗者托管六个赛季的争执，以及闹矛盾的都不是「很铁」的队友')
 {
-  const ARGUE_BAND = [10, 20]
-  const REGION_OF: Record<number, Region> = { 7: 'Americas', 8: 'Pacific', 9: 'EMEA' }
+  // a guard, not a rate: the count per career runs 1 to 38 and its median moves with the world, so this
+  // only catches 争执 being switched off or becoming weekly (see the header, and scripts/probe_argue.ts)
+  const ARGUE_GUARD = [1, 40]
+  const SEEDS = [7, 8, 9, 11, 12]
+  // the regions scripts/probe_argue.ts starts these seeds in
+  const REGION_OF: Record<number, Region> = { 7: 'Americas', 8: 'Pacific', 9: 'EMEA', 11: 'Americas', 12: 'Pacific' }
   // the cards of 队内矛盾 that are a row rather than a thaw (me/events_more.ts)
   const ROWS = ['ch_rift_open', 'ch_rift_boil', 'ch_rift_bad']
   const per: string[] = []
   let total = 0
   let tight = 0
   const tightSaid: string[] = []
-  for (const seed of [7, 8, 9]) {
+  for (const seed of SEEDS) {
     const s = createCareer({ name: `P${seed}`, region: REGION_OF[seed], role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2026 })
     const me = s.me!
     const p = s.players[me.id]
@@ -594,9 +615,9 @@ console.log('七、均衡型决斗者托管六个赛季的争执，以及闹矛�
     per.push(`种子 ${seed}：${all}（赛后争执 ${argues} · 还没缓和 ${feuds}）`)
     total += all
   }
-  const avg = total / 3
+  const avg = total / SEEDS.length
   console.log(`  ${per.join('；')}；平均 ${avg.toFixed(1)}；其中队伍界面写着「很铁」的 ${tight} 次`)
-  ok(avg >= ARGUE_BAND[0] && avg <= ARGUE_BAND[1], `均衡型决斗者六个赛季平均 ${avg.toFixed(1)} 条 💢，应在 ${ARGUE_BAND[0]}–${ARGUE_BAND[1]}`)
+  ok(avg >= ARGUE_GUARD[0] && avg <= ARGUE_GUARD[1], `均衡型决斗者六个赛季平均 ${avg.toFixed(1)} 条 💢，应在 ${ARGUE_GUARD[0]}–${ARGUE_GUARD[1]}（这一条只防争执被关掉、或者变成每周都吵，不是速率）`)
   ok(tight === 0, `和队伍界面写着「很铁」的队友闹了 ${tight} 次：${tightSaid.slice(0, 3).join('；')}`)
 }
 
