@@ -21,6 +21,18 @@ import './tour.css'
  */
 const SECTIONS: { title: string; lines: string[] }[] = [
   {
+    // the one word on each start card (engine/me/career.ts START_CN tag), said in full here: what the
+    // door gives you on day one, and what it costs in time. The ceiling is the same through all three
+    // — 天赋 and 出身 decide it — so what differs is how soon you stand on which stage.
+    title: '开局怎么选',
+    lines: [
+      '「从天梯开始」（挑战）：三扇门里唯一没有俱乐部、也没有工资的一个。杯赛、排位、粉丝换来试训，第一份合同多半在第一个赛季里，打进 VCT 联赛还要再等好几个赛季。',
+      '「Challengers 二队」（中等，2021 年叫二线队首发）：第一天就有俱乐部，而且是二队首发，打的是二级赛事。上一线队要先在二队打出名堂，奖杯也从二级赛事拿起。',
+      '「VCT 替补」（轻松，2021 年叫强队替补）：第一天就在一线队名单上，第一年就可能跟着队伍站上国际赛。代价是首发位置得自己抢，教练不认你就一直坐着。',
+      '三扇门的天花板一样：属性上限由天赋和出身决定，开局决定的是你多快站上哪种舞台、多早碰到奖杯。',
+    ],
+  },
+  {
     title: '一周怎么过',
     lines: [
       `每周有一把行动点：没有队伍 ${AP_PRE} 点，签约后 ${AP_SEASON} 点，受伤时 ${AP_HURT} 点。`,

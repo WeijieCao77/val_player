@@ -353,7 +353,12 @@ export default function NewCareer({
         <div className="start-grid">
           {(Object.keys(starts) as StartPoint[]).map((k) => (
             <button key={k} className={`start-card${start === k ? ' on' : ''}`} onClick={() => pickStart(k)}>
-              <b>{starts[k].name}</b>
+              {/* one word for how hard this door is (career.ts START_CN tag), in the tag colours the game
+                  already uses: 挑战 warns, 轻松 is the easy one. What it means is in 帮助「开局怎么选」 */}
+              <span className="start-head">
+                <b>{starts[k].name}</b>
+                <span className={`tag${k === 'pre' ? ' warn' : k === 't1' ? ' win' : ''}`}>{starts[k].tag}</span>
+              </span>
               <span>{starts[k].blurb}</span>
             </button>
           ))}

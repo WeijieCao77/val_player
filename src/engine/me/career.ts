@@ -53,20 +53,31 @@ export type StartPoint = 'pre' | 'chal' | 't1'
  * A club start is a door, not a club to pick (asked 2026-09-12: 「这个出身选择就应该是直接从二队有俱乐部开始」):
  * the game assigns the club (pickClub), and the club shows once the career has started.
  */
-export const START_CN: Record<StartPoint, { name: string; blurb: string }> = {
-  pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。排位、杯赛、试训，先拿到第一份合同。最长的路，也是完整的路。' },
-  chal: { name: 'Challengers 二队', blurb: '18 岁，一支俱乐部二队的首发：一线队的 Academy，赛区里没有就是一支 Challengers 俱乐部。开局分到哪家由游戏决定。' },
-  t1: { name: 'VCT 替补', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。开局分到哪家由游戏决定。' },
+/**
+ * A door's card on the new-career screen: its name, one word for how hard it is, one line.
+ *
+ * The word is the whole of what the screen says about the difficulty (asked 2026-09-16:
+ * 「开局的身份选择上不要写的那么多」). Measured over six seasons, the three doors differ in when you
+ * reach a stage, not in how good you can get — the ceiling is the 天赋 and 出身: a ladder start is the
+ * only one that opens with no club and took some five seasons to reach a VCT side, a 替补 start opens
+ * on a league roster and took its first title in its first season. The detail is in 帮助「开局怎么选」.
+ */
+export interface StartCopy { name: string; tag: string; blurb: string }
+
+export const START_CN: Record<StartPoint, StartCopy> = {
+  pre: { name: '从天梯开始', tag: '挑战', blurb: '17 岁，没有队伍。排位、杯赛、试训，先拿到第一份合同。最长的路，也是完整的路。' },
+  chal: { name: 'Challengers 二队', tag: '中等', blurb: '18 岁，一支俱乐部二队的首发：一线队的 Academy，赛区里没有就是一支 Challengers 俱乐部。' },
+  t1: { name: 'VCT 替补', tag: '轻松', blurb: '18 岁，一级俱乐部的第六人。名单上有你，首发没有。' },
 }
 
 /** 2021 had no leagues and no academies to start in: the same three doors, as they were then. */
-export const START_CN_2021: Record<StartPoint, { name: string; blurb: string }> = {
-  pre: { name: '从天梯开始', blurb: '17 岁，没有队伍。2021 年没有联赛也没有青训体系：排位、网吧赛、试训——哪家俱乐部看上你，哪家就给你合同。' },
-  chal: { name: '二线队首发', blurb: '18 岁，一支还没打出名堂的俱乐部的首发，开放海选一场场打上去。开局分到哪家由游戏决定。' },
-  t1: { name: '强队替补', blurb: '18 岁，一支打进过赛区决赛的俱乐部的第六人。名单上有你，首发没有。开局分到哪家由游戏决定。' },
+export const START_CN_2021: Record<StartPoint, StartCopy> = {
+  pre: { name: '从天梯开始', tag: '挑战', blurb: '17 岁，没有队伍。2021 年没有联赛也没有青训体系：排位、网吧赛、试训，哪家看上你哪家就给合同。' },
+  chal: { name: '二线队首发', tag: '中等', blurb: '18 岁，一支还没打出名堂的俱乐部的首发，开放海选一场场打上去。' },
+  t1: { name: '强队替补', tag: '轻松', blurb: '18 岁，一支打进过赛区决赛的俱乐部的第六人。名单上有你，首发没有。' },
 }
 
-export const startCnOf = (year: number): Record<StartPoint, { name: string; blurb: string }> =>
+export const startCnOf = (year: number): Record<StartPoint, StartCopy> =>
   (year <= 2021 ? START_CN_2021 : START_CN)
 
 export interface CareerOpts {

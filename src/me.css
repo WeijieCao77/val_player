@@ -334,6 +334,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .start-card, .origin-pick { text-align: left; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 10px 12px; white-space: normal; height: auto; }
 .start-card.on, .origin-pick.on { border-color: var(--accent); background: var(--accent-wash); }
 .start-card span, .origin-pick span { font-size: var(--t-small); color: var(--muted); font-weight: 400; }
+/* the door's name and its one difficulty word on one line; on a narrow phone the word wraps under the
+   name instead of stretching the card (the head is a span, so it needs to out-weigh .start-card span) */
+.start-card .start-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: inherit; color: inherit; font-weight: inherit; }
+.start-card .start-head .tag { flex: none; font-size: var(--t-tiny); }
 .origin-pick em { font-size: var(--t-tiny); color: var(--faint); font-style: normal; }
 /* three cards dealt: a row of three, or one column on a phone — never two and a stray */
 .origin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
