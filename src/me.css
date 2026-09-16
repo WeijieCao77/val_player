@@ -343,23 +343,97 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .origin-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 720px) { .origin-grid { grid-template-columns: 1fr; } }
 
-/* ---- the career on one card ---- */
-.poster-me { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(160deg, var(--panel), var(--panel-2)); }
-.poster-me .eyebrow { font-size: var(--t-tiny); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; overflow-wrap: anywhere; }
-.poster-me h1 { margin: 2px 0 6px; font-size: 34px; }
-.poster-me .txt { color: var(--muted); margin: 0 0 12px; }
-.poster-me .wall { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.poster-me .trophy { padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line-hi); font-size: var(--t-small); }
-.poster-me .trophy.c { border-color: var(--gold); color: var(--gold); }
-.poster-me .trophy.m { border-color: var(--accent); color: var(--accent); }
-.poster-me .trophy.ring { opacity: .6; }
-/* a club's name wraps inside its year: twelve seasons of long names were wider than a phone */
-.poster-me .years td { padding: 2px 8px 2px 0; font-size: var(--t-small); white-space: normal; }
-.poster-me .nums { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0; }
-.poster-me .nums div { display: flex; flex-direction: column; }
-.poster-me .nums b { font-size: 22px; }
-.poster-me .nums span { font-size: var(--t-tiny); color: var(--muted); }
-.poster-me .sig { font-size: var(--t-tiny); color: var(--faint); border-top: 1px solid var(--line-soft); padding-top: 8px; }
+/* ---- the career on one card ----
+   The last thing a save shows, rebuilt 2026-09-16 after 破晓's 生涯名片. The
+   hierarchy is borrowed, not the look: the verdict is set four times the size
+   of anything around it, and the trophies are tiles in three tiers — 冠军赛 >
+   大师赛 > 赛区冠军 — so the shelf can be read at a glance instead of scanned.
+   Everything here is a token, so all three grounds get it (ui/me/theme.ts). */
+.poster-me { position: relative; padding: 26px 24px 18px; border: 1px solid var(--line-hi); border-radius: var(--radius);
+  background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--panel), var(--panel-2)); }
+/* an inner hairline, so the card reads as a keepsake and not as one more panel */
+.poster-me::before { content: ''; position: absolute; inset: 6px; border-radius: 2px; pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--gold) 20%, transparent); }
+.poster-me > * { position: relative; }
+
+.poster-me .pm-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-family: var(--mono); font-size: var(--t-tiny); letter-spacing: .18em; color: var(--faint); overflow-wrap: anywhere; }
+.poster-me .pm-mark { color: var(--accent); }
+
+/* the verdict — me/endings.ts, the whole point of the card */
+.poster-me .pm-hero { text-align: center; margin: 20px 0 14px; }
+.poster-me .pm-verdict { margin: 0 0 8px; font-size: 40px; font-weight: 800; line-height: 1.15;
+  letter-spacing: .03em; color: var(--gold); text-wrap: balance; }
+.poster-me .pm-story { margin: 0 auto; max-width: 34em; font-size: var(--t-body); line-height: 1.75; color: var(--muted); }
+.poster-me .pm-id { margin: 0 0 14px; text-align: center; font-size: var(--t-small); color: var(--faint); overflow-wrap: anywhere; }
+.poster-me .pm-id b { color: var(--text); }
+
+/* the shelf, in three tiers */
+.poster-me .pm-wall { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  padding: 14px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.poster-me .pm-t { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 122px;
+  padding: 10px 8px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius); }
+.poster-me .pm-t-ic { display: block; width: 26px; height: 26px; color: var(--muted); font-style: normal; line-height: 1; }
+.poster-me .pm-t-ic svg { display: block; width: 100%; height: 100%; }
+.poster-me .pm-t-n { font-size: var(--t-small); font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.poster-me .pm-t-y { font-size: var(--t-tiny); font-style: normal; color: var(--faint); letter-spacing: .06em; }
+/* 冠军赛 takes the metal and the room; 大师赛 the accent; a 赛区冠军 the plain border */
+.poster-me .pm-t.champions { width: 158px; border-color: var(--gold);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 18%, transparent), transparent); }
+.poster-me .pm-t.champions .pm-t-ic { width: 38px; height: 38px; color: var(--gold); }
+.poster-me .pm-t.champions .pm-t-n { color: var(--gold); }
+.poster-me .pm-t.masters { border-color: var(--accent-line); }
+.poster-me .pm-t.masters .pm-t-ic { color: var(--accent); }
+/* won from the bench: the trophy is real and stays on the shelf, but it loses the metal */
+.poster-me .pm-t.ring { opacity: .72; }
+.poster-me .pm-t.ring .pm-t-ic, .poster-me .pm-t.ring .pm-t-n { color: var(--muted); }
+/* no trophies at all is an outcome, not an error state: a tile that says how far it got */
+.poster-me .pm-t.none { width: auto; max-width: 100%; padding: 12px 22px; border-style: dashed; }
+.poster-me .pm-t.none .pm-t-ic { font-size: 22px; color: var(--faint); }
+.poster-me .pm-note { margin: 10px 0 0; text-align: center; font-size: var(--t-small); color: var(--muted); }
+
+/* 大师赛 / 冠军赛 the club played and did not win (engine/me/intl.ts) */
+.poster-me .pm-runs { display: flex; flex-direction: column; gap: 3px; margin: 12px 0 0; padding: 10px 12px;
+  border-left: 2px solid var(--accent-line); background: var(--accent-wash); border-radius: 0 8px 8px 0; }
+.poster-me .pm-runs-k { font-size: var(--t-tiny); letter-spacing: .08em; color: var(--faint); }
+.poster-me .pm-run { font-size: var(--t-small); color: var(--muted); }
+
+/* year by year, one row each; a title year wears the metal down its edge */
+.poster-me .pm-years { display: grid; gap: 1px; margin: 16px 0; background: var(--line-soft);
+  border: 1px solid var(--line-soft); border-radius: var(--radius); overflow: hidden; }
+.poster-me .pm-yr { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 6px 10px; background: var(--panel); font-size: var(--t-small); }
+.poster-me .pm-yr b { font-family: var(--mono); font-weight: 700; color: var(--muted); }
+.poster-me .pm-yr-t { overflow-wrap: anywhere; }
+.poster-me .pm-yr-r { font-size: var(--t-tiny); color: var(--faint); text-align: right; white-space: nowrap; }
+.poster-me .pm-yr.won { background: color-mix(in srgb, var(--gold) 9%, var(--panel)); box-shadow: inset 3px 0 0 var(--gold); }
+.poster-me .pm-yr.won b { color: var(--gold); }
+
+/* five, and two of them are words */
+.poster-me .pm-nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px;
+  padding: 12px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.poster-me .pm-nums div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.poster-me .pm-nums small { font-size: var(--t-tiny); letter-spacing: .06em; color: var(--faint); }
+.poster-me .pm-nums b { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.poster-me .pm-nums b.w { font-size: var(--t-small); font-weight: 650; line-height: 1.5; }
+.poster-me .pm-sub { font-size: var(--t-tiny); font-style: normal; font-weight: 400; color: var(--faint); }
+
+.poster-me .sig { font-size: var(--t-tiny); color: var(--faint); border-top: 1px solid var(--line-soft);
+  padding-top: 8px; overflow-wrap: anywhere; }
+
+@media (max-width: 560px) {
+  .poster-me { padding: 18px 13px 14px; }
+  .poster-me::before { inset: 4px; }
+  .poster-me .pm-top { letter-spacing: .1em; }
+  .poster-me .pm-verdict { font-size: 30px; }
+  /* two to a row, and 冠军赛 keeps its own — it is the one that must not be skimmed */
+  .poster-me .pm-t { width: calc(50% - 4px); }
+  .poster-me .pm-t.champions { width: 100%; }
+  .poster-me .pm-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+  .poster-me .pm-yr { grid-template-columns: 46px minmax(0, 1fr); row-gap: 2px; }
+  .poster-me .pm-yr-r { grid-column: 2; text-align: left; white-space: normal; }
+}
 
 /* the names on the other side, and what they have won */
 .light { padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
