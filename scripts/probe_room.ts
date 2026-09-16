@@ -28,7 +28,7 @@ import { advanceWeek } from '../src/engine/me/week'
 import type { WeekStop } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { NODES } from '../src/engine/me/nodes'
-import { coachStarters } from '../src/engine/me/coach'
+import { coachStarters, coachView } from '../src/engine/me/coach'
 import { roomBase, roomEdge, roomForm } from '../src/engine/me/room'
 import { squadOf } from '../src/engine/roster'
 import { weightsFor } from '../src/engine/player'
@@ -82,6 +82,10 @@ interface Tally {
   lineupWeeks: number
   fiveMoved: number
   meMoved: number
+  /** weeks my place is the contract's or a trial's, whatever the coach reads */
+  pinned: number
+  /** how far the coach's own reading puts me from the 5/6 line — what the room would have to cross */
+  margins: number[]
   edges: number[]
   forms: number[]
   edgeAtCap: number
@@ -98,7 +102,7 @@ interface Tally {
 }
 
 const blank = (): Tally => ({
-  matches: 0, flips: 0, lineupWeeks: 0, fiveMoved: 0, meMoved: 0,
+  matches: 0, flips: 0, lineupWeeks: 0, fiveMoved: 0, meMoved: 0, pinned: 0, margins: [],
   edges: [], forms: [], edgeAtCap: 0, formAtCap: 0,
   trustBySeason: new Map(), trust: [], calls: 0, onWeak: 0, offered: 0, proWeeks: 0, secs: 0,
 })
@@ -182,6 +186,23 @@ function career(role: Role, seed: number, t: Tally): void {
       const same = withRoom.slice().sort().join() === plain.slice().sort().join()
       if (!same) t.fiveMoved++
       if (withRoom.includes(me.id) !== plain.includes(me.id)) t.meMoved++
+      // why it reaches my place or does not: a place written into the contract, or a trial, is mine
+      // whatever the coach reads (me/coach.ts coachStarters) — and when it is not, how far his own
+      // reading puts me from the 5/6 line, which is the distance the room would have to cover
+      const mine = state.players[me.id]
+      const promised = mine?.contract?.promisedRole
+      if (me.trial || ((promised === 'starter' || promised === 'star') && !(me.benchLock && me.benchLock > state.day))) t.pinned++
+      const squadNow = squadOf(state, state.myTeam)
+      if (squadNow.length > 5) {
+        const cv = new Map(squadNow.map((p) => [p.id, coachView(state, p, false)]))
+        const sorted = squadNow.slice().sort((a, b) => cv.get(b.id)! - cv.get(a.id)!)
+        const rank = sorted.findIndex((p) => p.id === me.id)
+        if (rank >= 0) {
+          t.margins.push(rank < 5
+            ? cv.get(sorted[rank].id)! - cv.get(sorted[5].id)!
+            : cv.get(sorted[4].id)! - cv.get(sorted[rank].id)!)
+        }
+      }
       // and how big the room's two terms actually are, across the whole squad
       const base = roomBase(state, state.myTeam)
       for (const p of squadOf(state, state.myTeam)) {
@@ -215,6 +236,7 @@ console.log(`\n更衣室探针 · ${ROLES.join('/')} × 种子 ${SEEDS.join('/')
 console.log(`\n一、更衣室能不能决定比赛`)
 console.log(`  同一个种子打两遍（有更衣室 / 把更衣室从世界里拿掉）：${t.matches} 场正赛，结果不一样的 ${t.flips} 场（${pct(t.flips, t.matches)}）`)
 console.log(`  只看教练那一项：${t.lineupWeeks} 个在队的周里，首发名单被它改动 ${t.fiveMoved} 周（${pct(t.fiveMoved, t.lineupWeeks)}），你自己的位置被它改动 ${t.meMoved} 周（${pct(t.meMoved, t.lineupWeeks)}）`)
+console.log(`  你的位置为什么（没）被它改：合同写死首发、或正在试用期的周 ${pct(t.pinned, t.lineupWeeks)}；教练自己的读数把你和首发线隔开 p10 ${f2(q(t.margins, 0.1))} · p50 ${f2(q(t.margins, 0.5))} · p90 ${f2(q(t.margins, 0.9))}（更衣室那一项要跨过这个数才动得了你）`)
 console.log(`  这两项本身有多大：教练眼里 p10 ${f2(q(t.edges, 0.1))} · p50 ${f2(q(t.edges, 0.5))} · p90 ${f2(q(t.edges, 0.9))}，顶到上限的 ${pct(t.edgeAtCap, t.edges.length)}`)
 console.log(`                    状态   p10 ${f2(q(t.forms, 0.1))} · p50 ${f2(q(t.forms, 0.5))} · p90 ${f2(q(t.forms, 0.9))}，顶到上限的 ${pct(t.formAtCap, t.forms.length)}`)
 
