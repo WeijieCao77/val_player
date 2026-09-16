@@ -363,16 +363,21 @@ export const WEAK_SHARE = 0.2
  * A round written for the weakest thing about me costs WEAK_MISS_MUL of that
  * when it misses (2026-09-16). Those rounds are judged on the one attribute the
  * player is worst at, so by design they land less often than the rest; charging
- * them the full price made a bad season worse. With them switched on and the
- * price unchanged, the weeks spent at 50 regard or below went 19.2% → 28.0%
- * over the same careers (scripts/probe_room.ts, the same seeds with WEAK_SHARE
- * at 0 and at 0.2). Showing a player what he is worst at should cost him
- * something; it should not compound on the player already having the worst of
- * it.
+ * them the full price made a bad season worse. With them switched on at full
+ * price, the weeks spent at 50 regard or below went 19.2% → 28.0% over the same
+ * careers (scripts/probe_room.ts, the same seeds with WEAK_SHARE at 0 and 0.2).
+ *
+ * Half price removed that — 21.5% → 20.6% — and overshot. At +0.3/−0.3 against
+ * an ordinary round's +0.3/−0.6, the round that deliberately asks after a
+ * player's worst attribute had become the safest call in the game, and the
+ * weeks at 「信任」 or better ran 17.0% → 23.4% with it switched on. Testing a
+ * weakness is meant to be a gamble on a question that is unfair by design:
+ * cheaper than fumbling something he is good at, never the risk-free option.
+ * So three quarters, −0.45.
  */
 export const CALL_TRUST_OK = 0.3
 export const CALL_TRUST_MISS = 0.6
-export const WEAK_MISS_MUL = 0.5
+export const WEAK_MISS_MUL = 0.75
 
 /** A node that fits the key round, with the counts of theirs it may say are standing ([-1] when it says nothing about that). */
 export interface KeyCandidate { node: NodeDef; standing: number[] }
