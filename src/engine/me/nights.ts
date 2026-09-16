@@ -10,6 +10,7 @@ import { push } from './pending'
 import { cerCounted } from './cerbudget'
 import { bondAll, bondCardLines } from './bond'
 import { compCn } from './compname'
+import { compClass } from './compclass'
 import { outletRecap } from './outlets'
 import { ARRIVALS_UNTIL, arrivalsBetween, arrivedBy } from './releases'
 import type { Arrival } from './releases'
@@ -340,7 +341,14 @@ export function retireRecap(state: GameState): string[] {
   const span = pro[0].year === pro[pro.length - 1].year ? `${pro[0].year} 年` : `${pro[0].year}–${pro[pro.length - 1].year}`
   lines.push(`${span}，${pro.length} 个职业赛季，效力过 ${clubs.join('、')}。`)
   const started = me.titles.filter((t) => t.started)
-  const weight = (t: string) => (/Champions/.test(t) ? 3 : /Masters/.test(t) ? 2 : 1)
+  // 冠军赛 > 大师赛 > 赛区冠军, off what the event is. It was /Champions/ and
+  // /Masters/, which the timeline's own names never match (engine/circuit.ts
+  // books `${year} 全球冠军赛`), so the three named here were picked by year
+  // alone and a world title could be left out for a 赛段 win.
+  const weight = (t: string) => {
+    const c = compClass(t)
+    return c === 'champions' ? 3 : c === 'masters' || c === 'lockin' ? 2 : 1
+  }
   if (started.length) {
     const top = started.slice().sort((a, b) => weight(b.title) - weight(a.title) || a.year - b.year).slice(0, 3)
     lines.push(`冠军 ${started.length} 座：${top.map((t) => `${t.year} ${compCn(t.title)}`).join('、')}${started.length > 3 ? ' 等' : ''}。`)
