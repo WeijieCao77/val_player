@@ -178,7 +178,10 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h3>{title}</h3>
+          {/* a card that carries its own headline passes none: the career-end
+              card's 「生涯结束」 sat one line above its own verdict. The head
+              stays for the way out. */}
+          {title ? <h3>{title}</h3> : null}
           <div className="spacer" style={{ flex: 1 }} />
           <button className="sm ghost" onClick={onClose}>关闭 ✕</button>
         </div>

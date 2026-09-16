@@ -573,7 +573,8 @@ function EndingModal({ onDone }: { onDone: () => void }) {
   const close = () => { pop(game, 'ending'); commit(); onDone() }
   return (
     <>
-      <Modal wide title="生涯结束" onClose={close} onBgClose={() => {}}>
+      {/* no title: the card's own verdict (me/endings.ts) is the headline */}
+      <Modal wide title={null} onClose={close} onBgClose={() => {}}>
         <Poster />
         {/* a screenshot comes with the address bar and no way in for whoever sees it */}
         <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 12 }}>
