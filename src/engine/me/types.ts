@@ -1,4 +1,5 @@
 import type { Attrs, Region, SquadRole } from '../types'
+import type { CompClass } from './compclass'
 import type { Cur } from './currency'
 
 /** What a week's action points can be spent on. */
@@ -266,7 +267,17 @@ export interface MeIntlRun {
   key: string
   /** the competition's stored name (me/compname.ts turns it into words) */
   comp: string
-  /** the line the season's row and the 赛季结束 card show */
+  /**
+   * What the line says, kept apart from the prose so campaigns can be ranked without
+   * reading it back: the competition's class as me/compclass.ts reads it — 冠军赛 above
+   * 大师赛, the same rule the trophy wall ranks by — and the placing, 夺冠 being 1.
+   * `place` is absent where the club finished unranked, which is what the line says in
+   * words; both are absent in a save written before they existed, and nothing is derived
+   * from the line to fill them in.
+   */
+  cls?: CompClass
+  place?: number
+  /** the line the season's row and the 赛季结束 card show, rendered as authored */
   line: string
   matches: number
   starts: number

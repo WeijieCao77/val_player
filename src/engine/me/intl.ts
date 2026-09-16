@@ -1,4 +1,4 @@
-import { isIntlComp } from './compclass'
+import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
 import type { Competition, GameState } from '../types'
 import type { MeState } from './types'
@@ -61,10 +61,15 @@ export function noteIntlRun(state: GameState): void {
     const wins = mine.filter((m) => m.won).length
     const losses = mine.filter((m) => !m.won && !m.drawn).length
     const starts = mine.filter((m) => m.started).length
-    const place = placeOf(comp, club)
+    // the champion's own placing, so the number and the word can never disagree
+    const place = comp.champion === club ? (placeOf(comp, club) ?? 1) : placeOf(comp, club)
     const how = comp.champion === club ? '夺冠' : place ? `第 ${place} 名` : '没能排上名次'
     runs.push({
       year: state.year, key, comp: comp.name, matches: mine.length, starts, wins,
+      // the two facts the line states in words, kept apart from it so a campaign can be
+      // ranked without reading the prose back — 冠军赛 above 大师赛, and a 3–4 finish
+      // above a group exit. The line itself is unchanged: it is rendered as authored.
+      cls: compClass(comp.name), ...(place != null ? { place } : {}),
       line: `${compCn(comp.name)} ${wins} 胜 ${losses} 负 · ${how}`
         + `（你${starts ? `首发 ${starts} 场` : '没有出场'}）`,
     })

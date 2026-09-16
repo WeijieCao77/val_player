@@ -44,7 +44,7 @@ import { advanceTurn } from '../src/engine/me/week'
 import { advanceUntil, autoPlan, autoResolve, runAutoPilot } from '../src/engine/me/auto'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { takeMoment } from '../src/engine/me/moments'
-import { isIntlComp } from '../src/engine/me/compclass'
+import { compClass, isIntlComp } from '../src/engine/me/compclass'
 import { compCn } from '../src/engine/me/compname'
 import type { GameState, Region } from '../src/engine/types'
 
@@ -168,6 +168,7 @@ let sample = 0
 let inSummary = 0
 let played = 0
 let cardsSeen = 0
+let fieldsSeen = 0
 
 for (const o of SCN) {
   const born = createCareer({
@@ -222,6 +223,23 @@ for (const o of SCN) {
         fail(`${o.label} · ${run.label}：${r.year} ${compCn(r.name)} 打了 ${r.fxPlayed} 场，却没弹「打进大赛」的卡`)
       }
     }
+
+    // The campaign's class and placing are kept beside the line so the career-end card can
+    // rank campaigns without reading the prose back (engine/me/types.ts MeIntlRun). They have
+    // to say exactly what the line says, or the two drift apart the moment either is edited.
+    for (const r of me.intlRuns ?? []) {
+      if (r.cls !== compClass(r.comp)) {
+        fail(`${o.label} · ${run.label}：${r.year} ${compCn(r.comp)} 的赛事类别记成「${r.cls ?? '没记'}」，`
+          + `compClass 读出来是「${compClass(r.comp)}」`)
+      }
+      const said = r.line.match(/第 (\d+) 名/)
+      const want = r.line.includes('· 夺冠') ? 1 : said ? Number(said[1]) : undefined
+      if (r.place !== want) {
+        fail(`${o.label} · ${run.label}：${r.year} ${compCn(r.comp)} 的名次记成「${r.place ?? '没记'}」，`
+          + `行里写的是「${r.line}」`)
+      }
+      fieldsSeen++
+    }
   }
 
   // the two ways of playing the season out must see the same thing
@@ -259,12 +277,14 @@ for (const o of SCN) {
 
 if (sample < SAMPLE_MIN) fail(`只查到 ${sample} 项我队打过的大师赛 / 冠军赛，样本太少（至少 ${SAMPLE_MIN} 项）`)
 if (cardsSeen < CARDS_MIN) fail(`只弹出 ${cardsSeen} 张「打进大赛」的卡，样本太少（至少 ${CARDS_MIN} 张）`)
+if (fieldsSeen < SAMPLE_MIN) fail(`只查到 ${fieldsSeen} 条大师赛 / 冠军赛战绩，样本太少（至少 ${SAMPLE_MIN} 条）`)
 if (!inSummary) fail('「快进到赛季末」的推进总结里，一场大师赛 / 冠军赛都没写')
 
 console.log(bad
   ? `\n✗ ${bad} 项不对。`
   : `\n✓ 我队打过的 ${sample} 项大师赛 / 冠军赛，两条路（周推、快进到赛季末）打出的场次和结果一样，`
     + `每一项都真打了、也都写进了赛季总结；推进总结里写到了其中 ${inSummary} 项，我自己的记录共 ${played} 场；`
-    + `${cardsSeen} 张「打进大赛」的卡，每一张都是我队真打了的赛事，真打了的也都弹了卡`
+    + `${cardsSeen} 张「打进大赛」的卡，每一张都是我队真打了的赛事，真打了的也都弹了卡；`
+    + `${fieldsSeen} 条战绩记下的赛事类别和名次，和那一行写的一字不差`
     + ` · ${((Date.now() - t0) / 1000).toFixed(0)}s`)
 process.exit(bad ? 1 : 0)
