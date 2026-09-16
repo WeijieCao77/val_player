@@ -1,7 +1,7 @@
 import type { Competition, GameState, Team } from '../types'
 import { onTimeline, regionIn, stagesOf } from '../era'
-import { datesKnown, drawOutlook, eventOf, eventsOf, floorOf, gameOf, phaseOnlyOf, roundAheadOf } from '../circuit'
-import type { CEvent } from '../circuit'
+import { datesKnown, drawOutlook, entryDayIn, eventOf, eventsOf, floorOf, gameOf, phaseOnlyOf, roundAheadOf } from '../circuit'
+import type { CEvent, PhaseHold } from '../circuit'
 import { inVctLeague, sceneFor } from '../timeline'
 
 /**
@@ -35,10 +35,14 @@ import { inVctLeague, sceneFor } from '../timeline'
  *    the season to the day before its first of the next. Riot's published windows are
  *    not read. Where it could go either way it leans closed (「赛事期间都应该没办法转会」):
  *      · on an event's floor — seeded into its own matches, or sent on to them by its
- *        qualifier (circuit.ts floorOf): from the event's first day, its qualifiers'
- *        days included, to its last, whether it is out early or not — a Masters' Swiss
- *        stage lost, a league stage whose playoffs it did not reach, an Ascension's
- *        groups: a roster registered for it. The line says it is out;
+ *        qualifier (circuit.ts floorOf): from the first day of the phase it enters to the
+ *        event's last day, whether it is out early or not — a Masters' Swiss stage lost, a
+ *        league stage whose playoffs it did not reach, an Ascension's groups: a roster
+ *        registered for it. The line says it is out. 「从自己第一场所在阶段锁」 (the author,
+ *        2026-09-14): a club seeded past an event's qualifiers is not held for their weeks —
+ *        a Masters playoff seed waits for the playoffs — while one that came up through a
+ *        qualifier is held from that qualifier's first day. A Challengers league kept as one
+ *        long event still holds its clubs from their first phase to the event's last day;
  *      · in a phase kept as its result — an open or closed qualifier, a regular season,
  *        a promotion series, played as history had it — and no further (circuit.ts
  *        phaseOnlyOf): from that phase's first day to its last, the day it went out not
@@ -65,6 +69,10 @@ import { inVctLeague, sceneFor } from '../timeline'
  * market around me is not asked: it turns over at its own two moments
  * (MARKET_DAYS, me/market.ts), and in the book's years history moves the clubs out
  * of my reach (engine/timeline.ts).
+ *
+ * A transfer period carries one round of calls whatever the window does to it: from 2023
+ * that round's chance is spread over the period's open days alone, so the gaps between
+ * events carry what the event days cannot (rollWeight, 「集中到开窗的日子」).
  */
 
 /* ------------------------------------------------------------------ */
@@ -114,34 +122,148 @@ export function periodKey(year: number, day: number): number {
 export type RollKind = 'market' | 'stage' | 'week'
 /** Each kind of moment's share of a period's round of calls, before it is spread over the period. */
 export const ROLL_BASE: Record<RollKind, number> = { market: 3, stage: 2, week: 0.2 }
+/** The moments of one day, in the order the week runs them (me/week.ts): a stage that opens, the market day, the week's end. */
+const ORDER: RollKind[] = ['stage', 'market', 'week']
+
+/**
+ * How much of the old spread one moment may carry once the round is concentrated on the open days
+ * (rollWeight). Concentration is there to give back what the shut days took, not to add: a moment
+ * carries at most this much of what it carried when the round was spread over the period end to end,
+ * so a transfer period tops out at about this times the share of it the window is open for. Without
+ * the cap a career at a 2026 club was offered half again as many moves as before the windows narrowed
+ * (probe_window_phase: VCT 0.58 → 1.17 a season against about 1.0 before, Challengers 0.92 → 1.50
+ * against about 1.1).
+ */
+export const ROLL_CAP = 1.5
+
+/** The days a transfer period covers, by year: the winter one runs from the day after the winter market into the next year. */
+function periodSpans(key: number): [number, number, number][] {
+  const y = Math.floor(key / 2)
+  return key % 2 === 0
+    ? [[y - 1, MARKET_DAYS[1] + 1, 363], [y, 0, MARKET_DAYS[0]]]
+    : [[y, MARKET_DAYS[0] + 1, MARKET_DAYS[1]]]
+}
+
 const BUDGET = new Map<string, number>()
 /**
- * How much of a period's round of calls one moment carries: its kind's share over
- * the period's whole budget — its market day, each stage that opens inside it
- * (the season's turn is not rolled), each week. A period open from end to end adds
- * up to one round, the chance its market day alone used to carry; a period the
- * window shuts for part of gets that part less.
+ * A period's whole budget of moments, the days the window is shut included: its market day, each stage
+ * that opens inside it (the season's turn is not rolled), each week. Spread over all of them, a period
+ * adds up to one round — the chance its market day alone used to carry.
  */
-export function rollWeight(state: GameState, kind: RollKind): number {
+function periodBudget(state: GameState): number {
   const key = periodKey(state.year, state.day)
   const timeline = onTimeline(state)
   const at = `${key}:${timeline}`
   let budget = BUDGET.get(at)
   if (budget == null) {
-    const y = Math.floor(key / 2)
-    const spans: [number, number, number][] = key % 2 === 0
-      ? [[y - 1, MARKET_DAYS[1] + 1, 363], [y, 0, MARKET_DAYS[0]]]
-      : [[y, MARKET_DAYS[0] + 1, MARKET_DAYS[1]]]
     let stages = 0
     let days = 0
-    for (const [yy, a, b] of spans) {
+    for (const [yy, a, b] of periodSpans(key)) {
       days += b - a + 1
       stages += stagesOf(yy, timeline).filter((s) => s.start > 0 && s.start >= a && s.start <= b).length
     }
     budget = ROLL_BASE.market + ROLL_BASE.stage * stages + ROLL_BASE.week * Math.floor(days / 7)
     BUDGET.set(at, budget)
   }
-  return ROLL_BASE[kind] / budget
+  return budget
+}
+
+/** Does a stage open on this day (me/week.ts onStageChange)? The season's turn has its own business and is not rolled. */
+function stageOpens(state: GameState, abs: number): boolean {
+  const { y } = ymdOf(abs)
+  const d = abs - absDay(y, 0)
+  return d > 0 && stagesOf(y, onTimeline(state)).some((s) => s.start === d)
+}
+
+/**
+ * How much of this period's round its days before today already carried, counted as the whole budget
+ * counts them: a career that starts, or a save that is read, in the middle of a period does not get the
+ * chance those days had (me/transfer.ts syncPeriod).
+ */
+export function periodElapsed(state: GameState): number {
+  const T = todayAbs(state)
+  const first = periodSpans(periodKey(state.year, state.day))[0]
+  const from = absDay(first[0], first[1])
+  let spent = ROLL_BASE.week * Math.floor(Math.max(0, T - from) / 7)
+  for (let d = from; d < T; d++) if (stageOpens(state, d)) spent += ROLL_BASE.stage
+  return Math.min(1, spent / periodBudget(state))
+}
+
+const SPANS = new WeakMap<GameState, { at: string; of: Map<string, [number, number][]> }>()
+/** 2023 on: the days from `from` to `to` (absolute) the club's window is open, as the books stand today. */
+function openAhead(state: GameState, team: Team, from: number, to: number): [number, number][] {
+  const at = dayKey(state)
+  return daily(SPANS, state, at, `${team.id}:${from}:${to}`, () => {
+    const out: [number, number][] = []
+    let day = from
+    for (let i = 0; i < 24 && day <= to; i++) {
+      const b = busyFrom(state, team, day, at)
+      if (!b || b.from > to) { out.push([day, to]); break }
+      if (b.from > day) out.push([day, b.from - 1])
+      day = Math.max(day + 1, b.until + 1)
+    }
+    return out
+  })
+}
+
+/**
+ * What is left of the period's round from this moment on: what every moment of the days the window is
+ * still open would carry, today's moments from `kind` on included. The days it is shut carry nothing.
+ */
+function budgetAhead(state: GameState, team: Team, kind: RollKind): number {
+  const T = todayAbs(state)
+  const end = nextMarketAbs(T - 1)
+  const spans = openAhead(state, team, T, end)
+  const open = (d: number): boolean => spans.some(([a, b]) => d >= a && d <= b)
+  const mine = ORDER.indexOf(kind)
+  // the week's end, a week at a time, from the day this one runs out (me/week.ts settleWeek)
+  let week = T + (7 - (state.me?.weekDay ?? 0))
+  let total = 0
+  for (let d = T; d <= end; d++) {
+    const isWeek = d === week
+    if (isWeek) week += 7
+    if (!open(d)) continue
+    const from = d === T ? mine : 0
+    if (from <= 0 && stageOpens(state, d)) total += ROLL_BASE.stage
+    if (from <= 1 && d === end) total += ROLL_BASE.market
+    // the market day closes the period (me/transfer.ts endTransferPeriod): a week ending on it carries nothing
+    if (from <= 2 && isWeek && d !== end) total += ROLL_BASE.week
+  }
+  return total
+}
+
+const SPENT = new WeakMap<GameState, { at: string; w: number }>()
+/**
+ * How much of a period's round of calls this moment carries.
+ *
+ * 2021–2022, and the old 2026 world: its kind's share of the period's whole budget (periodBudget) — a
+ * period the window shuts for part of gets that part less. From 2023 the window is open only in the
+ * gaps between events, and that spread would drop most of the round on days no call can come: the
+ * chance a period carries stays what it was, and is spread over its open days alone (the author,
+ * 2026-09-14: 集中到开窗的日子). This moment takes what is left of the round over the budget of the open
+ * moments still ahead of it, and books what it took (me/transfer.ts syncPeriod starts the count at
+ * today's, endTransferPeriod clears it for the next period) — so a period with few open days
+ * concentrates its round on them, one with none carries nothing, and what the books did not see coming
+ * — a place still to be earned, an event drawn since — falls to the open moments that are left. Asked
+ * twice on a market day (the VCT clubs, then the rest), it books the moment once.
+ */
+export function rollWeight(state: GameState, kind: RollKind): number {
+  const me = state.me
+  const team = me ? state.teams[state.myTeam] : undefined
+  if (!byEvents(state) || !me || !team) return ROLL_BASE[kind] / periodBudget(state)
+  // the market day closes the period: a week ending on it belongs to the next one
+  if (kind === 'week' && marketDay(state)) return 0
+  const at = `${state.year}:${state.day}:${kind}`
+  const hit = SPENT.get(state)
+  if (hit?.at === at) return hit.w
+  const share = me.flags.winShare ?? periodElapsed(state)
+  const ahead = budgetAhead(state, team, kind)
+  // what the shut days took is given back, but no more than that (ROLL_CAP)
+  const ceiling = ROLL_CAP * ROLL_BASE[kind] / periodBudget(state)
+  const w = ahead > 0 ? Math.min(1, ceiling, Math.max(0, 1 - share) * ROLL_BASE[kind] / ahead) : 0
+  me.flags.winShare = share + w
+  SPENT.set(state, { at, w })
+  return w
 }
 
 /** The first market day after an absolute day. */
@@ -214,6 +336,8 @@ export interface RosterLock {
   out?: boolean
   /** 2023 on: its decider still to play — lost, the lock lifts the day after it, so `until` is 暂定 */
   pending?: boolean
+  /** `phase`: the phase's own words — 海选, 小组赛 — for a line that must not say it is playing (lockDoing) */
+  phase?: string
 }
 
 /** 2021's regional events that fed an international (engine/circuit.ts TOP): its Masters and its Challengers Finals. */
@@ -262,7 +386,7 @@ function majorLock(state: GameState, comp: Competition, id: string): RosterLock 
   return { event: comp.name, comp: comp.key, until: span.until, kind: 'major' }
 }
 
-interface Hold { from: number; until: number; kind: 'event' | 'phase' | 'decider'; pending?: boolean }
+interface Hold { from: number; until: number; kind: 'event' | 'phase' | 'decider'; pending?: boolean; phase?: string }
 
 const HOLDS = new WeakMap<GameState, { at: string; of: Map<string, Map<string, Hold>> }>()
 /**
@@ -277,9 +401,9 @@ function holdsOf(state: GameState, comp: Competition): Map<string, Hold> {
   const key = `${comp.key}:${c.mode}:${decider ? (gameOf(decider)?.w ?? (decider.played ? '=' : '-')) : ''}:${c.seeds.join(',')}`
   return daily(HOLDS, state, `${state.year}:${state.day}`, key, () => {
     const out = new Map<string, Hold>()
-    for (const [id, [a, b]] of phaseOnlyOf(state, comp)) out.set(id, { from: Math.max(0, a), until: b, kind: 'phase' })
-    const from = Math.max(0, c.start)
-    for (const id of floorOf(state, comp)) out.set(id, { from, until: c.end, kind: 'event' })
+    for (const [id, h] of phaseOnlyOf(state, comp)) out.set(id, { from: Math.max(0, h.from), until: h.until, kind: 'phase', phase: phaseCn(h.label) })
+    // each from the first day of the phase it enters, not the event's own (circuit.ts floorOf)
+    for (const [id, day] of floorOf(state, comp)) out.set(id, { from: Math.max(0, Math.min(Math.max(day, c.start), c.end)), until: c.end, kind: 'event' })
     if (decider) {
       const club = decider.teamA
       // an open qualifier's place: the club is in that qualifier from its first day; a seat's decider is its own day
@@ -300,7 +424,7 @@ function eventLock(state: GameState, comp: Competition, id: string): RosterLock 
   if (!c || !c.mode || c.done || state.day > c.end || state.day < c.start - 1) return null
   const h = holdsOf(state, comp).get(id)
   if (!h || state.day < h.from || state.day > h.until) return null
-  return { event: comp.name, comp: comp.key, until: h.until, kind: h.kind, ...(h.pending ? { pending: true } : {}) }
+  return { event: comp.name, comp: comp.key, until: h.until, kind: h.kind, ...(h.pending ? { pending: true } : {}), ...(h.phase ? { phase: h.phase } : {}) }
 }
 
 /** Of two events holding a club at once, the one that holds it longer. */
@@ -384,7 +508,7 @@ function legacyCal(state: GameState): Cal {
 interface Busy { from: number; until: number; name: string; tentative: boolean }
 
 const OUTLOOK = new WeakMap<GameState, { at: string; of: Map<string, ReturnType<typeof drawOutlook>> }>()
-const PHASES = new WeakMap<GameState, { at: string; of: Map<string, Map<string, [number, number]>> }>()
+const PHASES = new WeakMap<GameState, { at: string; of: Map<string, Map<string, PhaseHold>> }>()
 const SCENES = new WeakMap<GameState, { at: string; of: Map<string, string | undefined> }>()
 
 /** The latest day an open qualifier not drawn yet plays the player's club's decider: its open phases' last day, or its draw's eve (me/nextup.ts deciderBy). */
@@ -421,10 +545,11 @@ function busyIn(state: GameState, comp: Competition, team: Team, at: string): Bu
   }
   if (!concerns(state, ev, comp, team, at)) return null
   const o = daily(OUTLOOK, state, at, `${comp.key}:${team.id}`, () => drawOutlook(state, comp, team.id))
-  if (o?.standing === 'seated') return { from: absDay(y, Math.max(0, c.start)), until: absDay(y, c.end), name: comp.name, tentative }
+  // from the first day of the phase the draw as it stands would put it in (circuit.ts drawOutlook)
+  if (o?.standing === 'seated') return { from: absDay(y, Math.max(0, Math.min(Math.max(o.from ?? c.start, c.start), c.end))), until: absDay(y, c.end), name: comp.name, tentative }
   // a phase history booked it into and no further (circuit.ts phaseOnlyOf)
   const phase = daily(PHASES, state, at, comp.key, () => phaseOnlyOf(state, comp)).get(team.id)
-  if (phase) return { from: absDay(y, Math.max(0, phase[0])), until: absDay(y, phase[1]), name: comp.name, tentative }
+  if (phase) return { from: absDay(y, Math.max(0, phase.from)), until: absDay(y, phase.until), name: comp.name, tentative }
   // an open qualifier the player's club will enter (circuit.ts offerPlayIn, planPlayIn): its days up to the decider, the rest up to the result
   if (o?.standing === 'entry' && state.me?.phase === 'pro' && team.id === state.myTeam) {
     const last = deciderDay(comp, ev)
@@ -463,7 +588,10 @@ function firstNextSeason(state: GameState, team: Team): Busy | null {
     const scene = sceneFor(state, team, false)
     best = (scene ? firstOf(y, `scene:${scene}`, (ev) => ev.scene === scene && ev.units.some((u) => u.type !== 'open')) : null) ?? undefined
   }
-  return best ? { from: absDay(y, Math.max(0, best.start!)), until: absDay(y, best.end!), name: best.cn, tentative: true } : null
+  if (!best) return null
+  // the phase history books it into there, not the event's first day (circuit.ts entryDayIn)
+  const day = [...own].map((v) => entryDayIn(best!, v)).filter((d): d is number => d != null).sort((a, b) => a - b)[0]
+  return { from: absDay(y, Math.max(0, Math.min(day ?? best.start!, best.end!))), until: absDay(y, best.end!), name: best.cn, tentative: true }
 }
 
 const BUSY = new WeakMap<GameState, { at: string; of: Map<string, Busy | null> }>()
@@ -612,10 +740,29 @@ function openWhy(state: GameState, w: WindowState): string {
   return w.rule === 'chal' ? 'Challengers 俱乐部不设窗口' : ''
 }
 
-/** What a locked club is doing, in the screens' words: 「正在打 X」, or out of it and held all the same. */
+/**
+ * What a locked club is doing, in the screens' words: 「正在打 X」, or out of it and held all the same.
+ *
+ * A phase kept as its result — an open qualifier, a regular season — is not one of those: history had
+ * the club in it, this world replays none of it, and the club has no match of its own to show. The line
+ * says what is true, that the phase is under way and the roster is held with it (the coordinator,
+ * 2026-09-14), and lockSaid puts the club where it reads right.
+ */
 export function lockDoing(lock: RosterLock): string {
+  if (lock.kind === 'phase') return `${lock.event} 的${lock.phase ?? '资格赛'}阶段进行中`
   if (!lock.out) return `正在打 ${lock.event}`
   return lock.kind === 'decider' ? `在 ${lock.event} 的决胜局出局` : `已在 ${lock.event} 出局，名单锁到赛事结束`
+}
+
+/** The club and its lock in one clause: 「你的俱乐部正在打 X，…」, and for a phase 「X 的海选阶段进行中，你的俱乐部…」. */
+export function lockSaid(lock: RosterLock, who: string, tail: string): string {
+  return lock.kind === 'phase' ? `${lockDoing(lock)}，${who}${tail}` : `${who}${lockDoing(lock)}，${tail}`
+}
+
+/** A phase kept as its result, in a word a screen can use: its own label without the group it ran in, 「资格赛」 where the data kept vlr's English. */
+export function phaseCn(label: string | undefined): string {
+  const base = (label ?? '').split(' · ')[0].trim()
+  return /^[一-龥]{2,6}$/.test(base) ? base : '资格赛'
 }
 
 /** The last day of a lock (absolute): its event's, or, from 2023, that of the last event after it with no day between. */
@@ -645,8 +792,11 @@ export function windowLine(state: GameState, teamId?: string): string {
   const soft = w.tentative ? '（暂定）' : ''
   if (w.lock) {
     const who = w.side === 'other' ? (state.teams[w.club ?? '']?.name ?? '对方俱乐部') : '你的俱乐部'
-    const then = w.then?.length ? `，接着打 ${w.then.join('、')}` : ''
-    return `名单锁定 · ${who}${lockDoing(w.lock)}${then} · ${dateCn(lockLifts(state, w), state.year)}后解除${soft}`
+    const then = w.then?.length ? `接着打 ${w.then.join('、')}` : ''
+    const when = dateCn(lockLifts(state, w), state.year)
+    // a phase kept as its result: the club is on its list, not on a court — 「X 的海选阶段进行中，你的俱乐部名单锁到 3月4日」
+    if (w.lock.kind === 'phase') return `名单锁定 · ${lockDoing(w.lock)}，${who}${then ? `${then}，` : ''}名单锁到 ${when}${soft}`
+    return `名单锁定 · ${who}${lockDoing(w.lock)}${then ? `，${then}` : ''} · ${when}后解除${soft}`
   }
   if (w.open) {
     if (w.closesOn != null) return `转会窗口开放中 · 到 ${dateCn(w.closesOn, state.year)}（还剩 ${w.closesOn - T} 天）${soft}${w.closer ? ` · 之后打 ${w.closer}` : ''}`
@@ -729,12 +879,12 @@ export function windowRuleLines(state: GameState): string[] {
   if (y <= 2022) {
     out.push(`${y} 年还没有联盟，也没有固定的转会窗口：俱乐部只要不在打大赛——国际赛、最后机会资格赛${y === 2021 ? '、赛区大师赛和挑战者决赛' : ''}——随时能签人。大赛开打那天锁名单，出局或打完就解除。`)
   } else if (onTimeline(state)) {
-    out.push('有了 VCT 联赛以后，VCT 联赛俱乐部和 Challengers 俱乐部一个规矩：俱乐部打的每一项赛事，从第一天到最后一天都锁名单——联赛的揭幕赛、第一赛段、第二赛段（2027 年起是杯赛、公开季后赛和公开资格赛），Challengers 联赛的各个赛段，大师赛、冠军赛、最后机会资格赛、晋升赛，打的海选、资格赛和升降级赛也算。提前出局、没打进季后赛，也要等这项赛事结束才解锁；只打了海选或资格赛、没打进正赛的，那一轮结束解锁。你的俱乐部报名打决胜局的，从那轮海选第一天锁，输了第二天解锁，赢了锁到赛事结束。')
+    out.push('有了 VCT 联赛以后，VCT 联赛俱乐部和 Challengers 俱乐部一个规矩：俱乐部打的每一项赛事，从自己第一场比赛所在的那个阶段的第一天，锁名单到赛事最后一天——联赛的揭幕赛、第一赛段、第二赛段（2027 年起是杯赛、公开季后赛和公开资格赛），Challengers 联赛的各个赛段，大师赛、冠军赛、最后机会资格赛、晋升赛，打的海选、资格赛和升降级赛也算。直接进正赛的，前面那几周海选不跟着锁；从海选打上来的，从海选第一天就锁。提前出局、没打进季后赛，也要等这项赛事结束才解锁；只打了海选或资格赛、没打进正赛的，那一轮结束解锁。你的俱乐部报名打决胜局的，从那轮海选第一天锁，输了第二天解锁，赢了锁到赛事结束。')
     out.push('转会窗口只在两项赛事之间的空档开。休赛期也是空档：从这个赛季最后一项赛事的第二天，到下个赛季第一项赛事的前一天。还没抽签的赛事按眼下的形势算；大师赛、冠军赛这类还要看打不打得进的，还有没公布日期的赛事，窗口的日期标「暂定」。')
   } else {
     out.push(`VCT 联赛俱乐部每年四段转会窗口：${LEGACY.map(([a, b]) => `${dateCn(absDay(y, a), y)}–${dateCn(absDay(y, b), y)}`).join('、')}；Challengers 俱乐部不设窗口。打国际赛期间名单锁定。`)
   }
-  out.push('一笔转会要两边俱乐部的窗口都开着。开着的时候，赛段结束、6 月中和 11 月下旬的两个转会日、平常的每周都可能来报价，每半个赛季最多来一轮。')
+  out.push('一笔转会要两边俱乐部的窗口都开着。开着的时候，赛段结束、6 月中和 11 月下旬的两个转会日、平常的每周都可能来报价，每半个赛季最多来一轮。窗口关着的日子不来报价，这一轮的机会全挪到开着的日子上：空档短，来的那几天就更集中；半个赛季一天都不开，这一轮就没有了。')
   out.push('试训邀请也只在窗口开着时来。在一个转会期里刚签约的，这个转会期不会再有俱乐部来请你试训或报价，外区的邀约顺延，自己也不能挂牌，要等下个转会期；自己俱乐部的续约不受影响。')
   out.push('谈妥时有一边名单锁定的，锁定解除才正式转会。')
   return out

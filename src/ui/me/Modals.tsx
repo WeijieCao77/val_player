@@ -10,7 +10,7 @@ import { doorsOf, formatOf } from '../../engine/era'
 import { hasPlace } from '../../engine/timeline'
 import { REGION_CN } from '../../engine/types'
 import { ASKS, askDeal, acceptDeal, declineDeal, ROLE_CN } from '../../engine/me/contract'
-import { dateCn, lockDoing, lockLifts, windowAt } from '../../engine/me/window'
+import { dateCn, lockLifts, lockSaid, windowAt } from '../../engine/me/window'
 import { Rng, hashStr } from '../../engine/rng'
 import { CLAUSE_FINE, answerStreamOffer } from '../../engine/me/stream'
 import { describeEffect, eventOf, resolveEvent } from '../../engine/me/events'
@@ -339,7 +339,7 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: (aside?: boolea
         // signed under a roster lock, the move is made once the event is over (engine/me/contract.ts settleMove)
         const w = d.kind === 'renew' ? null : windowAt(game, d.teamId)
         return w?.lock
-          ? <p className="tiny warn" style={{ margin: '6px 0' }}>{w.side === 'other' ? team.name : '你的俱乐部'}{lockDoing(w.lock)}，名单锁定：签了要等 {dateCn(lockLifts(game, w), game.year)}后才正式转会。</p>
+          ? <p className="tiny warn" style={{ margin: '6px 0' }}>{lockSaid(w.lock, w.side === 'other' ? team.name : '你的俱乐部', `名单锁定：签了要等 ${dateCn(lockLifts(game, w), game.year)}后才正式转会。`)}</p>
           : null
       })()}
       {d.via === 'contact' && <p className="tiny muted" style={{ margin: '6px 0' }}>这是你主动接触换来的：他们来和你的俱乐部谈转会，违约金他们付。</p>}

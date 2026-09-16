@@ -16,7 +16,7 @@ import { compClass, isIntlComp } from './compclass'
 import { compCn } from './compname'
 import { leaguePool, seasonBar } from './nights'
 import type { Invite } from './types'
-import { clubOpen, listBlock, moveBlock, periodKey, rollWeight, signedThisPeriod, windowAt } from './window'
+import { clubOpen, listBlock, moveBlock, periodElapsed, periodKey, rollWeight, signedThisPeriod, windowAt } from './window'
 import type { RollKind } from './window'
 
 /**
@@ -443,6 +443,8 @@ function syncPeriod(state: GameState): void {
   me.flags.winRolled = 0
   me.flags.winGot = 0
   me.flags.vctGot = 0
+  // the share of the round this period's days before today carried is gone with them (me/window.ts rollWeight)
+  me.flags.winShare = periodElapsed(state)
 }
 
 /**
@@ -480,6 +482,8 @@ export function endTransferPeriod(state: GameState): void {
   me.flags.winRolled = 0
   me.flags.winGot = 0
   me.flags.vctGot = 0
+  // the next period opens with its whole round ahead of it (me/window.ts rollWeight)
+  me.flags.winShare = 0
 }
 
 /** Put myself on the market while the window is open. The manager remembers. */

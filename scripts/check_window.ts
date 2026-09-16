@@ -14,8 +14,9 @@
  *     俱乐部、Challengers 俱乐部各挑几家：赛事之间的空档开、休赛期开，开着时说开到下一项赛事的前一天、之后打哪项，关着时说哪天
  *     解除；休赛期说开到下个赛季第一项赛事的前一天（暂定）；报数和 2026 年开窗日期
  * 三、名单锁定：LOCK//IN 打到最后一天，出局了也锁、那一行写出局；联赛赛段从常规赛第一天锁；Challengers 赛段、晋升赛整段锁；
- *     只打了海选的，海选打几天锁几天；玩家俱乐部的决胜局：从那轮海选第一天锁（抢席位的决胜局从当天），没打之前解除日期暂定，
- *     输了第二天开，赢了锁到赛事结束；对方俱乐部锁定也算；还没抽签的赛事按形势说开到哪天
+ *     只打了海选的，海选打几天锁几天、那一行不写「正在打」（写「X 的海选阶段进行中，你的俱乐部名单锁到 D」）；玩家俱乐部的
+ *     决胜局：从那轮海选第一天锁（抢席位的决胜局从当天），没打之前解除日期暂定，输了第二天开，赢了锁到赛事结束；
+ *     对方俱乐部锁定也算；还没抽签的赛事按形势说开到哪天
  * 四、锁定期间不来新报价、不能挂牌；锁定期间谈妥的转会，锁定解除才生效
  * 五、世界市场只在两个转会日（第 166、324 天）动
  * 六、2023 年从 1 月 1 日打：VCT、Challengers 俱乐部各打 160 天，打过的每项赛事整段关着、那一行不说开放中，
@@ -25,6 +26,10 @@
  *     转会期让他又跳槽的可能」，用到每一种转会来路上）：不来试训邀请、不来报价（坐板凳也不来，没签约的
  *     对照会来）、挂牌被拒并写明原因和日期、外区邀约顺延到下个转会期再兑现；自己俱乐部窗口关着不发邀请；
  *     下个转会期邀请、报价、挂牌照常；被放走的自由人不受这一条限制
+ * 九、从自己第一场所在阶段锁（2026-09-14，作者）：直接进正赛的席位，赛事第一天还开着，到自己那个阶段第一天才锁，
+ *     之后锁到赛事最后一天；从海选打上来的，还是从海选第一天锁
+ * 十、集中到开窗的日子（2026-09-14，作者）：一个转会期里开窗的那些日子上，报价的机会加起来还是一轮（改之前摊到整个
+ *     转会期的总量）；关着的日子不摊也不扣；一天都不开的转会期一轮也没有
  */
 import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
@@ -34,14 +39,14 @@ import { acceptDeal, joinClub, leaveClub, makeDeal, settleMove } from '../src/en
 import { cupInvite } from '../src/engine/me/prepro'
 import { storyWeek } from '../src/engine/me/storyweek'
 import { VCT_SEEN, listSelf, rollOffers, vctApproach, vctRead, windowRoll } from '../src/engine/me/transfer'
-import { MARKET_DAYS, absDay, clubOpen, dateCn, inviteBlock, listBlock, marketDay, moveBlock, periodKey, signedThisPeriod, windowAt, windowLine, windowOfClub, windowRuleLines } from '../src/engine/me/window'
-import type { WindowState } from '../src/engine/me/window'
+import { MARKET_DAYS, ROLL_BASE, ROLL_CAP, absDay, clubOpen, dateCn, inviteBlock, listBlock, marketDay, moveBlock, periodKey, rollWeight, signedThisPeriod, windowAt, windowLine, windowOfClub, windowRuleLines } from '../src/engine/me/window'
+import type { RollKind, WindowState } from '../src/engine/me/window'
 import { eventOf, eventsOf, gameOf } from '../src/engine/circuit'
 import type { CEvent } from '../src/engine/circuit'
 import { makeFixture } from '../src/engine/league'
 import { setupSeason } from '../src/engine/season'
 import { hasPlace, inVctLeague } from '../src/engine/timeline'
-import { regionIn } from '../src/engine/era'
+import { regionIn, stagesOf } from '../src/engine/era'
 import { Rng } from '../src/engine/rng'
 import type { Competition, Fixture, GameState, Region, Role, Team } from '../src/engine/types'
 
@@ -94,6 +99,62 @@ function seatedIn(ev: CEvent, id: string): boolean {
   const v = vlrOf(id)
   return mainSeeds(ev).some((i) => ev.seeds[i] === v) || sentOn(ev).has(v)
 }
+/** the day a phase opens: an open qualifier's own first day, any other unit's first match */
+const unitDay = (ev: CEvent, ui: number): number => {
+  const u = ev.units[ui]
+  if (u.type === 'open') return u.first ?? ev.start ?? 0
+  const days = (u.nodes ?? []).map((n) => n.day)
+  return days.length ? Math.min(...days) : ev.start ?? 0
+}
+/** by the data alone: the first day a seat of the event's own matches is held — the first day of the phase that seats it */
+function seatDay(ev: CEvent, seat: number): number | null {
+  let best = Infinity
+  ev.units.forEach((u, ui) => {
+    if (u.type === 'open' || !(u.nodes ?? []).some((n) => [n.a, n.b].some((sl) => sl[0] === 's' && sl[1] === seat))) return
+    best = Math.min(best, unitDay(ev, ui))
+  })
+  return best === Infinity ? null : Math.max(0, best)
+}
+/** the first day a side its open qualifier sent on is held: that qualifier's own first day */
+function sentDay(ev: CEvent, v: string): number | null {
+  let best = Infinity
+  ev.units.forEach((u, ui) => { if (u.type === 'open' && u.ranked?.includes(v)) best = Math.min(best, unitDay(ev, ui)) })
+  return best === Infinity ? null : Math.max(0, best)
+}
+/** the first day a place a stand-in took is held (engine/circuit.ts fillGaps): the phase that place feeds */
+function feedDay(ev: CEvent, key: string): number | null {
+  const [ui, rank] = key.split(':').map(Number)
+  let best = Infinity
+  ev.units.forEach((u, i) => {
+    if (u.type === 'open' || !(u.nodes ?? []).some((n) => [n.a, n.b].some((sl) => sl[0] === 'g' && sl[1] === ui && sl[2] === rank))) return
+    best = Math.min(best, unitDay(ev, i))
+  })
+  return best === Infinity ? null : Math.max(0, best)
+}
+/** the day the club's own lock starts, by the data alone (engine/circuit.ts entryOf): its seat's phase, or the qualifier it came up through */
+function lockFrom(ev: CEvent, id: string): number | null {
+  const v = vlrOf(id)
+  const main = mainSeeds(ev)
+  let best: number | null = null
+  const keep = (d: number | null): void => { if (d != null && (best == null || d < best)) best = d }
+  ev.seeds.forEach((s, i) => { if (s === v && main.includes(i)) keep(seatDay(ev, i)) })
+  if (sentOn(ev).has(v)) keep(sentDay(ev, v))
+  return best
+}
+
+/** the words a phase kept as its result is named by on the screens (engine/me/window.ts phaseCn): its label without the group it ran in */
+function phaseWordOf(ev: CEvent, id: string): string {
+  const v = vlrOf(id)
+  let first = Infinity
+  let label = ''
+  for (const u of ev.units) {
+    if (u.type !== 'open' || !u.ranked?.includes(v)) continue
+    if ((u.first ?? 0) < first) { first = u.first ?? 0; label = u.label }
+  }
+  const base = label.split(' · ')[0].trim()
+  return /^[一-龥]{2,6}$/.test(base) ? base : '资格赛'
+}
+
 /** in a phase kept as its result and no further, by the data alone: that phase's first and last day */
 function phaseOf(ev: CEvent, id: string): [number, number] | null {
   if (ev.projected) return null
@@ -231,7 +292,8 @@ for (const Y of [2023, 2024, 2025, 2026]) {
   for (const comp of comps) {
     const ev = eventOf(comp.circuit!.id)!
     for (const id of comp.teams) {
-      const span = seatedIn(ev, id) ? [ev.start!, ev.end!] : phaseOf(ev, id)
+      // a seat of the event's own matches is held from its own phase's first day (从自己第一场所在阶段锁), not the event's
+      const span = seatedIn(ev, id) ? [lockFrom(ev, id) ?? Math.max(0, ev.start!), ev.end!] : phaseOf(ev, id)
       if (!span) continue
       if (seatedIn(ev, id)) seated++
       else phased++
@@ -306,7 +368,10 @@ for (const Y of [2023, 2024, 2025, 2026]) {
       const lock = windowAt(s)
       let end = next.until
       for (const x of spans) if (x.from <= end + 1 && x.until > end) end = x.until
-      if (lock.open || !lock.lock || lock.nextOpens !== absDay(Y, end + 1) || !windowLine(s).startsWith('名单锁定 · 你的俱乐部正在打 ')) {
+      // 「正在打 X」, or — a phase kept as its result, with no match of its own — 「X 的海选阶段进行中，你的俱乐部…」
+      const said2 = windowLine(s)
+      if (lock.open || !lock.lock || lock.nextOpens !== absDay(Y, end + 1)
+        || !(said2.startsWith('名单锁定 · 你的俱乐部正在打 ') || /^名单锁定 · .+ 的.{2,6}阶段进行中，你的俱乐部/.test(said2))) {
         fail(`${Y} ${club.name} ${next.name} 第一天：${windowLine(s)}，应该第 ${end + 1} 天再开`)
       }
     } else if (spans.length > 1 && spans.some((x, i) => i > 0 && x.from > spans[i - 1].until + 1)) fail(`${Y} ${club.name}：赛事之间的空档没找到`)
@@ -320,9 +385,10 @@ for (const Y of [2023, 2024, 2025, 2026]) {
       if (!w.open || !nextYear || !w.tentative || !line.includes('（暂定）')) fail(`${Y} ${club.name} 休赛期第一天（第 ${last + 1} 天）：${line}`)
       if (g === 'VCT EMEA') {
         const ko = eventsOf(Y + 1).find((e) => LEAGUE_OF(e, 'EMEA') && e.stage === 'kickoff')
-        const want = ko ? absDay(Y + 1, Math.max(0, ko.start!) - 1) : null
+        // to the day before its own phase there, not before the event's first day (从自己第一场所在阶段锁)
+        const want = ko ? absDay(Y + 1, (lockFrom(ko, club.id) ?? Math.max(0, ko.start!)) - 1) : null
         // the report read 「转会窗口开放中 · 到 2026年8月7日（还剩 275 天）（暂定）」 over the offseason: Riot's window, to Stage 2
-        if (w.closesOn !== want) fail(`${Y} ${club.name} 休赛期应该开到 ${Y + 1} 年 EMEA 揭幕赛前一天 ${iso(want ?? undefined)}：${line}`)
+        if (w.closesOn !== want) fail(`${Y} ${club.name} 休赛期应该开到 ${Y + 1} 年 EMEA 揭幕赛自己那个阶段前一天 ${iso(want ?? undefined)}：${line}`)
         if (Y === 2025) console.log(`  2025 休赛期 ${club.name}：${line}`)
       }
     }
@@ -366,13 +432,17 @@ lk.me!.phase = 'pro'
   const split = find(2025, (e) => !!e.scene && (e.start ?? 0) > 0 && e.units.some((u) => u.type !== 'open') && mainSeeds(e).length > 0, 'Challengers 赛段')
   const asc = find(2025, (e) => e.stage === 'ascension' && e.region === 'EMEA' && mainSeeds(e).length > 0, 'EMEA 晋升赛')
   lk.comps = { [`ev:${stage1.id}`]: drawn(stage1, [vct.id]), [`ev:${split.id}`]: drawn(split, [chal.id]) }
-  at(lk, vct, { year: 2025, day: stage1.start! - 1 }, { open: true, closesOn: absDay(2025, stage1.start! - 1), lock: false }, 'EMEA 第一赛段前一天')
-  at(lk, vct, { year: 2025, day: stage1.start! }, { open: false, lock: true }, 'EMEA 第一赛段常规赛第一天')
+  // drawn() seats the club in the first of the event's own seats: its lock starts with that seat's phase
+  const s1 = seatDay(stage1, mainSeeds(stage1)[0]) ?? Math.max(0, stage1.start!)
+  const sp = seatDay(split, mainSeeds(split)[0]) ?? Math.max(0, split.start!)
+  const as1 = seatDay(asc, mainSeeds(asc)[0]) ?? Math.max(0, asc.start!)
+  at(lk, vct, { year: 2025, day: s1 - 1 }, { open: true, closesOn: absDay(2025, s1 - 1), lock: false }, 'EMEA 第一赛段常规赛前一天')
+  at(lk, vct, { year: 2025, day: s1 }, { open: false, lock: true }, 'EMEA 第一赛段常规赛第一天')
   at(lk, vct, { year: 2025, day: stage1.end! }, { open: false, lock: true }, 'EMEA 第一赛段最后一天')
-  at(lk, chal, { year: 2025, day: split.start! }, { open: false, lock: true }, `${split.cn} 第一天`)
+  at(lk, chal, { year: 2025, day: sp }, { open: false, lock: true }, `${split.cn} 自己那个阶段第一天`)
   at(lk, chal, { year: 2025, day: split.end! }, { open: false, lock: true }, `${split.cn} 最后一天`)
   lk.comps = { [`ev:${asc.id}`]: drawn(asc, [chal.id]) }
-  at(lk, chal, { year: 2025, day: asc.start! }, { open: false, lock: true }, 'EMEA 晋升赛第一天')
+  at(lk, chal, { year: 2025, day: as1 }, { open: false, lock: true }, 'EMEA 晋升赛第一天')
   at(lk, chal, { year: 2025, day: asc.end! }, { open: false, lock: true }, 'EMEA 晋升赛最后一天')
   // the other club's lock closes a move as surely as mine: my Challengers club is open, the VCT club I would join is in its stage
   lk.year = 2025
@@ -407,7 +477,10 @@ lk.me!.phase = 'pro'
     at(lk, team, { year: Y, day: span[0] - 1 }, { open: true, closesOn: absDay(Y, span[0] - 1), lock: false }, `${ev.cn} ${team.name} 那一轮前一天`)
     at(lk, team, { year: Y, day: span[0] }, { open: false, lock: true }, `${ev.cn} ${team.name} 那一轮第一天`)
     const line = windowLine(lk)
-    if (line !== `名单锁定 · 你的俱乐部正在打 ${ev.cn} · ${dateCn(absDay(Y, span[1]), Y)}后解除`) fail(`只打了资格赛这类阶段那一行：${line}`)
+    // it has no match of its own here: the line says the phase is under way and the roster is held, not 「正在打」
+    if (line !== `名单锁定 · ${ev.cn} 的${phaseWordOf(ev, id)}阶段进行中，你的俱乐部名单锁到 ${dateCn(absDay(Y, span[1]), Y)}` || line.includes('正在打')) {
+      fail(`只打了资格赛这类阶段那一行：${line}`)
+    }
     at(lk, team, { year: Y, day: span[1] }, { open: false, lock: true }, `${ev.cn} ${team.name} 那一轮最后一天`)
     at(lk, team, { year: Y, day: span[1] + 1 }, { open: true, lock: false }, `${ev.cn} ${team.name} 那一轮打完`)
     console.log(`  只打了资格赛这类阶段：${line}`)
@@ -641,7 +714,15 @@ console.log('六、2021–2022 一路打下来；2023 年从 1 月 1 日打')
         const lost = decider.played && gameOf(decider)?.w !== club.id
         spans.push({ from: first, until: lost ? decider.day : c.end, name: comp.name, lastTie })
       } else if (onFloor) {
-        spans.push({ from: Math.max(0, c.start), until: c.end, name: comp.name, lastTie })
+        // from its own phase's first day, not the event's (engine/circuit.ts entryOf): the seat it took, the
+        // qualifier it came up through, or — a stand-in — the phase the place it filled feeds
+        const seat = c.seeds.indexOf(club.id)
+        const fillKey = Object.entries(c.fill ?? {}).find(([, t]) => t === club.id)?.[0]
+        const from = (seat >= 0 && main.has(seat) ? seatDay(ev, seat) : null)
+          ?? (sentOn(ev).has(vlrOf(club.id)) ? sentDay(ev, vlrOf(club.id)) : null)
+          ?? (fillKey ? feedDay(ev, fillKey) : null)
+          ?? Math.max(0, c.start)
+        spans.push({ from, until: c.end, name: comp.name, lastTie })
       } else if (c.seeds.includes(club.id)) {
         const phase = phaseOf(ev, club.id)
         if (phase) spans.push({ from: Math.max(0, phase[0]), until: phase[1], name: comp.name, lastTie })
@@ -695,7 +776,10 @@ console.log('六、2021–2022 一路打下来；2023 年从 1 月 1 日打')
     judge(c, club, rows, inLock, 'Challengers')
   }
   const help = windowRuleLines(c)
-  if (!help[0].includes('从第一天到最后一天都锁名单') || !help[1].includes('休赛期') || help.some((l) => l.includes('Riot') || l.includes('季后赛、晋级赛'))) fail(`2023 年帮助里的规则：${help.slice(0, 2).join(' / ')}`)
+  if (!help[0].includes('从自己第一场比赛所在的那个阶段的第一天') || !help[0].includes('锁名单到赛事最后一天') || !help[1].includes('休赛期')
+    || !help.some((l) => l.includes('全挪到开着的日子上')) || help.some((l) => l.includes('Riot') || l.includes('季后赛、晋级赛'))) {
+    fail(`2023 年帮助里的规则：${help.slice(0, 2).join(' / ')}`)
+  }
 }
 
 /* ---- 七、生涯里的报价和转会 ---- */
@@ -867,5 +951,158 @@ console.log('八、签约的那个转会期里：不来试训邀请、不来报�
   }
 }
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 转会窗口：2021–2022 只锁大赛；2023 起俱乐部打的每项赛事整段锁，赛事之间和休赛期开；锁定时不来报价，世界市场照旧两个转会日；试训邀请只在转会期发，签约的那个转会期里不再发。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+/* ---- 九、从自己第一场所在的阶段锁 ---- */
+console.log('九、从自己第一场所在的阶段锁：直接进正赛的，前面几周海选不跟着锁')
+{
+  /** by the data alone: the first day of the phase that seats `seat`, and the day that seat first plays */
+  const phaseOfSeat = (ev: CEvent, seat: number): { phase: number; first: number } | null => {
+    let phase = Infinity
+    let first = Infinity
+    for (const u of ev.units) {
+      if (u.type === 'open' || !u.nodes?.length) continue
+      const opens = Math.min(...u.nodes.map((n) => n.day))
+      for (const n of u.nodes) for (const sl of [n.a, n.b]) {
+        if (sl[0] !== 's' || sl[1] !== seat) continue
+        first = Math.min(first, n.day)
+        phase = Math.min(phase, opens)
+      }
+    }
+    return first === Infinity ? null : { phase, first }
+  }
+  let hit: { Y: number; ev: CEvent; id: string; phase: number; first: number } | undefined
+  for (const Y of [2025, 2026, 2024, 2023]) {
+    for (const ev of eventsOf(Y)) {
+      if (ev.projected || ev.start == null || ev.end == null || ev.end > 362) continue
+      const through = sentOn(ev)
+      for (const seat of mainSeeds(ev)) {
+        const v = ev.seeds[seat]
+        const id = `V21T${v ?? ''}`
+        const p = phaseOfSeat(ev, seat)
+        // a seat of its own, and nothing of this event's before it: no qualifier of its own to be held for
+        if (!v || through.has(v) || !p || !lk.teams[id] || p.phase < Math.max(1, ev.start) + 3) continue
+        hit = { Y, ev, id, phase: p.phase, first: p.first }
+        break
+      }
+      if (hit) break
+    }
+    if (hit) break
+  }
+  if (!hit) fail('2023–2026 找不到直接进正赛、前面还有别的阶段的席位')
+  else {
+    const { Y, ev, id, phase, first } = hit
+    const team = lk.teams[id]
+    const c = asHistory(lk, ev)
+    lk.comps = { [c.key]: c }
+    lk.myTeam = id
+    at(lk, team, { year: Y, day: Math.max(0, ev.start!) }, { open: true, lock: false }, `${ev.cn} 赛事第一天（${team.name} 的阶段还没开）`)
+    at(lk, team, { year: Y, day: phase - 1 }, { open: true, closesOn: absDay(Y, phase - 1), lock: false }, `${ev.cn} ${team.name} 那个阶段前一天`)
+    at(lk, team, { year: Y, day: phase }, { open: false, lock: true }, `${ev.cn} ${team.name} 那个阶段第一天`)
+    at(lk, team, { year: Y, day: ev.end! }, { open: false, lock: true }, `${ev.cn} 最后一天（出局也锁到这天）`)
+    console.log(`  ${ev.cn}：赛事第 ${ev.start}–${ev.end} 天，${team.name} 第一场在第 ${first} 天，从第 ${phase} 天（自己那个阶段）才锁`)
+  }
+}
+{
+  // a club its own open qualifier really sent on: held from that qualifier's first day, as before
+  let hit: { Y: number; ev: CEvent; id: string; first: number } | undefined
+  for (const Y of [2025, 2026, 2024, 2023]) {
+    for (const ev of eventsOf(Y)) {
+      if (ev.projected || ev.start == null || ev.end == null || ev.end > 362) continue
+      for (const v of sentOn(ev)) {
+        const id = `V21T${v}`
+        // an event opening before 1 January is held from 1 January (see the header): take one whose qualifier opens inside the year
+        const u = ev.units.find((x) => x.type === 'open' && x.ranked?.includes(v) && (x.first ?? -1) >= 1)
+        if (!u || !lk.teams[id]) continue
+        hit = { Y, ev, id, first: u.first! }
+        break
+      }
+      if (hit) break
+    }
+    if (hit) break
+  }
+  if (!hit) fail('2023–2026 找不到从海选打上来的俱乐部')
+  else {
+    const { Y, ev, id, first } = hit
+    const team = lk.teams[id]
+    const c = asHistory(lk, ev)
+    lk.comps = { [c.key]: c }
+    lk.myTeam = id
+    at(lk, team, { year: Y, day: first }, { open: false, lock: true }, `${ev.cn} ${team.name} 海选第一天`)
+    at(lk, team, { year: Y, day: ev.end! }, { open: false, lock: true }, `${ev.cn} ${team.name} 锁到最后一天`)
+    console.log(`  从海选打上来的 ${team.name}：${ev.cn} 海选第 ${first} 天就锁，锁到第 ${ev.end} 天`)
+  }
+}
+
+/* ---- 十、一个转会期的机会集中到开窗的日子 ---- */
+console.log('十、一个转会期的机会：关着的日子不摊，全挪到开窗的日子上')
+{
+  const s = season(2026)
+  const me = s.me!
+  const st1 = Object.values(s.comps).find((x) => { const e = eventOf(x.circuit?.id ?? ''); return !!e && LEAGUE_OF(e, 'EMEA') && e.stage === 'stage1' })
+  const club = (st1?.circuit?.seeds ?? []).find((id): id is string => !!id && !!s.teams[id] && inVctLeague(s, s.teams[id]))
+  if (!club) fail('2026 EMEA 第一赛段里找不到 VCT 俱乐部')
+  else {
+    s.myTeam = club
+    const name = s.teams[club].name
+    const stageDay = (d: number): boolean => stagesOf(2026, true).some((x) => x.start === d && x.start > 0)
+    /** one transfer period, moment by moment as the week runs them (me/week.ts): what its open days carry */
+    const walk = (from: number, to: number): { sum: number; open: number; moments: number; share: number } => {
+      me.flags.winPeriod = periodKey(2026, from)
+      me.flags.winShare = 0
+      let sum = 0
+      let open = 0
+      let moments = 0
+      let full = 0
+      let live = 0
+      for (let d = from; d <= to; d++) {
+        s.day = d
+        me.weekDay = ((d - from) % 7) + 1
+        const can = windowAt(s).open
+        if (can) open++
+        const kinds: RollKind[] = []
+        if (stageDay(d)) kinds.push('stage')
+        if (marketDay({ day: d })) kinds.push('market')
+        if (me.weekDay === 7) kinds.push('week')
+        for (const k of kinds) {
+          moments++
+          full += ROLL_BASE[k]
+          if (can) { live += ROLL_BASE[k]; sum += rollWeight(s, k) }
+        }
+      }
+      return { sum, open, moments, share: full ? live / full : 0 }
+    }
+    const said: string[] = []
+    for (const [label, a, b] of [['上半赛季', 0, MARKET_DAYS[0]], ['下半赛季', MARKET_DAYS[0] + 1, MARKET_DAYS[1]]] as [string, number, number][]) {
+      const r = walk(a, b)
+      // the round is concentrated on the open days, but a moment carries at most ROLL_CAP times the old
+      // spread (me/window.ts): a period adds up to about ROLL_CAP × the share of its moments that are open
+      const want = Math.min(1, ROLL_CAP * r.share)
+      said.push(`${label}开 ${r.open} 天、${r.moments} 个时机（开着的占 ${(r.share * 100).toFixed(0)}%）、机会 ${r.sum.toFixed(2)} 轮`)
+      if (r.open && Math.abs(r.sum - want) > 0.12) fail(`2026 ${name} ${label}：开着的日子上加起来 ${r.sum.toFixed(2)} 轮，按开窗比例封顶应该是 ${want.toFixed(2)} 轮`)
+      if (!r.open && r.sum > 0) fail(`2026 ${name} ${label}：一天都没开，却还有 ${r.sum.toFixed(2)} 轮`)
+    }
+    // a stretch of its own events: no open day in it, so it carries nothing, and a locked day spends none of the period's round
+    let a = -1
+    let b = -1
+    for (let d = 0, run = -1; d <= 363 && a < 0; d++) {
+      s.day = d
+      if (windowAt(s).open) { run = -1; continue }
+      if (run < 0) run = d
+      if (d - run >= 9) { a = run; b = d }
+    }
+    if (a < 0) fail(`2026 ${name}：找不到连着关十天的赛事期`)
+    else {
+      const shut = walk(a, b)
+      if (shut.sum > 0) fail(`2026 ${name} 第 ${a}–${b} 天全程名单锁定，却摊到了 ${shut.sum.toFixed(2)} 轮`)
+      s.day = a
+      me.flags.winPeriod = periodKey(2026, a)
+      const before = me.flags.winShare ?? 0
+      const came = windowRoll(s, new Rng(7), 'week')
+      if (came || (me.flags.winShare ?? 0) !== before) fail(`2026 ${name} 名单锁定的日子里来了 ${came} 份报价，或者扣掉了这个转会期的机会`)
+      said.push(`第 ${a}–${b} 天全程锁定 ${shut.moments} 个时机、0 轮`)
+    }
+    console.log(`  ${name} 2026：${said.join(' · ')}`)
+  }
+}
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 转会窗口：2021–2022 只锁大赛；2023 起俱乐部打的每项赛事从自己第一场所在的阶段锁到赛事结束，赛事之间和休赛期开；一个转会期的机会全挪到开窗的日子上；锁定时不来报价，世界市场照旧两个转会日；试训邀请只在转会期发，签约的那个转会期里不再发。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

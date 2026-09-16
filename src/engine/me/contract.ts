@@ -16,7 +16,7 @@ import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
 import { roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
-import { dateCn, lockDoing, lockLifts, periodKey, windowAt } from './window'
+import { dateCn, lockLifts, lockSaid, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
 import { standAtLeast, standingOf } from './rank'
 import { dropPitch } from './pitchbook'
@@ -219,7 +219,7 @@ export function acceptDeal(state: GameState, dealId: string): string {
     dropPitch(state, d.teamId, '谈妥了')
     const to = state.teams[d.teamId]?.name ?? '对方'
     const when = dateCn(lockLifts(state, w), state.year)
-    pushLog(state, 'deal', `和 ${to} 谈妥了。${w.side === 'other' ? `${to} ` : '你的俱乐部'}${lockDoing(w.lock)}，名单锁定到 ${when}，锁定解除再正式转会。`)
+    pushLog(state, 'deal', `和 ${to} 谈妥了。${lockSaid(w.lock, w.side === 'other' ? `${to} ` : '你的俱乐部', `名单锁定到 ${when}，锁定解除再正式转会。`)}`)
     return `谈妥了：名单锁定解除（${when}后）正式去 ${to}。`
   }
   joinClub(state, d)

@@ -1727,6 +1727,9 @@ export function mayStillDraw(state: GameState, comp: Competition, teamId: string
 /** How a club stands with an event that is not over: see drawStanding. */
 export type DrawStanding = 'seated' | 'entry' | 'maybe' | 'booked'
 
+/** A phase kept as its result that holds a club: its first and last day, and the phase's own words (engine/me/window.ts). */
+export interface PhaseHold { from: number; until: number; label: string }
+
 /**
  * How a club stands with an event, most certain first — for the week's
  * 「下一场」 between events (engine/me/nextup.ts):
@@ -1756,7 +1759,7 @@ export function drawStanding(state: GameState, comp: Competition, teamId: string
  * the qualifier for a month as the club's next event, and then its group round
  * over Stage 3's (engine/me/nextup.ts, scripts/check_nextup.ts seed 11).
  */
-export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number } | null {
+export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number; from?: number } | null {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
   const team = state.teams[teamId]
@@ -1777,40 +1780,127 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
       (through.length ? s[0] === 'g' && through.some((o) => o.ui === s[1] && o.rank === s[2]) : s[0] === 's' && s[1] === at)
     let day: number | undefined
     for (const n of flat(ev).nodes) if (!isOpen(ev.units[n.unit]) && (mine(n.a) || mine(n.b)) && (day == null || n.day < day)) day = n.day
-    return { standing: 'seated', day }
+    // the first day of the phase it enters: what would hold its roster (engine/me/window.ts busyIn)
+    const { seat, road } = entryOf(ev)
+    const from = through.length
+      ? Math.min(...through.map(({ ui, rank }) => road.get(ev.units[ui].ranked?.[rank - 1] ?? '') ?? c.start))
+      : seat.get(at) ?? c.start
+    return { standing: 'seated', day, from }
   }
   const more = couldStillTake(state, comp, ev, team, depth, { seats, moved: drawn.swaps.length > 0 })
   return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
 }
 
+/** A phase's first day: an open qualifier's own days are on record, any other unit's first match is its opening. */
+function unitFirst(ev: CEvent, ui: number): number {
+  const u = ev.units[ui]
+  if (isOpen(u)) return u.first ?? ev.start ?? 0
+  let d = Infinity
+  for (const n of u.nodes ?? []) if (n.day < d) d = n.day
+  return d === Infinity ? ev.start ?? 0 : d
+}
+
 /**
- * The clubs on a drawn event's own floor (engine/me/window.ts: each is held from its first day to its
- * last): a seed its own matches are drawn from, the club its open qualifier really sent on to a place
- * or the stand-in for it, and a decider's winner — its rival while the decider is to play. A side
- * booked only for an open qualifier, history's to replay, is not on it. Empty before the draw.
+ * The day each place in an event's draw is first held (engine/me/window.ts: 从自己第一场所在阶段锁, the
+ * author 2026-09-14) — not the event's own first day, whose weeks of qualifiers a side seeded past them
+ * never plays:
+ *
+ *  - `seat`: a seat the event's own matches are drawn from, from the first day of the earliest phase
+ *    that seats it — a Masters seeded into the playoffs is held from the playoffs, not from the Swiss;
+ *  - `road`: for a side an open qualifier sent on, the first day of the road it came up — the earliest
+ *    phase kept as its result that it played, not only the one whose place it took. 2026's NORTH//EAST
+ *    Kickoff runs its 海选 on days 15–17 and a Swiss Stage on 21–26, both kept as results, and a side
+ *    that played both is on the floor from day 15;
+ *  - `feed`: a place a stand-in took instead (fillGaps): from the phase the place feeds.
  */
-export function floorOf(state: GameState, comp: Competition): Set<string> {
+const ENTRY = new Map<string, { seat: Map<number, number>; road: Map<string, number>; feed: Map<string, number> }>()
+function entryOf(ev: CEvent): { seat: Map<number, number>; road: Map<string, number>; feed: Map<string, number> } {
+  let hit = ENTRY.get(ev.id)
+  if (!hit) {
+    hit = { seat: new Map(), road: new Map(), feed: new Map() }
+    const keep = (m: Map<string, number> | Map<number, number>, k: never, d: number): void => {
+      const had = (m as Map<string | number, number>).get(k)
+      if (had == null || d < had) (m as Map<string | number, number>).set(k, d)
+    }
+    ev.units.forEach((u, ui) => {
+      if (isOpen(u)) {
+        // every side this phase ranked played it: its first day is the earliest of the ones it played
+        for (const v of u.ranked ?? []) keep(hit!.road, v as never, unitFirst(ev, ui))
+        return
+      }
+      const first = unitFirst(ev, ui)
+      for (const n of u.nodes ?? []) for (const s of [n.a, n.b]) {
+        if (s[0] === 's') keep(hit!.seat, s[1] as never, first)
+        else if (s[0] === 'g' && isOpen(ev.units[s[1]])) keep(hit!.feed, `${s[1]}:${s[2]}` as never, first)
+      }
+    })
+    ENTRY.set(ev.id, hit)
+  }
+  return hit
+}
+
+/**
+ * The clubs on a drawn event's own floor, each with the day it is first held (engine/me/window.ts holds
+ * it from that day to the event's last): a seed its own matches are drawn from, from the phase that
+ * seats it (entryOf); the club its open qualifier really sent on to a place, from that qualifier's first
+ * day, or the stand-in for it, from the phase the place feeds; and a decider's winner — its rival while
+ * the decider is to play. A side booked only for an open qualifier, history's to replay, is not on it.
+ * Empty before the draw.
+ */
+export function floorOf(state: GameState, comp: Competition): Map<string, number> {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
-  const out = new Set<string>()
+  const out = new Map<string, number>()
   if (!c || !ev || !c.mode) return out
+  const add = (t: string, day: number): void => {
+    const had = out.get(t)
+    if (had == null || day < had) out.set(t, day)
+  }
   const decider = c.playin ? state.fixtures.find((f) => f.id === c.playin!.fixture) : undefined
   const won = decider ? gameOf(decider)?.w ?? null : null
   const main = mainSeedsOf(ev)
+  const { seat, road, feed } = entryOf(ev)
+  /** the day the place a decider was played for is held from */
+  const placeDay = (key: string): number => {
+    const s = /^s:(\d+)$/.exec(key)
+    if (s) return seat.get(Number(s[1])) ?? c.start
+    const at = /^(\d+):(\d+)$/.exec(key)
+    const v = at ? ev.units[Number(at[1])]?.ranked?.[Number(at[2]) - 1] : undefined
+    return (v ? road.get(v) : undefined) ?? feed.get(key) ?? c.start
+  }
   c.seeds.forEach((t, i) => {
     // a seat the decider's winner took from its holder (slot 's')
-    if (t && main.has(i) && !(won && c.playin?.key === `s:${i}` && won !== t)) out.add(t)
+    if (t && main.has(i) && !(won && c.playin?.key === `s:${i}` && won !== t)) add(t, seat.get(i) ?? c.start)
   })
   for (const { ui, rank } of openOutputs(ev)) {
     const key = `${ui}:${rank}`
     if (won && c.playin?.key === key) continue
     // as the graph seats it (graphOf's `slot`)
-    const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    const v = ev.units[ui].ranked?.[rank - 1]
+    const real = teamOf(state, ev, v)
     const t = real && gone(state, real) ? c.fill?.[key] ?? real : real ?? c.fill?.[key]
-    if (t) out.add(t)
+    // the side that really played is held from the first day of the road it came up; a stand-in only from the phase the place feeds
+    if (t) add(t, (t === real && v ? road.get(v) : feed.get(key)) ?? c.start)
   }
-  if (won) out.add(won)
+  // the decider it played is its own day, whatever the place it won opens
+  if (won) add(won, Math.min(decider?.day ?? c.start, placeDay(c.playin?.key ?? '')))
   return out
+}
+
+/**
+ * The day an event of a season nobody has drawn yet would first hold the side history books into it
+ * (engine/me/window.ts firstNextSeason): the phase its seat enters, or the qualifier it played. Null
+ * where the event holds it in no phase of its own.
+ */
+export function entryDayIn(ev: CEvent, vlr: string): number | null {
+  const { seat, road } = entryOf(ev)
+  let best: number | null = null
+  const keep = (d: number | undefined): void => { if (d != null && (best == null || d < best)) best = d }
+  ev.seeds.forEach((v, i) => { if (v === vlr) keep(seat.get(i)) })
+  for (const { ui, rank } of openOutputs(ev)) {
+    if (ev.units[ui].ranked?.[rank - 1] === vlr) keep(road.get(vlr))
+  }
+  return best
 }
 
 /**
@@ -1820,10 +1910,10 @@ export function floorOf(state: GameState, comp: Competition): Set<string> {
  * those days: the day it went out is not on record). Drawn, off its field; before the draw, as history
  * booked it. A projected event's phases have no results and hold nobody.
  */
-export function phaseOnlyOf(state: GameState, comp: Competition): Map<string, [number, number]> {
+export function phaseOnlyOf(state: GameState, comp: Competition): Map<string, PhaseHold> {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
-  const out = new Map<string, [number, number]>()
+  const out = new Map<string, PhaseHold>()
   if (!c || !ev || ev.projected) return out
   const main = mainSeedsOf(ev)
   const sent = new Set(openOutputs(ev).map(({ ui, rank }) => ev.units[ui].ranked?.[rank - 1]))
@@ -1833,14 +1923,16 @@ export function phaseOnlyOf(state: GameState, comp: Competition): Map<string, [n
     if (!t || main.has(i) || sent.has(v)) return
     let from = Infinity
     let until = -Infinity
+    let label = ''
     for (const u of ev.units) {
       if (!isOpen(u) || !u.ranked?.includes(v)) continue
+      if ((u.first ?? c.start) < from) label = u.label
       from = Math.min(from, u.first ?? c.start)
       until = Math.max(until, u.last ?? c.end)
     }
     if (until < from) return
     const had = out.get(t)
-    out.set(t, had ? [Math.min(had[0], from), Math.max(had[1], until)] : [from, until])
+    out.set(t, had ? { from: Math.min(had.from, from), until: Math.max(had.until, until), label: had.from <= from ? had.label : label } : { from, until, label })
   })
   return out
 }
