@@ -48,10 +48,23 @@ import { squadOf } from '../roster'
 export const ROOM_EDGE_EASE = 0.1
 export const ROOM_EDGE_BOND = 0.04
 export const ROOM_EDGE_MAX = 3
-/** form: the same two, the most, and the weekly share of it applied */
-export const ROOM_FORM_EASE = 0.1
-export const ROOM_FORM_BOND = 0.05
-export const ROOM_FORM_MAX = 3
+/**
+ * Form: the same two, the most it can move a player, and the weekly share of
+ * it applied.
+ *
+ * Raised by five thirds 2026-09-16, for the reason the coach's eye above was
+ * doubled and on the same measurement. Over 1,871 weeks at a club
+ * (scripts/probe_room.ts) this term ran p10 −1.04 · p50 −0.01 · p90 +0.97 and
+ * never once reached ±3, so the cap was not what held it down here either. The
+ * rates move; the cap moves with them, to stay the guard on the tail.
+ *
+ * This is the only road the room has into a match. roomEdge is read when the
+ * coach names a five (me/coach.ts coachView) and nowhere else, so whatever the
+ * room does to a result, it does through form.
+ */
+export const ROOM_FORM_EASE = 0.167
+export const ROOM_FORM_BOND = 0.083
+export const ROOM_FORM_MAX = 5
 export const ROOM_FORM_PULL = 0.06
 
 /** His average bond with the rest of his club's squad. */
