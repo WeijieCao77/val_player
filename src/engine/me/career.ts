@@ -6,6 +6,7 @@ import { bookClubsAt, openWorldAt } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
 import { setupSeason } from '../season'
+import { STAFF_STAMP } from '../staffStints'
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS, REGION_CN, emptyStats } from '../types'
 import type { Attrs, GameState, Player, Region, Role } from '../types'
@@ -424,6 +425,13 @@ export function createCareer(o: CareerOpts): GameState {
   if (o.start === 'pre') state.myTeam = ''
   // the world file is a roster book; the calendar is drawn here
   setupSeason(state)
+  // This world is built from the corrected roster book, so nobody inside a staff stint is in it as a player: it is
+  // already up to the staff data and has nothing to be brought up to (me/staffMigrate.ts migrateStaff, written for
+  // saves made before that data). Stamped at birth, because the migration is a read-path one: unstamped, the first
+  // load of a career would run it over a world that never needed it — taking a man out of the pool and filling his
+  // seat from the free agents on the day his real stint began — and a career read back would no longer be the one
+  // that was played (scripts/check_reload.ts).
+  state.staffSync = STAFF_STAMP
 
   const attrs = buildAttrs(o.role, o.talents, o.originKey, rng)
   const model = Object.values(state.players).find((p) => p.role === o.role && p.region === region && (p.agentPool?.length ?? 0) >= 3)

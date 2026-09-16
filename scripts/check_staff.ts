@@ -189,6 +189,10 @@ console.log('读档：老存档里的教练组成员')
   const newsBefore = s0.news.length
   const logBefore = s0.me!.log.length
 
+  // a save from before staff_stints.json carries no stamp (me/staffMigrate.ts). A career created today is already
+  // built from the corrected book and is stamped at birth (me/career.ts), so the fixture has to drop the stamp to
+  // be the old save it stands for.
+  delete s0.staffSync
   const loaded = migratePlayerSave(unpackState(packState(s0)))
   check(!loaded.players.V29401 && !loaded.players.V13109, 'Muggle（AI 俱乐部）和 Stunner（你的队伍）离开了选手池')
   check(Object.values(loaded.teams).every((t) => ![...t.roster, ...t.starters].some((id) => id === 'V29401' || id === 'V13109')), '两人不在任何名单和首发里')
@@ -211,18 +215,22 @@ console.log('读档：老存档里的教练组成员')
 {
   const s = createCareer({ name: 'Plain', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 3, year: 2021 })
   const n = Object.keys(s.players).length
-  const l = migratePlayerSave(unpackState(packState(s)))
+  const old = unpackState(packState(s))
+  delete old.staffSync
+  const l = migratePlayerSave(old)
   check(Object.keys(l.players).length === n && l.staffSync === STAFF_STAMP, '没有教练组成员的老存档照常读，一个人都不动')
 
   check(!!s.players.V1003, 'Reita 在 2021 年的世界里')
   const s24 = unpackState(packState(s))
   s24.year = 2024
   s24.day = 130
+  delete s24.staffSync
   migrateStaff(s24)
   check(!!s24.players.V1003, '同一个世界放到 2024 年 5 月：Reita 是 Murash Gaming 的选手，留下')
   const s26 = unpackState(packState(s))
   s26.year = 2026
   s26.day = 130
+  delete s26.staffSync
   const move = migrateStaff(s26)
   check(!s26.players.V1003 && !!move?.gone.includes('Reita'), '放到 2026 年 5 月：Reita 已是 Murash Gaming 的教练（2025 年 12 月起），离开选手池')
 }
