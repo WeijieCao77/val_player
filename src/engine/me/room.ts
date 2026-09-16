@@ -36,35 +36,57 @@ import { squadOf } from '../roster'
  * The coach's eye: per point of ease over the squad's, per point of bond over
  * the squad's, and the most it can move a player.
  *
- * Doubled 2026-09-16. The room was put in to settle a close call for a place,
- * and it was settling almost nothing: over 1,871 weeks at a club
- * (scripts/probe_room.ts) the term ran p10 −0.50 · p50 −0.01 · p90 +0.47, and
- * in all of them not one reading sat at the cap. So the cap was never what
- * bound this — the rates were, and the rates are what moved. The cap is raised
- * with them to go back to being what it should have been all along: the outer
- * guard on the tail, not the mechanism. A clearly better player is still never
- * passed over for it (scripts/check_igl.ts 三 reads that case as 2 × MAX).
+ * These rates were doubled on 2026-09-16 to make the room settle close calls
+ * for a place, measured, and put back the same night. Read this before trying
+ * it again (scripts/probe_room.ts, 24 careers a side, 3,740 weeks at a club):
+ *
+ *  - the cap is not the knob and never was. At these rates the term runs
+ *    p10 −0.51 · p50 0.00 · p90 +0.49 and reaches ±1.5 in 0.0% of readings.
+ *    Doubling them moved it to p90 +0.97, exactly as the arithmetic says, and
+ *    still nothing came near the cap;
+ *  - it changed no outcome. The five the coach names moved in 3.7% of weeks at
+ *    these rates and 3.4% doubled — if anything fewer, and well inside the
+ *    spread between runs;
+ *  - it cannot reach the career player's own place at all: 0 weeks of 3,743,
+ *    either way. His place is the contract's or a trial's in 99.4% of weeks —
+ *    me/coach.ts coachStarters seats him before coachView is ever read — and in
+ *    the weeks left, the coach's own reading puts him a median 9.55 from the
+ *    5/6 line, against an edge whose p90 is 0.97 and whose cap is 3.
+ *
+ * Making the room decide a place is not a tuning job. It is a question about
+ * whether a starting place written into a contract can be lost.
  */
-export const ROOM_EDGE_EASE = 0.1
-export const ROOM_EDGE_BOND = 0.04
-export const ROOM_EDGE_MAX = 3
+export const ROOM_EDGE_EASE = 0.05
+export const ROOM_EDGE_BOND = 0.02
+export const ROOM_EDGE_MAX = 1.5
 /**
  * Form: the same two, the most it can move a player, and the weekly share of
  * it applied.
  *
- * Raised by five thirds 2026-09-16, for the reason the coach's eye above was
- * doubled and on the same measurement. Over 1,871 weeks at a club
- * (scripts/probe_room.ts) this term ran p10 −1.04 · p50 −0.01 · p90 +0.97 and
- * never once reached ±3, so the cap was not what held it down here either. The
- * rates move; the cap moves with them, to stay the guard on the tail.
- *
- * This is the only road the room has into a match. roomEdge is read when the
+ * This is the only road the room has into a match: roomEdge is read when the
  * coach names a five (me/coach.ts coachView) and nowhere else, so whatever the
- * room does to a result, it does through form.
+ * room does to a result it does through form.
+ *
+ * These rates were raised by five thirds on 2026-09-16 to make the room decide
+ * close matches, and put back the same night for a reason that is structural
+ * rather than a matter of degree: **this term is mean-zero across the squad by
+ * construction**. Every player is measured against his own squad's average ease
+ * and average bond, so what it gives one man it takes from another and the
+ * club's own strength is untouched — the note at the top of this file always
+ * said so, and the measurement confirmed it. Over 24 careers a side
+ * (scripts/probe_room.ts), taking the room out of the world changed 3.2% of
+ * official matches at these rates and 2.3% at five thirds; the term's own
+ * spread went p90 1.02 → 1.69 as the arithmetic says, and the cap was reached
+ * 0.0% of the time in both. The cancellation is exact, not approximate,
+ * precisely because the clamp never binds.
+ *
+ * So no value of these rates makes the room decide matches. A room meant to
+ * move a result has to stop being zero-sum inside the squad — a design change,
+ * not a constant.
  */
-export const ROOM_FORM_EASE = 0.167
-export const ROOM_FORM_BOND = 0.083
-export const ROOM_FORM_MAX = 5
+export const ROOM_FORM_EASE = 0.1
+export const ROOM_FORM_BOND = 0.05
+export const ROOM_FORM_MAX = 3
 export const ROOM_FORM_PULL = 0.06
 
 /** His average bond with the rest of his club's squad. */
