@@ -5,6 +5,7 @@ import { recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
 import { compClass, isIntlComp, isQualifier } from './compclass'
+import { tallyOf } from './detail'
 
 /**
  * 瓶颈: each of the eight has a ceiling, and hours past it go nowhere.
@@ -335,7 +336,10 @@ function veteranOf(state: GameState): Player | undefined {
     .find((q) => !!q && q.id !== me.id && q.age >= VET_AGE)
 }
 const strongClub = (state: GameState) => state.me!.phase === 'pro' && (state.teams[state.myTeam]?.rating ?? 0) >= STRONG_TEAM
-const playedIntl = (state: GameState) => state.me!.matches.some((m) => m.started && isIntlComp(state.comps[m.comp]?.name ?? m.comp))
+// ever, not just this year: the detail only reaches back a year (me/detail.ts), so the career's own
+// count answers it, with the detail still there as a floor for a save whose records hold a comp key
+const playedIntl = (state: GameState) => tallyOf(state.me!).intl > 0
+  || state.me!.matches.some((m) => m.started && isIntlComp(state.comps[m.comp]?.name ?? m.comp))
 
 /**
  * Every attribute's own way through, 破晓's BREAK_PATHS on this game's eight.

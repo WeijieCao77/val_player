@@ -240,6 +240,26 @@ export interface MeMatchRecord {
   rivalNote?: { t: string; ok: boolean }
 }
 
+/**
+ * The career's running totals — what has to outlive the one-year detail window
+ * (me/detail.ts), added up the moment each match is written down instead of
+ * counted off a list that only reaches back a year. Official matches I started,
+ * nothing else. Absent in saves from before it, and read off their detail once.
+ */
+export interface MeTally {
+  /** 比赛 MVP */
+  mvp: number
+  /** lost, and still the best line on my side */
+  carried: number
+  /** finals lost as a starter */
+  finalLost: number
+  /** 大师赛 / 冠军赛 / LOCK//IN matches started */
+  intl: number
+  /** defeats in a row right now, and the longest run of the career */
+  skid: number
+  skidBest: number
+}
+
 export interface MeSeason {
   year: number
   team: string
@@ -590,8 +610,12 @@ export interface IglBook {
   revokes: number
   /** weeks I have called, over the career */
   calledWeeks: number
-  /** calling now: since when, whom I took it from, and where I stood on each gate that day */
-  since?: { year: number; day: number; week: number; prev?: string; igl: number; comm: number; trust: number; weeks: number }
+  /**
+   * calling now: since when, whom I took it from, and where I stood on each gate that day —
+   * with the starts and wins since, counted as they happen because the detail only reaches
+   * back a year (me/detail.ts) and a man can call for longer than that. Absent in older saves.
+   */
+  since?: { year: number; day: number; week: number; prev?: string; igl: number; comm: number; trust: number; weeks: number; n?: number; w?: number }
   /** the last year I called for a club, kept across clubs — what a club reads when it signs a caller */
   lastYear?: number
 }
@@ -730,7 +754,10 @@ export interface MeState {
   /** 钱的出口：家用、见面会、奖学金、休赛期、直播间、网咖 — see me/outlets.ts; absent in older saves and until the first is used */
   out?: import('./outlets').OutletBook
   log: MeLog[]
+  /** per-match detail, the last year of it — the rule and why it is a year are in me/detail.ts */
   matches: MeMatchRecord[]
+  /** what has to outlive that year, added up as it happens (me/detail.ts); absent in older saves */
+  tally?: MeTally
   /** engine digest lines collected during the week, shown on the week screen */
   weekNotes: string[]
   /** a fixture the week stopped on, still to be played */

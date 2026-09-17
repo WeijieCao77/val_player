@@ -4,6 +4,7 @@ import type { GameState } from '../types'
 import { buildSaveMeta, readSaveMeta, writeSaveMeta } from './saveMeta'
 import { migrateRuler } from './rulerMigrate'
 import { migrateStaff } from './staffMigrate'
+import { settleDetail } from './detail'
 import type { SaveMeta } from './saveMeta'
 import { migrateToCny } from './cnyMigrate'
 import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
@@ -125,6 +126,10 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me) migrateRuler(state)
   // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
   if (state.me) resumeCup(state)
+  // 生涯明细只保留最近一年的 (me/detail.ts): a save from before the window carried up to 120
+  // records, however far back they went. What has to outlive a year is read off them once —
+  // which is all that save could see anyway — and then the older detail is let go.
+  if (state.me) settleDetail(state.me, state.year, state.day)
   return state
 }
 

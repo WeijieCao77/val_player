@@ -149,7 +149,7 @@ function IglPanel() {
       <Panel title="指挥" actions={<span className="tag t1">主指挥</span>}>
         <p className="small" style={{ margin: '0 0 6px' }}>你是队里的主指挥：比赛里全队按你的指挥来打（指挥{w(p.attrs.igl)}）。复盘和每一张你喊过的图都会涨指挥；关键回合里看协同、沟通的选项也会加上它。</p>
         <p className="tiny muted" style={{ margin: 0 }}>
-          {since ? `${since.year} 年接的指挥，之后首发 ${runs.length} 场，赢 ${runs.filter((m) => m.won).length} 场。` : ''}
+          {since ? `${since.year} 年接的指挥，之后首发 ${since.n ?? runs.length} 场，赢 ${since.w ?? runs.filter((m) => m.won).length} 场。` : ''}
           最近 {SKID_OF} 场只赢 {SKID_WINS} 场以下、教练的信任掉到{nums ? ` ${IGL_TRUST_LOST} 以下` : '「有保留」'}，或者你被换下场，他会把指挥收回去。
         </p>
       </Panel>

@@ -310,6 +310,7 @@ export function takeIgl(state: GameState): string[] {
   b.since = {
     year: state.year, day: state.day, week: me.week, prev: prev?.id,
     igl: p.attrs.igl, comm: p.attrs.communication, trust: Math.round(me.coachTrust), weeks: b.weeks,
+    n: 0, w: 0,
   }
   b.lastYear = state.year
   state.news.push({ day: state.day, kind: 'club', important: true, text: `${p.ign} 出任 ${team.name} 主指挥${prev ? `，${prev.ign} 转为副指挥` : ''}。` })
@@ -371,6 +372,13 @@ export function iglDrop(state: GameState, clubId: string | null | undefined): vo
 /** Every map I call teaches me to call. */
 export function iglAfterMatch(state: GameState, rec: MeMatchRecord): void {
   if (!rec.started || rec.friendly || !myCall(state)) return
+  // starts and wins since I took the calls, counted as they happen: a man can call for
+  // longer than the detail reaches back (me/detail.ts)
+  const since = state.me!.igl?.since
+  if (since) {
+    since.n = (since.n ?? 0) + 1
+    if (rec.won) since.w = (since.w ?? 0) + 1
+  }
   const p = state.players[state.me!.id]
   const room = clamp(((p.caps?.igl ?? 99) - p.attrs.igl) / 10, 0.25, 1.3)
   addXp(p, 'igl', CALL_XP * rec.maps * room)

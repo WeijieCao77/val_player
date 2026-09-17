@@ -30,6 +30,16 @@ export const isIntlComp = (name: string): boolean => {
 }
 
 /**
+ * A series that decides the whole event — not a semi-final, not an upper-bracket final.
+ * Read off the stored label, so it belongs here beside the other name tests rather
+ * than in a module that imports half the career (me/achievements.ts, me/detail.ts).
+ */
+export function isFinal(label: string): boolean {
+  const l = (label ?? '').trim()
+  return /总决赛$|^决赛$|\s决赛$|Grand Final|^Final/i.test(l) && !/(胜者组|败者组|半|四分之一)决赛$/.test(l)
+}
+
+/**
  * An event whose point is to send its winner on to another one: an open
  * qualifier (a cup's 公开资格赛, the kickoff's 揭幕赛公开资格赛), a league cup's
  * 公开季后赛, a Last Chance or any other qualifier. Winning it is 出线, not a

@@ -27,6 +27,7 @@ import { bondNoteMatch } from './bond'
 import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
 import { starBeat, starBeatLine } from './stars'
 import { rivalAfterMatch, rivalNodeEdge } from './rivals'
+import { noteMatch, trimDetail } from './detail'
 import { pushLog } from './log'
 import { questProgress } from './quests'
 import { compCn } from './compname'
@@ -47,9 +48,6 @@ export interface Friendly {
 
 /** what a map of a cup round takes out of me; a league map on the floor takes 5 (me/auto.ts matchLoad) */
 export const FRIENDLY_MAP_FATIGUE = 4
-
-/** how many matches back keep the full all-ten table; older ones keep only the words */
-const BOX_KEEP = 12
 
 /** under this in the bank a side's next buy is an eco for certain (engine/match.ts Economy.decide) */
 const ECO_BANK = 2200
@@ -526,10 +524,10 @@ export class MeMatch {
     if (!this.friendly && f.comp !== 'scrim') rivalAfterMatch(state, rec, { oppTeamId: this.oppTeamId, maps: result.maps, fixture: f })
     this.finished = rec
     if (this.friendly) {
+      // 生涯明细只保留最近一年的，and what has to outlive it is added up now (me/detail.ts)
       me.matches.push(rec)
-      if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
-      // ten rows a match adds up; only the recent ones keep the full table
-      for (let i = 0; i < me.matches.length - BOX_KEEP; i++) delete me.matches[i].box
+      noteMatch(me, rec)
+      trimDetail(me, state.year, state.day)
       me.heat += won ? 4 : 1
       this.me.fatigue = clamp(this.me.fatigue + FRIENDLY_MAP_FATIGUE * result.maps.length, 0, 100)
       me.mental = clamp(me.mental + (won ? 0.3 : 0.1), 0, 100)
@@ -540,10 +538,10 @@ export class MeMatch {
       return
     }
     if (f.comp !== 'scrim') {
+      // 生涯明细只保留最近一年的，and what has to outlive it is added up now (me/detail.ts)
       me.matches.push(rec)
-      if (me.matches.length > 120) me.matches.splice(0, me.matches.length - 120)
-      // ten rows a match adds up; only the recent ones keep the full table
-      for (let i = 0; i < me.matches.length - BOX_KEEP; i++) delete me.matches[i].box
+      noteMatch(me, rec)
+      trimDetail(me, state.year, state.day)
       me.seasonStart.matches++
       me.playedThisStage++
       // one more night shared with these four

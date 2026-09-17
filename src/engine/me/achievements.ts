@@ -7,8 +7,9 @@ import { addMoney } from './money'
 import { bondProtege, bondRoleCount } from './bond'
 import { CAP_EXP_MAX } from './bottleneck'
 import type { MeMatchRecord, MeSeason, MeState } from './types'
-import { compClass, isIntlComp } from './compclass'
+import { compClass, isFinal, isIntlComp } from './compclass'
 import type { CompClass } from './compclass'
+import { careerStarts, tallyOf } from './detail'
 import { rankAt } from './rank'
 import { cny } from './moneyfmt'
 import { wageCny } from './paytable'
@@ -81,12 +82,6 @@ export interface AchDef {
 
 export { compClass, isIntlComp }
 export type { CompClass }
-
-/** A series that decides the whole event — not a semi-final, not an upper-bracket final. */
-const isFinal = (label: string): boolean => {
-  const l = (label ?? '').trim()
-  return /总决赛$|^决赛$|\s决赛$|Grand Final|^Final/i.test(l) && !/(胜者组|败者组|半|四分之一)决赛$/.test(l)
-}
 
 /* ------------------------------------------------------------------ */
 /*  reading the save                                                    */
@@ -284,7 +279,8 @@ export const ACHIEVEMENTS: AchDef[] = [
 
   // ---- 残局与数据
   { key: 'first_mvp', route: 'stats', name: '全场最佳', desc: '拿一次比赛 MVP', reward: { fans: 15 }, cond: (s) => starts(s).some((m) => m.mvp) },
-  { key: 'mvp10', route: 'stats', name: '常客', desc: '10 次 MVP', reward: { heat: 15 }, cond: (s) => starts(s).filter((m) => m.mvp).length >= 10 },
+  // counted over the career, not off the detail — see me/detail.ts
+  { key: 'mvp10', route: 'stats', name: '常客', desc: '10 次 MVP', reward: { heat: 15 }, cond: (s) => tallyOf(M(s)).mvp >= 10 },
   { key: 'acs300', route: 'stats', name: '爆种', desc: '一场比赛 ACS 300+', reward: { fans: 20 }, cond: (s) => starts(s).some((m) => m.acs >= 300) },
   { key: 'clutch3', route: 'stats', name: '残局大师', desc: '一场比赛赢下 3 个残局', reward: { mental: 1 }, cond: (s) => starts(s).some((m) => m.clutches >= 3) },
   { key: 'clutch120', route: 'stats', name: '最后一个人', desc: '生涯赢下 120 个残局', reward: { title: '残局专家' }, cond: (s) => P(s).career.clutches >= 120 },
@@ -309,7 +305,9 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'skid_title', route: 'back', name: '连败之后', desc: '同一年首发连输三场，还是拿了冠军', reward: { heat: 20 }, cond: skidTitle },
 
   // ---- 老将与退役
-  { key: 'matches100', route: 'vet', name: '一百场', desc: '首发打满 100 场正赛', reward: { heat: 10 }, cond: (s) => starts(s).length >= 100 },
+  // the seasons' own record, never the detail: that reaches back a year (me/detail.ts), and under the
+  // 120-record cap before it this asked for 100 starts among the last 120 matches — all but unreachable
+  { key: 'matches100', route: 'vet', name: '一百场', desc: '首发打满 100 场正赛', reward: { heat: 10 }, cond: (s) => careerStarts(M(s)) >= 100 },
   { key: 'seasons8', route: 'vet', name: '常青树', desc: '打满八个职业赛季', reward: { title: '老将' }, cond: (s) => proSeasons(s) >= 8 },
   { key: 'age30', route: 'vet', name: '三十而立', desc: '30 岁还在打', reward: { body: 1 }, cond: (s) => P(s).age >= 30 && M(s).phase === 'pro' },
   { key: 'seasons12', route: 'vet', name: '十二年', desc: '打满十二个职业赛季', reward: { title: '元老' }, cond: (s) => proSeasons(s) >= 12 },
@@ -319,11 +317,11 @@ export const ACHIEVEMENTS: AchDef[] = [
     cond: (s) => { const e = M(s).ending; return M(s).phase === 'retired' && !!e && M(s).titles.some((t) => t.started && t.year >= e.year - 1) } },
 
   // ---- 失败与坚持
-  { key: 'carry5', route: 'grit', name: '一个人在扛', desc: '5 场败局里你是全队最高', reward: { mental: 1 }, cond: (s) => starts(s).filter((m) => m.carried).length >= 5 },
+  { key: 'carry5', route: 'grit', name: '一个人在扛', desc: '5 场败局里你是全队最高', reward: { mental: 1 }, cond: (s) => tallyOf(M(s)).carried >= 5 },
   { key: 'bench_year', route: 'grit', name: '坐满一季', desc: '一个职业赛季没打上首发（至少 8 场）', reward: { body: 1 },
     cond: (s) => M(s).seasons.some((x) => x.tier > 0 && x.matches >= 8 && x.starts === 0) },
-  { key: 'final_lost3', route: 'grit', name: '三次倒在决赛', desc: '首发输掉三场决赛', reward: { mental: 1 }, cond: (s) => starts(s).filter((m) => !m.won && !m.drawn && isFinal(m.label)).length >= 3 },
-  { key: 'losing_skid', route: 'grit', name: '八连败', desc: '首发连输八场', reward: { heat: 10 }, cond: (s) => lossRun(starts(s)) >= 8 },
+  { key: 'final_lost3', route: 'grit', name: '三次倒在决赛', desc: '首发输掉三场决赛', reward: { mental: 1 }, cond: (s) => tallyOf(M(s)).finalLost >= 3 },
+  { key: 'losing_skid', route: 'grit', name: '八连败', desc: '首发连输八场', reward: { heat: 10 }, cond: (s) => tallyOf(M(s)).skidBest >= 8 },
   { key: 'shore', route: 'grit', secret: true, name: '天梯上的四年', desc: '四年没签到合同，一直打到最后', reward: { title: '路人王' },
     cond: (s) => M(s).phase === 'retired' && M(s).ending?.key === 'shore' },
   { key: 'no_title_8', route: 'grit', secret: true, name: '空奖杯柜', desc: '八个职业赛季，一个冠军都没有', reward: { title: '一直在路上' },
