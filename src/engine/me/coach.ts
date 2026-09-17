@@ -31,7 +31,9 @@ export const TRIAL_MATCHES = 2
  * ways round, because a promise is a promise either way — a man signed as a
  * starter can be benched once the floor is spent, and a man signed as a
  * substitute sits out exactly as long before he is allowed to compete for a
- * start. Counted in matches the club actually played (MeState.promiseMatches),
+ * start. 轮换 is the exception on both sides: it promises neither, so it holds
+ * nothing and the coach reads the man from his first match (promiseSeat).
+ * Counted in matches the club actually played (MeState.promiseMatches),
  * not in weeks: a floor measured in weeks would run out over a break with
  * nothing played, and would be worth twice as much in a busy stage as in a
  * quiet one.
@@ -113,16 +115,22 @@ export function promiseFloorLeft(state: GameState): number {
 
 /**
  * Which way the contract seats me while its floor still holds, and null once my
- * place is the coach's to decide: 'start' for 核心 and 首发, 'bench' for 轮换 and
- * 替补. A benching for form outranks a starting promise, as it always did.
+ * place is the coach's to decide: 'start' for 核心 and 首发, 'bench' for 替补.
+ * A benching for form outranks a starting promise, as it always did.
+ *
+ * 轮换 holds nothing, either way. The decision named two contracts —
+ * 「签的首发合同」 and 「替补合同」 — and 轮换 is neither: it is the standing a club
+ * writes down when it is promising nothing about selection, which is why
+ * scripts/check_igl.ts sets it to read the coach's own eye with the contract out
+ * of the way. Seating a 轮换 signing on the bench for three matches would have
+ * benched a man 3.5 clear of his rival on a contract that never promised it.
  */
 export function promiseSeat(state: GameState): 'start' | 'bench' | null {
   const me = state.me
   if (!me || promiseFloorLeft(state) <= 0) return null
   const role = state.players[me.id]?.contract?.promisedRole
-  if (!role) return null
   if (role === 'starter' || role === 'star') return me.benchLock && me.benchLock > state.day ? null : 'start'
-  return 'bench'
+  return role === 'bench' ? 'bench' : null
 }
 
 /** Whether this week's place is the contract's rather than the coach's — what scripts/probe_place.ts counts. */

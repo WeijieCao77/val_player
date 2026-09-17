@@ -165,6 +165,18 @@ console.log('同一份替补合同，打不过就还坐着')
   check(promiseFloorLeft(s) === 0 && !starts(s), '综合 35 对 70：保底过了也进不了首发 —— 保底之后两边都可能')
 }
 
+console.log('轮换合同两边都不保：位置从第一场起就归教练')
+{
+  // 轮换 is what a contract says when it promises nothing about selection — the
+  // value scripts/check_igl.ts uses to read the coach's eye with the contract out
+  // of the way. It must not seat him, and it must not bench him.
+  const good = bench(13, 'rotation', 95)
+  check(promiseSeat(good) === null && !promiseHolds(good), '一份轮换合同不压位置')
+  check(starts(good), '综合 95 对 70：第一场就在首发里，合同不会把你按回替补席')
+  const poor = bench(13, 'rotation', 35)
+  check(!starts(poor), '综合 35 对 70：第一场就不在首发里，合同也不会把你抬进去')
+}
+
 console.log('保底就是 PROMISE_FLOOR 场，不多不少')
 {
   const s = bench(21, 'starter', 35)
