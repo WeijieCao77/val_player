@@ -110,7 +110,7 @@ const POOL_CN: Record<string, string> = {
 const BASIS_CN: Record<PointsBasis, string> = { drawn: '名单已出', settled: '积分已定', standing: '按目前积分', history: '照真实历史' }
 
 const BASIS_NOTE: Record<PointsBasis, string> = {
-  standing: '还有给积分的比赛没打完，这条线会跟着积分动。',
+  standing: '还有给积分的比赛没打完，标出来的名额会跟着积分动。',
   settled: '能改变名额的比赛都打完了，抽签就照这张表给名额。',
   drawn: '冠军赛名单已经出来，标出的就是真正拿到名额的队。',
   history: '你的世界还没碰到这个赛区的积分，名额照真实历史给，抽签那天标出来。',
@@ -123,10 +123,17 @@ const shortName = (name: string): string => name.split(' · ').pop() ?? name
  * The year's points table for the region on screen — 2021 and 2022's circuit
  * points, the Championship Points from 2024 — as vlr.gg lists one, team and
  * points, with the places it gives marked the way the draw gives them
- * (engine/circuit.ts pointsTables): a line under the last Champions place, a
- * dashed line under the last Last Chance Qualifier place, and a side already
- * through by another road marked as through. The club is lit wherever it
- * stands, and the table is there whichever tier the club plays in.
+ * (engine/circuit.ts pointsTables): the Champions places, the Last Chance
+ * Qualifier places, and a side already through by another road marked as
+ * through. The club is lit wherever it stands, and the table is there whichever
+ * tier the club plays in.
+ *
+ * No line is drawn across it (作者：「积分表上的线不画了，只列出积分，但是如果有其他队伍在
+ * 其他渠道进入冠军赛了，那就标一下」). A line under the last Champions place promised that
+ * the rows above it are the ones that go, and they are not: the draw passes over a club
+ * already at Champions by another road and the place falls to the next one down
+ * (engine/circuit.ts seedsFor, `direct`). The marks say who goes, row by row, and
+ * 已晋级 says why a row above is not one of them.
  */
 export function PointsPanel({ table }: { table: PointsTable }) {
   const { game } = useGame()
@@ -149,10 +156,10 @@ export function PointsPanel({ table }: { table: PointsTable }) {
   const marks = rows.map((r) => r.mark)
   const lastDirect = marks.lastIndexOf('direct')
   const lastLcq = marks.lastIndexOf('lcq')
-  // 破晓's one line under the table: what its lines mean
+  // 破晓's one line under the table: what its marks mean — there is no line to explain
   const legend = [
     lastDirect >= 0 || lastLcq >= 0
-      ? `${[lastDirect >= 0 ? `实线以上${open ? '直接' : '靠积分'}去冠军赛` : '', lastLcq >= 0 ? '虚线以上去最后机会资格赛' : ''].filter(Boolean).join('，')}；标「已晋级」的队不占积分名额，名额往下顺延`
+      ? `${[lastDirect >= 0 ? `标「冠军赛」的队${open ? '直接' : '靠积分'}去冠军赛` : '', lastLcq >= 0 ? '标「最后机会资格赛」的队去最后机会资格赛' : ''].filter(Boolean).join('，')}；标「已晋级」的队不占积分名额，名额往下顺延`
       : '',
     live ? '「本赛事已得」是还在打的赛事里赢球拿到的分，赛事结束才加进积分' : '',
   ].filter(Boolean).join('。')
@@ -161,25 +168,23 @@ export function PointsPanel({ table }: { table: PointsTable }) {
   const rule = open
     ? `还没拿到冠军赛名额的队里，积分最高的 ${table.direct} 队直接去冠军赛${table.lcq ? `，再往下 ${table.lcq} 队去最后机会资格赛` : ''}。已经靠别的途径拿到名额的队不占积分名额，名额往下顺延。`
     : `第二赛段季后赛前 ${table.stage2} 名直接去冠军赛；另外 ${table.direct} 个名额给其余队里冠军积分最高的队。`
-  const line = (i: number) => (i === lastDirect ? { borderBottom: '2px solid var(--accent)' }
-    : i === lastLcq ? { borderBottom: '2px dashed var(--muted)' } : undefined)
   const row = (r: PointsRow, i: number) => {
     const src = (from.get(r.team) ?? []).slice().sort((a, b) => b.v - a.v).slice(0, 2)
     return (
       <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''} data-team={r.team} data-mark={r.mark ?? ''}>
-        <td className="num muted" style={line(i)}>{i + 1}</td>
-        <td style={line(i)}>
+        <td className="num muted">{i + 1}</td>
+        <td>
           <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><span>{game.teams[r.team]?.name}</span></span>
         </td>
-        <td className="num mono" style={line(i)}><b>{r.points}</b></td>
-        {live && <td className="num mono muted" style={line(i)}>{running.get(r.team) ? `+${running.get(r.team)}` : ''}</td>}
-        <td className="small" style={line(i)}>
+        <td className="num mono"><b>{r.points}</b></td>
+        {live && <td className="num mono muted">{running.get(r.team) ? `+${running.get(r.team)}` : ''}</td>}
+        <td className="small">
           {r.mark === 'direct' ? <span className="tag t1">冠军赛</span>
             : r.mark === 'lcq' ? <span className="tag">最后机会资格赛</span>
               : r.mark === 'through' ? <span className="tag win">已晋级</span> : ''}
           {r.mark === 'through' && r.via && <div className="tiny faint">{r.via}</div>}
         </td>
-        <td className="tiny faint" style={line(i)}>{src.map((x) => `${x.name} ${x.v}`).join(' · ')}</td>
+        <td className="tiny faint">{src.map((x) => `${x.name} ${x.v}`).join(' · ')}</td>
       </tr>
     )
   }

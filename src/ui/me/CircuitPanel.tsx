@@ -293,7 +293,7 @@ function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolea
           return m === 'yes' ? <span key={k} className="tag win">{v ? `+${v} 积分` : '拿积分'}</span>
             : m === 'no' ? <span key={k} className="faint">没有积分</span> : null
         }
-        return m === 'yes' ? <span key={k} className="tag t1">已拿到{s.name}名额</span>
+        return m === 'yes' ? <span key={k} className="tag t1">已拿到{s.name} 名额</span>
           : m === 'other' ? <span key={k} className="tag">已从别的途径进入{s.name}</span>
             : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
       })}
@@ -364,7 +364,7 @@ function FinalPlaces({ comp }: { comp: Competition }) {
       return v ? <span key={k} className="tag win">+{v} 积分</span> : null
     }
     if (s.elsewhere?.includes(id)) return <span key={k} className="tag">已从别的途径进入{s.name}</span>
-    if (s.seated?.includes(id)) return <span key={k} className="tag t1">已拿到{s.name}名额</span>
+    if (s.seated?.includes(id)) return <span key={k} className="tag t1">已拿到{s.name} 名额</span>
     return null
   })
   const cascaded = sets.some((s) => s.elsewhere?.some((t) => rows.some((r) => r.id === t)))

@@ -14,7 +14,11 @@
  *    page marks the places as settled, the Champions or Last Chance Qualifier
  *    draw that follows gives exactly those places to exactly those sides; once
  *    it is drawn, the page marks the draw. 2023 and 2027 on gave no place off
- *    points and show no table.
+ *    points and show no table. No line is drawn across it either (作者：「积分表上
+ *    的线不画了」): a club already at Champions by another road sits above where
+ *    the line went and takes none of the points places, so the marks are the
+ *    whole of it — 「已晋级」 among them, checked both ways against the field the
+ *    draw made, and against the field it makes a week later.
  *  - events: a played event's tables are its matches — a side's record, maps and
  *    rounds the sum of its matches in that phase, in whichever group's table it
  *    sits, and a knockout side's series, maps and rounds the same; a finished
@@ -127,7 +131,7 @@ interface Snap { year: number; day: number; tables: PointsTable[]; drawn: Set<st
 const stats = {
   weeks: 0, tables: 0, rows: 0, settled: 0, standing: 0, standingOff: 0, drawn: 0, renders: 0, events: 0, eventTables: 0,
   lines: 0, linesAtSeats: 0, knockoutRows: 0, pointsMarks: 0, onward: 0, historyEvents: 0, historyRows: 0, panelRenders: 0,
-  cascades: 0, elsewhere: 0, fields: 0,
+  cascades: 0, elsewhere: 0, fields: 0, through: 0, throughRows: 0,
 }
 /** a history event once it is over: looked at once */
 const historyOver = new Set<string>()
@@ -144,6 +148,14 @@ function snap(state: GameState): Snap {
 /** A year's points tables hold together: there when the year had places off points, in points order, no more marks than places. */
 function tablesHold(state: GameState, s: Snap, label: string): void {
   const want = POINTS_YEARS.has(state.year)
+  // Once the Champions field exists, every mark answers to it: a club of this pool that is in that field is
+  // marked — 「冠军赛」 off the points, 「已晋级」 off another road — and a club that is marked is in it. The
+  // line that used to run under the last Champions place is gone (作者：「积分表上的线不画了」), because a club
+  // already in by another road stood above it and took none of these places; nothing checked 「已晋级」 at all,
+  // and an unchecked mark is how the line came to promise what the draw does not keep.
+  const cev = targets(state.year).find((e) => e.stage === 'champions')
+  const cc = cev ? state.comps[`ev:${cev.id}`]?.circuit : undefined
+  const field = cc?.mode ? new Set(cc.seeds.filter((x): x is string => !!x)) : null
   if (want && !s.tables.length) fail(`${label}：${state.year} 年第 ${state.day} 天应该有积分榜，页面上没有`)
   if (!want && s.tables.length) fail(`${label}：${state.year} 年没有靠积分给的名额，页面上却有 ${s.tables.length} 张积分榜`)
   for (const t of s.tables) {
@@ -155,6 +167,17 @@ function tablesHold(state: GameState, s: Snap, label: string): void {
     const lcq = t.rows.filter((r) => r.mark === 'lcq').length
     if (direct > t.direct) fail(`${label}：${state.year} ${t.pool} 标了 ${direct} 个冠军赛名额，只有 ${t.direct} 个`)
     if (lcq > t.lcq) fail(`${label}：${state.year} ${t.pool} 标了 ${lcq} 个资格赛名额，只有 ${t.lcq} 个`)
+    if (!field) continue
+    stats.through++
+    for (const r of t.rows) {
+      const marked = r.mark === 'direct' || r.mark === 'through'
+      if (r.mark === 'through') stats.throughRows++
+      if (marked !== field.has(r.team)) {
+        fail(`${label}：${state.year} ${t.pool} 积分榜：${state.teams[r.team]?.name} ${marked
+          ? `标着「${r.mark === 'direct' ? '冠军赛' : '已晋级'}」，冠军赛的名单里没有它`
+          : '什么都没标，它却在冠军赛的名单里'}`)
+      }
+    }
   }
 }
 
@@ -166,6 +189,15 @@ function drawsSince(before: Snap, state: GameState, label: string): void {
     if (!state.comps[`ev:${ev.id}`]?.circuit?.mode || before.drawn.has(ev.id)) continue
     const champs = ev.stage === 'champions'
     const mark = champs ? 'direct' : 'lcq'
+    // 「已晋级」 is a promise about today, not a guess about later: a club the page marked as in by another
+    // road the week before is a club this draw's field holds
+    if (champs) {
+      const field = new Set((state.comps[`ev:${ev.id}`]?.circuit?.seeds ?? []).filter((x): x is string => !!x))
+      for (const t of before.tables) {
+        const missing = t.rows.filter((r) => r.mark === 'through' && !field.has(r.team)).map((r) => r.team)
+        if (missing.length) fail(`${label}：${state.year} ${ev.name} ${t.pool}：第 ${before.day} 天页面标「已晋级」给 ${names(state, missing)}，抽出来的名单里没有他们`)
+      }
+    }
     for (const [pool, list] of seatsByPool(state, ev)) {
       const got = new Set(list)
       const was = before.tables.find((t) => t.pool === pool)
@@ -586,9 +618,11 @@ mastersWaits()
 run('二线 · 欧洲 2021 起', 'Europe', 'chal', 2021, 2027)
 run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
-console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时的线不同）· 渲染 ${stats.renders} 次`)
+console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时标的不同）· 渲染 ${stats.renders} 次 · 冠军赛名单出来后对过标记 ${stats.through} 张表，其中 ${stats.throughRows} 行标着「已晋级」`)
 console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分标记 ${stats.pointsMarks} 次 · 跨赛事名额 ${stats.onward} 次：对过参赛名单 ${stats.fields} 次、对过「名额往下顺延」${stats.cascades} 次，其中 ${stats.elsewhere} 行是已经从别的途径进去的 · 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
 if (!stats.settled) fail('没有一次抽签是在页面标「积分已定」之后发生的：检查没有覆盖到定下来的名额')
+if (!stats.through) fail('冠军赛名单出来以后一张积分榜的标记都没对过：检查没有覆盖到「已晋级」')
+if (!stats.throughRows) fail('没有一行标过「已晋级」：检查没有覆盖到从别的途径进了冠军赛的队')
 if (!stats.linesAtSeats) fail('没有一张打完的表对过下一阶段的座位：检查没有覆盖到线')
 if (!stats.pointsMarks) fail('没有一张淘汰赛表对过积分标记：检查没有覆盖到积分')
 if (!stats.cascades) fail('没有一次对过「名额往下顺延」：检查没有覆盖到跨赛事名额是怎么给的')
