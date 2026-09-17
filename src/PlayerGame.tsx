@@ -256,6 +256,9 @@ export default function PlayerGame() {
       <>
       {/* a build that went live while this page was open: 刷新 / 稍后 (ui/me/UpdateNudge.tsx); nothing to save before it here */}
       <UpdateNudge />
+      {/* the same corner button as inside a career (below): 更新日志 belongs to the build, not to a career, so the
+          cover page has it too — someone who has not started yet is exactly who wants to read what changed (me.css) */}
+      <Changelog />
       <NewCareer
         onStart={start}
         // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself

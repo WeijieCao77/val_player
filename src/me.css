@@ -195,7 +195,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .week-day.past { opacity: .55; }
 .week-day.next { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
-.newcareer { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+/* 页尾那 104px 是给右下角「更新日志」留的：正文栏最宽 860，屏幕一窄到正文栏顶住右边（约 892 以下），
+   页面最后那颗右对齐的按钮就和钉在屏幕角上的按钮撞在一起——量出来 721 和 860 宽都实实在在叠着。
+   留出按钮的高度（它顶边离屏幕底 96px）比按宽度写一条特例稳：正文栏、按钮大小以后怎么改都不会漏。 */
+.newcareer { max-width: 860px; margin: 0 auto; padding: 24px 16px 104px; }
 .newcareer h1 { margin: 0 0 4px; }
 /* the cover (public/cover.svg) is drawn 1200×630 for link previews; on the page its top and bottom margins are trimmed */
 .nc-cover {
@@ -747,8 +750,12 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
     .app.career .face-btn + .face-btn { margin-left: 0; }
   }
 
-  /* -- the new career: the start button ends the page at its own width, as 破晓's 建档 ends with its button */
-  .newcareer { padding: 12px 10px calc(24px + var(--safe-b)); }
+  /* -- the new career: the start button ends the page at its own width, as 破晓's 建档 ends with its button.
+        窄屏上正文栏已经顶到屏幕两边，而「更新日志」那颗是钉在屏幕右下角的，于是它正好压在
+        页面最后那颗按钮（「开始生涯」／「先选一个出身」）上——量出来按钮底边离屏幕底 24px，
+        按钮顶边 46px，实实在在叠着。给页尾留出这颗按钮的高度，跟生涯壳给底栏留位子是同一招
+        （上面 .app.career > .body > .main 的 64px）。 */
+  .newcareer { padding: 12px 10px calc(64px + var(--safe-b)); }
   .newcareer > .row:last-child > button.primary { min-height: 48px; padding: 0 24px; font-size: 16px; }
 }
 @media (min-width: 721px) {
@@ -765,6 +772,16 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 @media (max-width: 720px) {
   .app.career > .log-fab { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(var(--dock-h) + var(--safe-b) + 8px); }
   .app.career:has(> .nav-scrim) > .log-fab { display: none; }
+}
+
+/* 开局页（建档页）也有这颗「更新日志」，和生涯里是同一个组件、同一套样式（PlayerGame.tsx）：
+   更新日志说的是这一版游戏改了什么，不是某一局生涯的事，而封面页恰恰是还没开局、最想先看看
+   改了什么的人待的地方。位置也跟生涯里一样，右下角那颗，不占「成就殿堂」那一行。
+   只有一处不一样，而且是壳的差别不是样式的差别：手机上生涯壳底下钉着底栏，那颗按钮站在底栏
+   上面（上面那条规则）；开局页在壳外面，没有底栏，所以它落回屏幕右下角，不然就悬在一段空白
+   上面（base.css 里「a button floating 68px up from nothing just looks lost」说的就是这个）。 */
+@media (max-width: 720px) {
+  body:has(.newcareer) .log-fab { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* a club background on a ladder start: visible, greyed, with the reason */
