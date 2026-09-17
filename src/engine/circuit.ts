@@ -339,9 +339,44 @@ const uniq = <T>(xs: T[]): T[] => [...new Set(xs)]
  * world plays gives it a place. Gambit's five were M3 Champions' by 2022 and
  * G2 had let its team go, yet a placing from an event played here seated each
  * of them — Gambit in 2022's EMEA Challengers, G2 at Champions — with nobody
- * on the roster to field. The place goes to the next side (fillGaps).
+ * on the roster to field. The place goes to the next side: a place it earned
+ * by a placing, to the next finisher there (nextFinisher); any other, to the
+ * side fillGaps stands in.
  */
 const gone = (state: GameState, id: string): boolean => !!state.teams[id]?.dormant || foldDue(state, id)
+
+/**
+ * The side a place earned by a placing goes to: the first of the feeder's finishers, in their order, that `ok` lets
+ * take it. A club history has let go is passed over (gone) — the player's own club is not, as begin keeps it — and
+ * the place is the next finisher's, not a stand-in's from wherever fillGaps finds the best side. Once one has been
+ * passed over, the next is also one that could take this event's place any other way: not already in by the event's
+ * own open qualifier (openEntrants), and of the event's own scene, as a stand-in would be (canStandIn). A Chinese
+ * invitational that reads its places off Champions does not pass a dissolved club's place down that table to a North
+ * American side; where no finisher below is left, the place keeps its real side, or goes to fillGaps.
+ *
+ * Reported 2026-09-17 (a European career from 2021, seed 1; seed 5 the same): EXCEL finished third in 2022's EMEA
+ * Stage 2 Challengers and took the EMEA place at Masters Copenhagen that the third place gives, but history had let
+ * EXCEL go by the draw. begin emptied the place and fillGaps, whose scope for an international is the world, stood in
+ * Version1 — a North American club that never played that event — over Anonymo Esports, EMEA's fourth
+ * (scripts/check_gone_seat.ts).
+ */
+function nextFinisher(state: GameState, ev: CEvent, order: readonly string[], ok: (t: string) => boolean): string | undefined {
+  const club = playerClub(state)
+  const scope = scopeOf(ev)
+  let through: Set<string> | undefined
+  let passed = false
+  for (const t of order) {
+    if (!ok(t)) continue
+    if (t !== club && gone(state, t)) { passed = true; continue }
+    if (passed) {
+      if ((through ??= openEntrants(state, ev)).has(t)) continue
+      const region = state.teams[t]?.region
+      if (scope && !(region && (scope.includes(region) || scope.includes(regionIn(region, state.year))))) continue
+    }
+    return t
+  }
+  return undefined
+}
 
 /* ------------------------------------------------------------------ */
 /*  the graph                                                          */
@@ -1175,7 +1210,7 @@ function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swa
     } else if (x.r.kind === 'top' && x.r.event) {
       const c = state.comps[`ev:${x.r.event}`]
       const inLeague = (t: string) => !x.r.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === x.r.league
-      now = c?.champion && c.circuit?.mode === 'sim' ? c.finished.find((t) => !used.has(t) && inLeague(t)) : real[x.i]
+      now = c?.champion && c.circuit?.mode === 'sim' ? nextFinisher(state, ev, c.finished, (t) => !used.has(t) && inLeague(t)) : real[x.i]
     } else if (x.r.kind === 'rest' && x.r.event) {
       // the league's sides not already through to Champions. Each real entrant keeps
       // its place unless it has since gone through; only then does the league's next
@@ -1188,7 +1223,7 @@ function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swa
       if (keep && !through.has(keep) && !used.has(keep)) now = keep
       else if (c?.champion) {
         const field = new Set(items.filter((y) => y.r.kind === 'rest').map((y) => real[y.i]).filter((t): t is string => !!t))
-        now = c.finished.find((t) => !used.has(t) && !through.has(t) && !field.has(t))
+        now = nextFinisher(state, ev, c.finished, (t) => !used.has(t) && !through.has(t) && !field.has(t))
       } else now = keep
     } else if (x.r.kind === 'points' && x.r.pool) {
       if (!poolTouched(state, x.r.pool)) now = real[x.i]
@@ -1258,9 +1293,7 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
     const taken = new Set<string>()
     const blocked = (t: string | undefined) => !!t && (taken.has(t) || elsewhere.has(t) || out.some((o, at) => !own.has(at) && o === t))
     const next = list.map(({ i, k }) => {
-      let j = k
-      while (j < feeder.finished.length && blocked(feeder.finished[j])) j++
-      const now = feeder.finished[j]
+      const now = nextFinisher(state, ev, feeder.finished.slice(k), (t) => !blocked(t))
       if (now) taken.add(now)
       return { i, now }
     })
@@ -1370,11 +1403,11 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
       if (r.kind === 'winner') take(i, c?.champion)
       else if (r.kind === 'top') {
         const inLeague = (t: string) => !r.league || regionIn(state.teams[t]?.region ?? 'Europe', year) === r.league
-        take(i, c?.finished.find((t) => !used.has(t) && inLeague(t)))
+        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => !used.has(t) && inLeague(t)))
       } else if (r.kind === 'rest') {
         direct ??= championsDirect(state)
         const through = direct
-        take(i, c?.finished.find((t) => !used.has(t) && !through.has(t)))
+        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => !used.has(t) && !through.has(t)))
       } else if (r.kind === 'points' && r.pool) {
         if (/Last Chance/i.test(ev.name)) direct ??= championsDirect(state)
         const through = direct
@@ -1398,7 +1431,7 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
           .sort((x, y) => y.circuit!.end - x.circuit!.end)[0]
       }
       if (!c?.champion) continue
-      for (let j = f.k; j < c.finished.length; j++) if (take(i, c.finished[j])) break
+      take(i, nextFinisher(state, ev, c.finished.slice(f.k), (t) => !used.has(t) && !!state.teams[t] && !(elsewhere ??= playsElsewhere(state, ev)).has(t)))
     }
   }
 
@@ -1693,14 +1726,7 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
       c.done = true
     }
   } else if (c.mode === 'sim') {
-    // a club history has let go takes no place in a draw played here; the next side does
-    c.seeds = c.seeds.map((t) => (t && t !== club && gone(state, t) ? null : t))
-    // one side, one way in: a club the event's own open qualifier really sent on is in by that road, and a
-    // seed that would seat it again is the next side's (fillGaps). 2023's third China Evolution Series act
-    // had Dragon Ranger Gaming in its main bracket twice — a Play-In group's winner, and in EDward Gaming's
-    // seed — playing two quarter-finals (reported 2026-09-14)
-    const through = openEntrants(state, ev)
-    c.seeds = c.seeds.map((t) => (t && through.has(t) ? null : t))
+    c.seeds = vacate(state, ev, c.seeds)
     fillGaps(state, comp, ev)
     offerPlayIn(state, comp, ev, club, notes)
   }
@@ -2020,11 +2046,30 @@ function openEntrants(state: GameState, ev: CEvent): Set<string> {
 }
 
 /**
+ * A played event's seeds as its draw takes them (begin), and as the week reads that draw before it is made
+ * (standsIn) — one reading, so that the two cannot disagree about which places fillGaps fills:
+ *
+ *  - a club history has let go takes no place in a draw played here, the player's own club excepted. A place a
+ *    placing earned has already gone past it to the feeder's next finisher (nextFinisher); what empties here is a
+ *    place with no placing played here behind it — its real side's, or one whose placings ran out
+ *  - one side, one way in: a club the event's own open qualifier really sent on is in by that road, and a seed that
+ *    would seat it again is the next side's (fillGaps). 2023's third China Evolution Series act had Dragon Ranger
+ *    Gaming in its main bracket twice — a Play-In group's winner, and in EDward Gaming's seed — playing two
+ *    quarter-finals (reported 2026-09-14)
+ */
+function vacate(state: GameState, ev: CEvent, seeds: (string | null)[]): (string | null)[] {
+  const club = playerClub(state)
+  const through = openEntrants(state, ev)
+  return seeds.map((t) => (!t || (t !== club && gone(state, t)) || through.has(t) ? null : t))
+}
+
+/**
  * A place in the draw whose real side is not in this world — a club that
- * folded before the save's roster book was written, or never had five on it.
- * A simulated event cannot hand its opponent a walkover in every round, so
- * the best side in scope that is not already in stands in — not already in
- * by a seed, and not by the event's own open qualifier either.
+ * folded before the save's roster book was written, or never had five on it,
+ * or that history has let go where no placing played here passes the place on
+ * (vacate). A simulated event cannot hand its opponent a walkover in every
+ * round, so the best side in scope that is not already in stands in — not
+ * already in by a seed, and not by the event's own open qualifier either.
  */
 function fillGaps(state: GameState, comp: Competition, ev: CEvent): void {
   const c = comp.circuit!
@@ -2076,7 +2121,8 @@ function standInPool(state: GameState, comp: Competition, ev: CEvent, taken: Set
 /**
  * Could the draw stand `team` in for a side it is missing (fillGaps)? Only a played event fills its gaps — one nobody
  * has played yet, or one whose field has moved — and only where the draw as it stands (`seats`) leaves one, reading
- * seeds as begin does: a club history has let go, or one in by its own open qualifier, leaves its seed empty. Who is
+ * seeds as begin does (vacate): a club history has let go, or one in by its own open qualifier, leaves its seed empty
+ * — and a place a placing earned is not among them, since the draw has already passed it to the next finisher. Who is
  * stood in is not read off today's order: the events drawn before it take their own stand-ins first.
  *
  * Reported 2026-09-14 (scripts/check_nextup.ts seeds 7 and 13): 2027's Spain Stage 1 has two Spanish clubs for eight
@@ -2090,9 +2136,8 @@ function standsIn(state: GameState, comp: Competition, ev: CEvent, team: Team, d
   if (!ev.projected && !draw.moved) return false
   const scope = scopeOf(ev)
   if (scope && !scope.includes(team.region)) return false
-  const club = playerClub(state)
   const through = openEntrants(state, ev)
-  const seats = draw.seats.map((t) => (t && t !== club && gone(state, t) ? null : t)).map((t) => (t && through.has(t) ? null : t))
+  const seats = vacate(state, ev, draw.seats)
   let gaps = [...mainSeedsOf(ev)].filter((i) => !seats[i]).length
   const open = new Set<string>()
   for (const { ui, rank } of openOutputs(ev)) {
