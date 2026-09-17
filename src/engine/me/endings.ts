@@ -113,7 +113,7 @@ export function retire(state: GameState, why: string, kind: RetireWhy = 'other')
   // the night of it goes on screen before the card (me/nights.ts)
   retireNight(state)
   push(state, { kind: 'ending' })
-  // Which of the fifteen endings a career reached, and what it took to get
+  // Which of the fourteen endings a career reached, and what it took to get
   // there — every road out goes through this one function. The ending's key,
   // never its title or its text: those are sentences (engine/me/telemetry.ts).
   const seasons = me.seasons.filter((x) => x.tier > 0)
