@@ -3004,6 +3004,12 @@ export interface Onward {
   league?: string
   /** the sides the draw put in those seats, once it is drawn */
   seated: string[] | null
+  /**
+   * the rest of that field: sides in it by another road. seedsFor fills each of these seats with the next side
+   * of this event's order it has not seated already (`used`), so a side already in is skipped and the seat
+   * cascades past it. Null while the field is not drawn — until then nobody is in it.
+   */
+  elsewhere: string[] | null
 }
 
 export function onwardOf(state: GameState, comp: Competition): Onward[] {
@@ -3038,12 +3044,14 @@ export function onwardOf(state: GameState, comp: Competition): Onward[] {
     if (!places.length) continue
     const target = state.comps[`ev:${e.id}`]
     const drawn = target?.circuit?.mode ? target.circuit.seeds : null
+    const seated = drawn ? at.map((i) => drawn[i]).filter((t): t is string => !!t) : null
     out.push({
       event: e.id,
       name: target?.name ?? e.cn,
       places: uniq(places).sort((a, b) => a - b),
       league,
-      seated: drawn ? at.map((i) => drawn[i]).filter((t): t is string => !!t) : null,
+      seated,
+      elsewhere: drawn && seated ? uniq(drawn.filter((t): t is string => !!t && !seated.includes(t))) : null,
     })
   }
   return out

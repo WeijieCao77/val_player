@@ -259,10 +259,11 @@ function placeLegend(t: PlaceTable, over: boolean): string {
   if (t.lives > 1) bits.push(`输满 ${t.lives} 场淘汰`)
   if (!over) bits.push('名次按已经打完的比赛算')
   if (t.onward.length) {
-    const first = t.onward.find((s) => s.kind === 'event' && !s.league && s.places[0] === 1)
-    if (t.lines.length && first && t.lines.some((l) => l.after === first.places[first.places.length - 1])) bits.push(`实线以上去${first.name}`)
-    else if (t.lines.length) bits.push('实线是名额的分界')
-    if (!over && t.onward.some((_, k) => t.rows.some((r) => r.marks[k] === 'open'))) bits.push('名额没定的时候不画线，看每一行的「名额」')
+    // no line above a run of places: a side already in by another road takes none of them (engine/eventTable.ts markOnward)
+    bits.push(t.rows.some((r) => r.marks.includes('other'))
+      ? '标「已从别的途径进入」的队不占这里的名额，名额往下顺延'
+      : '名额以每一行标的为准')
+    if (t.onward.some((_, k) => t.rows.some((r) => r.marks[k] === 'open'))) bits.push('还没定的写「还在赛」「待定」「等抽签」')
     if (t.onward.some((s) => s.kind === 'points')) bits.push('积分在赛事结束时入账')
   }
   if (t.history) bits.push('照真实比分记，没有回合数')
@@ -277,8 +278,9 @@ function outText(r: PlaceRow, over: boolean): string {
 }
 
 /**
- * A side's marks against the places the event gives on: 已拿到 or 无缘 each, and where a later event's places are
- * still open to it, 还在赛 — 待定 for a side already out on a joint place, 等抽签 for a league's places once over.
+ * A side's marks against the places the event gives on: 已拿到 or 无缘 each, 已从别的途径进入 for a side that is in
+ * that field already and so takes none of these places, and where a later event's places are still open to it,
+ * 还在赛 — 待定 for a side already out on a joint place, 等抽签 for a league's places once over.
  */
 function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolean }) {
   const open = sets.some((s, k) => s.kind === 'event' && r.marks[k] === 'open')
@@ -292,7 +294,8 @@ function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolea
             : m === 'no' ? <span key={k} className="faint">没有积分</span> : null
         }
         return m === 'yes' ? <span key={k} className="tag t1">已拿到{s.name}名额</span>
-          : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
+          : m === 'other' ? <span key={k} className="tag">已从别的途径进入{s.name}</span>
+            : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
       })}
       {open && <span className="muted">{over ? '等抽签' : r.state === 'out' ? '待定' : '还在赛'}</span>}
     </span>
@@ -304,7 +307,6 @@ function PlaceTableView({ t, comp, title }: { t: PlaceTable; comp: Competition; 
   const { game } = useGame()
   const over = !!comp.champion
   const note = t.onward.map(onwardText).join(' · ')
-  const line = lineAt(t.lines)
   const marks = t.onward.length > 0
   return (
     <div style={{ minWidth: 0 }}>
@@ -322,8 +324,8 @@ function PlaceTableView({ t, comp, title }: { t: PlaceTable; comp: Competition; 
             </tr>
           </thead>
           <tbody>
-            {t.rows.map((r, i) => (
-              <tr key={r.team} className={cls(r.team === game.myTeam && 'me', line(i))} data-team={r.team}>
+            {t.rows.map((r) => (
+              <tr key={r.team} className={cls(r.team === game.myTeam && 'me')} data-team={r.team}>
                 <td className="num mono">{r.state === 'in' ? '—' : placeText(r.place)}{comp.champion === r.team && ' 🏆'}</td>
                 <td><Club id={r.team} name={r.name} /></td>
                 <td className="num mono">{r.w}-{r.l}</td>
@@ -352,27 +354,30 @@ function FinalPlaces({ comp }: { comp: Competition }) {
   const rows = comp.finished.map((id, i) => ({ id, p: comp.places?.[i] ?? i + 1 }))
   const joint = (p: number) => (comp.places ? comp.places.filter((x) => x === p).length : 1)
   const sets = onwardSets(game, comp).filter((s) => !s.league)
-  // a line where a run of places given on starts or ends — if the sides the draw seated are those rows
-  const cuts = new Set<number>()
-  for (const s of sets) {
-    const [lo, hi] = [s.places[0], s.places[s.places.length - 1]]
-    const inRange = rows.filter((r) => r.p >= lo && r.p + joint(r.p) - 1 <= hi).map((r) => r.id)
-    if (s.seated && (inRange.length !== s.seated.length || inRange.some((t) => !s.seated!.includes(t)))) continue
-    rows.forEach((r, i) => {
-      const nx = rows[i + 1]
-      const end = r.p + joint(r.p) - 1
-      if (nx && ((end <= hi && nx.p > hi) || (end < lo && nx.p >= lo))) cuts.add(i + 1)
-    })
-  }
-  const body = (list: typeof rows, from: number) => (
+  // No line under a run of places: a side already in a later event's field by another road takes none of that
+  // event's places here, so which rows go on is not a run (engine/eventTable.ts markOnward). Each row says
+  // what it got — the points its place pays, the seat it took, or the field it was in already.
+  const marks = sets.length > 0
+  const cell = (id: string, p: number) => sets.map((s, k) => {
+    if (s.kind === 'points') {
+      const v = s.pays?.[p - 1]
+      return v ? <span key={k} className="tag win">+{v} 积分</span> : null
+    }
+    if (s.elsewhere?.includes(id)) return <span key={k} className="tag">已从别的途径进入{s.name}</span>
+    if (s.seated?.includes(id)) return <span key={k} className="tag t1">已拿到{s.name}名额</span>
+    return null
+  })
+  const cascaded = sets.some((s) => s.elsewhere?.some((t) => rows.some((r) => r.id === t)))
+  const body = (list: typeof rows) => (
     <div className="table-wrap">
       <table>
-        <thead><tr><th className="num">名次</th><th>战队</th></tr></thead>
+        <thead><tr><th className="num">名次</th><th>战队</th>{marks && <th>名额</th>}</tr></thead>
         <tbody>
-          {list.map(({ id, p }, i) => (
-            <tr key={id} className={cls(id === game.myTeam && 'me', cuts.has(from + i + 1) && 'cut-solid')}>
+          {list.map(({ id, p }) => (
+            <tr key={id} className={cls(id === game.myTeam && 'me')}>
               <td className="num mono">{placeText([p, p + joint(p) - 1])}{comp.champion === id && ' 🏆'}</td>
               <td><Club id={id} /></td>
+              {marks && <td className="small"><span className="row wrap" style={{ gap: 4 }}>{cell(id, p)}</span></td>}
             </tr>
           ))}
         </tbody>
@@ -383,12 +388,12 @@ function FinalPlaces({ comp }: { comp: Competition }) {
   return (
     <div style={{ borderTop: '1px solid var(--line)' }}>
       <div className="nav-group" style={{ padding: '8px 13px 4px' }}>最终名次{note && <span className="faint"> · {note}</span>}</div>
-      {body(rows.slice(0, 8), 0)}
-      {cuts.size > 0 && <p className="tiny faint table-legend">实线是名额的分界：{sets.map(onwardText).join('，')}。</p>}
+      {body(rows.slice(0, 8))}
+      {cascaded && <p className="tiny faint table-legend">标「已从别的途径进入」的队不占这里的名额，名额往下顺延。</p>}
       {rows.length > 8 && (
         <details style={{ margin: '0 13px 8px' }}>
           <summary className="small muted" style={{ cursor: 'pointer', padding: '6px 0' }}>其余 {rows.length - 8} 队</summary>
-          {body(rows.slice(8), 8)}
+          {body(rows.slice(8))}
         </details>
       )}
     </div>

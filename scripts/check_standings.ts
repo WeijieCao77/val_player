@@ -22,13 +22,19 @@
  *    where the sides the next phases seated change — while it is still played,
  *    only between the bands the draw reads; a side out of a bracket lost a match
  *    there; an event over carries its own placings.
- *  - onward: a final bracket's points line is under the last place its prize
- *    table pays, a later event takes as many places as the route book gives it,
- *    and once that event is drawn a side marked as having one is a side it seated.
+ *  - onward: an event's final order draws no line — every row is marked instead
+ *    (作者：「积分表上的线不画了，只列出积分，但是如果有其他队伍在其他渠道进入冠军赛了，
+ *    那就标一下」). A row marked as taking points is a place the prize table pays;
+ *    a later event takes as many places as the route book gives it; once it is
+ *    drawn, the rows marked as holding one of its seats are the sides it seated,
+ *    the rows marked as being in it already are the rest of its field and are
+ *    really in its entry list — and the seats it gave are the first finishers
+ *    that were not in it already, the rule a line could never tell.
  *  - history: an event replayed as history shows, while it is on, exactly the real
  *    results whose day has passed, and none after.
  *  - render: the points panel as React renders it lists the table's rows, in its
- *    order, with its marks; an event's panel draws each line under its row.
+ *    order, with its marks; an event's panel draws each phase line under its row,
+ *    and no line at all under its final order.
  *  - a Masters' winner: on a 2021 EMEA table built by hand, before Masters Berlin
  *    is over history's winner (Gambit) is not through — it takes a points place,
  *    and the Last Chance Qualifier's places start right below the Champions
@@ -54,7 +60,7 @@ import { circuitAward, circuitPaid, drawStanding, eventOf, eventSoFar, eventsOf,
 import type { CEvent, PointsTable } from '../src/engine/circuit'
 import { circuitPointsFor } from '../src/engine/era'
 import { eventTables, labelOf } from '../src/engine/eventTable'
-import type { EventTable, GroupTable, PlaceTable, TableRow } from '../src/engine/eventTable'
+import type { EventTable, GroupTable, Line, PlaceTable, TableRow } from '../src/engine/eventTable'
 import { qualifyHolds, qualifyStats } from './qualify_holds'
 import { GameCtx } from '../src/ui/me/ctx'
 import CircuitPanel from '../src/ui/me/CircuitPanel'
@@ -120,7 +126,8 @@ const renderCtx = (state: GameState) => ({
 interface Snap { year: number; day: number; tables: PointsTable[]; drawn: Set<string> }
 const stats = {
   weeks: 0, tables: 0, rows: 0, settled: 0, standing: 0, standingOff: 0, drawn: 0, renders: 0, events: 0, eventTables: 0,
-  lines: 0, linesAtSeats: 0, knockoutRows: 0, pointsLines: 0, onward: 0, historyEvents: 0, historyRows: 0, panelRenders: 0,
+  lines: 0, linesAtSeats: 0, knockoutRows: 0, pointsMarks: 0, onward: 0, historyEvents: 0, historyRows: 0, panelRenders: 0,
+  cascades: 0, elsewhere: 0, fields: 0,
 }
 /** a history event once it is over: looked at once */
 const historyOver = new Set<string>()
@@ -236,18 +243,29 @@ function sumFixtures(fx: Fixture[]): Map<string, number[]> {
   return sum
 }
 
-/** The event's final bracket against the places it gives on: the points line, the route book's count, the draw's seats. */
+/** The event's final order against the places it gives on: the points each place pays, the route book's count, the draw's seats — and no line. */
 function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTable, where: string): void {
   const over = !!comp.champion && comp.finished.length > 0
+  const nameOf = (r: PlaceTable['rows'][number]) => state.teams[r.team]?.name ?? r.name ?? r.team
+  const paid = (p: number) => (circuitAward(comp, p) ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, p) : 0)) > 0
   t.onward.forEach((s, k) => {
     const hi = s.places[s.places.length - 1]
     if (s.kind === 'points') {
-      stats.pointsLines++
+      stats.pointsMarks++
       const size = Math.max(comp.teams.length, ev.seeds.length, ev.places.length)
       let last = 0
-      for (let p = 1; p <= size; p++) if ((circuitAward(comp, p) ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, p) : 0)) > 0) last = p
+      for (let p = 1; p <= size; p++) if (paid(p)) last = p
       if (hi !== last) fail(`${where}：积分标到第 ${hi} 名，奖励表最后一个给分的名次是第 ${last} 名`)
-      if (over && hi < t.rows.length && !t.lines.some((l) => l.after === hi)) fail(`${where}：赛事结束，第 ${hi} 名下面没有积分线`)
+      // the line under the last paying place is gone: each row says for itself, and the prize table says who is right
+      if (over) {
+        for (const r of t.rows) {
+          const p = r.place?.[0]
+          if (p == null) continue
+          if ((r.marks[k] === 'yes') !== paid(p)) {
+            fail(`${where}：${nameOf(r)} 第 ${p} 名，表上标的是「${r.marks[k] === 'yes' ? '拿积分' : '没有积分'}」，奖励表给的是 ${paid(p) ? '有分' : '0 分'}`)
+          }
+        }
+      }
       return
     }
     stats.onward++
@@ -256,41 +274,61 @@ function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTa
       const want = Object.values(BOOK[target.id]?.routes ?? {}).filter((r) => (r.kind === 'top' || r.kind === 'winner') && r.event === ev.id).length
       if (want !== s.places.length) fail(`${where}：${s.name} 从这里拿 ${want} 个名额，表上写的是 ${s.places.length} 个`)
     }
-    if (s.seated) {
-      for (const r of t.rows) {
-        if ((r.marks[k] === 'yes') !== s.seated.includes(r.team)) fail(`${where}：${state.teams[r.team]?.name ?? r.name} 的「${s.name}」名额标记和抽签不一致`)
+    if (!s.seated) return
+    const seated = s.seated
+    const dest = s.event ? state.comps[`ev:${s.event}`] : undefined
+    const field = dest?.circuit?.seeds ?? []
+    const elsewhere = new Set(field.filter((x): x is string => !!x && !seated.includes(x)))
+    stats.elsewhere += t.rows.filter((r) => elsewhere.has(r.team)).length
+    // every row, both ways: the seat this event gave it, and the seat it did not give because that side was in already
+    for (const r of t.rows) {
+      if ((r.marks[k] === 'yes') !== seated.includes(r.team)) fail(`${where}：${nameOf(r)} 的「${s.name}」名额标记和抽签不一致`)
+      if ((r.marks[k] === 'other') !== elsewhere.has(r.team)) {
+        fail(`${where}：${nameOf(r)} 的「${s.name}」标记是「${r.marks[k]}」，${elsewhere.has(r.team) ? '它已经从别的途径进去了' : '它并不在那边的名单上'}`)
       }
     }
-    // The N above the line are not always the N this event seats. A club above it may already hold
-    // a place in that field by another road, and the draw skips a club it has already seated
-    // (engine/circuit.ts seedsFor: c.finished.find((t) => !used.has(t) && inLeague(t))), so the
-    // seat cascades to the next finisher. 2021 EMEA 挑战者赛 1: Guild finished 3rd and was already
-    // in 挑战者决赛 by another seed, so the seat it would have taken went to G2, the 5th. Compare
-    // against that rule, not against a raw prefix of the table — a prefix only ever agreed because
-    // no side above a line had yet qualified twice, which is fixture luck and not a rule.
+    // the mark is not a second reading of the same list: a side it marks is really in that event, as that
+    // event holds its entrants — the page would otherwise promise a seat off a seed list nobody plays by
+    if (dest?.teams.length) {
+      stats.fields++
+      for (const r of t.rows) {
+        if ((r.marks[k] === 'yes' || r.marks[k] === 'other') && !dest.teams.includes(r.team)) {
+          fail(`${where}：${nameOf(r)} 标着${r.marks[k] === 'yes' ? `拿到${s.name}名额` : `已经进了${s.name}`}，${s.name} 的参赛名单里没有它`)
+        }
+      }
+    }
+    // The N at the top are not always the N this event seats, which is why no line is drawn and each row is
+    // marked instead. A club up there may already hold a place in that field by another road, and the draw
+    // skips a club it has already seated (engine/circuit.ts seedsFor: c.finished.find((t) => !used.has(t)
+    // && inLeague(t))), so the seat cascades to the next finisher. 2021 EMEA 挑战者赛 1: Guild finished 3rd
+    // and was already in 挑战者决赛 by another seed, so the seat it would have taken went to G2, the 5th.
     //
-    // Keyed on the outcome rather than on a second copy of the engine's route order (winner /
-    // points / top before 2023, winner / top / rest / points after): whichever order the seats are
-    // filled in, a club taken by an earlier road ends up holding one of that field's other seeds.
-    // Read off the drawn field, this cannot drift the way a copy of the order table would.
-    if (over && s.seated && !s.league && t.lines.some((l) => l.after === hi)) {
-      const seated = s.seated
-      const field = (s.event ? state.comps[`ev:${s.event}`]?.circuit?.seeds : undefined) ?? []
-      const elsewhere = new Set(field.filter((x): x is string => !!x && !seated.includes(x)))
-      const want = new Set(t.rows.map((r) => r.team).filter((x) => !elsewhere.has(x)).slice(s.places[0] - 1, hi))
-      if (!same(want, new Set(seated))) fail(`${where}：${s.name} 该坐的是 ${names(state, want)}（线以上、还没从别的路进去的），抽签给了 ${names(state, seated)}`)
+    // Keyed on the outcome rather than on a second copy of the engine's route order (winner / points / top
+    // before 2023, winner / top / rest / points after): whichever order the seats are filled in, a club taken
+    // by an earlier road ends up holding one of that field's other seeds. Read off the drawn field, this
+    // cannot drift the way a copy of the order table would. The line used to gate this, and gated it into a
+    // tautology: a line was drawn only where the top rows already were the seated sides, and where that holds
+    // the cascade can have skipped nobody. Ungated, it is the rule itself, on every event that is over.
+    if (over && !s.league && s.places[0] === 1 && t.rows.slice(0, hi).every((r, i) => r.place?.[0] === i + 1)) {
+      stats.cascades++
+      const want = new Set(t.rows.map((r) => r.team).filter((x) => !elsewhere.has(x)).slice(0, hi))
+      if (!same(want, new Set(seated))) fail(`${where}：${s.name} 该坐的是 ${names(state, want)}（名次靠前、还没从别的路进去的），抽签给了 ${names(state, seated)}`)
     }
   })
 }
 
-/** An event's panel as rendered draws each of its tables' lines under the row it belongs under. */
+/**
+ * An event's panel as rendered draws each phase table's lines under the row it belongs under — and draws none
+ * under its final order, which has none to draw. A panel carrying either is rendered and read back.
+ */
 function panelHolds(state: GameState, comp: Competition, tables: EventTable[], label: string): void {
-  if (!tables.some((t) => t.lines.length)) return
+  const linesOf = (t: EventTable): Line[] => (t.kind === 'table' ? t.lines : [])
+  if (!tables.some((t) => linesOf(t).length || (t.kind === 'bracket' && t.onward.length))) return
   stats.panelRenders++
   const html = renderToStaticMarkup(createElement(GameCtx.Provider, { value: renderCtx(state) }, createElement(CircuitPanel, { comp })))
   const got = [...html.matchAll(/<tr class="([^"]*)" data-team="([^"]*)"/g)].map((m) => `${m[2]}${/cut-solid/.test(m[1]) ? '=' : /cut-dash/.test(m[1]) ? '-' : ''}`)
   const want = tables.flatMap((t) => t.rows.map((r, i) => {
-    const l = t.lines.find((x) => x.after === i + 1)
+    const l = linesOf(t).find((x) => x.after === i + 1)
     return `${r.team}${l ? (l.solid ? '=' : '-') : ''}`
   }))
   if (got.join('|') !== want.join('|')) fail(`${label}：${state.year} ${comp.name} 渲染出来的线和表里的线不一致`)
@@ -549,10 +587,11 @@ run('二线 · 欧洲 2021 起', 'Europe', 'chal', 2021, 2027)
 run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
 console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时的线不同）· 渲染 ${stats.renders} 次`)
-console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分线 ${stats.pointsLines} 次 · 跨赛事名额 ${stats.onward} 次 · 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
+console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分标记 ${stats.pointsMarks} 次 · 跨赛事名额 ${stats.onward} 次：对过参赛名单 ${stats.fields} 次、对过「名额往下顺延」${stats.cascades} 次，其中 ${stats.elsewhere} 行是已经从别的途径进去的 · 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
 if (!stats.settled) fail('没有一次抽签是在页面标「积分已定」之后发生的：检查没有覆盖到定下来的名额')
 if (!stats.linesAtSeats) fail('没有一张打完的表对过下一阶段的座位：检查没有覆盖到线')
-if (!stats.pointsLines) fail('没有一张淘汰赛表标过积分线：检查没有覆盖到积分线')
+if (!stats.pointsMarks) fail('没有一张淘汰赛表对过积分标记：检查没有覆盖到积分')
+if (!stats.cascades) fail('没有一次对过「名额往下顺延」：检查没有覆盖到跨赛事名额是怎么给的')
 if (!stats.historyRows) fail('没有一场照真实历史的赛事对过真实比分：检查没有覆盖到进行中的历史赛事')
 console.log(`资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛 · ${qualifyStats.ties} 场淘汰赛对阵等前一场打完才排、坐的是那场的胜者或负者`)
 if (!qualifyStats.tables) fail('资格判定：一个打完的小组赛、常规赛、瑞士轮出线单元都没检查到')
