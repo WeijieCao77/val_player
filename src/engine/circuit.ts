@@ -3006,10 +3006,20 @@ export interface Onward {
   seated: string[] | null
   /**
    * the rest of that field: sides in it by another road. seedsFor fills each of these seats with the next side
-   * of this event's order it has not seated already (`used`), so a side already in is skipped and the seat
-   * cascades past it. Null while the field is not drawn — until then nobody is in it.
+   * of this event's order that it has not seated already (`used`) and that history has not let go by the draw
+   * (nextFinisher), so a side already in is skipped and the seat cascades past it. A side let go is skipped too,
+   * but it is in no field at all, so it is not here: it is in `gone`. Null while the field is not drawn — until
+   * then nobody is in it.
    */
   elsewhere: string[] | null
+  /**
+   * the sides of this event's order that these seats passed over because history had let them go by the draw:
+   * each finished above the last side the seats went to, and the place it would have taken went on down to the
+   * next finisher (nextFinisher). Only where this world played the event and its order is what the seats were
+   * read off — every side above the last one seated is seated, in that field already, or let go — so the page
+   * never says a place passed down that went to a stand-in instead. Null while the field is not drawn.
+   */
+  gone: string[] | null
 }
 
 export function onwardOf(state: GameState, comp: Competition): Onward[] {
@@ -3045,14 +3055,40 @@ export function onwardOf(state: GameState, comp: Competition): Onward[] {
     const target = state.comps[`ev:${e.id}`]
     const drawn = target?.circuit?.mode ? target.circuit.seeds : null
     const seated = drawn ? at.map((i) => drawn[i]).filter((t): t is string => !!t) : null
+    const elsewhere = drawn && seated ? uniq(drawn.filter((t): t is string => !!t && !seated.includes(t))) : null
+    const sorted = uniq(places).sort((a, b) => a - b)
     out.push({
       event: e.id,
       name: target?.name ?? e.cn,
-      places: uniq(places).sort((a, b) => a - b),
+      places: sorted,
       league,
       seated,
-      elsewhere: drawn && seated ? uniq(drawn.filter((t): t is string => !!t && !seated.includes(t))) : null,
+      elsewhere,
+      gone: seated && elsewhere
+        ? (sorted.every((p, n) => p === n + 1) ? passedGone(state, comp, at.length, league, seated, elsewhere) : [])
+        : null,
     })
   }
   return out
+}
+
+/**
+ * The finishers a later event's placing seats passed over as let go, read back off the draw it made (Onward.gone):
+ * walking this event's order the way nextFinisher did — a side already in that field or of another league is not
+ * asked — every side above the last one seated is either seated or let go. Where one is neither, the seats were not
+ * read off this order (history's own seeds, a stand-in, a scope nextFinisher kept to), and nothing is said to have
+ * passed down. Only once this world has played the event: a replayed one hands its seats on as history had them.
+ */
+function passedGone(state: GameState, comp: Competition, seats: number, league: string | undefined, seated: string[], elsewhere: string[]): string[] {
+  if (!comp.champion || comp.circuit?.mode !== 'sim' || !comp.finished.length) return []
+  const passed: string[] = []
+  let taken = 0
+  for (const t of comp.finished) {
+    if (taken === seats) break
+    if (elsewhere.includes(t) || (league && regionIn(state.teams[t]?.region ?? 'Europe', state.year) !== league)) continue
+    if (seated.includes(t)) { taken++; continue }
+    if (!gone(state, t)) return []
+    passed.push(t)
+  }
+  return taken === seats ? passed : []
 }

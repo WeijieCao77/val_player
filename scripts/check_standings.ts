@@ -33,7 +33,11 @@
  *    drawn, the rows marked as holding one of its seats are the sides it seated,
  *    the rows marked as being in it already are the rest of its field and are
  *    really in its entry list — and the seats it gave are the first finishers
- *    that were not in it already, the rule a line could never tell.
+ *    that were not in it already and that history had not let go by its draw
+ *    day, the rule a line could never tell. A row marked 「已解散，名额顺延」 was
+ *    let go by that day, as the world that morning and the roster book have it,
+ *    and is in no seat there; every club let go whose place passed down is so
+ *    marked, and no other is.
  *  - history: an event replayed as history shows, while it is on, exactly the real
  *    results whose day has passed, and none after.
  *  - render: the points panel as React renders it lists the table's rows, in its
@@ -63,6 +67,7 @@ import { autoWeek } from '../src/engine/me/auto'
 import { circuitAward, circuitPaid, drawStanding, eventOf, eventSoFar, eventsOf, pointsTables, worldIdOf } from '../src/engine/circuit'
 import type { CEvent, PointsTable } from '../src/engine/circuit'
 import { circuitPointsFor } from '../src/engine/era'
+import { foldsOf, isTimelineWorld } from '../src/engine/timeline'
 import { eventTables, labelOf } from '../src/engine/eventTable'
 import type { EventTable, GroupTable, Line, PlaceTable, TableRow } from '../src/engine/eventTable'
 import { qualifyHolds, qualifyStats } from './qualify_holds'
@@ -131,10 +136,59 @@ interface Snap { year: number; day: number; tables: PointsTable[]; drawn: Set<st
 const stats = {
   weeks: 0, tables: 0, rows: 0, settled: 0, standing: 0, standingOff: 0, drawn: 0, renders: 0, events: 0, eventTables: 0,
   lines: 0, linesAtSeats: 0, knockoutRows: 0, pointsMarks: 0, onward: 0, historyEvents: 0, historyRows: 0, panelRenders: 0,
-  cascades: 0, elsewhere: 0, fields: 0, through: 0, throughRows: 0,
+  cascades: 0, elsewhere: 0, fields: 0, through: 0, throughRows: 0, goneMarks: 0, passedGone: 0,
 }
 /** a history event once it is over: looked at once */
 const historyOver = new Set<string>()
+
+/**
+ * The world as each event's draw found it, read beside the draw and not through it. A club history has let go by
+ * the day a later event is drawn is passed over for the place it finished in here, and the place goes on down to
+ * the next finisher (engine/circuit.ts nextFinisher, 2026-09-17). Which clubs those were is read off what the draw
+ * reads, never off the code that does the passing:
+ *
+ *  - quiet: the clubs already dormant that morning
+ *  - folded: on a world that follows the roster book, the clubs it lets go on or before that day
+ *    (engine/timeline.ts foldsOf: its fold day; the club it carries on as, where it has an heir)
+ *  - club: the player's own club that day, which no draw passes over
+ *
+ * Taken each morning an event is due to be drawn — a setter on state.day, so the engine is untouched — before that
+ * day's own work, a club let go that very day being in the book's list; kept from the morning the event is drawn.
+ */
+interface DrawDay { year: number; day: number; quiet: Set<string>; folded: Set<string>; club: string | null }
+let drawDays = new Map<string, DrawDay>()
+
+function watchDraws(state: GameState): void {
+  drawDays = new Map()
+  const take = (): DrawDay => {
+    const heir = (id: string) => { const h = state.heirs?.[id]; return h && state.teams[h] ? h : id }
+    return {
+      year: state.year,
+      day: state.day,
+      quiet: new Set(Object.values(state.teams).filter((t) => t.dormant).map((t) => t.id)),
+      // a book club's id is V21T and its vlr id (engine/timeline.ts clubId)
+      folded: new Set(isTimelineWorld(state) ? foldsOf(state.year).filter((f) => f.day <= state.day).map((f) => heir(`V21T${f.vlr}`)) : []),
+      club: state.me ? (state.me.phase === 'pro' ? state.myTeam : null) : state.myTeam,
+    }
+  }
+  const morning = (first: boolean): void => {
+    let today: DrawDay | undefined
+    for (const c of Object.values(state.comps)) {
+      const k = c.circuit
+      if (!k) continue
+      // an event drawn before the watch began, as the career was made: the world as the watch first finds it
+      if (k.mode ? first : state.day >= k.start - 2) drawDays.set(c.key, (today ??= take()))
+    }
+  }
+  morning(true)
+  let d = state.day
+  Object.defineProperty(state, 'day', {
+    get: () => d,
+    set: (v: number) => { d = v; morning(false) },
+    configurable: true,
+    enumerable: true,
+  })
+}
 
 function snap(state: GameState): Snap {
   return {
@@ -312,12 +366,24 @@ function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTa
     const field = dest?.circuit?.seeds ?? []
     const elsewhere = new Set(field.filter((x): x is string => !!x && !seated.includes(x)))
     stats.elsewhere += t.rows.filter((r) => elsewhere.has(r.team)).length
+    // the world that draw found: which of these finishers history had let go by then
+    const at = dest ? drawDays.get(dest.key) : undefined
+    if (!at) fail(`${where}：${s.name} 抽签那天的世界没有记下来，查不了谁已经解散`)
+    const letGo = (x: string): boolean => !!at && x !== at.club && (at.quiet.has(x) || at.folded.has(x))
     // every row, both ways: the seat this event gave it, and the seat it did not give because that side was in already
     for (const r of t.rows) {
       if ((r.marks[k] === 'yes') !== seated.includes(r.team)) fail(`${where}：${nameOf(r)} 的「${s.name}」名额标记和抽签不一致`)
       if ((r.marks[k] === 'other') !== elsewhere.has(r.team)) {
         fail(`${where}：${nameOf(r)} 的「${s.name}」标记是「${r.marks[k]}」，${elsewhere.has(r.team) ? '它已经从别的途径进去了' : '它并不在那边的名单上'}`)
       }
+    }
+    // 「已解散，名额顺延」 says two things of a row, and both are read off the world, not off the mark: history had let
+    // that club go by the day this event was drawn, and it holds no place in that event
+    for (const r of t.rows) {
+      if (r.marks[k] !== 'gone') continue
+      stats.goneMarks++
+      if (!letGo(r.team)) fail(`${where}：${nameOf(r)} 标着「已解散，名额顺延」，${s.name}抽签那天它还没解散`)
+      if (field.includes(r.team) || dest?.teams.includes(r.team)) fail(`${where}：${nameOf(r)} 标着「已解散，名额顺延」，${s.name} 的名单里却有它`)
     }
     // the mark is not a second reading of the same list: a side it marks is really in that event, as that
     // event holds its entrants — the page would otherwise promise a seat off a seed list nobody plays by
@@ -331,9 +397,12 @@ function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTa
     }
     // The N at the top are not always the N this event seats, which is why no line is drawn and each row is
     // marked instead. A club up there may already hold a place in that field by another road, and the draw
-    // skips a club it has already seated (engine/circuit.ts seedsFor: c.finished.find((t) => !used.has(t)
+    // skips a club it has already seated (engine/circuit.ts seedsFor: nextFinisher(…, (t) => !used.has(t)
     // && inLeague(t))), so the seat cascades to the next finisher. 2021 EMEA 挑战者赛 1: Guild finished 3rd
     // and was already in 挑战者决赛 by another seed, so the seat it would have taken went to G2, the 5th.
+    // Nor does a place go to a club history had let go by the draw (nextFinisher, 2026-09-17): 2022 EMEA 第二赛段
+    // 挑战者赛, EXCEL finished 3rd and was gone before Masters Copenhagen was drawn, and its seat went on down
+    // to the 4th. Which clubs were gone is the world that draw found (watchDraws), not the draw's own reading.
     //
     // Keyed on the outcome rather than on a second copy of the engine's route order (winner / points / top
     // before 2023, winner / top / rest / points after): whichever order the seats are filled in, a club taken
@@ -343,8 +412,23 @@ function onwardHolds(state: GameState, comp: Competition, ev: CEvent, t: PlaceTa
     // the cascade can have skipped nobody. Ungated, it is the rule itself, on every event that is over.
     if (over && !s.league && s.places[0] === 1 && t.rows.slice(0, hi).every((r, i) => r.place?.[0] === i + 1)) {
       stats.cascades++
-      const want = new Set(t.rows.map((r) => r.team).filter((x) => !elsewhere.has(x)).slice(0, hi))
-      if (!same(want, new Set(seated))) fail(`${where}：${s.name} 该坐的是 ${names(state, want)}（名次靠前、还没从别的路进去的），抽签给了 ${names(state, seated)}`)
+      const order = t.rows.map((r) => r.team).filter((x) => !elsewhere.has(x))
+      const want = order.filter((x) => !letGo(x)).slice(0, hi)
+      if (!same(new Set(want), new Set(seated))) {
+        fail(`${where}：${s.name} 该坐的是 ${names(state, want)}（名次靠前、还没从别的路进去、抽签前也没解散的），抽签给了 ${names(state, seated)}`)
+      }
+      // and the other way round: every finisher these places passed over because it had been let go says so on
+      // its row, and no other row does — the page never leaves 「无缘」 on a club whose place went to the next one
+      const last = want.length === hi ? order.indexOf(want[hi - 1]) : -1
+      const passed = new Set(order.slice(0, last + 1).filter(letGo))
+      stats.passedGone += passed.size
+      for (const r of t.rows) {
+        if (passed.has(r.team) !== (r.marks[k] === 'gone')) {
+          fail(`${where}：${nameOf(r)} 的「${s.name}」标记是「${r.marks[k]}」，${passed.has(r.team)
+            ? '它抽签前已经解散，名额顺延给了下一名，该标「已解散，名额顺延」'
+            : '它的名额并没有因为解散顺延下去'}`)
+        }
+      }
     }
   })
 }
@@ -581,6 +665,7 @@ function mastersWaits(): void {
 function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026, until: number): void {
   const t0 = Date.now()
   const state = createCareer({ name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year })
+  watchDraws(state)
   console.log(`\n== ${label}（${state.teams[state.myTeam]?.name ?? '无队'}，${state.year} 年第 ${state.day} 天开局）`)
   const years = new Map<number, number>()
   let guard = 0
@@ -619,13 +704,15 @@ run('二线 · 欧洲 2021 起', 'Europe', 'chal', 2021, 2027)
 run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
 console.log(`\n${stats.weeks} 周 · 积分榜 ${stats.tables} 次（${stats.rows} 行）· 抽签对照 ${stats.drawn} 次：抽签前「积分已定」${stats.settled} 次、「按目前积分」${stats.standing} 次（其中 ${stats.standingOff} 次抽签和当时标的不同）· 渲染 ${stats.renders} 次 · 冠军赛名单出来后对过标记 ${stats.through} 张表，其中 ${stats.throughRows} 行标着「已晋级」`)
-console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分标记 ${stats.pointsMarks} 次 · 跨赛事名额 ${stats.onward} 次：对过参赛名单 ${stats.fields} 次、对过「名额往下顺延」${stats.cascades} 次，其中 ${stats.elsewhere} 行是已经从别的途径进去的 · 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
+console.log(`赛事表 ${stats.eventTables} 张（${stats.events} 场赛事）· 线 ${stats.lines} 条，${stats.linesAtSeats} 张打完的表对过下一阶段的座位 · 淘汰赛 ${stats.knockoutRows} 行 · 积分标记 ${stats.pointsMarks} 次 · 跨赛事名额 ${stats.onward} 次：对过参赛名单 ${stats.fields} 次、对过「名额往下顺延」${stats.cascades} 次，其中 ${stats.elsewhere} 行是已经从别的途径进去的、${stats.goneMarks} 行标着「已解散，名额顺延」（因为解散顺延下去的名额 ${stats.passedGone} 次）· 照真实历史 ${stats.historyEvents} 次（${stats.historyRows} 行）· 赛事面板渲染 ${stats.panelRenders} 次`)
 if (!stats.settled) fail('没有一次抽签是在页面标「积分已定」之后发生的：检查没有覆盖到定下来的名额')
 if (!stats.through) fail('冠军赛名单出来以后一张积分榜的标记都没对过：检查没有覆盖到「已晋级」')
 if (!stats.throughRows) fail('没有一行标过「已晋级」：检查没有覆盖到从别的途径进了冠军赛的队')
 if (!stats.linesAtSeats) fail('没有一张打完的表对过下一阶段的座位：检查没有覆盖到线')
 if (!stats.pointsMarks) fail('没有一张淘汰赛表对过积分标记：检查没有覆盖到积分')
 if (!stats.cascades) fail('没有一次对过「名额往下顺延」：检查没有覆盖到跨赛事名额是怎么给的')
+if (!stats.goneMarks) fail('没有一行标过「已解散，名额顺延」：检查没有覆盖到抽签前解散的俱乐部')
+if (!stats.passedGone) fail('没有一个名额因为俱乐部抽签前解散而顺延：检查没有覆盖到解散俱乐部的名额给了谁')
 if (!stats.historyRows) fail('没有一场照真实历史的赛事对过真实比分：检查没有覆盖到进行中的历史赛事')
 console.log(`资格判定：${qualifyStats.tables} 个小组赛、常规赛、瑞士轮的出线按各组战绩 · ${qualifyStats.entries} 次入口没有一队两占 · ${qualifyStats.lcqs} 个没进自己资格赛、积分却够的 LCQ 冠军去了冠军赛 · ${qualifyStats.ties} 场淘汰赛对阵等前一场打完才排、坐的是那场的胜者或负者`)
 if (!qualifyStats.tables) fail('资格判定：一个打完的小组赛、常规赛、瑞士轮出线单元都没检查到')

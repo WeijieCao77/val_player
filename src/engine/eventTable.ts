@@ -21,10 +21,12 @@ import type { Competition, GameState } from './types'
  *
  * The event's own final order draws none (作者：「积分表上的线不画了，只列出积分，但是如果有其他队伍在其他渠道进入
  * 冠军赛了，那就标一下」). A line there promised what the draw does not keep: a later event seats the first finishers
- * that are not already in its field by another road (engine/circuit.ts seedsFor, `used`), so a club above the line
- * is skipped and the seat cascades past it — 2021 EMEA 挑战者赛 1 sent G2（第 5 名）to 挑战者决赛 because Guild
- * （第 3 名）was in it already. Every row is marked instead: the places it holds, the places it cannot have, and
- * where it is in that field already by another road.
+ * that are not already in its field by another road (engine/circuit.ts seedsFor, `used`) and that history has not
+ * let go by the draw (nextFinisher), so a club above the line is skipped and the seat cascades past it — 2021 EMEA
+ * 挑战者赛 1 sent G2（第 5 名）to 挑战者决赛 because Guild（第 3 名）was in it already, and a Copenhagen seat 2022's
+ * EMEA Stage 2 Challengers gave its third went on down when that third was EXCEL, let go before the draw. Every row
+ * is marked instead: the places it holds, the places it cannot have, where it is in that field already by another
+ * road, and — once the draw is made — that it was let go and its place passed down.
  *
  * Nothing here decides anything. Who a table sends on is the draw's own reading of the slot that place fills
  * (engine/circuit.ts eventSoFar, PhaseSeats), and a table's order is the order the draw reads it in
@@ -97,9 +99,10 @@ export interface PlaceRow {
   roundL: number
   /**
    * against each of the table's `onward`: this side has those places, cannot have them, is in that field already
-   * by another road — so it takes none of them — or it is still to play
+   * by another road — so it takes none of them — had been let go by the draw, so the place it finished in passed
+   * down to the next finisher, or it is still to play
    */
-  marks: ('yes' | 'no' | 'open' | 'other')[]
+  marks: ('yes' | 'no' | 'open' | 'other' | 'gone')[]
 }
 
 /** Places an event gives beyond itself: a later event's seats, or its points. */
@@ -120,6 +123,12 @@ export interface OnwardSet {
    * places pass them by. Null while the field is not drawn — until then no side is in it yet.
    */
   elsewhere: string[] | null
+  /**
+   * sides of this event's order the draw passed over because history had let them go before it, the place each
+   * finished in going on down to the next finisher (engine/circuit.ts Onward.gone). Null while the field is not
+   * drawn: before the draw nobody has been passed over yet.
+   */
+  gone: string[] | null
   /** points: what each place pays, from 1st */
   pays?: number[]
 }
@@ -497,24 +506,27 @@ function placeTable(comp: Competition, so: EventSoFar, ui: number): PlaceTable {
 export function onwardSets(state: GameState, comp: Competition): OnwardSet[] {
   const ev = comp.circuit && eventOf(comp.circuit.id)
   const out: OnwardSet[] = onwardOf(state, comp)
-    .map((o) => ({ kind: 'event', event: o.event, name: o.name, places: o.places, league: o.league, seated: o.seated, elsewhere: o.elsewhere }))
+    .map((o) => ({ kind: 'event', event: o.event, name: o.name, places: o.places, league: o.league, seated: o.seated, elsewhere: o.elsewhere, gone: o.gone }))
   const size = Math.max(comp.teams.length, ev?.seeds.length ?? 0, ev?.places.length ?? 0)
   const pays: number[] = []
   for (let p = 1; p <= size; p++) pays.push(circuitAward(comp, p) ?? (state.year <= 2022 ? circuitPointsFor(comp.stage, p) : 0))
   const places = pays.flatMap((v, i) => (v > 0 ? [i + 1] : []))
-  if (places.length && !(places[0] === 1 && places.length >= size)) out.push({ kind: 'points', name: '积分', places, seated: null, elsewhere: null, pays })
+  if (places.length && !(places[0] === 1 && places.length >= size)) out.push({ kind: 'points', name: '积分', places, seated: null, elsewhere: null, gone: null, pays })
   return out
 }
 
 /**
  * The event's final bracket, marked against the places it gives on. Each row: the places are its, cannot be,
  * are still to play for — while it is still in, it finishes no lower than the number of sides still in — or are
- * places it takes none of, because it is in that field already by another road.
+ * places it takes none of, because it is in that field already by another road, or because history let it go
+ * before the draw and the place it finished in passed down.
  *
  * No line is drawn under any of it (作者：「积分表上的线不画了，只列出积分」). Where a run of places ends was never
- * the same thing as which sides go: the draw fills each seat with the next finisher it has not seated already,
- * so a side in the field by another road is skipped and the seat cascades past it. The mark is the rule itself,
- * row by row, and it says so only once it is true — the field drawn, the side really in it.
+ * the same thing as which sides go: the draw fills each seat with the next finisher it has not seated already and
+ * that is still a club, so a side in the field by another road, or one let go by the draw, is skipped and the seat
+ * cascades past it. The mark is the rule itself, row by row, and it says so only once it is true — the field drawn,
+ * the side really in it, or really passed over. Before the draw a club let go is marked like any other: whether
+ * it goes is the draw's to say, on its day.
  */
 function markOnward(state: GameState, comp: Competition, t: PlaceTable): void {
   const sets = onwardSets(state, comp)
@@ -525,6 +537,7 @@ function markOnward(state: GameState, comp: Competition, t: PlaceTable): void {
   t.rows.forEach((r, i) => {
     r.marks = sets.map((s) => {
       if (s.elsewhere?.includes(r.team)) return 'other'
+      if (s.gone?.includes(r.team)) return 'gone'
       if (s.seated) return s.seated.includes(r.team) ? 'yes' : 'no'
       if (s.league) return 'open'
       const [lo, hi] = [s.places[0], s.places[s.places.length - 1]]

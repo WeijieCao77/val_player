@@ -253,16 +253,24 @@ function GroupTableView({ t, title }: { t: GroupTable; title: string }) {
   )
 }
 
+/**
+ * What the marks that pass a place down mean, where a final order carries any: one sentence for both — a side
+ * already in by another road, a side let go before the draw — rather than one line each.
+ */
+const cascadeNote = (other: boolean, gone: boolean): string | null => (other || gone
+  ? `标${[other ? '「已从别的途径进入」' : '', gone ? '「已解散」' : ''].filter(Boolean).join('或')}的队不占这里的名额，名额往下顺延`
+  : null)
+
 /** The one line under a bracket. */
 function placeLegend(t: PlaceTable, over: boolean): string {
   const bits: string[] = []
   if (t.lives > 1) bits.push(`输满 ${t.lives} 场淘汰`)
   if (!over) bits.push('名次按已经打完的比赛算')
   if (t.onward.length) {
-    // no line above a run of places: a side already in by another road takes none of them (engine/eventTable.ts markOnward)
-    bits.push(t.rows.some((r) => r.marks.includes('other'))
-      ? '标「已从别的途径进入」的队不占这里的名额，名额往下顺延'
-      : '名额以每一行标的为准')
+    // no line above a run of places: a side already in by another road, or let go by the draw, takes none of
+    // them (engine/eventTable.ts markOnward)
+    bits.push(cascadeNote(t.rows.some((r) => r.marks.includes('other')), t.rows.some((r) => r.marks.includes('gone')))
+      ?? '名额以每一行标的为准')
     if (t.onward.some((_, k) => t.rows.some((r) => r.marks[k] === 'open'))) bits.push('还没定的写「还在赛」「待定」「等抽签」')
     if (t.onward.some((s) => s.kind === 'points')) bits.push('积分在赛事结束时入账')
   }
@@ -279,7 +287,8 @@ function outText(r: PlaceRow, over: boolean): string {
 
 /**
  * A side's marks against the places the event gives on: 已拿到 or 无缘 each, 已从别的途径进入 for a side that is in
- * that field already and so takes none of these places, and where a later event's places are still open to it,
+ * that field already and so takes none of these places, 已解散，名额顺延 for a side the draw passed over because
+ * history had let it go before it, and where a later event's places are still open to it,
  * 还在赛 — 待定 for a side already out on a joint place, 等抽签 for a league's places once over.
  */
 function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolean }) {
@@ -295,7 +304,8 @@ function Marks({ r, sets, over }: { r: PlaceRow; sets: OnwardSet[]; over: boolea
         }
         return m === 'yes' ? <span key={k} className="tag t1">已拿到{s.name} 名额</span>
           : m === 'other' ? <span key={k} className="tag">已从别的途径进入{s.name}</span>
-            : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
+            : m === 'gone' ? <span key={k} className="tag">已解散，名额顺延</span>
+              : m === 'no' ? <span key={k} className="faint">无缘{s.name}</span> : null
       })}
       {open && <span className="muted">{over ? '等抽签' : r.state === 'out' ? '待定' : '还在赛'}</span>}
     </span>
@@ -355,8 +365,9 @@ function FinalPlaces({ comp }: { comp: Competition }) {
   const joint = (p: number) => (comp.places ? comp.places.filter((x) => x === p).length : 1)
   const sets = onwardSets(game, comp).filter((s) => !s.league)
   // No line under a run of places: a side already in a later event's field by another road takes none of that
-  // event's places here, so which rows go on is not a run (engine/eventTable.ts markOnward). Each row says
-  // what it got — the points its place pays, the seat it took, or the field it was in already.
+  // event's places here, and nor does a club history let go before the draw, so which rows go on is not a run
+  // (engine/eventTable.ts markOnward). Each row says what it got — the points its place pays, the seat it took,
+  // the field it was in already, or that it was let go and its place passed down.
   const marks = sets.length > 0
   const cell = (id: string, p: number) => sets.map((s, k) => {
     if (s.kind === 'points') {
@@ -364,10 +375,12 @@ function FinalPlaces({ comp }: { comp: Competition }) {
       return v ? <span key={k} className="tag win">+{v} 积分</span> : null
     }
     if (s.elsewhere?.includes(id)) return <span key={k} className="tag">已从别的途径进入{s.name}</span>
+    if (s.gone?.includes(id)) return <span key={k} className="tag">已解散，名额顺延</span>
     if (s.seated?.includes(id)) return <span key={k} className="tag t1">已拿到{s.name} 名额</span>
     return null
   })
-  const cascaded = sets.some((s) => s.elsewhere?.some((t) => rows.some((r) => r.id === t)))
+  const listed = (ids: string[] | null) => !!ids?.some((t) => rows.some((r) => r.id === t))
+  const cascaded = cascadeNote(sets.some((s) => listed(s.elsewhere)), sets.some((s) => listed(s.gone)))
   const body = (list: typeof rows) => (
     <div className="table-wrap">
       <table>
@@ -389,7 +402,7 @@ function FinalPlaces({ comp }: { comp: Competition }) {
     <div style={{ borderTop: '1px solid var(--line)' }}>
       <div className="nav-group" style={{ padding: '8px 13px 4px' }}>最终名次{note && <span className="faint"> · {note}</span>}</div>
       {body(rows.slice(0, 8))}
-      {cascaded && <p className="tiny faint table-legend">标「已从别的途径进入」的队不占这里的名额，名额往下顺延。</p>}
+      {cascaded && <p className="tiny faint table-legend">{cascaded}。</p>}
       {rows.length > 8 && (
         <details style={{ margin: '0 13px 8px' }}>
           <summary className="small muted" style={{ cursor: 'pointer', padding: '6px 0' }}>其余 {rows.length - 8} 队</summary>
