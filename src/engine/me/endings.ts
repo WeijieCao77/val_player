@@ -39,7 +39,20 @@ export const ENDINGS_ME: EndingDef[] = [
   { key: 'ring', title: '板凳上的冠军', text: '你的名字在冠军名单上，你的位置在替补席。这枚戒指是真的，也是别人的。', cond: (s) => s.me!.titles.length > 0 && !s.me!.titles.some((t) => t.started) },
   { key: 'oneclub', title: '一队终老', text: '六个赛季，一家俱乐部。这在这个行业里比冠军还少见。', cond: (s) => s.me!.tenure >= 6 },
   { key: 'evergreen', title: '常青树', text: '八个赛季。天赋比你高的人来了又走，你还在名单上。', cond: (s) => proSeasons(s) >= 8 },
-  { key: 'abroad', title: '远征', text: '在外赛区打了两个赛季以上。语言、时差、想家——你都熬过了。', cond: (s) => (s.me!.flags.abroadSeasons ?? 0) >= 2 },
+  // 「无冠就是无冠不要写远征」 (the author, 2026-09-17). Two seasons abroad alone
+  // used to be enough, and this line sits above 泯然众人 / 昙花一现, so a career
+  // that won nothing usually read 「远征」 — a travel note where the verdict goes,
+  // since the autopilot is fond of foreign spells.
+  //
+  // Moving the line down cannot fix it. Below 拿过冠军 the only careers left to
+  // reach it are the ones with nothing on the shelf — exactly backwards — and
+  // below 泯然众人 none reaches it at all: two seasons abroad are two pro seasons,
+  // which 泯然众人 and 昙花一现 already take. Ordering ranks careers; it cannot
+  // tell one apart. So the trophy goes into the condition: 远征 is a career that
+  // went out and brought something back. A spell abroad that won nothing is said
+  // in the ending's own words instead (abroadLine), never in its verdict.
+  { key: 'abroad', title: '远征', text: '在外赛区打了两个赛季以上，奖杯柜也不空。语言、时差、想家——你都熬过了。',
+    cond: (s) => (s.me!.flags.abroadSeasons ?? 0) >= 2 && s.me!.titles.some((t) => t.started) },
   // A player with one regional title used to fall through to 「没有冠军」,
   // which the career card contradicts on the same screen — it lists the trophy
   // right above the verdict. 3+ is 赛区功勋; 1–2 is still a trophy.
@@ -70,6 +83,20 @@ const staffLines = (state: GameState): string[] => {
   return []
 }
 
+/**
+ * The trip, for a career the trophy cabinet judged. Taking 「远征」 away from a
+ * trophyless career (ENDINGS_ME above) takes with it the only line that ever
+ * said this career left home — so the ending says it in its own words, where a
+ * travel note belongs. Said for exactly the two endings that lost the verdict
+ * this way: 泯然众人 and 昙花一现, at the same two seasons abroad that used to
+ * be the verdict. 没能上岸 never signed anywhere, at home or away.
+ */
+const abroadLine = (state: GameState, key: string): string[] => {
+  const n = state.me!.flags.abroadSeasons ?? 0
+  if (n < 2 || (key !== 'journeyman' && key !== 'flash')) return []
+  return [`其中 ${n} 个赛季是在外赛区打的。语言、时差、想家你都熬过来了，只是没拿回奖杯。`]
+}
+
 /** Hang them up. What the money became off the stage (me/shop.ts LIFESTYLE, me/outlets.ts) is the ending's last words. */
 export function retire(state: GameState, why: string, kind: RetireWhy = 'other'): void {
   const me = state.me!
@@ -77,7 +104,7 @@ export function retire(state: GameState, why: string, kind: RetireWhy = 'other')
   const e = endingFor(state)
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
-  me.ending = { key: e.key, title: e.title, text: `${e.text}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
+  me.ending = { key: e.key, title: e.title, text: `${e.text}${abroadLine(state, e.key).join('')}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)

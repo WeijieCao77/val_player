@@ -99,10 +99,12 @@ const CASES: Record<string, Case> = {
         line: '东京大师赛 4 胜 3 负 · 第 3 名（你首发 7 场）' },
     ],
   },
-  // 泯然众人 — a real career with nothing on the shelf. The autopilot tends to
-  // take a spell abroad, and 远征 outranks 泯然众人 (me/endings.ts), so this case
-  // stays home: the archetypal no-trophy ending is the one worth looking at.
+  // 泯然众人 — a real career with nothing on the shelf, at home. Since 2026-09-17
+  // a trophyless career cannot read 「远征」 whatever it did abroad (me/endings.ts),
+  // so the spell abroad is a line inside this ending instead of a verdict above it:
+  // `away` is the same career with three seasons in another region.
   none: { label: '泯然众人（无冠）', titles: () => [], flags: { abroadSeasons: 0 } },
+  away: { label: '泯然众人（无冠 · 在外赛区打过）', titles: () => [], flags: { abroadSeasons: 3 } },
   // 没能上岸 — never signed at all
   shore: { label: '没能上岸', titles: () => [], seasons: 0 },
 }
