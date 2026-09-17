@@ -1,5 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { ROLES } from '../types'
+import { ROLES, SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
 import { weightsFor } from '../player'
@@ -14,6 +14,29 @@ import { myCall } from './igl'
 /** duels won (net) before the coach agrees to a trial */
 export const EDGE_NEED = 3
 export const TRIAL_MATCHES = 2
+
+/**
+ * How many of a club's matches a contract's promised standing is worth (decided
+ * 2026-09-17): 「允许承诺打破，比如签的首发合同那就先稳定首发三场保底，后面如果竞争
+ * 不行，那就去替补，替补也是同理，替补合同也是先稳定替补三场，后面竞争」
+ *
+ * A promise used to be the whole contract. `promisedRole` seated the career
+ * player for as long as it was written, so his place at a club was not the
+ * coach's to decide in 99.4% of his weeks there (scripts/probe_room.ts,
+ * me/room.ts) — nothing the dressing room, his form or his practice did could
+ * reach it, and the answer to 「我会不会丢掉位置」 was structurally no.
+ *
+ * It is a floor now: the club keeps its word for this many of the matches it
+ * plays, and after that the five is the coach's own reading (coachView). Both
+ * ways round, because a promise is a promise either way — a man signed as a
+ * starter can be benched once the floor is spent, and a man signed as a
+ * substitute sits out exactly as long before he is allowed to compete for a
+ * start. Counted in matches the club actually played (MeState.promiseMatches),
+ * not in weeks: a floor measured in weeks would run out over a break with
+ * nothing played, and would be worth twice as much in a busy stage as in a
+ * quiet one.
+ */
+export const PROMISE_FLOOR = 3
 
 /**
  * How hard a week pulls the coach's regard back toward 60 (me/week.ts
@@ -70,6 +93,41 @@ export function refreshMyRounds(state: GameState): void {
   if (!me) return
   const p = state.players[me.id]
   if (p) p.rounds = 400 + me.scrimRounds + p.career.rounds
+}
+
+/**
+ * Matches of the contract's promise still to come — PROMISE_FLOOR at the start
+ * of a spell, counting down with every match the club plays (afterMyMatch).
+ *
+ * A save from before the counter reads as already spent. A career in progress
+ * keeps the place it has and the coach decides from its next match on, which is
+ * the change this is; the other default — handing every old save a fresh three —
+ * would have re-armed a guarantee nobody signed for, and on the substitute side
+ * would have pulled a man out of a five he had been starting in for a season.
+ */
+export function promiseFloorLeft(state: GameState): number {
+  const me = state.me
+  if (!me || me.phase !== 'pro' || !state.myTeam) return 0
+  return Math.max(0, PROMISE_FLOOR - (me.promiseMatches ?? PROMISE_FLOOR))
+}
+
+/**
+ * Which way the contract seats me while its floor still holds, and null once my
+ * place is the coach's to decide: 'start' for 核心 and 首发, 'bench' for 轮换 and
+ * 替补. A benching for form outranks a starting promise, as it always did.
+ */
+export function promiseSeat(state: GameState): 'start' | 'bench' | null {
+  const me = state.me
+  if (!me || promiseFloorLeft(state) <= 0) return null
+  const role = state.players[me.id]?.contract?.promisedRole
+  if (!role) return null
+  if (role === 'starter' || role === 'star') return me.benchLock && me.benchLock > state.day ? null : 'start'
+  return 'bench'
+}
+
+/** Whether this week's place is the contract's rather than the coach's — what scripts/probe_place.ts counts. */
+export function promiseHolds(state: GameState): boolean {
+  return promiseSeat(state) !== null
 }
 
 /**
@@ -133,18 +191,28 @@ export function coachStarters(state: GameState, room = true): string[] {
       if (out) five[five.indexOf(out)] = mine
     }
   }
-  // a starting place written into my contract is kept — every Challengers signing, and 「承诺首发」
-  // bought at the table — unless the coach has just benched me for my form or to try another five.
-  // Until 2026-09-11 nothing read it: a rookie signed as a starter sat on the bench from day one
-  const promised = me ? state.players[me.id]?.contract?.promisedRole : undefined
-  if (me && !me.trial && (promised === 'starter' || promised === 'star') && !(me.benchLock && me.benchLock > state.day)) {
-    const mine = state.players[me.id]
-    if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
-      const sameRole = five.filter((p) => !p.isIgl && (p.roles ?? [p.role]).includes(mine.role))
-      const out = (sameRole.length ? sameRole : five.filter((p) => !p.isIgl))
-        .sort((a, b) => cv(a) - cv(b))[0]
-      if (out) five[five.indexOf(out)] = mine
-    }
+  // What the contract promised, for as long as it is still a promise (PROMISE_FLOOR): a
+  // starting place written into it is kept — every Challengers signing, and 「承诺首发」
+  // bought at the table — unless the coach has just benched me for my form or to try
+  // another five. Until 2026-09-11 nothing read `promisedRole` and a rookie signed as a
+  // starter sat on the bench from day one; until 2026-09-17 it read it for the whole
+  // contract, and the place could not be lost.
+  const seat = me && !me.trial ? promiseSeat(state) : null
+  if (seat === 'start' && mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
+    const sameRole = five.filter((p) => !p.isIgl && (p.roles ?? [p.role]).includes(mine.role))
+    const out = (sameRole.length ? sameRole : five.filter((p) => !p.isIgl))
+      .sort((a, b) => cv(a) - cv(b))[0]
+    if (out) five[five.indexOf(out)] = mine
+  }
+  // And the same promise the other way round: signed as a substitute, I am one for as
+  // long as the floor holds. Two things outrank it — a club that cannot field five
+  // without me plays me, and the man the coach has named his caller goes out with the
+  // team whatever his contract says.
+  if (seat === 'bench' && mine && five.includes(mine) && !(mine.isIgl && mine.iglSource === 'appointed')) {
+    const spare = squad.filter((p) => !five.includes(p) && p.injuredUntil <= state.day)
+    const sameRole = spare.filter((p) => (p.roles ?? [p.role]).includes(mine.role))
+    const inst = (sameRole.length ? sameRole : spare).sort((a, b) => cv(b) - cv(a))[0]
+    if (inst) five[five.indexOf(mine)] = inst
   }
   return five.map((p) => p.id)
 }
@@ -197,6 +265,21 @@ export function weeklyLineup(state: GameState): void {
   const now = team.starters.includes(me.id)
   if (now && !was) pushLog(state, 'good', me.trial ? '教练兑现了承诺：本周你在首发名单里，这是试用。' : '教练把你排进了本周的首发名单。')
   if (!now && was) pushLog(state, 'bad', '本周你回到替补席。')
+  // The first time the place moves on merit alone, the contract is named: it is the
+  // sentence that makes the rule legible — 「合同上写着首发」 and yet here I am on the
+  // bench — and it is said once a spell rather than every week it happens.
+  const promised = state.players[me.id]?.contract?.promisedRole
+  if (promised && !me.trial && !promiseHolds(state)) {
+    const startPromise = promised === 'starter' || promised === 'star'
+    if (!now && was && startPromise && !me.flags.promiseLost) {
+      me.flags.promiseLost = 1
+      pushLog(state, 'bad', `合同里保底的那 ${PROMISE_FLOOR} 场早就打完了：从这里开始，谁上谁不上，教练说了算。`)
+    }
+    if (now && !was && !startPromise && !me.flags.promiseWon) {
+      me.flags.promiseWon = 1
+      pushLog(state, 'good', `合同上写的是${SQUAD_ROLE_CN[promised]}，这个首发是你自己打进来的。`)
+    }
+  }
   const why = now !== was ? roomCall(state) : null
   if (why) pushLog(state, now ? 'good' : 'bad', why)
   me.lastLineupIn = now
@@ -256,7 +339,9 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
   const starter = team.starters.includes(me.id)
   const locked = !!me.benchLock && me.benchLock > state.day
   let trial = false
-  if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked) {
+  // a substitute contract's floor is the coach's word too: he does not move the five for
+  // me inside it, so no trial begins there (me/duel.ts says as much before a duel is played)
+  if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked && promiseSeat(state) !== 'bench') {
     me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
     me.edge = 0
     team.starters = coachStarters(state)
@@ -286,6 +371,20 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   const team = state.teams[state.myTeam]
   const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
   const calling = myCall(state)
+
+  // one more of the club's matches against the contract's floor — played, or watched from
+  // the bench: both are matches the club played. A cup or an exhibition is not one of them
+  // (me/matchplay.ts sends none here), and neither is a week in which nothing was played.
+  if (!rec.friendly) {
+    const spent = me.promiseMatches ?? PROMISE_FLOOR
+    me.promiseMatches = spent + 1
+    if (spent < PROMISE_FLOOR && spent + 1 >= PROMISE_FLOOR) {
+      const role = state.players[me.id]?.contract?.promisedRole
+      pushLog(state, 'info', role === 'starter' || role === 'star'
+        ? `合同里保底的 ${PROMISE_FLOOR} 场首发打完了。往后名单是教练自己排的——位置得自己守住。`
+        : `合同里保底的 ${PROMISE_FLOOR} 场替补坐完了。往后教练按状态排人——训练赛、对位，从现在起都算数。`)
+    }
+  }
 
   if (rec.started) {
     let d = rec.won ? 1.5 : -0.5
@@ -419,6 +518,15 @@ export function standingLine(state: GameState, where: 'week' | 'team'): string {
   const team = state.teams[state.myTeam]
   if (!me || !team) return ''
   if (me.trial) return `试用期，还剩 ${me.trial.left} 场。赢下比赛或打出队内前二就算过。`
+  // while the contract is still what decides, that is where I stand — and the sentence
+  // says when it stops deciding, so the day it does is not a surprise
+  const seat = promiseSeat(state)
+  if (seat === 'start') {
+    return `合同承诺的首发：俱乐部接下来 ${promiseFloorLeft(state)} 场比赛写死是你的。这 ${PROMISE_FLOOR} 场打完，名单就归教练自己排了。`
+  }
+  if (seat === 'bench') {
+    return `合同说好先打 ${PROMISE_FLOOR} 场替补，还剩 ${promiseFloorLeft(state)} 场。坐满了才谈竞争——训练赛、对位，从那时候起都算数。`
+  }
   if (!team.starters.includes(me.id)) {
     if (me.benchLock && me.benchLock > state.day) return `教练暂时把你换下来了，${me.benchLock - state.day} 天后重新考虑。`
     return where === 'team'

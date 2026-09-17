@@ -717,6 +717,16 @@ export interface MeState {
   startsHere?: number
   /** official starts left, after a title won as a starter, in which a bad run costs no place (me/coach.ts coachAfterTitle) */
   graceMatches?: number
+  /**
+   * Official matches my club has played since the promise on my contract was made — whether
+   * I was on the floor or watching from the bench; a cup or an exhibition is not one of them.
+   * The promised standing is a floor of me/coach.ts PROMISE_FLOOR matches rather than a
+   * standing guarantee, and this is what is counted against it. Set at 0 when I join a club
+   * and when I leave one, and again when a renewal changes what was promised. Absent in a
+   * save from before the floor, where it reads as already spent: a career in progress keeps
+   * the place it has, and from its next match the coach decides.
+   */
+  promiseMatches?: number
   coachTrust: number
   gmTrust: number
   fans: number

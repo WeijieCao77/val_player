@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player } from '../types'
 import { ACTION_BY_KEY, DUELS_PER_WEEK } from './actions'
-import { EDGE_NEED, TRIAL_MATCHES, coachStarters, duelTarget } from './coach'
+import { EDGE_NEED, PROMISE_FLOOR, TRIAL_MATCHES, coachStarters, duelTarget, promiseFloorLeft, promiseSeat } from './coach'
 import { addXp } from './growth'
 import { pushLog } from './log'
 import type { DuelSceneLog } from './types'
@@ -45,6 +45,9 @@ export function duelBlock(state: GameState): string | null {
   const team = state.teams[state.myTeam]
   if (team.starters.includes(me.id)) return '你已经是首发了，不用挑战谁。'
   if (me.trial) return '你正在试用期，先把正赛打好。'
+  // signed as a substitute: those first matches are what the club promised, and the coach
+  // does not move the five for me inside them (me/coach.ts PROMISE_FLOOR)
+  if (promiseSeat(state) === 'bench') return `合同说好先打 ${PROMISE_FLOOR} 场替补，还剩 ${promiseFloorLeft(state)} 场，教练这几场不会为你动名单。`
   if (me.benchLock && me.benchLock > state.day) return `教练这段时间不会再看你（还有 ${me.benchLock - state.day} 天）。`
   if (me.duelLive && !me.duelLive.done) return '训练赛正在打。'
   if (me.duelsThisWeek >= DUELS_PER_WEEK) return '这周已经打了两次对位，教练不会再排。'
@@ -147,7 +150,7 @@ function endDuel(state: GameState): void {
   const team = state.teams[state.myTeam]
   const starter = team.starters.includes(me.id)
   const locked = !!me.benchLock && me.benchLock > state.day
-  if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked) {
+  if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked && promiseSeat(state) !== 'bench') {
     me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
     me.edge = 0
     team.starters = coachStarters(state)

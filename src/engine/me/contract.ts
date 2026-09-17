@@ -208,7 +208,12 @@ export function acceptDeal(state: GameState, dealId: string): string {
   for (const other of me.deals.slice()) { pop(state, 'deal', other.id) }
   me.deals = []
   if (d.kind === 'renew') {
+    // a renewal is the same spell at the same club, so the promise's floor is not handed
+    // out again (me/coach.ts PROMISE_FLOOR) — unless the new deal promises a different
+    // standing, which is a new promise and gets its own matches to be worth something
+    const was = state.players[me.id]?.contract?.promisedRole
     applyTerms(state, d)
+    if (was !== d.role) me.promiseMatches = 0
     me.tenure += 0
     pushLog(state, 'deal', `和 ${state.teams[d.teamId]?.name} 续约 ${d.years} 年，年薪 ${fmtMoney(d.salary, d.cur, state.year)}${d.signBonus ? `，签字费 ${fmtMoney(d.signBonus, d.cur, state.year)}` : ''}。`)
     me.flags.refusedRenew = 0
@@ -329,6 +334,10 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
   me.tenure = 0
   me.startsHere = 0
   me.graceMatches = 0
+  // a new spell is a new promise: its floor of matches starts here (me/coach.ts PROMISE_FLOOR)
+  me.promiseMatches = 0
+  me.flags.promiseLost = 0
+  me.flags.promiseWon = 0
   me.freeYears = 0
   me.abroad = to.region !== me.region
   // a club I turned down this year stays away this year, at this club too (me/prepro.ts declinedNow)
@@ -389,6 +398,7 @@ export function leaveClub(state: GameState, why: string): void {
   me.tenure = 0
   me.startsHere = 0
   me.graceMatches = 0
+  me.promiseMatches = 0
   me.trial = undefined
   me.benchLock = undefined
   me.proven = false
