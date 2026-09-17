@@ -60,11 +60,18 @@ const SCN: Scn[] = [
   { label: '2021 欧洲 · 强队第六人', region: 'Europe', start: 't1', year: 2021, years: 3 },
 ]
 
-/** one international of one year, as my club's last day of it saw it */
+/** one international of one year and one club I was at, as the last day I was at that club saw it */
 interface Row {
   year: number
   key: string
   name: string
+  /**
+   * the club I was at. A row is booked under it and read on the days I was there, so a move after the event
+   * cannot rewrite what my club did there with what the next club did not: 2027 科隆大师赛 was TYLOO's, won with
+   * six ties, and the 「打进大赛」 card was TYLOO's; from the day the career went to KeepBest Gaming, the row read
+   * that club's 0 ties instead, and the card looked like one fired for an event nobody played (2026-09-17)
+   */
+  club: string
   /** this world plays it, rather than keeping the real result (engine/circuit.ts begin) */
   sim: boolean
   seated: boolean
@@ -76,8 +83,11 @@ interface Row {
   mine: number
 }
 
-/** a 打进大赛 card the screen showed (engine/me/moments.ts noteQualify, ui/me/MomentQueue.tsx) */
-interface Card { year: number; key: string; comp: string }
+/**
+ * a 打进大赛 card the screen showed (engine/me/moments.ts noteQualify, ui/me/MomentQueue.tsx), and the club I was at
+ * the morning it was taken — the club it said had qualified, read off the world rather than off the card
+ */
+interface Card { year: number; key: string; comp: string; club: string }
 
 let bad = 0
 const fail = (m: string): void => { bad++; if (bad <= 30) console.log(`  ✗ ${m}`) }
@@ -93,11 +103,28 @@ function drain(state: GameState, cards: Card[]): void {
   let guard = 0
   while (me.moments.length && guard++ < 40) {
     const m = me.moments[0]
-    if (m.kind === 'qualify') cards.push({ year: m.year, key: m.key.replace(/^qualify:/, ''), comp: m.comp ?? '?' })
+    if (m.kind === 'qualify') cards.push({ year: m.year, key: m.key.replace(/^qualify:/, ''), comp: m.comp ?? '?', club: state.myTeam })
     takeMoment(state)
   }
 }
 
+/**
+ * The events my club was seated in, that this world played, that are over and that are on my own record — one row
+ * each. A move between two clubs of the same field leaves a row for each; the one whose ties were played speaks for
+ * the event, so a campaign is never counted twice.
+ */
+function campaigns(book: Map<string, Row>): Row[] {
+  const out = new Map<string, Row>()
+  for (const r of book.values()) {
+    if (!r.seated || !r.sim || !r.over || !r.mine) continue
+    const k = `${r.year}:${r.key}`
+    const had = out.get(k)
+    if (!had || (!had.fxPlayed && r.fxPlayed)) out.set(k, r)
+  }
+  return [...out.values()]
+}
+
+/** Each morning: every international of the year, for the club I am at today — a row of its own per club. */
 function rowsOf(state: GameState, book: Map<string, Row>): void {
   const me = state.me
   const club = state.myTeam
@@ -109,8 +136,8 @@ function rowsOf(state: GameState, book: Map<string, Row>): void {
       || !!c?.seeds.includes(club) || Object.values(c?.fill ?? {}).includes(club)
     const fx = state.fixtures.filter((f) => f.comp === comp.key && (f.teamA === club || f.teamB === club))
     const mine = me.matches.filter((m) => m.year === state.year && !m.friendly && m.comp === comp.name)
-    book.set(`${state.year}:${comp.key}`, {
-      year: state.year, key: comp.key, name: comp.name,
+    book.set(`${state.year}:${comp.key}:${club}`, {
+      year: state.year, key: comp.key, name: comp.name, club,
       // an old world with no real calendar plays its internationals too (engine/season.ts createMasters)
       sim: !c || c.mode === 'sim',
       seated, over: !!comp.champion || !!c?.done,
@@ -189,9 +216,8 @@ for (const o of SCN) {
 
   for (const run of runs) {
     const me = run.state.me!
-    for (const r of run.book.values()) {
-      // an event my club is in, that this world plays, that is over, and that I was there for
-      if (!r.seated || !r.sim || !r.over || !r.mine) continue
+    // an event my club is in, that this world plays, that is over, and that I was there for
+    for (const r of campaigns(run.book)) {
       sample++
       played += r.mine
       if (!r.fxPlayed) {
@@ -209,10 +235,11 @@ for (const o of SCN) {
 
     // 「打进大赛」 never for an event my club has no tie in — the card used to be raised off
     // history's booking, months before the draw (reported 2026-09-16, scripts/probe_qualcard.ts)
+    // — my club being the club I was at when the card came, not whichever club I am at by the event's end
     for (const c of run.cards) {
-      const r = run.book.get(`${c.year}:${c.key}`)
+      const r = run.book.get(`${c.year}:${c.key}:${c.club}`)
       if (!r || !r.fx) {
-        fail(`${o.label} · ${run.label}：${c.year} 弹了「打进${compCn(c.comp)}」的卡，我队整届一场都没打`)
+        fail(`${o.label} · ${run.label}：${c.year} 弹了「打进${compCn(c.comp)}」的卡，我队（${run.state.teams[c.club]?.name ?? c.club}）整届一场都没打`)
       }
       cardsSeen++
     }
@@ -262,12 +289,11 @@ for (const o of SCN) {
   }
 
   // the 推进总结 a 快进 run hands back carries my club's international matches
-  for (const r of b.book.values()) {
-    if (!r.seated || !r.sim || !r.over || !r.mine) continue
+  for (const r of campaigns(b.book)) {
     if (b.notes.some((n) => n.startsWith(`${compCn(r.name)} vs `))) inSummary++
   }
 
-  const mine = [...b.book.values()].filter((r) => r.seated && r.sim && r.over && r.mine)
+  const mine = campaigns(b.book)
   console.log(`  ${o.label}：${o.years} 个赛季，我队打了 ${mine.length} 项大师赛 / 冠军赛`
     + `${mine.length ? ` — ${mine.map((r) => `${r.year} ${compCn(r.name)} ${r.fxPlayed} 场`).join('、')}` : ''}`)
   for (const row of b.state.me!.seasons) {
