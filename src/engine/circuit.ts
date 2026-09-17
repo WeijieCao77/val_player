@@ -1092,12 +1092,15 @@ function championsDirect(state: GameState): Set<string> {
       if (t) f.real.push(t)
       perFeeder.set(key, f)
     }
-    // a Last Chance Qualifier is through only once this world has played it. Before that its real
-    // winner holds no Champions place here, and counting one kept it out of its own qualifier:
-    // Cloud9 out of 2021 North America's, KRÜ and FURIA out of 2022 South America's (reported 2026-09-14)
-    if (r?.kind === 'winner' && event && (state.comps[`ev:${event}`]?.champion || eventOf(event)?.stage !== 'lcq')) {
-      const c = state.comps[`ev:${event}`]
-      const w = c?.champion ?? teamOf(state, champs, v)
+    // an event's winner is through only once it is over in this world, played or replayed. Before that its real
+    // winner holds no Champions place here, and counting one kept a Last Chance Qualifier's out of
+    // its own qualifier: Cloud9 out of 2021 North America's, KRÜ and FURIA out of 2022 South
+    // America's (reported 2026-09-14). A Masters is no different: before Berlin was over, 2021's
+    // EMEA qualifier counted history's Gambit through and passed the table's second place down to
+    // FUT Esports, while the table, which waits for Berlin (pointsTables), still gave Gambit and
+    // Guild the two places — FUT Esports, third on points, was marked by neither (reported 2026-09-17)
+    if (r?.kind === 'winner' && event) {
+      const w = state.comps[`ev:${event}`]?.champion
       if (w) out.add(w)
     }
     if (r?.kind === 'points' && r.pool) perPool.set(r.pool, (perPool.get(r.pool) ?? 0) + 1)

@@ -29,6 +29,14 @@
  *    results whose day has passed, and none after.
  *  - render: the points panel as React renders it lists the table's rows, in its
  *    order, with its marks; an event's panel draws each line under its row.
+ *  - a Masters' winner: on a 2021 EMEA table built by hand, before Masters Berlin
+ *    is over history's winner (Gambit) is not through — it takes a points place,
+ *    and the Last Chance Qualifier's places start right below the Champions
+ *    places, with the week's reading of that qualifier (drawStanding) seating
+ *    the same sides; once this world has played Berlin, its own winner is
+ *    through and the places pass it by. Before Berlin the qualifier had counted
+ *    Gambit through and the table had not, and the side third on points was
+ *    marked by neither (reported 2026-09-17).
  *
  * Two careers: a Challengers starter in Europe from 2021 into 2027, and a VCT
  * club in EMEA from the 2026 entrance, whose league events are played.
@@ -42,7 +50,7 @@ import partneredRaw from '../src/data/routes_partnered.json'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { circuitAward, circuitPaid, eventOf, eventSoFar, eventsOf, pointsTables } from '../src/engine/circuit'
+import { circuitAward, circuitPaid, drawStanding, eventOf, eventSoFar, eventsOf, pointsTables, worldIdOf } from '../src/engine/circuit'
 import type { CEvent, PointsTable } from '../src/engine/circuit'
 import { circuitPointsFor } from '../src/engine/era'
 import { eventTables, labelOf } from '../src/engine/eventTable'
@@ -74,9 +82,10 @@ const fail = (msg: string) => { if (said.has(msg)) return; said.add(msg); bad++;
 const POINTS_YEARS = new Set([2021, 2022, 2024, 2025, 2026])
 
 type Route = { kind: string; pool?: string; event?: string }
+type Rules = { routes?: Record<string, Route>; award?: unknown; wins?: unknown; groupWin?: unknown; bye?: unknown }
 const BOOK = {
-  ...(routesRaw as unknown as { events: Record<string, { routes?: Record<string, Route> }> }).events,
-  ...(partneredRaw as unknown as { events: Record<string, { routes?: Record<string, Route> }> }).events,
+  ...(routesRaw as unknown as { events: Record<string, Rules> }).events,
+  ...(partneredRaw as unknown as { events: Record<string, Rules> }).events,
 }
 /** An event's routes as the route book has them; a projected event plays by the event it is drawn from. */
 const routesOf = (ev: CEvent): Record<string, Route> =>
@@ -438,6 +447,67 @@ function eventsHold(state: GameState, label: string): void {
   }
 }
 
+/**
+ * A Masters' winner is at Champions once this world has played that Masters, and not before — the rule a Last
+ * Chance Qualifier's winner already had. Built by hand rather than waited for: 2021's EMEA table, touched by
+ * one event played here, with history's Berlin winner first on points and eleven sides below it.
+ */
+function mastersWaits(): void {
+  const label = '大师赛冠军 · 2021 EMEA（手搭）'
+  const was = bad
+  const state = createCareer({ name: 'Probe', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed, year: 2021 })
+  const champs = targets(2021).find((e) => e.stage === 'champions')
+  const lcq = targets(2021).find((e) => e.stage === 'lcq' && Object.values(routesOf(e)).some((r) => r.kind === 'points' && r.pool === 'EMEA'))
+  const road = champs && Object.values(routesOf(champs)).find((r) => r.kind === 'winner' && !!r.event && eventOf(r.event)?.stage !== 'lcq')
+  const masters = road?.event ? eventOf(road.event) : undefined
+  const real = masters?.places[0] ? worldIdOf(masters.places[0][0]) : null
+  const pool = (routesRaw as unknown as { pools: Record<string, Record<string, { regions: string[] }>> }).pools['2021']?.EMEA
+  if (!champs || !lcq || !masters || !real || !state.teams[real] || !pool) {
+    fail(`${label}：搭不起来——冠军赛、EMEA 最后机会资格赛、大师赛或它的真实冠军没找到`)
+    return
+  }
+  // the pool touched: the first event before Berlin that pays EMEA points, played here
+  const regions = new Set(pool.regions)
+  const pays = (id: string) => { const r = BOOK[id]; return !!(r?.award || r?.wins || r?.groupWin || r?.bye) }
+  const played = Object.values(state.comps)
+    .filter((c) => !!c.circuit && c.circuit.end < (masters.start ?? 0) && pays(c.circuit.id) && c.teams.some((t) => regions.has(state.teams[t]?.region ?? '')))
+    .sort((a, b) => a.circuit!.end - b.circuit!.end)[0]
+  if (!played) { fail(`${label}：柏林之前没有给 EMEA 积分的赛事`); return }
+  played.circuit!.mode = 'sim'
+  played.finished = [...played.teams]
+  played.champion = played.finished[0]
+  // the points: history's Berlin winner first, then eleven sides that hold no other seat at Champions or the qualifier
+  const other = new Set([champs, lcq].flatMap((e) => Object.entries(routesOf(e)).filter(([, r]) => r.kind !== 'points' && r.kind !== 'winner').map(([v]) => worldIdOf(v))))
+  const rows = pointsTables(state).find((t) => t.pool === 'EMEA')?.rows.map((r) => r.team) ?? []
+  for (const t of rows) state.teams[t].champPoints = 0
+  const order = [real, ...rows.filter((t) => t !== real && !other.has(t) && t !== state.myTeam).slice(0, 11)]
+  if (order.length < 12) { fail(`${label}：EMEA 积分榜上凑不够十二队`); return }
+  order.forEach((t, i) => { state.teams[t].champPoints = i ? 400 - 10 * i : 500 })
+  const comp = state.comps[`ev:${lcq.id}`]
+  const expect = (when: string, want: (string | null)[], seated: string[], out: string[]): void => {
+    const t = pointsTables(state).find((x) => x.pool === 'EMEA')
+    if (!t) { fail(`${label} · ${when}：没有 EMEA 积分榜`); return }
+    if (t.basis !== 'standing' || t.lcqBasis !== 'standing') fail(`${label} · ${when}：积分榜标的是 ${t.basis} / ${t.lcqBasis}，该是「按目前积分」`)
+    const got = t.rows.slice(0, want.length).map((r) => `${state.teams[r.team]?.name}[${r.mark ?? ''}]`)
+    const exp = order.slice(0, want.length).map((x, i) => `${state.teams[x]?.name}[${want[i] ?? ''}]`)
+    if (got.join() !== exp.join()) fail(`${label} · ${when}：积分榜标的是 ${got.join(' ')}，该是 ${exp.join(' ')}`)
+    // the week's reading of the qualifier's draw seats exactly the sides the table marks for it
+    for (const x of seated) if (drawStanding(state, comp, x) !== 'seated') fail(`${label} · ${when}：${state.teams[x]?.name} 该有资格赛名额，抽签照目前看却没有它（${drawStanding(state, comp, x)}）`)
+    for (const x of out) if (drawStanding(state, comp, x) === 'seated') fail(`${label} · ${when}：${state.teams[x]?.name} 不该有资格赛名额，抽签照目前看却有它`)
+  }
+  // Berlin not played: history's winner holds a points place like anyone else, and the qualifier starts at the third
+  const lcqs = (n: number) => Array(n).fill('lcq') as string[]
+  expect('柏林还没打', ['direct', 'direct', ...lcqs(7), null, null, null], [order[2], order[8]], [order[9]])
+  // Berlin played here and won by the table's fifth: this world's winner is through, and history's keeps its points place
+  const berlin = state.comps[`ev:${masters.id}`]
+  const won = order[4]
+  berlin.circuit!.mode = 'sim'
+  berlin.finished = [won, ...berlin.teams.filter((x) => x !== won)]
+  berlin.champion = won
+  expect('柏林在这个世界打完', ['direct', 'direct', 'lcq', 'lcq', 'through', ...lcqs(5), null, null], [order[2], order[9]], [won, order[10]])
+  if (bad === was) console.log(`\n== ${label}：柏林之前真实冠军 ${state.teams[real].name} 不算直通；柏林打完，这个世界的冠军 ${state.teams[won].name} 算`)
+}
+
 function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026, until: number): void {
   const t0 = Date.now()
   const state = createCareer({ name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year })
@@ -474,6 +544,7 @@ function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026
   console.log(`  跑到 ${state.year} 年第 ${state.day} 天，${((Date.now() - t0) / 1000).toFixed(1)} 秒；经过 ${[...years.keys()].join('、')}`)
 }
 
+mastersWaits()
 run('二线 · 欧洲 2021 起', 'Europe', 'chal', 2021, 2027)
 run('VCT · EMEA 2026 起', 'Europe', 't1', 2026, 2027)
 
