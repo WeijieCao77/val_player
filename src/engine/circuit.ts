@@ -1115,18 +1115,11 @@ function championsDirect(state: GameState): Set<string> {
   if (!champs || !book) return out
   const perPool = new Map<string, number>()
   // a placing in a league event, or EMEA's at Tokyo: taken off the feeder as it went in this world
-  const perFeeder = new Map<string, { event: string; league?: string; n: number; real: string[] }>()
+  const tops: { v: string; r: Route; event: string }[] = []
   for (const v of champs.seeds) {
     const r = book[v]
     const event = r?.event && counterpart(r.event, champs)
-    if (r?.kind === 'top' && event && eventOf(event)?.stage !== 'lcq') {
-      const key = `${event}|${r.league ?? ''}`
-      const f = perFeeder.get(key) ?? { event, league: r.league, n: 0, real: [] }
-      f.n++
-      const t = teamOf(state, champs, v)
-      if (t) f.real.push(t)
-      perFeeder.set(key, f)
-    }
+    if (r?.kind === 'top' && event && eventOf(event)?.stage !== 'lcq') tops.push({ v, r, event })
     // an event's winner is through only once it is over in this world, played or replayed. Before that its real
     // winner holds no Champions place here, and counting one kept a Last Chance Qualifier's out of
     // its own qualifier: Cloud9 out of 2021 North America's, KRÜ and FURIA out of 2022 South
@@ -1140,12 +1133,23 @@ function championsDirect(state: GameState): Set<string> {
     }
     if (r?.kind === 'points' && r.pool) perPool.set(r.pool, (perPool.get(r.pool) ?? 0) + 1)
   }
-  for (const f of perFeeder.values()) {
-    const c = state.comps[`ev:${f.event}`]
+  // Each placing seat as the Champions draw will take it (seedsFor's `top`): in the draw's order, the feeder's next
+  // finisher of the league not already through — past a club history has let go (nextFinisher) — and the seat's real
+  // side where the feeder's order runs out or the feeder was replayed. Who is gone is read as of today: the best
+  // reading there is before the Champions draw, which reads it again on its own day. Counted straight off the top of
+  // the order, a club let go before a Last Chance Qualifier's draw was through here while the club below it, which
+  // takes its Champions place, was left free to be seated in the qualifier as well (reported 2026-09-17, after
+  // nextFinisher; scripts/check_gone_seat.ts)
+  tops.sort((a, b) => (a.r.rank ?? 99) - (b.r.rank ?? 99) || (a.r.k ?? 0) - (b.r.k ?? 0))
+  for (const { v, r, event } of tops) {
+    const c = state.comps[`ev:${event}`]
+    const real = teamOf(state, champs, v)
+    let now: string | null | undefined = real
     if (c?.champion && (c.circuit?.mode === 'sim' || champs.projected)) {
-      const inLeague = (t: string) => !f.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === f.league
-      for (const t of c.finished.filter(inLeague).slice(0, f.n)) out.add(t)
-    } else for (const t of f.real) out.add(t)
+      const inLeague = (t: string) => !r.league || regionIn(state.teams[t]?.region ?? 'Europe', state.year) === r.league
+      now = nextFinisher(state, champs, c.finished, (t) => !out.has(t) && inLeague(t)) ?? (real && !out.has(real) ? real : null)
+    }
+    if (now) out.add(now)
   }
   for (const [pool, n] of perPool) {
     if (!champs.projected && !poolTouched(state, pool)) {

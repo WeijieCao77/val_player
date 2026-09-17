@@ -18,12 +18,25 @@
  * A club history really had at Reykjavík is not the one let go: the draw puts each real side back on the floor with
  * the people it really brought (engine/timeline.ts syncEvent), which wakes it. EXCEL was not at Copenhagen.
  *
+ * And the Champions places a Last Chance Qualifier reads before its draw (engine/circuit.ts championsDirect) are
+ * counted the way the Champions draw will take them. 2023's Champions has the Americas League's top three; the
+ * Americas qualifier takes the league's other sides, and a side already through hands its qualifier place to the
+ * league's next side not in the qualifier:
+ *
+ *  - direct: the league is played here, its second let go before the qualifier's draw. Read as the Champions draw
+ *    reads a placing (nextFinisher), that place is the league's fourth's, Cloud9's — so Cloud9 is through, and its
+ *    qualifier place is the next side's: a club of the league not in the qualifier, placed fifth here. The week read
+ *    the same field the day before. (Who is let go is read on the qualifier's day, the best reading there is before
+ *    the Champions draw; NRG really played Champions 2023, and that draw would wake it — no club of the league's top
+ *    three is let go by that day in the book, see the commit that added this.)
+ *  - nobody let go: Cloud9 is not through and keeps its qualifier place; the fifth is not in it.
+ *
  *   npx tsx scripts/check_gone_seat.ts [seed=11]
  */
 import RAW_2021 from '../src/data/world_2021.json'
 import { drawStanding, eventOf, progressCircuit, worldIdOf } from '../src/engine/circuit'
 import { setupSeason } from '../src/engine/season'
-import { foldsOf } from '../src/engine/timeline'
+import { foldsOf, openWorldAt } from '../src/engine/timeline'
 import type { Competition, GameState } from '../src/engine/types'
 import { createNewGame } from '../src/engine/world'
 
@@ -136,10 +149,61 @@ function ranOut(): void {
   if (before.get(club) !== 'maybe') fail(`抽签前一天应该读出 ${nameOf(w, club)} 可能替补进去（maybe），实际 ${before.get(club) ?? '进不去'}`)
 }
 
+const LEAGUE = '1189' // Champions Tour 2023: Americas League — Champions 2023's three Americas places
+const LCQ = '1658' // Champions Tour 2023: Americas Last Chance Qualifier — the league's other sides
+const [LOUD, NRG, EG, C9, FURIA, LEV, T100, SEN, MIBR, KRU] = ['6961', '1034', '5248', '188', '2406', '2359', '120', '2', '7386', '2355'].map(id)
+
+/**
+ * direct: see the top of the file. A world brought up to 2023 on the book alone (engine/timeline.ts openWorldAt, as a
+ * 2026 career's is), the day before the Americas qualifier's draw, the league played here with `fifth` placed fifth.
+ */
+function direct(letGo: boolean): void {
+  const lcq = eventOf(LCQ)
+  if (!lcq?.start) { fail(`日历上找不到 2023 美洲最后机会资格赛（${LCQ}）`); return }
+  const state = createNewGame((RAW_2021 as unknown as { teams: { id: string }[] }).teams[0].id, 'Probe', seed, undefined, 2021)
+  state.myTeam = ''
+  openWorldAt(state, 2023)
+  const busy = new Set([...eventOf(LEAGUE)!.seeds, ...lcq.seeds, ...eventOf('1657')!.seeds].map(id))
+  const folding = new Set(foldsOf(2023).map((f) => id(f.vlr)))
+  const fifth = Object.values(state.teams)
+    .filter((t) => t.region === 'North America' && !t.dormant && t.roster.length >= 5 && !busy.has(t.id) && !folding.has(t.id))
+    .sort((a, b) => a.id.localeCompare(b.id))[0]
+  if (!fifth) { fail('2023 年的世界里找不到一家不在美洲联赛和资格赛里、这一年也没解散的北美俱乐部'); return }
+  state.myTeam = fifth.id
+  setupSeason(state)
+  const league = state.comps[`ev:${LEAGUE}`]
+  const comp = state.comps[`ev:${LCQ}`]
+  if (!league?.circuit || !comp?.circuit) { fail('2023 存档里没有美洲联赛或美洲最后机会资格赛'); return }
+  playedHere(league, [LOUD, NRG, EG, C9, fifth.id, FURIA, LEV, T100, SEN, MIBR, KRU])
+  // NRG was not in the qualifier, so its draw wakes nobody who is let go here
+  if (letGo) state.teams[NRG].dormant = true
+  const w = { state, club: fifth.id } as World
+  console.log(letGo
+    ? `\n== 直通：2023 美洲联赛第二名 ${nameOf(w, NRG)} 在资格赛抽签前解散；第四名 ${nameOf(w, C9)}，第五名 ${nameOf(w, fifth.id)}（不在资格赛真实名单里）`
+    : `\n== 没人解散：2023 美洲联赛前三直通，第四名 ${nameOf(w, C9)}，第五名 ${nameOf(w, fifth.id)}`)
+  state.day = lcq.start - 2
+  const before = drawStanding(state, comp, fifth.id)
+  state.day++
+  progressCircuit(state, comp, [])
+  const field = comp.circuit.seeds.filter((t): t is string => !!t)
+  console.log(`  抽签前一天：${nameOf(w, fifth.id)} ${before ?? '进不去'} · 资格赛名单：${field.map((t) => nameOf(w, t)).join('、')}`)
+  if (letGo) {
+    if (field.includes(C9)) fail(`${nameOf(w, C9)} 接了解散的 ${nameOf(w, NRG)} 的冠军赛名额，已经直通，不该还占着资格赛的位置`)
+    if (!field.includes(fifth.id)) fail(`${nameOf(w, C9)} 直通后空出来的资格赛位置，应该给联赛下一名、不在资格赛里的 ${nameOf(w, fifth.id)}`)
+    if (field.includes(NRG)) fail(`已经解散的 ${nameOf(w, NRG)} 不该进资格赛`)
+    if (before !== 'seated') fail(`抽签前一天应该读出 ${nameOf(w, fifth.id)} 会进资格赛（seated），实际 ${before ?? '进不去'}`)
+  } else {
+    if (!field.includes(C9)) fail(`没人解散时 ${nameOf(w, C9)} 是联赛第四、没有直通，应该留在资格赛`)
+    if (field.includes(fifth.id)) fail(`没人解散时资格赛没有空出来的位置，${nameOf(w, fifth.id)} 不该进去`)
+  }
+}
+
 const t0 = Date.now()
 next()
 ranOut()
+direct(true)
+direct(false)
 console.log(bad
   ? `\n✗ ${bad} 项不对。`
-  : `\n✓ 靠名次拿到的大师赛名额，俱乐部抽签前解散了，名额给同一项赛事的下一名，不再从全世界找替补；后面没有名次可接的名额照旧找替补；抽签前一周读出来的和抽签一致 · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+  : `\n✓ 靠名次拿到的大师赛名额，俱乐部抽签前解散了，名额给同一项赛事的下一名，不再从全世界找替补；后面没有名次可接的名额照旧找替补；最后机会资格赛读的冠军赛直通名单和冠军赛抽签同一个走法；抽签前一周读出来的和抽签一致 · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
 process.exit(bad ? 1 : 0)
