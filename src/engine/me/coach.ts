@@ -41,6 +41,14 @@ export const TRIAL_MATCHES = 2
 export const PROMISE_FLOOR = 3
 
 /**
+ * What a practice duel won inside a substitute's floor says, on the button's path (me/duel.ts
+ * endDuel) and 托管's (runDuel) alike. The floor holds back the one step that would move the
+ * five — a won duel starting a trial — and nothing else: practice is his to play. Without the
+ * sentence, a won duel that moves nothing reads as a bug.
+ */
+export const PROMISE_HELD = `教练看在眼里——不过合同说好的 ${PROMISE_FLOOR} 场替补还没打完，这几场名单不会动。`
+
+/**
  * How hard a week pulls the coach's regard back toward 60 (me/week.ts
  * settleWeek) — and why the two directions are not the same rate (2026-09-16).
  *
@@ -347,8 +355,9 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
   const starter = team.starters.includes(me.id)
   const locked = !!me.benchLock && me.benchLock > state.day
   let trial = false
-  // a substitute contract's floor is the coach's word too: he does not move the five for
-  // me inside it, so no trial begins there (me/duel.ts says as much before a duel is played)
+  // a substitute contract's floor is the coach's word too: he does not move the five for me
+  // inside it, so no trial begins there. That guard is the whole of the rule — the duel itself
+  // is still mine to play, and a win says why nothing moves yet (PROMISE_HELD)
   if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked && promiseSeat(state) !== 'bench') {
     me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
     me.edge = 0
@@ -356,8 +365,9 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
     trial = true
     pushLog(state, 'good', `训练赛里你连着压过 ${him.ign}，教练点头了：接下来 ${TRIAL_MATCHES} 场正赛你先打。赢下来就是你的。`)
   } else {
+    const held = won && promiseSeat(state) === 'bench'
     pushLog(state, won ? 'team' : 'info',
-      `对位挑战 vs ${him.ign}：${rounds.map((r) => `${r.dim}${r.ok ? '✓' : '✗'}`).join(' ')} —— ${won ? '赢了' : '输了'}，资本 ${me.edge.toFixed(1)}/${EDGE_NEED}。`)
+      `对位挑战 vs ${him.ign}：${rounds.map((r) => `${r.dim}${r.ok ? '✓' : '✗'}`).join(' ')} —— ${won ? '赢了' : '输了'}，资本 ${me.edge.toFixed(1)}/${EDGE_NEED}。${held ? PROMISE_HELD : ''}`)
   }
   return { him, rounds, won, flash, edge: me.edge, trial }
 }

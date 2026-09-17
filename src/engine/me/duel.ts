@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player } from '../types'
 import { ACTION_BY_KEY, DUELS_PER_WEEK } from './actions'
-import { EDGE_NEED, PROMISE_FLOOR, TRIAL_MATCHES, coachStarters, duelTarget, promiseFloorLeft, promiseSeat } from './coach'
+import { EDGE_NEED, PROMISE_HELD, TRIAL_MATCHES, coachStarters, duelTarget, promiseSeat } from './coach'
 import { addXp } from './growth'
 import { pushLog } from './log'
 import type { DuelSceneLog } from './types'
@@ -45,9 +45,6 @@ export function duelBlock(state: GameState): string | null {
   const team = state.teams[state.myTeam]
   if (team.starters.includes(me.id)) return '你已经是首发了，不用挑战谁。'
   if (me.trial) return '你正在试用期，先把正赛打好。'
-  // signed as a substitute: those first matches are what the club promised, and the coach
-  // does not move the five for me inside them (me/coach.ts PROMISE_FLOOR)
-  if (promiseSeat(state) === 'bench') return `合同说好先打 ${PROMISE_FLOOR} 场替补，还剩 ${promiseFloorLeft(state)} 场，教练这几场不会为你动名单。`
   if (me.benchLock && me.benchLock > state.day) return `教练这段时间不会再看你（还有 ${me.benchLock - state.day} 天）。`
   if (me.duelLive && !me.duelLive.done) return '训练赛正在打。'
   if (me.duelsThisWeek >= DUELS_PER_WEEK) return '这周已经打了两次对位，教练不会再排。'
@@ -150,6 +147,8 @@ function endDuel(state: GameState): void {
   const team = state.teams[state.myTeam]
   const starter = team.starters.includes(me.id)
   const locked = !!me.benchLock && me.benchLock > state.day
+  // a substitute contract's floor holds back the trial and only the trial (me/coach.ts
+  // PROMISE_FLOOR): the duel was his to play, and a win inside it says why the five stays put
   if (me.edge >= EDGE_NEED && !me.trial && !starter && !locked && promiseSeat(state) !== 'bench') {
     me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
     me.edge = 0
@@ -158,8 +157,10 @@ function endDuel(state: GameState): void {
     live.verdict += `教练找你谈了：下一场正赛，名单上是你。赢了位置就是你的；输了回替补席。`
     pushLog(state, 'good', `训练赛里你连着压过 ${him.ign}，教练点头了：接下来 ${TRIAL_MATCHES} 场正赛你先打。赢下来就是你的。`)
   } else {
+    const held = won && promiseSeat(state) === 'bench'
+    if (held) live.verdict += `。${PROMISE_HELD}`
     pushLog(state, won ? 'team' : 'info',
-      `对位挑战 vs ${him.ign} ${live.sc[0]}:${live.sc[1]}${live.flash ? `，${live.flash} 波亮眼` : ''} —— ${won ? '赢了' : '输了'}，资本 ${me.edge.toFixed(1)}/${EDGE_NEED}。`)
+      `对位挑战 vs ${him.ign} ${live.sc[0]}:${live.sc[1]}${live.flash ? `，${live.flash} 波亮眼` : ''} —— ${won ? '赢了' : '输了'}，资本 ${me.edge.toFixed(1)}/${EDGE_NEED}。${held ? PROMISE_HELD : ''}`)
   }
 }
 

@@ -26,10 +26,10 @@ import { Rng } from '../src/engine/rng'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { CareerOpts } from '../src/engine/me/career'
 import {
-  EDGE_NEED, PROMISE_FLOOR, afterMyMatch, coachStarters, promiseFloorLeft, promiseHolds,
+  EDGE_NEED, PROMISE_FLOOR, PROMISE_HELD, afterMyMatch, coachStarters, promiseFloorLeft, promiseHolds,
   promiseSeat, runDuel, standingLine, weeklyLineup,
 } from '../src/engine/me/coach'
-import { duelBlock } from '../src/engine/me/duel'
+import { closeDuel, duelBlock, duelPick, startDuel } from '../src/engine/me/duel'
 import { ROLES } from '../src/engine/types'
 import type { GameState, Role, SquadRole } from '../src/engine/types'
 import type { MeMatchRecord } from '../src/engine/me/types'
@@ -218,14 +218,56 @@ console.log('队里凑不出五个人的时候，替补保底让路')
   check(five.includes(s.me!.id), '没有第六个健康的人可换，合同让路，你上')
 }
 
-console.log('替补保底没打完，试用期不开始')
+console.log('替补保底没打完：对位照打，名单不动，试用期不开始')
 {
+  // The promise is about who starts for those matches, not about practice. The one step that
+  // would move the five — a won duel starting a trial — is what the floor holds back, and a win
+  // inside it says so. An earlier version blocked the duel button itself and this check asserted
+  // it: it pinned that over-reach rather than the rule (found on review, 2026-09-17).
   const s = bench(55, 'bench', 35)
   const me = s.me!
+  const mine = s.players[me.id]
+  // plainly better in practice, plainly worse on the coach's sheet: he duels and wins, and stays benched
+  for (const k of Object.keys(mine.attrs) as (keyof typeof mine.attrs)[]) mine.attrs[k] = 99
+  me.mental = 99
   check(!starts(s), '先确认你在替补席上')
-  check(!!duelBlock(s) && /保底|替补/.test(duelBlock(s)!), `对位挑战说得清楚：「${duelBlock(s)}」`)
-  for (let i = 0; i < 6; i++) { me.edge = EDGE_NEED + 1; me.duelsThisWeek = 0; runDuel(s, new Rng(100 + i)) }
-  check(!me.trial, '保底没过：资本攒够了也开不了试用期')
+  check(promiseSeat(s) === 'bench' && duelBlock(s) === null, `保底期里对位挑战照样能打，不归保底拦（${duelBlock(s) ?? '没有被拦'}）`)
+
+  // the button's own path: start it, play the scenes, and a win says why the five stays put
+  let played = 0
+  let won = 0
+  let said = 0
+  for (let i = 0; i < 6; i++) {
+    me.edge = EDGE_NEED + 1
+    me.duelsThisWeek = 0
+    me.ap = 8
+    s.day++
+    if (startDuel(s) !== null) break
+    played++
+    let g = 0
+    while (me.duelLive && !me.duelLive.done && g++ < 5) duelPick(s, 0)
+    const live = me.duelLive!
+    if (live.sc[0] > live.sc[1]) {
+      won++
+      if ((live.verdict ?? '').includes(PROMISE_HELD) && me.log.slice(-1)[0]?.text.includes(PROMISE_HELD)) said++
+    }
+    closeDuel(s)
+  }
+  check(played === 6, `按下对位挑战，${played}/6 次真的开打了`)
+  check(won > 0 && said === won, `赢下的 ${won} 场对位，结算和日志都说了：「${PROMISE_HELD}」（${said}/${won}）`)
+
+  // 托管's path (me/week.ts doDuel → runDuel): the same rule, the same sentence
+  let autoWon = 0
+  let autoSaid = 0
+  for (let i = 0; i < 6; i++) {
+    me.edge = EDGE_NEED + 1
+    me.duelsThisWeek = 0
+    const r = runDuel(s, new Rng(100 + i))
+    if (r?.won) { autoWon++; if (me.log.slice(-1)[0]?.text.includes(PROMISE_HELD)) autoSaid++ }
+  }
+  check(autoWon > 0 && autoSaid === autoWon, `托管赢下的 ${autoWon} 场对位也都说了（${autoSaid}/${autoWon}）`)
+  check(!me.trial, '保底没过：对位赢了、资本攒够了，也开不了试用期')
+  check(!starts(s), '保底没过：名单一场没动')
   me.promiseMatches = PROMISE_FLOOR
   me.duelsThisWeek = 0
   check(!duelBlock(s), `保底过了：对位挑战可以打（${duelBlock(s) ?? '没有拦住'}）`)

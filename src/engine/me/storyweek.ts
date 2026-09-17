@@ -386,6 +386,13 @@ export function storyPlan(state: GameState, set: (k: MeAction, d: 1 | -1) => boo
       if (set(key, 1)) break
       if (k !== key && (plan[k] ?? 0) > 0) set(k, -1)
     }
+    // …and one more try once the last of them has. The loop tries the task before each hour it
+    // frees, so when it is 休息, the last in line, that makes the room, it used to end right there:
+    // the room made and the task never booked. A week that tight is a man on the bench on 托管 —
+    // two practice duels in (me/auto.ts autoPlan) — and it cost 「合同年」 on 按推荐 every week of
+    // its task (found 2026-09-17, once a Challengers signing could lose his place, me/coach.ts
+    // PROMISE_FLOOR; scripts/check_story.ts).
+    if (!(plan[key] ?? 0)) set(key, 1)
   }
   if (key === 'duo' && (plan.duo ?? 0) > 0) me.duoWith = c.mate
 }
