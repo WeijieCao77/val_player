@@ -41,21 +41,21 @@ export const WEEK_END_FATIGUE = 40
 
 /**
  * The fatigue my matches still to come this week will book: my club's
- * (matchplay.ts: a map on the floor 5, on the bench 1.5) — or, without a club,
- * the round of my cup this week holds (a map of it FRIENDLY_MAP_FATIGUE).
+ * (matchplay.ts: a map on the floor 5, on the bench 1.5), and the round of my
+ * cup this week holds (a map of it FRIENDLY_MAP_FATIGUE) — a club's man can be
+ * in one too, between its events (me/cups.ts clubCupBlock).
  */
 export function matchLoad(state: GameState): number {
   const me = state.me!
   const last = state.day - me.weekDay + 7
   const maps = (bo: number) => bo === 1 ? 1 : bo === 2 ? 2 : bo === 5 ? 4 : 2.5
-  if (me.phase !== 'pro') {
-    const run = me.pre.cup
-    const r = run && cupFor(state, run.key)?.rounds[run.round]
-    return run && r && run.next != null && run.next <= last ? maps(r.bo) * FRIENDLY_MAP_FATIGUE : 0
-  }
+  const run = me.pre.cup
+  const r = run && cupFor(state, run.key)?.rounds[run.round]
+  const cup = run && r && run.next != null && run.next <= last ? maps(r.bo) * FRIENDLY_MAP_FATIGUE : 0
+  if (me.phase !== 'pro') return cup
   const club = state.myTeam
   const starter = !!state.teams[club]?.starters.includes(me.id)
-  let load = 0
+  let load = run?.club === club ? cup : 0
   for (const f of state.fixtures) {
     if (f.played || f.comp === 'scrim' || f.day > last || (f.teamA !== club && f.teamB !== club)) continue
     load += maps(f.bo) * (starter ? 5 : 1.5)
@@ -291,6 +291,10 @@ export function autoResolve(state: GameState, item: PendingItem): string {
         afterCupMatch(state, rec.won, rec.score, rng)
         return `${cup.name}${label} ${rec.won ? '胜' : '负'} ${rec.score}`
       }
+      // signed, a cup between the club's events is the player's own call (me/cups.ts clubCupBlock): 托管 keeps to the
+      // club's career and leaves it. Entered for him, a 2021 Korean Challengers career played June's 主播杯, came into its
+      // Stage 3 a little more tired and out of form, and lost the quarter-final it had won (scripts/check_worldline.ts)
+      if (me.phase === 'pro') { skipCup(state, item.id!); return `签了约，${cup.name}没替你报` }
       if (me.money < cup.fee + 500 || me.fans < cup.minFans) { skipCup(state, item.id!); return `跳过${cup.name}` }
       // not entered on anything serious or anything that can leave a mark: the first round is only a week or so away
       if (autoSitsOut(state)) { skipCup(state, item.id!); return `带伤，没报${cup.name}` }
@@ -445,8 +449,8 @@ export function quietAhead(state: GameState, days = 28): boolean {
   if (!me) return false
   const club = me.phase === 'pro' ? state.myTeam : null
   const until = state.day + days
-  // a round of my cup inside the stretch (me/cups.ts, a round a week)
-  const run = club ? undefined : me.pre.cup
+  // a round of my cup inside the stretch (me/cups.ts, a round a week) — entered without a club, or at this one
+  const run = !club || me.pre.cup?.club === club ? me.pre.cup : undefined
   if (run?.next != null && run.next <= until) return false
   if (club && state.fixtures.some((f) => !f.played && f.day >= state.day && f.day <= until && (f.teamA === club || f.teamB === club))) return false
   // nor a round of my club's whose tie is not written yet, nor an event opening that holds its place or may take it: the week

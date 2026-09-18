@@ -10,11 +10,13 @@ import { addMoney } from './money'
 import { fansCn } from './fans'
 import { cupInvite } from './prepro'
 import { cny } from './moneyfmt'
+import { nextUp } from './nextup'
 
 /**
- * The amateur calendar: what a player with no club can enter, week by week.
- * The bands are the opponents' ratings; the deeper the run the more likely
- * somebody at a club hears about it (prepro.ts cupInvite).
+ * The amateur calendar: what a player with no club can enter, week by week —
+ * and a signed one whose club has nothing of its own before the cup is played
+ * out (clubCupBlock). The bands are the opponents' ratings; the deeper the run
+ * the more likely somebody at a club hears about it (prepro.ts cupInvite).
  */
 export interface CupDef {
   key: string
@@ -226,7 +228,7 @@ export type CupStatus =
   | { kind: 'done'; run: CupRun }
   /** answered 「不打」, or passed on by 托管 */
   | { kind: 'skipped' }
-  /** its week went by with no card: I had a club then, or the career had not begun */
+  /** its week went by with no card: my club had a match before the cup would be played out (clubCupBlock), or the career had not begun */
   | { kind: 'missed' }
 
 export function cupStatus(state: GameState, key: string): CupStatus {
@@ -249,9 +251,46 @@ export function cupEntryBlock(state: GameState, key: string): string | null {
   if (!cup) return '没有这项赛事'
   const run = me.pre.cup
   if (run && run.key !== key) return `还在打${cupFor(state, run.key)?.name ?? '另一项赛事'}，打完才能报名`
+  const club = clubCupBlock(state, key)
+  if (club) return club
   if (me.money < cup.fee) return `报名费 ${cny(cup.fee)}，你只有 ${cny(Math.max(0, me.money))}`
   if (me.fans < cup.minFans) return `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}`
   return null
+}
+
+/** The day this year's edition of a cup plays its last round: entered the week it opens, a round a week from the next weekend. */
+export function cupLastDay(state: GameState, c: CupDef): number {
+  return roundDayAfter(state.year, cupOpensOn(state, c)) + (c.rounds.length - 1) * CUP_ROUND_GAP
+}
+
+/**
+ * Why a signed player cannot enter this cup, or null — always null without a club.
+ *
+ * Decided 2026-09-18 (the hx-wait report): a ladder player often waited months after signing for his club's first
+ * match — history's open-qualifier lists, a season whose doors had shut, 2026's November open qualifiers — and the
+ * months had nothing in them, the cups being for players without a club. Real tier-two and tier-three pros did play
+ * community cups between their Riot events: 2021 North America had Nerd Street Gamers' monthly opens and its Winter
+ * and Summer Championships (Liquipedia). So a signed player may enter one, while:
+ *
+ *  - the club has nothing of its own before the cup's last round — no tie, no round, no event it is seated in or can
+ *    enter, as the week's 「下一场」 reads it (me/nextup.ts nextUp). Once in, a match of the club's before the next
+ *    round is a forfeit there (resumeCup): the club comes first, and it does not mind the rest — no trust, no morale
+ *  - it is not the Challengers road: 2021–22's open qualifier is the club's to play, and from 2023 the official
+ *    amateur league's top group is where players without a club come up from
+ */
+export function clubCupBlock(state: GameState, key: string): string | null {
+  const me = state.me
+  if (me?.phase !== 'pro') return null
+  const c = cupFor(state, key)
+  if (!c) return null
+  if (key === 'premier') {
+    return state.year <= 2022 ? '签了约，Challengers 的海选跟着俱乐部打，不能另找四个人再报' : '官方业余联赛的挑战者组是给还没签约的选手打上来的，签了约不报'
+  }
+  const last = cupLastDay(state, c)
+  const up = nextUp(state)
+  if (up.kind === 'none' || up.day > last) return null
+  const what = up.kind === 'fixture' ? state.comps[up.fixture.comp]?.name ?? '正式比赛' : up.name
+  return `俱乐部 ${cupDateCn(state, Math.max(up.day, state.day))}有${what}，这项杯赛要打到 ${cupDateCn(state, last)}`
 }
 
 /** 「2月20日（周六）」 */
@@ -269,7 +308,7 @@ export function isCupRound(state: GameState, item: PendingItem): boolean {
 export function cupRoundToday(state: GameState): boolean {
   const me = state.me
   const run = me?.pre.cup
-  return !!me && !!run && run.next != null && run.next <= state.day && me.phase !== 'pro' && me.phase !== 'retired'
+  return !!me && !!run && run.next != null && run.next <= state.day && me.phase !== 'retired' && (me.phase !== 'pro' || run.club === state.myTeam)
 }
 
 /**
@@ -285,12 +324,15 @@ export function enterCup(state: GameState, key: string, rng: Rng): string | null
   const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事。'
   if (me.pre.cup) return `你还在打${cupFor(state, me.pre.cup.key)?.name ?? '另一项赛事'}，打完才能报名。`
+  const club = clubCupBlock(state, key)
+  if (club) return `${club}。`
   if (me.money < cup.fee) return `报名费 ${cny(cup.fee)}，你的钱不够。`
   if (me.fans < cup.minFans) return `这是邀请赛，粉丝要过 ${fansCn(cup.minFans)}。`
   addMoney(state, 'fee', -cup.fee)
   me.pre.seen.push(`${state.year}:${key}`)
   const next = cupRoundDay(state)
-  me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [], next, year: state.year }
+  // entered under contract: the club it was entered at (resumeCup)
+  me.pre.cup = { key, round: 0, alive: true, mates: makePickupMates(state, cup, rng), results: [], next, year: state.year, ...(me.phase === 'pro' ? { club: state.myTeam } : {}) }
   pop(state, 'cup', key)
   const plan = cup.rounds.length > 1 ? `赛程 ${cup.rounds.map((r) => r.label).join(' → ')}，一周一轮，` : ''
   pushLog(state, 'cup', `报名了${cup.name}${cup.fee ? `（${cny(cup.fee)}）` : ''}。${plan}${cup.rounds[0].label}在 ${cupDateCn(state, next)}。抽到的队友：${me.pre.cup.mates.map((m) => `${m.ign}（${m.role}）`).join('、')}。`)
@@ -367,8 +409,9 @@ function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, r
       : `${cup.name}止步${at}${prize ? `，奖金 ${cny(prize)}` : ''}。`
   pushLog(state, rec.won ? 'good' : 'cup', line)
   // and the deeper the run, the likelier a club's call (me/prepro.ts cupInvite). Once the run is over, as
-  // 破晓 has it (cup.ts: a call in the middle of one had players signing at the semi-final and skipping the rest)
-  cupInvite(state, rec, rng)
+  // 破晓 has it (cup.ts: a call in the middle of one had players signing at the semi-final and skipping the rest).
+  // Not for a man under contract: a cup played between his club's events is for the prize and the crowd (clubCupBlock)
+  if (me.phase !== 'pro') cupInvite(state, rec, rng)
   return rec
 }
 
@@ -385,7 +428,10 @@ export function offerCup(state: GameState, key: string): void {
  * and on every day of me/week.ts runDays, and when a save is read (me/save.ts).
  *
  * Signed to a club by now, the run is withdrawn from: a pro does not go back to
- * a café cup (破晓's acceptOffer does the same, the fee not returned).
+ * a café cup (破晓's acceptOffer does the same, the fee not returned). A run
+ * entered under contract (clubCupBlock) is the club's man's own, and goes on —
+ * until a match of the club's comes before its next round: that round is a
+ * forfeit, the club first. At another club by then, it is withdrawn from.
  *
  * A save from before the rounds had days holds a run whose next round was due
  * the moment it was read: that round is today's — the card it had in front
@@ -397,12 +443,23 @@ export function resumeCup(state: GameState): void {
   const me = state.me
   const run = me?.pre.cup
   if (!me || !run) return
-  if (me.phase === 'pro' || me.phase === 'retired') {
+  if (me.phase === 'retired' || (me.phase === 'pro' && run.club !== state.myTeam)) {
     dropTempTeams(state)
     me.pre.cup = undefined
     pop(state, 'cup', run.key)
     pushLog(state, 'cup', `退出了${cupFor(state, run.key)?.name ?? '杯赛'}。`)
     return
+  }
+  if (me.phase === 'pro') {
+    const club = state.myTeam
+    const due = run.next ?? state.day
+    const clash = state.fixtures.find((f) => !f.played && !f.scrim && f.comp !== 'scrim' && f.day <= due && (f.teamA === club || f.teamB === club))
+    if (clash) {
+      const cup = cupFor(state, run.key)
+      pushLog(state, 'cup', `俱乐部 ${cupDateCn(state, clash.day)}要打${state.comps[clash.comp]?.name ?? '正式比赛'}，${cup?.name ?? '杯赛'}这一轮弃权。`)
+      forfeitCup(state, cupRng(state, 'club'))
+      return
+    }
   }
   if (run.next == null || run.year !== state.year) {
     run.next = state.day

@@ -170,7 +170,10 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
       </p>
       <p className="small muted">
         {cup.rounds.length > 1 ? `一周一轮：${cup.rounds.map((x) => x.label).join(' → ')}，` : ''}{cup.rounds[0].label}在 {cupDateCn(game, cupRoundDay(game))}。报名这周和两轮之间照常训练、休息、买东西。
-        走得越远，越可能有俱乐部的人记下你的名字。你会抽到四个路人队友。
+        {/* signed: the club's calendar is clear until the cup is played out (engine/me/cups.ts clubCupBlock) */}
+        {me.phase === 'pro'
+          ? '俱乐部在这项杯赛打完之前没有比赛，签了约也能打：拿奖金和人气，不会因此来试训邀请；俱乐部要是在下一轮之前排上正式比赛，那一轮就弃权。'
+          : '走得越远，越可能有俱乐部的人记下你的名字。'}你会抽到四个路人队友。
       </p>
       {inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
       <div className="row" style={{ gap: 10, justifyContent: 'center' }}>

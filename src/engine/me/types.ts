@@ -506,7 +506,7 @@ export interface PreState {
    * — a round a week (me/cups.ts). `next` and `year` are absent in a save from
    * before the rounds had days; resumeCup gives them today.
    */
-  cup?: { key: string; round: number; alive: boolean; mates: PickupMate[]; results: string[]; next?: number; year?: number }
+  cup?: { key: string; round: number; alive: boolean; mates: PickupMate[]; results: string[]; next?: number; year?: number; club?: string }
   /** a former pro on the market keeps his record but starts here again */
   wasPro: boolean
 }

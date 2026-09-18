@@ -25,7 +25,7 @@ import { MeMatch } from './matchplay'
 import { pushLog } from './log'
 import { push } from './pending'
 import { AP_PRE, cupThisWeek, expireInvites, ladderLabel, ladderWeekly, rollInvites } from './prepro'
-import { offerCup, resumeCup } from './cups'
+import { clubCupBlock, offerCup, resumeCup } from './cups'
 import { fanWeek } from './fans'
 import { streamClauseCheck, streamTick } from './stream'
 import { AGENTS } from './shop'
@@ -51,6 +51,7 @@ import type { SeasonLedger } from './worldline'
 import { iglWeek } from './igl'
 import { roomWeek } from './room'
 import { pitchDay } from './selfpitch'
+import { trimDetail } from './detail'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -567,6 +568,9 @@ export function settleWeek(state: GameState): void {
     roomWeek(state)
     // a week's end is a moment a club can call while my window is open: a small share of the period's round (me/window.ts rollWeight)
     windowRoll(state, new Rng(hashStr(`offer:week:${state.seed}:${state.year}:${state.day}`)), 'week')
+    // an amateur cup opening this week, while my club has nothing of its own before it is played out (me/cups.ts clubCupBlock)
+    const cup = cupThisWeek(state)
+    if (cup && !clubCupBlock(state, cup.key)) offerCup(state, cup.key)
   }
   // a chain's next card, a seed coming back, or a new chain — before the draw, which steps aside for it
   storyWeek(state)
@@ -580,6 +584,10 @@ export function settleWeek(state: GameState): void {
   for (const n of notes) me.weekNotes.push(n)
   // the week's paper: my results, who moved where, who got stronger, what is next
   me.weekNotes.unshift(...weekReport(state))
+  // the detail is the last year's (me/detail.ts): let go at the week's end as well as when a match is written. A club's
+  // man can play November's 全明星表演赛 now (me/cups.ts clubCupBlock), and the one of the year before stayed on past
+  // its year until his club's next match, months later (scripts/check_detail.ts, found 2026-09-18)
+  trimDetail(me, state.year, state.day)
   me.week++
   me.weekDay = 0
   me.plan = {}

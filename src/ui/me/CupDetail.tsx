@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useGame } from './ctx'
 import { Modal, money } from './common'
-import { cupDateCn, cupOf, cupOpensOn, cupStatus, cupView, roundDayAfter, CUP_ROUND_GAP } from '../../engine/me/cups'
+import { clubCupBlock, cupDateCn, cupLastDay, cupOf, cupOpensOn, cupStatus, cupView, roundDayAfter, CUP_ROUND_GAP } from '../../engine/me/cups'
 import { fansCn } from '../../engine/me/fans'
 
 /**
@@ -94,6 +94,10 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
   const feeOk = me.money >= c.fee
   const fansOk = me.fans >= c.minFans
   const ahead = st.kind === 'ahead' || st.kind === 'now'
+  // signed: the third door, my club's calendar until the cup is played out (engine/me/cups.ts clubCupBlock)
+  const pro = me.phase === 'pro'
+  const clubWhy = pro && ahead ? clubCupBlock(game, cupKey) : null
+  const signedOut = cupKey === 'premier'
 
   return (
     <Modal
@@ -132,8 +136,18 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
 
           <dt>报名</dt>
           <dd>
-            {c.minFans ? '粉丝够了才有请柬' : '谁都能报'}，只要还没签俱乐部；同时只打一项杯赛。
+            {signedOut
+              ? `${c.minFans ? '粉丝够了才有请柬' : '谁都能报'}，只要还没签俱乐部；同时只打一项杯赛。`
+              : `${c.minFans ? '粉丝够了才有请柬' : '谁都能报'}：还没签俱乐部的，或者签了约、俱乐部到这项杯赛打完（${md(cupLastDay(game, raw))}）都没有比赛的；同时只打一项杯赛。`}
             <ul className="cup-gates">
+              {pro && (
+                <li className={ahead && (signedOut || clubWhy) ? 'no' : ''}>
+                  <span>{signedOut ? '还没签俱乐部' : `俱乐部到 ${md(cupLastDay(game, raw))} 都没有比赛`}</span>
+                  {ahead && (signedOut || clubWhy
+                    ? <span className="tag">{signedOut ? (game.year <= 2022 ? '签了约，海选跟着俱乐部打' : '签了约不报') : clubWhy}</span>
+                    : <span className="tag win">照现在的赛程，是</span>)}
+                </li>
+              )}
               <li className={ahead && !feeOk ? 'no' : ''}>
                 <span>报名费 {c.fee ? money(c.fee) : '免费'}</span>
                 {c.fee > 0 && ahead && (feeOk ? <span className="tag win">够</span> : <span className="tag">你只有 {money(Math.max(0, me.money))}</span>)}
@@ -146,7 +160,10 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
                 </li>
               )}
             </ul>
-            <span className="tiny faint">到了那一周会弹卡问你报不报名；打到一半签了俱乐部就退出{c.fee ? '，报名费不退' : ''}。</span>
+            <span className="tiny faint">
+              到了那一周会弹卡问你报不报名；打到一半签了俱乐部就退出{c.fee ? '，报名费不退' : ''}。
+              {!signedOut && '签了约报的，俱乐部在下一轮之前排上正式比赛，那一轮就弃权，奖金按已赢的轮次给；俱乐部不会因为你去打杯赛有意见。'}
+            </span>
           </dd>
 
           <dt>队友</dt>
@@ -160,8 +177,8 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
             <ul className="cup-gets">
               <li>{n > 1 ? `奖金按赢下的轮数给一次${top ? `，冠军 ${money(top)}` : ''}。` : `赢了拿 ${money(top)}。`}</li>
               <li>走得越远，涨粉越快，战术素养涨得越多。</li>
-              <li>打完越可能有俱乐部来电话；赢下一半以上的轮次，会有俱乐部记下你。</li>
-              <li>夺冠的话，打来电话的 Challengers 俱乐部直接给报价，不用试训。</li>
+              <li>打完越可能有俱乐部来电话；赢下一半以上的轮次，会有俱乐部记下你。{pro ? '签了约打的不算：只有奖金和人气。' : ''}</li>
+              <li>夺冠的话，打来电话的 Challengers 俱乐部直接给报价，不用试训{pro ? '（同样只给还没签约的）' : ''}。</li>
             </ul>
           </dd>
         </dl>

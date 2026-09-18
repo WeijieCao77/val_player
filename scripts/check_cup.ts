@@ -13,6 +13,8 @@
  *   三、forfeit, signing mid-run, and saves from the blocking model
  *   四、the call a deep run can bring, once the run is over
  *   五、the cup's own page (ui/me/CupDetail.tsx): its days, its state and its greyed 报名 as the engine has them
+ *   六、signed: a club with nothing before the cup is played out lets its man enter, one with a match that soon does
+ *       not; the Challengers road is the club's; once in, a match of the club's before the next round is a forfeit
  *
  *   npx tsx scripts/check_cup.ts
  */
@@ -24,7 +26,9 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { advanceUntil, autoPlan, autoResolve, leftToMe, matchLoad, runAutoPilot, runBlocked } from '../src/engine/me/auto'
 import { advanceTurn, advanceWeek, planBlock, setPlan } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
-import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupEntryBlock, cupFor, cupOf, cupOpensOn, cupRng, cupRoundDay, cupStatus, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, roundDayAfter, skipCup } from '../src/engine/me/cups'
+import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupEntryBlock, cupFor, cupLastDay, cupOf, cupOpensOn, cupRng, cupRoundDay, cupStatus, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, roundDayAfter, skipCup } from '../src/engine/me/cups'
+import { nextUp } from '../src/engine/me/nextup'
+import { makeFixture } from '../src/engine/league'
 import { buyRelax } from '../src/engine/me/shop'
 import { reachableClubs } from '../src/engine/me/prepro'
 import { migratePlayerSave } from '../src/engine/me/save'
@@ -528,5 +532,181 @@ for (const c of CAREERS) {
   if (cupStatus(late, 'premier').kind !== 'missed') fail(`${tag}：挑战者组那一周过去了也没弹卡，详情页写的是「${cupStatus(late, 'premier').kind}」`)
 }
 
-console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上，走得远会有人来电话；详情页说的日子和状态都是引擎的。 · ${secs()}`)
+/* ---- 六、signed, with nothing of the club's before the cup is played out ---- */
+// Decided 2026-09-18 (the hx-wait report): a ladder player waited months after signing for his club's first match, and
+// the cups were for players without a club. A signed player may now enter one while his club has nothing of its own
+// before the cup's last round (me/cups.ts clubCupBlock) — never the Challengers road, and the club comes first once in.
+console.log(`\n六、签了约：俱乐部在杯赛打完之前没有比赛才能报，挑战者组不报，俱乐部排上比赛那一轮弃权 · ${secs()}`)
+/** A signed career, weeks the bot's way, until this cup's week has begun — or its card is up (`card`). Other cups are passed on. */
+function toCupWeek(s: GameState, key: string, card: boolean, maxWeeks = 60): PendingItem | null {
+  const me = s.me!
+  const week = cupOf(key)!.week
+  const answer = (it: PendingItem): boolean => {
+    if (it.kind === 'cup' && !isCupRound(s, it)) {
+      if (it.id === key && card) return true
+      if (it.id === key) fail(`签了约、俱乐部有比赛，${cupFor(s, key)?.name}还是弹了报名卡`)
+      skipCup(s, it.id!)
+      return false
+    }
+    autoResolve(s, it)
+    return false
+  }
+  for (let w = 0; w < maxWeeks; w++) {
+    let g = 0
+    while (me.pending.length && g++ < 30) if (answer(me.pending[0])) return me.pending[0]
+    if (me.phase !== 'pro') return null
+    if (!card && Math.floor(s.day / 7) === week && me.weekDay === 0) return null
+    if (Math.floor(s.day / 7) > week + 1) return null
+    if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(s)
+    let st = advanceWeek(s)
+    let k = 0
+    while (st.kind !== 'week-end' && st.kind !== 'game-over' && k++ < 40) {
+      if (st.kind === 'pending' && answer(st.item)) return st.item
+      if (st.kind === 'match') new MeMatch(s, st.fixture).runOut()
+      st = advanceWeek(s)
+    }
+  }
+  return null
+}
+/** One more week the bot's way: this cup's entry card must not come up. */
+function weekOn(s: GameState, key: string): void {
+  const me = s.me!
+  const answer = (it: PendingItem): void => {
+    if (it.kind === 'cup' && !isCupRound(s, it)) {
+      if (it.id === key) fail(`签了约、报不了${cupFor(s, key)?.name}，还是弹了报名卡`)
+      skipCup(s, it.id!)
+    } else autoResolve(s, it)
+  }
+  let g = 0
+  while (me.pending.length && g++ < 30) answer(me.pending[0])
+  if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(s)
+  let st = advanceWeek(s)
+  let k = 0
+  while (st.kind !== 'week-end' && st.kind !== 'game-over' && k++ < 40) {
+    if (st.kind === 'pending') answer(st.item)
+    if (st.kind === 'match') new MeMatch(s, st.fixture).runOut()
+    st = advanceWeek(s)
+  }
+  g = 0
+  while (me.pending.length && g++ < 30) answer(me.pending[0])
+}
+/** What the week's 「下一场」 names, and its day: the reading clubCupBlock is held to, said independently. */
+const clubNext = (s: GameState): { day: number | null; what: string } => {
+  const up = nextUp(s)
+  return up.kind === 'none' ? { day: null, what: '没有' } : { day: up.day, what: up.kind === 'fixture' ? s.comps[up.fixture.comp]?.name ?? '' : up.name }
+}
+{
+  // idle: a Chinese Challengers club in 2021, from its spring PangHu cup to FGC's August invitational: China's open doors shut in June (the hx-wait report)
+  const s = make({ name: 'CupP', region: 'China', role: '决斗者', originKey: 'netcafe', start: 'chal', seed: 11, year: 2021 })
+  const me = s.me!
+  const tag = '2021 中国 · 签了约的主播杯'
+  const it = toCupWeek(s, 'streamer', true)
+  const cup = cupFor(s, 'streamer')!
+  const nx = clubNext(s)
+  if (!it) fail(`${tag}：没等到报名卡（俱乐部下一场 ${nx.what}）`)
+  else if (nx.day != null && nx.day <= cupLastDay(s, cup)) fail(`${tag}：俱乐部 ${date(s, nx.day)} 就有 ${nx.what}，在杯赛打完（${date(s, cupLastDay(s, cup))}）之前，却弹了报名卡`)
+  else {
+    if (cupEntryBlock(s, 'streamer')) fail(`${tag}：俱乐部这段时间没有比赛，详情页却说报不了：${cupEntryBlock(s, 'streamer')}`)
+    me.money = Math.max(me.money, cup.fee + 3000)
+    me.fans = Math.max(me.fans, cup.minFans + 50)
+    // 托管 leaves it to him: a signed man's cup is his own call (me/auto.ts autoResolve)
+    const bot = clone(s)
+    autoResolve(bot, bot.me!.pending.find((x) => x.kind === 'cup' && x.id === 'streamer')!)
+    if (bot.me!.pre.cup || cupStatus(bot, 'streamer').kind !== 'skipped') fail(`${tag}：托管替签了约的人报了名`)
+    stronger(s, 14)
+    me.pending = [it, ...me.pending.filter((x) => x !== it)]
+    const entered = s.day
+    /** Entered with this draw of team-mates, and played out: the rounds, and each round's word on the club's regard. */
+    const play = (w: GameState, draw: number): { rows: Row[]; why: string | null } => {
+      const wm = w.me!
+      const why = enterCup(w, 'streamer', new Rng(draw))
+      const rows: Row[] = []
+      if (why) return { rows, why }
+      if (wm.pre.cup?.club !== w.myTeam) fail(`${tag}：报名没记下是在哪家俱乐部报的`)
+      if (cupStatus(w, 'streamer').kind !== 'running') fail(`${tag}：报了名，详情页写的是「${cupStatus(w, 'streamer').kind}」`)
+      let guard = 0
+      while (wm.pre.cup && guard++ < 150) {
+        const st = advanceTurn(w)
+        if (st.kind === 'pending' && isCupRound(w, st.item)) {
+          // the club does not mind: a round leaves the coach's and the club's regard where they were
+          const t0 = [wm.coachTrust, wm.gmTrust]
+          playRound(w, rows)
+          if (wm.coachTrust !== t0[0] || wm.gmTrust !== t0[1]) fail(`${tag}：打了一轮杯赛，教练的看法 ${t0[0].toFixed(1)}→${wm.coachTrust.toFixed(1)}、管理层 ${t0[1].toFixed(1)}→${wm.gmTrust.toFixed(1)}`)
+        } else if (st.kind === 'pending') { if (st.item.kind === 'cup') skipCup(w, st.item.id!); else autoResolve(w, st.item) }
+        else if (st.kind === 'match') new MeMatch(w, st.fixture).runOut()
+        else if (st.kind === 'game-over') break
+        if (wm.phase !== 'pro') break
+      }
+      return { rows, why: null }
+    }
+    // a draw of team-mates that wins its first round, so the weeks between rounds are a club man's ordinary weeks too
+    let draw = 1
+    for (let k = 1; k <= 8; k++) if ((play(clone(s), k).rows[0]?.won)) { draw = k; break }
+    const r = play(s, draw)
+    if (r.why) fail(`${tag}：报不了名：${r.why}`)
+    else {
+      checkRows(s, r.rows, tag, { entered })
+      ended(s, 'streamer', tag)
+      if (r.rows.length < 2) fail(`${tag}：换了 8 套队友都没赢下首轮，两轮之间的那一周测不了`)
+      const rec = me.pre.cups.find((x) => x.key === 'streamer' && x.year === s.year)
+      console.log(`  ${tag}：${s.teams[s.myTeam]?.name} 下一场 ${nx.what}，${date(s, entered)} 报名 → ${r.rows.map((x) => date(s, x.day)).join('、')}；${line(r.rows)} → ${rec?.won ? '冠军' : `赢 ${rec?.reached}/${rec?.rounds} 轮`}，教练和管理层的看法没动`)
+    }
+  }
+  // the Challengers road is the club's: no card, greyed, refused
+  const q = make({ name: 'CupQ', region: 'China', role: '决斗者', originKey: 'netcafe', start: 'chal', seed: 11, year: 2021 })
+  toCupWeek(q, 'premier', false)
+  const why = cupEntryBlock(q, 'premier')
+  if (!why?.includes('海选')) fail(`2021 中国 · 签了约：${cupFor(q, 'premier')?.name}的详情页没说签了约不报（${why}）`)
+  if (!enterCup(clone(q), 'premier', new Rng(1))) fail(`2021 中国 · 签了约：${cupFor(q, 'premier')?.name}还是报上了名`)
+  weekOn(q, 'premier')
+  console.log(`  2021 中国 · 签了约的${cupFor(q, 'premier')?.name}：没有报名卡，详情页写「${why}」`)
+}
+{
+  // busy: a European first-tier club in 2021, the week of the city cup — its Stage 1 Challengers 2 is days away
+  const s = make({ name: 'CupR', region: 'Europe', role: '决斗者', originKey: 'netcafe', start: 't1', seed: 11, year: 2021 })
+  const tag = '2021 欧洲 · 签了约、俱乐部要打比赛的本地线下赛'
+  toCupWeek(s, 'city', false)
+  const cup = cupFor(s, 'city')!
+  const nx = clubNext(s)
+  if (nx.day == null || nx.day > cupLastDay(s, cup)) fail(`${tag}：俱乐部下一场 ${nx.what}${nx.day != null ? `（${date(s, nx.day)}）` : ''}不在杯赛打完之前，测不了`)
+  else {
+    const why = cupEntryBlock(s, 'city')
+    if (!why?.includes(nx.what)) fail(`${tag}：详情页该说俱乐部要打 ${nx.what}，写的是「${why}」`)
+    if (!enterCup(clone(s), 'city', new Rng(1))) fail(`${tag}：俱乐部 ${date(s, nx.day)} 要打 ${nx.what}，还是报上了名`)
+    weekOn(s, 'city')
+    if (cupStatus(s, 'city').kind !== 'missed') fail(`${tag}：那一周过去了，详情页写的是「${cupStatus(s, 'city').kind}」`)
+    console.log(`  ${tag}：俱乐部 ${date(s, nx.day)} 打 ${nx.what}，没有报名卡，详情页写「${why}」`)
+  }
+}
+{
+  // in, and then a match of the club's before the next round: that round is a forfeit — the club first; at another club, withdrawn
+  const s = make({ name: 'CupS', region: 'China', role: '决斗者', originKey: 'netcafe', start: 'chal', seed: 11, year: 2021 })
+  const me = s.me!
+  const it = toCupWeek(s, 'open', true)
+  if (it) {
+    me.money = Math.max(me.money, 5000)
+    me.pending = [it, ...me.pending.filter((x) => x !== it)]
+    if (enterCup(s, 'open', new Rng(1))) fail('签了约报名秋季公开赛：报不了')
+    else {
+      const run = me.pre.cup!
+      const clash = clone(s)
+      const club = clash.myTeam
+      const rival = Object.values(clash.teams).find((t) => t.id !== club && t.region === clash.teams[club].region && t.roster.length >= 5)!.id
+      const f = makeFixture(clash, run.next! - 1, clash.stage, 'scrim-free', club, rival, 3, 'KO:0:补位 · 决胜局')
+      clash.fixtures.push(f)
+      const money0 = clash.me!.money
+      resumeCup(clash)
+      const rec = clash.me!.pre.cups.find((x) => x.key === 'open')
+      if (clash.me!.pre.cup || !rec?.forfeit) fail(`俱乐部 ${date(clash, f.day)} 排上比赛，杯赛 ${date(clash, run.next!)} 那一轮没有弃权`)
+      else if (clash.me!.money !== money0 + rec.prize) fail('俱乐部排上比赛弃权，奖金没按已赢的轮次到账')
+      else console.log(`  报名后俱乐部 ${date(clash, f.day)} 排上比赛：${cupFor(clash, 'open')!.name}${cupFor(clash, 'open')!.rounds[rec.reached]?.label}弃权，赢 ${rec.reached} 轮`)
+      const moved = clone(s)
+      moved.me!.pre.cup!.club = 'somewhere-else'
+      resumeCup(moved)
+      if (moved.me!.pre.cup) fail('在别家俱乐部报的杯赛，转会之后没有退出')
+    }
+  } else fail('签了约报名秋季公开赛：没等到报名卡')
+}
+
+console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上，走得远会有人来电话；详情页说的日子和状态都是引擎的；签了约、俱乐部这段时间没有比赛也能报，有比赛就报不了，挑战者组不报，俱乐部排上比赛那一轮弃权。 · ${secs()}`)
 if (bad) process.exit(1)
