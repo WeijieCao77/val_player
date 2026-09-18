@@ -167,7 +167,7 @@ export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onC
       )}
 
       <details style={{ marginTop: 14 }}>
-        <summary className="small muted" style={{ cursor: 'pointer' }}>BP 过程</summary>
+        <summary className="small muted" style={{ cursor: 'pointer' }}>选图环节</summary>
         <div className="veto" style={{ marginTop: 6 }}>
           {r.vetoLog.map((l, i) => <div key={i}>{l}</div>)}
         </div>

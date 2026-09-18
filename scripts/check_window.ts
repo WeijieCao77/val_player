@@ -13,7 +13,7 @@
  *     只打了海选、资格赛、升降级赛这类只留结果的阶段、没打进正赛的，那个阶段打几天锁几天。每一家在自己打的每一天都关；VCT 联赛
  *     俱乐部、Challengers 俱乐部各挑几家：赛事之间的空档开、休赛期开，开着时说开到下一项赛事的前一天、之后打哪项，关着时说哪天
  *     解除；休赛期说开到下个赛季第一项赛事的前一天（暂定）；报数和 2026 年开窗日期
- * 三、名单锁定：LOCK//IN 打到最后一天，出局了也锁、那一行写出局；联赛赛段从常规赛第一天锁；Challengers 赛段、晋升赛整段锁；
+ * 三、名单锁定：LOCK//IN 打到最后一天，出局了也锁、那一行写出局；联赛赛段从常规赛第一天锁；Challengers 赛段、晋级赛整段锁；
  *     只打了海选的，海选打几天锁几天、那一行不写「正在打」（写「X 的海选阶段进行中，你的俱乐部名单锁到 D」）；玩家俱乐部的
  *     决胜局：从那轮海选第一天锁（抢席位的决胜局从当天），没打之前解除日期暂定，输了第二天开，赢了锁到赛事结束；
  *     对方俱乐部锁定也算；还没抽签的赛事按形势说开到哪天
@@ -430,7 +430,7 @@ lk.me!.phase = 'pro'
   // 2025: a league stage from its first day, regular season and all; a Challengers stage and an Ascension all through
   const stage1 = find(2025, (e) => e.stage === 'stage1' && e.region === 'EMEA' && !e.scene, 'EMEA 第一赛段')
   const split = find(2025, (e) => !!e.scene && (e.start ?? 0) > 0 && e.units.some((u) => u.type !== 'open') && mainSeeds(e).length > 0, 'Challengers 赛段')
-  const asc = find(2025, (e) => e.stage === 'ascension' && e.region === 'EMEA' && mainSeeds(e).length > 0, 'EMEA 晋升赛')
+  const asc = find(2025, (e) => e.stage === 'ascension' && e.region === 'EMEA' && mainSeeds(e).length > 0, 'EMEA 晋级赛')
   lk.comps = { [`ev:${stage1.id}`]: drawn(stage1, [vct.id]), [`ev:${split.id}`]: drawn(split, [chal.id]) }
   // drawn() seats the club in the first of the event's own seats: its lock starts with that seat's phase
   const s1 = seatDay(stage1, mainSeeds(stage1)[0]) ?? Math.max(0, stage1.start!)
@@ -442,8 +442,8 @@ lk.me!.phase = 'pro'
   at(lk, chal, { year: 2025, day: sp }, { open: false, lock: true }, `${split.cn} 自己那个阶段第一天`)
   at(lk, chal, { year: 2025, day: split.end! }, { open: false, lock: true }, `${split.cn} 最后一天`)
   lk.comps = { [`ev:${asc.id}`]: drawn(asc, [chal.id]) }
-  at(lk, chal, { year: 2025, day: as1 }, { open: false, lock: true }, 'EMEA 晋升赛第一天')
-  at(lk, chal, { year: 2025, day: asc.end! }, { open: false, lock: true }, 'EMEA 晋升赛最后一天')
+  at(lk, chal, { year: 2025, day: as1 }, { open: false, lock: true }, 'EMEA 晋级赛第一天')
+  at(lk, chal, { year: 2025, day: asc.end! }, { open: false, lock: true }, 'EMEA 晋级赛最后一天')
   // the other club's lock closes a move as surely as mine: my Challengers club is open, the VCT club I would join is in its stage
   lk.year = 2025
   lk.day = stage1.start! + 1

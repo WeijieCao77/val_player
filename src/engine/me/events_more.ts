@@ -67,7 +67,7 @@ export const MORE_EVENTS: EventDef[] = [
       { t: '自己掏钱提前一天去', g: 'grind', e: { money: -800, fatigue: -4, form: 1 } },
       { t: '车上把对手录像看完', g: 'hard', e: { fatigue: 9, xp: { awareness: 10 } } }] },
   { id: 'chal_ascend', w: 4, max: 2, rec: 1, when: (s) => clubTier(s) === 2 && s.year >= 2023,
-    q: '队里有人把升级赛的对阵表贴在了训练室墙上。', ctx: '离一级联赛只差这几场。',
+    q: '队里有人把晋级赛的对阵表贴在了训练室墙上。', ctx: '离 VCT 联赛只差这几场。',
     a: [{ t: '每天加一场训练赛', g: 'grind', e: { fatigue: 8, xp: { teamwork: 10 }, coachTrust: 3 } },
       { t: '把表撕下来，一场一场打', g: 'warm', e: { tilt: -8, mental: 1 } },
       { t: '在直播里立 flag', g: 'show', e: { heat: 25, tilt: 5 } }] },
@@ -279,7 +279,7 @@ export const MORE_EVENTS: EventDef[] = [
 
   // ---- 队内矛盾 (chain: rift) — with one named teammate; ignoring it is the third option, and it comes to a head
   { id: 'ch_rift_open', w: 0, max: 3, rec: 0, chain: 'rift', when: (s) => s.me!.chain?.id === 'rift',
-    q: '训练赛第十一回合，你喊强起，一个队友坚持 ECO，语音里吵到教练摘了耳机。', ctx: '散场的时候他没看你。',
+    q: '训练赛第十一回合，你喊半起，一个队友坚持打经济局，语音里吵到教练摘了耳机。', ctx: '散场的时候他没看你。',
     a: [{ t: '当晚找他单聊，约他双排', g: 'warm', e: { tilt: -3 }, ch: { mate: 5, track: 'duo', need: 1, weeks: 2 } },
       { t: '复盘会上放录像，让数据说话', g: 'hard', e: { xp: { awareness: 8 }, coachTrust: 2 }, ch: { mate: -4, track: 'scrim', need: 2, weeks: 2 } },
       { t: '各打各的', g: 'grind', e: { tilt: 2 }, ch: { mate: -2, track: 'duo', need: 1, weeks: 2 } }] },

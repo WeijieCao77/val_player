@@ -434,11 +434,11 @@ export function runVeto(
       target = remaining.reduce((best, m) =>
         prefOf(other, m) - prefOf(actor, m) > prefOf(other, best) - prefOf(actor, best) ? m : best,
       )
-      log.push(`${actor.name} ban 掉 ${target}`)
+      log.push(`${actor.name} 禁图：${mapCn(target)}`)
     } else {
       target = remaining.reduce((best, m) => (prefOf(actor, m) > prefOf(actor, best) ? m : best))
       picked.push(target)
-      log.push(`${actor.name} 选下 ${target}`)
+      log.push(`${actor.name} 选图：${mapCn(target)}`)
     }
     remaining = remaining.filter((m) => m !== target)
   }
@@ -448,7 +448,7 @@ export function runVeto(
     const decider = remaining[rng.int(0, remaining.length - 1)]
     picked.push(decider)
     remaining = remaining.filter((m) => m !== decider)
-    log.push(`决胜图：${decider}`)
+    log.push(`决胜图：${mapCn(decider)}`)
   }
   return { maps: picked.slice(0, bo), log }
 }

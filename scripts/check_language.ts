@@ -36,7 +36,8 @@
  *    tryout options 「拉拉垮了」「别把手腾担累坏」「把队友喀舒服」 and 「这个价信不是不想」 in 话语权): every player-facing
  *    literal of the career (src/engine/me, src/ui/me, PlayerGame.tsx) closes the 「」“”（）《》 it opens and puts no
  *    space beside full-width punctuation; the words the 2026-09 wording pass took out (输球, 赢球, 球队…) stay out; and
- *    a news line that brings its own icon gets no second one in the weekly report (「🏆 🏆 BESTIA 夺得……冠军！」)
+ *    a news line that brings its own icon gets no second one in the weekly report (「🏆 🏆 BESTIA 夺得……冠军！」); and one
+ *    name for one thing, there and in the shared engine lines the career shows: 晋级赛, 半起, 经济局, 选图 / 禁图
  * 十 a key round's line tells what happened, not the result (the same audit: 497 of them ended 「……，这回合拿下 /
  *    丢了。」 beside a round record that already said it): no line of me/nodes.ts NODE_HL, nor the stand-in for a
  *    missing one, ends on the round's result; and every place the career shows such a line (a `.hl` read in src/ui/me
@@ -694,8 +695,8 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
   ]
   // every literal a player can read, as one string: a template's pieces joined (its expressions are read on their own),
   // a JSX element's text around its {…} joined the same way
-  const lits: { at: string; s: string }[] = []
-  for (const file of files) {
+  const literalsOf = (file: string): { at: string; s: string }[] => {
+    const out: { at: string; s: string }[] = []
     const sf = ts.createSourceFile(file, readFileSync(new URL(file, root), 'utf8'), ts.ScriptTarget.Latest, true,
       file.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
     const visit = (n: ts.Node): void => {
@@ -705,12 +706,14 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
       else if ((ts.isJsxElement(n) || ts.isJsxFragment(n)) && n.children.some((c) => ts.isJsxText(c) && CJK.test(c.text))) {
         s = n.children.map((c) => (ts.isJsxText(c) ? c.text.replace(/\s*\n\s*/g, '') : '⟨⟩')).join('')
       }
-      if (s != null && CJK.test(s)) lits.push({ at: `${file}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`, s })
+      if (s != null && CJK.test(s)) out.push({ at: `${file}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`, s })
       if (ts.isTemplateExpression(n)) { n.templateSpans.forEach((sp) => visit(sp.expression)); return }
       ts.forEachChild(n, visit)
     }
     visit(sf)
+    return out
   }
+  const lits = files.flatMap(literalsOf)
   const PAIRS = ['「」', '“”', '（）', '《》']
   const open = (s: string): string[] => PAIRS.filter(([a, b]) => {
     let d = 0
@@ -732,6 +735,14 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
   const other = lits.filter((l) => OTHER.test(l.s))
   if (other.length) fail(`${other.length} 句又用了别的项目的词：${other.slice(0, 4).map((l) => `${l.at}「${l.s.match(OTHER)![0]}」`).join('；')}`)
   else pass('没有「输球」「赢球」「球队」「更衣室」「主队」这类别的项目的词')
+  // one name for one thing (a copy audit, 2026-09-18): 晋级赛 for Ascension (not 晋升赛 / 升级赛), 半起 for a force buy (not
+  // 半配 / 强起), 经济局 (not ECO), 选图 / 禁图 for the veto (not 「BP 过程」「ban 掉」「选下」) — in the career's own text and in
+  // the shared engine's lines it shows: the stage names, the round highlights, the veto
+  const VARIANT = /晋升赛|升级赛|半配|强起|ECO|BP 过程|ban 掉|选下 /
+  const SHARED = ['src/engine/era.ts', 'src/engine/content.ts', 'src/engine/match.ts']
+  const variants = [...lits, ...SHARED.flatMap(literalsOf)].filter((l) => VARIANT.test(l.s))
+  if (variants.length) fail(`${variants.length} 句用了同一样东西的另一个叫法：${variants.slice(0, 4).map((l) => `${l.at}「${l.s.match(VARIANT)![0]}」`).join('；')}`)
+  else pass(`同一样东西一个叫法：晋级赛、半起、经济局、选图 / 禁图（生涯的字面，加上 ${SHARED.length} 个共用引擎文件里会显示出来的字）`)
 
   // the weekly report puts 🏆 before a league's news and 📰 before a transfer; the engine's own line may already carry one
   const s = createCareer({ name: 'Words', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 9, year: 2026 })

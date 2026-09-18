@@ -373,7 +373,7 @@ export const stageAtIn = (year: number, day: number, timeline?: boolean): StageK
  */
 const OFF_CALENDAR: Partial<Record<StageKey, string>> = {
   challengers1: '挑战者联赛第一赛段', challengers2: '挑战者联赛第二赛段', challengers3: '挑战者联赛第三赛段',
-  ascension: '晋升赛',
+  ascension: '晋级赛',
 }
 
 export const stageNameIn = (year: number, key: StageKey, timeline?: boolean): string =>
