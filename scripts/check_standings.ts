@@ -51,6 +51,12 @@
  *    through and the places pass it by. Before Berlin the qualifier had counted
  *    Gambit through and the table had not, and the side third on points was
  *    marked by neither (reported 2026-09-17).
+ *  - a club let go before the draw, built rather than waited for: the first
+ *    event this world plays that sends places on, once it is over, on a copy of
+ *    the career — a finisher holding one of those places, that the next event
+ *    did not really have, let go the day before that event's draw. The draw
+ *    passes its place to the next finisher and its row reads 「已解散，名额顺延」,
+ *    held by the same `onward` reading as every other table (goneBuilt).
  *
  * Two careers: a Challengers starter in Europe from 2021 into 2027, and a VCT
  * club in EMEA from the 2026 entrance, whose league events are played.
@@ -64,7 +70,7 @@ import partneredRaw from '../src/data/routes_partnered.json'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { circuitAward, circuitPaid, drawStanding, eventOf, eventSoFar, eventsOf, pointsTables, worldIdOf } from '../src/engine/circuit'
+import { circuitAward, circuitPaid, drawStanding, eventOf, eventSoFar, eventsOf, onwardOf, pointsTables, progressCircuit, worldIdOf } from '../src/engine/circuit'
 import type { CEvent, PointsTable } from '../src/engine/circuit'
 import { circuitPointsFor } from '../src/engine/era'
 import { foldsOf, isTimelineWorld } from '../src/engine/timeline'
@@ -662,6 +668,67 @@ function mastersWaits(): void {
   if (bad === was) console.log(`\n== ${label}：柏林之前真实冠军 ${state.teams[real].name} 不算直通；柏林打完，这个世界的冠军 ${state.teams[won].name} 算`)
 }
 
+/**
+ * 「已解散，名额顺延」, built rather than waited for (2026-09-18). The careers above met one by chance: EXCEL, third in
+ * the European career's 2022 EMEA Stage 2 Challengers, let go before Masters Copenhagen was drawn — the only row
+ * that ever carried the mark (eleven reads of it). Their world moves with the player's club, and once a club on
+ * history's open-qualifier list plays the decider a club off it gets (engine/circuit.ts offerPlayIn), that career's
+ * 2022 field was drawn without EXCEL and neither the mark nor a place passed down past a club let go was checked
+ * anywhere. So: the first event this world plays that sends places on to one not drawn yet, once it is over, on a
+ * copy of the career. A finisher holding one of those places — one the later event did not really have, whose draw
+ * would put it back on the floor with its real people (engine/timeline.ts syncEvent) — is let go the day before
+ * that draw; the draw is made, and the event's final order is read by onwardHolds against the world that morning,
+ * as every other table is. Its row must read 「已解散，名额顺延」 and its place go on down.
+ */
+let goneBuiltDone = false
+function goneBuilt(state: GameState, label: string): void {
+  if (goneBuiltDone || !isTimelineWorld(state)) return
+  for (const src of Object.values(state.comps)) {
+    const sc = src.circuit
+    if (!sc || sc.mode !== 'sim' || !src.champion || !src.finished.length) continue
+    const sev = eventOf(sc.id)
+    if (!sev) continue
+    for (const o of onwardOf(state, src)) {
+      const dest = state.comps[`ev:${o.event}`]
+      const dev = eventOf(o.event)
+      if (o.seated || o.league || !dest?.circuit || dest.circuit.mode || !dev || dev.plan || dev.projected) continue
+      if (dest.circuit.start - 1 <= state.day || !o.places.every((p, n) => p === n + 1)) continue
+      const real = new Set(dev.seeds.map((v) => worldIdOf(v)))
+      for (const gone of src.finished.slice(0, o.places.length)) {
+        if (real.has(gone) || gone === state.myTeam || state.teams[gone]?.dormant) continue
+        const copy = structuredClone(state) as GameState
+        copy.teams[gone].dormant = true
+        copy.day = dest.circuit.start - 1
+        const at: DrawDay = {
+          year: copy.year,
+          day: copy.day,
+          quiet: new Set(Object.values(copy.teams).filter((t) => t.dormant).map((t) => t.id)),
+          folded: new Set(foldsOf(copy.year).filter((f) => f.day <= copy.day).map((f) => { const h = copy.heirs?.[`V21T${f.vlr}`]; return h && copy.teams[h] ? h : `V21T${f.vlr}` })),
+          club: copy.me?.phase === 'pro' ? copy.myTeam : null,
+        }
+        progressCircuit(copy, copy.comps[dest.key], [])
+        if (!copy.comps[dest.key].circuit?.mode) continue
+        const table = eventTables(copy, copy.comps[src.key]).find((t): t is PlaceTable => t.kind === 'bracket' && t.onward.some((s) => s.event === o.event))
+        const k = table ? table.onward.findIndex((s) => s.event === o.event) : -1
+        if (!table || !table.onward[k].gone?.includes(gone)) continue
+        goneBuiltDone = true
+        const where = `${label}（手搭：${state.teams[gone]?.name} 在 ${dest.name}抽签前一天解散）：${state.year} ${src.name}`
+        const kept = drawDays
+        drawDays = new Map([[dest.key, at]])
+        const [marks, passed] = [stats.goneMarks, stats.passedGone]
+        onwardHolds(copy, copy.comps[src.key], sev, table, where)
+        drawDays = kept
+        const row = table.rows.find((r) => r.team === gone)
+        if (row?.marks[k] !== 'gone') fail(`${where}：${state.teams[gone]?.name} 抽签前解散了，那一行该标「已解散，名额顺延」，标的是「${row?.marks[k] ?? '（没有这一行）'}」`)
+        if (stats.goneMarks === marks || stats.passedGone === passed) fail(`${where}：手搭的解散没有被「名额往下顺延」那一条对到`)
+        const seated = table.onward[k].seated ?? []
+        console.log(`\n== ${where}：名次 ${src.finished.slice(0, o.places.length + 1).map((t) => state.teams[t]?.name).join('、')}，${dest.name}的名额给了 ${names(copy, seated)}`)
+        return
+      }
+    }
+  }
+}
+
 function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026, until: number): void {
   const t0 = Date.now()
   const state = createCareer({ name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start, seed, year })
@@ -683,6 +750,7 @@ function run(label: string, region: Region, start: StartPoint, year: 2021 | 2026
       return
     }
     stats.weeks++
+    goneBuilt(state, label)
     qualifyHolds(state, label, fail)
     const drawnBefore = stats.drawn
     drawsSince(before, state, label)
