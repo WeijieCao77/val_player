@@ -25,10 +25,30 @@
  * Intended scroll containers (overflow auto/scroll) are not offenders, and
  * what is inside one is judged by the scroller, not by the card around it.
  *
+ * It goes where a player's finger can go, and says so when it cannot. Reported
+ * 2026-09-18 by an outside audit: this knew three kinds of card (.modal-bg,
+ * .support-card, .share-overlay) and moved between screens with DOM .click(),
+ * which presses a button under a full-screen card as readily as one on top. A
+ * save that opened on a big moment (大事卡, .moment-bg) had 「我的」「帮助」… in
+ * the report as measured, while every shot, long-me.png among them, showed the
+ * same card. Now:
+ *
+ *  - whatever is in front is read off the middle of the window (elementFromPoint):
+ *    the tour, a big moment, an achievement card, a ceremony, any other card,
+ *    the changelog sheet, the 更多 menu, a poster, a share card. Each one met on
+ *    the way is measured once as a scene of its own, then put away with its own
+ *    button, pressed the way a finger presses it
+ *  - every press is Playwright's, which refuses a button something else covers
+ *  - after each move the tab is lit and the middle of the page is the page
+ *  - a scene that did not come, a page not reached and an error in the page
+ *    are listed, and the run exits 1; a press the page took over two seconds
+ *    to answer is listed as slow
+ *
  *   node scripts/mobile_audit.mjs <label> [--shots] [--sweep] [--only=<scenario>]
  *
- * Needs the dev server (npx vite --port 5190 --strictPort) and the saves.
- * Writes .cache/mobile-audit/<label>/report.md, report.json and shots/.
+ * Needs the dev server (npx vite --port 5190 --strictPort; AUDIT_URL for another
+ * address) and the saves (npx tsx scripts/mobile_saves.ts). Writes
+ * .cache/mobile-audit/<label>/report.md, report.json and shots/.
  */
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -94,9 +114,14 @@ function measure({ phone, root, exclude }) {
     if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'OPTION') continue
     if (el.closest('svg') && tag.toLowerCase() !== 'svg') continue
     if (el.closest('.sr-only, .cer-barrage, [aria-hidden="true"]')) continue
-    // what a closed <details> holds is not on screen, whatever box the engine still gives it
-    const shut = el.closest('details:not([open])')
-    if (shut && !el.closest('summary') && el !== shut) continue
+    // what a closed <details> holds is not on screen, whatever box the engine still gives it — its own summary aside,
+    // and only when every <details> around it is open too: 转会's 「挑一家接触」 holds a closed list of closed groups, and
+    // the groups' summaries were measured as text 4000px outside the panel (2026-09-18)
+    let hidden = false
+    for (let d = el.closest('details:not([open])'); d && !hidden; d = d.parentElement?.closest('details:not([open])')) {
+      if (el !== d && el.closest('summary')?.parentElement !== d) hidden = true
+    }
+    if (hidden) continue
     const s = cs(el)
     if (s.display === 'none' || s.visibility !== 'visible') continue
     const r = el.getBoundingClientRect()
@@ -204,6 +229,12 @@ const results = []
 /** what the keyboard found on each card in front of the page (keyboard below) */
 const keys = []
 const errors = []
+/** scenario · page for every page the run set out to measure and could not reach */
+const unreached = []
+/** scenario · page for every page it reached, lit in the tab bar and uncovered */
+const reached = []
+/** layers met on the way and put away, scenario · kind · name */
+const layersSeen = []
 // never a sound out of the machine running it (2026-09-18: preview tabs played the game's music out loud on the
 // author's computer): Chromium muted, and the music window (ui/me/MusicPlayer.tsx) seeded paused and silent below
 const browser = await chromium.launch({ args: ['--mute-audio'] })
@@ -215,16 +246,64 @@ const settle = async (page, ms = 60) => {
   if (ms) await page.waitForTimeout(ms)
 }
 
-/** the card in front, or the page */
+/**
+ * What is in front, read off the middle of the window: every card that can sit
+ * over the page covers all of it (position: fixed; inset: 0, or a veil that
+ * does), so the element under the middle belongs to the top one. null when it
+ * is the page itself. `kind` is one of tour, moment, ach-pop, ceremony, share,
+ * modal, sheet, nav-more, poster, pack, or unknown for something else on top.
+ */
+function topLayerInPage() {
+  const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)
+  const hit = document.elementFromPoint(Math.floor(innerWidth / 2), Math.floor(innerHeight / 2))
+  if (!hit) return null
+  const mark = (el) => {
+    for (const x of document.querySelectorAll('[data-audit-layer]')) x.removeAttribute('data-audit-layer')
+    el?.setAttribute('data-audit-layer', '1')
+  }
+  let el
+  if ((el = hit.closest('.mt-veil, .mt-card, .mt-hole'))) {
+    const card = document.querySelector('.mt-card')
+    mark(card)
+    return { kind: 'tour', name: clean(card?.querySelector('h3')?.textContent) }
+  }
+  if ((el = hit.closest('.tour-bg, .tut-bg, .tut-card'))) { mark(el); return { kind: 'tour', name: clean(el.querySelector('h3')?.textContent) } }
+  if ((el = hit.closest('.moment-bg'))) {
+    mark(el)
+    const eyebrow = clean(el.querySelector('.mo-eyebrow')?.textContent)
+    return { kind: /成就/.test(eyebrow) ? 'ach-pop' : 'moment', name: clean(el.querySelector('.mo-title')?.textContent) || eyebrow }
+  }
+  if ((el = hit.closest('.modal-bg'))) {
+    mark(el)
+    const name = clean(el.querySelector('.modal-head h3')?.textContent)
+    if (el.classList.contains('share-overlay')) return { kind: 'share', name: 'share-card' }
+    if (el.querySelector('.cer-story, .cer-game, .cer-tones, .cer-tier')) return { kind: 'ceremony', name }
+    return { kind: 'modal', name }
+  }
+  if (hit.closest('.support-veil, .support-card')) {
+    const card = [...document.querySelectorAll('.support-card')].pop()
+    mark(card)
+    return { kind: 'sheet', name: clean(card?.querySelector('h3')?.textContent) }
+  }
+  if (hit.closest('.nav-scrim')) return { kind: 'nav-more', name: '更多' }
+  if ((el = hit.closest('.poster-bg'))) { mark(el); return { kind: 'poster', name: clean(el.getAttribute('aria-label')) } }
+  if ((el = hit.closest('.pack-stage'))) { mark(el); return { kind: 'pack', name: '' } }
+  // the page: the career, the new-career page, the home page's save card
+  if (hit.closest('.app.career, .newcareer')) return null
+  const path = []
+  for (let e = hit; e && e !== document.body && path.length < 3; e = e.parentElement) path.unshift(e.tagName.toLowerCase() + [...e.classList].slice(0, 2).map((c) => `.${c}`).join(''))
+  return { kind: 'unknown', name: path.join('>') }
+}
+const topLayer = (page) => page.evaluate(topLayerInPage)
+
+/** the layer in front, or the page, to measure; a page is measured without any card that might still be there */
 async function rootOf(page) {
-  return page.evaluate(() => {
-    for (const el of document.querySelectorAll('[data-audit-root]')) el.removeAttribute('data-audit-root')
-    // the one not made inert by another in front of it (ui/me/layer.ts), else the last
-    const cards = [...document.querySelectorAll('.modal-bg, .moment-bg, .support-card, .share-overlay')]
-    const top = cards.filter((c) => !c.closest('[inert]')).pop() ?? cards.pop()
-    if (top) { top.setAttribute('data-audit-root', '1'); return { root: '[data-audit-root]', exclude: null } }
-    return { root: document.querySelector('.app.career') ? '.app.career' : '.newcareer', exclude: '.modal-bg' }
-  })
+  const top = await topLayer(page)
+  if (top && top.kind !== 'nav-more' && top.kind !== 'unknown') return { root: '[data-audit-layer]', exclude: null }
+  return page.evaluate(() => ({
+    root: document.querySelector('.app.career') ? '.app.career' : '.newcareer',
+    exclude: '.modal-bg, .moment-bg, .support-card, .mt-card, .poster-bg, .pack-stage',
+  }))
 }
 
 async function measureAll(page, scenario, state, opts = {}) {
@@ -320,18 +399,97 @@ async function keyboard(page, scenario, state, opts = {}) {
   return found
 }
 
+/** presses the page took more than SLOW_MS to answer: the page froze on them (measured from the press to the next frame) */
+const slow = []
+const SLOW_MS = 2000
+
 /**
- * opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than
- * continue; opts.moment: the big-moment card in front is what the scenario looks at, not something to take first
+ * A real press: Playwright waits for the element to be visible, steady and the one the pointer would land on.
+ * A press that went in while the page is still busy with it is waited out and listed as slow, not as missed
+ * (the long save's 转会 took 11 s to open the first time, 2026-09-18).
  */
+async function press(page, locator, what, scenario, quiet = false) {
+  const t = Date.now()
+  const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(0))))
+  try {
+    await locator.click({ timeout: 5000 })
+  } catch (e) {
+    const msg = String(e.message ?? e)
+    const log = msg.split('\n').map((l) => l.replace(/\x1b\[[0-9;]*m/g, '').trim().replace(/^-\s*/, '')).filter(Boolean)
+    if (/Timeout/.test(log[0]) && log[log.length - 1] === 'performing click action') {
+      await frame()
+      slow.push({ scenario: scenario ?? '', what, ms: Date.now() - t })
+      return true
+    }
+    // Playwright's log says why: what covers the button, or that it never held still, showed or enabled
+    const why = [...new Set(log.filter((l) => /intercepts pointer events|not stable|not visible|not enabled|outside of the viewport/.test(l)))].slice(-2)
+    if (!quiet) errors.push(`${scenario}: could not press ${what}: ${log[0]}${why.length ? ` (${why.join('; ')})` : ''}`)
+    return false
+  }
+  await frame()
+  const ms = Date.now() - t
+  if (ms > SLOW_MS) slow.push({ scenario: scenario ?? '', what, ms })
+  return true
+}
+
+/** each kind's own way out, the button a player would press */
+const WAY_OUT = {
+  tour: ['.mt-card .mt-head button', '.tut-card button', '.tour-bg button'],
+  moment: ['[data-audit-layer] .mo-acts button.primary'],
+  'ach-pop': ['[data-audit-layer] .mo-acts button.primary'],
+  ceremony: ['[data-audit-layer] .modal-head button'],
+  modal: ['[data-audit-layer] .modal-head button'],
+  share: ['[data-audit-layer] button:has-text("关闭")'],
+  sheet: ['[data-audit-layer] .support-head button'],
+  'nav-more': ['.nav-more .nav-item'],
+  poster: ['[data-audit-layer] button.primary'],
+}
+const LAYER_WIDTHS = [320, 375, 430, 768]
+
+/**
+ * Put away what is in front until the page shows, or a kind in `keep` is on top.
+ * Each layer met is measured once in a scenario, as a scene of its own. Returns
+ * what is still in front (null for the page).
+ */
+async function clearLayers(page, scenario, { keep = [], measureLayers = true } = {}) {
+  let last = ''
+  let same = 0
+  for (let i = 0; i < 16; i++) {
+    const top = await topLayer(page)
+    if (!top || keep.includes(top.kind)) return top
+    const key = `${top.kind}:${top.name}`
+    same = key === last ? same + 1 : 0
+    last = key
+    if (same >= 2) { errors.push(`${scenario}: ${top.kind}「${top.name}」stays in front after pressing its way out`); return top }
+    if (!layersSeen.some((x) => x.scenario === scenario && x.key === key)) {
+      layersSeen.push({ scenario, key })
+      if (measureLayers && top.kind !== 'nav-more' && top.kind !== 'unknown') await measureAll(page, scenario, `layer:${key}`, { widths: LAYER_WIDTHS })
+    }
+    const ways = WAY_OUT[top.kind]
+    if (!ways) { errors.push(`${scenario}: something unknown is in front (${top.name})`); return top }
+    let out = false
+    for (const sel of ways) {
+      const b = page.locator(sel)
+      if (!(await b.count())) continue
+      if (await press(page, b.last(), `${top.kind}「${top.name}」's way out`, scenario, true)) { out = true; break }
+    }
+    if (!out) { errors.push(`${scenario}: no button puts away ${top.kind}「${top.name}」`); return top }
+    await settle(page, 250)
+  }
+  return topLayer(page)
+}
+
+/** opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than continue */
 async function withSave(name, fn, opts = {}) {
   if (ONLY && !name?.includes(ONLY) && !(name === null && 'newcareer'.includes(ONLY))) return
   const file = name ? `${ROOT}/saves/${opts.save ?? name}.txt` : null
-  if (file && !existsSync(file)) { errors.push(`${name}: no save file`); return }
+  if (file && !existsSync(file)) { errors.push(`${name}: no save file ${file}`); return }
   const text = file ? readFileSync(file, 'utf8') : null
   const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 1 })
   await ctx.addInitScript(([key, text, musicKey, musicOff]) => {
     try {
+      // every load, a reload too: the music stays off whatever the page wrote since
+      localStorage.setItem(musicKey, musicOff)
       if (sessionStorage.getItem('audit-seeded')) return
       localStorage.clear()
       localStorage.setItem(musicKey, musicOff)
@@ -343,8 +501,9 @@ async function withSave(name, fn, opts = {}) {
   }, [SAVE_KEY, text, MUSIC_KEY, MUSIC_OFF])
   const page = await ctx.newPage()
   page.setDefaultTimeout(20000)
-  page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`${name}: console ${m.text().slice(0, 160)}`) })
+  const who = name ?? 'newcareer'
+  page.on('pageerror', (e) => errors.push(`${who}: page error ${e.message}`))
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`${who}: console ${m.text().slice(0, 160)}`) })
   const t = Date.now()
   try {
     await page.goto(BASE, { waitUntil: 'domcontentloaded' })
@@ -354,56 +513,72 @@ async function withSave(name, fn, opts = {}) {
       await page.waitForSelector('.app.career', { timeout: 60000 })
     }
     await settle(page, 300)
-    // What the headless run left in front of everything: its big moments (a new tier, a signing), then its
-    // achievements, each a full-screen card (ui/me/MomentQueue.tsx, AchPop.tsx) that comes before any card the clock
-    // stopped on. The first is measured once; all are taken with their own button, so what the save is for is the
-    // thing looked at — until 2026-09-18 an achievement card was looked for in the shape it had before the 14th, and
-    // the card of modal-event and the rest waited behind a 神话 card, never measured. A title's card is the scenario
-    // itself (opts.moment).
-    if (!opts.stay && !opts.moment) {
-      for (let i = 0; i < 60 && (await page.$('.moment-bg')); i++) {
-        if (i === 0) await measureAll(page, name, 'moment', { widths: [320, 375, 430, 768] })
-        await page.evaluate(() => document.querySelector('.moment-bg .mo-acts .primary')?.click())
-        await settle(page, 120)
-      }
-    }
     await fn(page)
   } catch (e) {
-    errors.push(`${name}: ${String(e.message ?? e).split('\n')[0]}`)
+    errors.push(`${who}: ${String(e.message ?? e).split('\n')[0]}`)
   } finally {
-    console.log(`  ${name ?? 'newcareer'} ${((Date.now() - t) / 1000).toFixed(0)}s`)
+    console.log(`  ${who} ${((Date.now() - t) / 1000).toFixed(0)}s`)
     await ctx.close()
   }
 }
 
-async function go(page, label) {
-  for (let i = 0; i < 3; i++) {
-    const how = await page.evaluate((label) => {
-      const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility === 'visible' }
-      const b = [...document.querySelectorAll('.nav button, .nav-sheet button')].find((x) => x.textContent.trim() === label && vis(x))
-      if (b) { b.click(); return 'done' }
-      const more = [...document.querySelectorAll('.nav button')].find((x) => x.textContent.trim().startsWith('更多') && vis(x))
-      if (more) { more.click(); return 'more' }
-      return 'none'
-    }, label)
-    await settle(page, 120)
-    if (how === 'done') return true
-    if (how === 'none') return false
+/** the page a screen shows, told apart from the one before it */
+const lastSig = new Map()
+
+/**
+ * To a screen by its tab, as a finger gets there: whatever is in front put away
+ * first, 更多 opened when a phone keeps the tab under it. It counts as reached
+ * when the tab is lit and the middle of the page area is the page, not a card.
+ */
+async function go(page, scenario, label) {
+  const fail = (why) => { unreached.push(`${scenario} · ${label}`); errors.push(`${scenario}: page ${label} not reached — ${why}`); return false }
+  const top = await clearLayers(page, scenario)
+  if (top) return fail(`${top.kind}「${top.name}」in front`)
+  const item = page.locator('.nav .nav-item').filter({ hasText: new RegExp(`^\\s*${label}\\s*$`) }).first()
+  if (!(await item.count())) return fail('no tab')
+  if (!(await item.isVisible())) {
+    // a phone's tab bar holds four and 更多
+    const more = page.locator('.nav-more .nav-item')
+    if (!(await more.count()) || !(await press(page, more, '更多', scenario))) return fail('更多 would not open')
+    await settle(page, 150)
   }
-  return false
+  if (!(await press(page, item, `the tab ${label}`, scenario))) return fail('the tab could not be pressed')
+  await settle(page, 200)
+  const at = await page.evaluate((label) => {
+    const lit = [...document.querySelectorAll('.nav .nav-item.active')].map((b) => b.textContent.trim()).filter((t) => t !== '更多')
+    const main = document.querySelector('#main')
+    if (!main) return { lit, covered: 'no #main', sig: '' }
+    const r = main.getBoundingClientRect()
+    const top = Math.max(r.top, 0)
+    const bottom = Math.min(r.bottom, innerHeight)
+    const x = Math.floor(Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 2))
+    const y = Math.floor(bottom > top ? (top + bottom) / 2 : innerHeight / 2)
+    const hit = document.elementFromPoint(x, y)
+    const covered = hit && !main.contains(hit) ? `${hit.tagName.toLowerCase()}.${[...hit.classList].join('.')}` : null
+    // the whole page's words, hashed: a retired career's pages all open on the same poster
+    const text = main.innerText.replace(/\s+/g, ' ')
+    let h = 0
+    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
+    return { lit, covered, sig: `${text.length}:${h}` }
+  }, label)
+  if (!at.lit.includes(label)) return fail(`the lit tab is ${at.lit.join('/') || 'none'}`)
+  if (at.covered) return fail(`the middle of the page is ${at.covered}`)
+  const prev = lastSig.get(scenario)
+  if (prev && prev.label !== label && prev.sig === at.sig) return fail(`it shows the same thing as ${prev.label}`)
+  lastSig.set(scenario, { label, sig: at.sig })
+  reached.push(`${scenario} · ${label}`)
+  return true
 }
 
-async function closeTop(page) {
-  await page.evaluate(() => {
-    const m = [...document.querySelectorAll('.modal-bg')].pop()
-    m?.querySelector('.modal-head button')?.click()
-  })
+async function closeTop(page, scenario) {
+  const b = page.locator('.modal-bg').last().locator('.modal-head button')
+  if (await b.count()) await press(page, b.first(), 'the card\'s 关闭', scenario)
   await settle(page, 150)
 }
 
 async function screens(page, name, list, shots = {}) {
   for (const s of list) {
-    if (!(await go(page, s))) { errors.push(`${name}: no nav item ${s}`); continue }
+    if (!(await go(page, name, s))) continue
     await measureAll(page, name, `screen:${s}`, { shot: shots[s] })
   }
 }
@@ -420,28 +595,34 @@ const topModal = (page) => page.evaluate(() => {
   return 'other'
 })
 
-async function clickText(page, text) {
-  return page.evaluate((text) => {
-    const m = [...document.querySelectorAll('.modal-bg')].pop() ?? document
-    const b = [...m.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith(text))
-    b?.click()
-    return !!b
-  }, text)
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** a button on the card in front whose words start with `text`, pressed */
+async function clickText(page, text, scenario) {
+  const b = page.locator('.modal-bg').last().locator('button').filter({ hasText: new RegExp(`^\\s*${escRe(text)}`) })
+  if (!(await b.count())) return false
+  return press(page, b.first(), `「${text}」`, scenario)
 }
 
 /** press the week's button until the match opens, answering anything in the way the plain way */
-async function toMatch(page) {
+async function toMatch(page, scenario) {
   for (let i = 0; i < 12; i++) {
+    // a big moment or an achievement over the week goes first, as it does for a player
+    const top = await clearLayers(page, scenario, { keep: ['modal', 'ceremony'] })
+    if (top?.kind === 'ceremony') {
+      // a ceremony on the way is walked past (silver), not played
+      await press(page, page.locator('[data-audit-layer] .modal-head button'), 'the ceremony\'s 关闭', scenario)
+      await settle(page, 400)
+      continue
+    }
     const at = await topModal(page)
     if (at === 'pre') return true
     if (at === 'other') {
-      await page.evaluate(() => {
-        const m = [...document.querySelectorAll('.modal-bg')].pop()
-        const b = m.querySelector('.node-opt button') ?? m.querySelector('button.primary') ?? m.querySelector('.modal-body button')
-        b?.click()
-      })
+      const m = page.locator('.modal-bg').last()
+      const b = (await m.locator('.node-opt button').count()) ? m.locator('.node-opt button')
+        : (await m.locator('button.primary').count()) ? m.locator('button.primary') : m.locator('.modal-body button')
+      if (!(await press(page, b.first(), 'the card\'s answer', scenario))) return false
     } else if (at === 'page') {
-      await page.evaluate(() => document.querySelector('.advance-me button.primary')?.click())
+      if (!(await press(page, page.locator('.advance-me button.primary').first(), 'the week\'s button', scenario))) return false
     } else return false
     await settle(page, 500)
   }
@@ -458,15 +639,20 @@ async function waitFor(page, phases, ms) {
   return topModal(page)
 }
 
+/** a scene the run expected and did not get */
+const missing = (scenario, what) => errors.push(`${scenario}: missing scene ${what}`)
+
 const PRE = ['本周', '我的', '转会', '经济', '积分榜', '成就', '日志', '托管', '帮助']
 const PRO = ['本周', '我的', '队伍', '转会', '经济', '赛程', '积分榜', '成就', '日志', '托管', '帮助']
 
 // ---- the new-career page
 await withSave(null, async (page) => {
   await measureAll(page, 'newcareer', 'new-career', { shot: 'newcareer' })
-  // a club start opens the list of clubs that came
-  await page.evaluate(() => { const g = document.querySelectorAll('.start-grid')[1]; g?.querySelectorAll('button')[2]?.click() })
+  // the third door, a club start: the club is the game's pick, and the form says so
+  const door = page.locator('.start-grid').nth(1).locator('button').nth(2)
+  if (!(await press(page, door, 'the third door', 'newcareer'))) return
   await settle(page, 200)
+  if (!/\bon\b/.test((await door.getAttribute('class')) ?? '')) { missing('newcareer', 'new-career:club (the door did not take)'); return }
   await measureAll(page, 'newcareer', 'new-career:club')
 })
 
@@ -499,64 +685,80 @@ await withSave('home', async (page) => {
 // ---- a ladder start, first week
 await withSave('pre-w0', async (page) => {
   await screens(page, 'pre-w0', PRE, { 本周: 'week-pre' })
-  if (SWEEP) { await go(page, '本周'); await measureAll(page, 'pre-w0', 'screen:本周', { widths: SWEEP_WIDTHS, sweep: true, wait: 30 }) }
-  // the changelog card, opened the way a press opens it (the button has the focus first)
-  await page.evaluate(() => { const b = document.querySelector('.log-fab'); b?.focus(); b?.click() })
+  if (SWEEP && await go(page, 'pre-w0', '本周')) await measureAll(page, 'pre-w0', 'screen:本周', { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
+  // the changelog card
+  if (await clearLayers(page, 'pre-w0')) return
+  if (!(await press(page, page.locator('.log-fab'), '更新日志', 'pre-w0'))) return
   await settle(page, 200)
-  if (await page.$('.log-card')) {
+  if ((await topLayer(page))?.kind === 'sheet' && await page.locator('.log-card').count()) {
     await measureAll(page, 'pre-w0', 'changelog')
     const found = await keyboard(page, 'pre-w0', 'changelog', { escape: 'closes' })
-    // closed, the focus is back on the corner button that opened it
+    // closed, the focus is back on the corner button that opened it (a press focuses it, as a finger's does)
     if (!(await page.evaluate(() => document.activeElement?.classList.contains('log-fab')))) found.push({ kind: 'kb:focus-not-back', text: '更新日志' })
-  }
+    await clearLayers(page, 'pre-w0', { measureLayers: false })
+  } else missing('pre-w0', 'changelog')
 })
 
 // ---- twenty weeks in, then a run to the end of the stage and its summary
 await withSave('pre-w20', async (page) => {
   await screens(page, 'pre-w20', PRE)
-  await go(page, '本周')
-  await page.selectOption('select.advance-far', 'stage').catch(() => {})
+  if (!(await go(page, 'pre-w20', '本周'))) return
+  const far = page.locator('select.advance-far')
+  if (!(await far.count()) || await far.isDisabled()) { missing('pre-w20', 'summary (快进 is not open)'); return }
+  await far.selectOption('stage')
   await settle(page, 1500)
-  for (let i = 0; i < 3; i++) {
-    const t = await page.evaluate(() => [...document.querySelectorAll('.modal-bg')].pop()?.querySelector('.modal-head h3')?.textContent ?? '')
-    if (t.startsWith('推进总结')) { await measureAll(page, 'pre-w20', 'summary'); break }
-    if (!t) break
-    await page.evaluate(() => { const m = [...document.querySelectorAll('.modal-bg')].pop(); (m.querySelector('.node-opt button') ?? m.querySelector('button.primary'))?.click() })
+  // the run is over when a card comes up: its summary, or a decision it stopped for
+  for (let t = 0; t < 80 && !(await topLayer(page)); t++) await page.waitForTimeout(250)
+  let got = false
+  for (let i = 0; i < 6 && !got; i++) {
+    const top = await clearLayers(page, 'pre-w20', { keep: ['modal', 'ceremony'] })
+    if (!top) break
+    if (top.name.startsWith('推进总结')) { await measureAll(page, 'pre-w20', 'summary'); got = true; break }
+    const m = page.locator('[data-audit-layer]')
+    const b = (await m.locator('.node-opt button').count()) ? m.locator('.node-opt button') : m.locator('button.primary')
+    if (!(await b.count()) || !(await press(page, b.first(), `the answer on「${top.name}」`, 'pre-w20'))) break
     await settle(page, 800)
   }
+  if (!got) missing('pre-w20', 'summary')
 })
 
 // ---- a Challengers starter, a week of days, the evening before a match
 await withSave('chal-days', async (page) => {
   await screens(page, 'chal-days', PRO, { 本周: 'week-pro-days', 我的: 'me', 队伍: 'team' })
   if (SWEEP) {
-    for (const s of ['本周', '我的', '队伍']) { await go(page, s); await measureAll(page, 'chal-days', `screen:${s}`, { widths: SWEEP_WIDTHS, sweep: true, wait: 30 }) }
+    for (const s of ['本周', '我的', '队伍']) if (await go(page, 'chal-days', s)) await measureAll(page, 'chal-days', `screen:${s}`, { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
   }
   // the player card, from the roster
-  await go(page, '队伍')
-  await page.evaluate(() => document.querySelector('tr.clickable')?.click())
-  await settle(page, 300)
-  if (await page.$('.modal-bg')) {
-    await measureAll(page, 'chal-days', 'player-card', { shot: 'player-card' })
-    await keyboard(page, 'chal-days', 'player-card', { escape: 'stays' })
-    await closeTop(page)
+  if (await go(page, 'chal-days', '队伍')) {
+    const row = page.locator('#main tr.clickable').first()
+    if (await row.count() && await press(page, row, 'a roster row', 'chal-days')) {
+      await settle(page, 300)
+      if ((await topLayer(page))?.kind === 'modal') {
+        await measureAll(page, 'chal-days', 'player-card', { shot: 'player-card' })
+        await keyboard(page, 'chal-days', 'player-card', { escape: 'stays' })
+        await closeTop(page, 'chal-days')
+      } else missing('chal-days', 'player-card')
+    } else missing('chal-days', 'player-card (no roster row)')
   }
   // a played match's sheet, from 最近的比赛 on the week page
-  await go(page, '本周')
-  await page.evaluate(() => document.querySelector('.panel-body.flush table tr.clickable')?.click())
-  await settle(page, 400)
-  if (await page.$('.modal-bg')) {
-    await measureAll(page, 'chal-days', 'match-sheet')
-    await keyboard(page, 'chal-days', 'match-sheet')
-    await closeTop(page)
+  if (await go(page, 'chal-days', '本周')) {
+    const row = page.locator('#main .panel-body.flush table tr.clickable').first()
+    if (await row.count() && await press(page, row, 'a played match', 'chal-days')) {
+      await settle(page, 400)
+      if ((await topLayer(page))?.kind === 'modal') {
+        await measureAll(page, 'chal-days', 'match-sheet')
+        await keyboard(page, 'chal-days', 'match-sheet')
+        await closeTop(page, 'chal-days')
+      } else missing('chal-days', 'match-sheet')
+    } else missing('chal-days', 'match-sheet (no played match)')
   }
   // the match, phase by phase
-  await go(page, '本周')
-  if (!(await toMatch(page))) { errors.push('chal-days: the match did not open'); return }
+  if (!(await go(page, 'chal-days', '本周'))) return
+  if (!(await toMatch(page, 'chal-days'))) { missing('chal-days', 'match:pre (the match did not open)'); return }
   await measureAll(page, 'chal-days', 'match:pre', { shot: 'match-pre' })
   await keyboard(page, 'chal-days', 'match:pre')
   if (SWEEP) await measureAll(page, 'chal-days', 'match:pre', { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
-  await clickText(page, '逐回合观战')
+  if (!(await clickText(page, '逐回合观战', 'chal-days'))) { missing('chal-days', 'match:live'); return }
   await page.waitForTimeout(1500)
   await measureAll(page, 'chal-days', 'match:live', { widths: [320, 375, 430, 768, 1280] })
   let at = await waitFor(page, ['node', 'break', 'done'], 120000)
@@ -565,27 +767,27 @@ await withSave('chal-days', async (page) => {
   for (let guard = 0; guard < 12 && at !== 'done'; guard++) {
     if (at === 'node') {
       if (!sawNode) { await measureAll(page, 'chal-days', 'match:node', { shot: 'match-node' }); sawNode = true }
-      await page.evaluate(() => [...document.querySelectorAll('.modal-bg')].pop()?.querySelector('.node-opt button')?.click())
+      await press(page, page.locator('.modal-bg').last().locator('.node-opt button').first(), 'a key-round option', 'chal-days')
     } else if (at === 'break') {
       if (!sawBreak) { await measureAll(page, 'chal-days', 'match:break', { shot: 'match-break' }); sawBreak = true }
-      await clickText(page, sawNode ? '快进剩余' : '开始下一把')
-    } else if (at === 'live' || at === 'other') {
-      // nothing asked yet: wait for the next beat
+      await clickText(page, sawNode ? '快进剩余' : '开始下一把', 'chal-days')
     }
+    // live or other: nothing asked yet, wait for the next beat
     at = await waitFor(page, ['node', 'break', 'done'], 120000)
   }
   if (at === 'done') await measureAll(page, 'chal-days', 'match:done', { shot: 'match-post' })
-  else errors.push(`chal-days: the match ended in ${at}`)
+  else missing('chal-days', `match:done (the match ended in ${at})`)
 })
 
 // ---- a VCT club at an international event
 await withSave('t1-intl', async (page) => {
   await screens(page, 't1-intl', ['本周', '队伍', '赛程', '积分榜'], { 本周: 'week-t1-intl' })
-  await go(page, '本周')
-  if (!(await toMatch(page))) { errors.push('t1-intl: the match did not open'); return }
+  if (!(await go(page, 't1-intl', '本周'))) return
+  if (!(await toMatch(page, 't1-intl'))) { missing('t1-intl', 'match:pre (the match did not open)'); return }
   await measureAll(page, 't1-intl', 'match:pre')
-  await clickText(page, '快进到结果')
+  if (!(await clickText(page, '快进到结果', 't1-intl'))) { missing('t1-intl', 'match:done (no 快进到结果)'); return }
   if ((await waitFor(page, ['done'], 20000)) === 'done') await measureAll(page, 't1-intl', 'match:done')
+  else missing('t1-intl', 'match:done')
 })
 
 // ---- eight seasons in
@@ -595,16 +797,18 @@ await withSave('long', async (page) => {
 
 // ---- the ending, the card, the page after
 await withSave('retired-ending', async (page) => {
+  const top = await clearLayers(page, 'retired-ending', { keep: ['modal'] })
+  if (top?.kind !== 'modal') { missing('retired-ending', 'modal:ending'); return }
   await measureAll(page, 'retired-ending', 'modal:ending', { shot: 'modal-ending' })
   await keyboard(page, 'retired-ending', 'modal:ending')
-  await page.evaluate(() => { const b = [...document.querySelectorAll('.modal-bg button')].find((x) => x.textContent.trim().startsWith('生成生涯名片图')); b?.focus(); b?.click() })
+  if (!(await clickText(page, '生成生涯名片图', 'retired-ending'))) { missing('retired-ending', 'share-card (no button)'); return }
   await settle(page, 1500)
-  if (await page.$('.share-card')) {
+  if (await page.locator('.share-card').count()) {
     await measureAll(page, 'retired-ending', 'share-card')
     const found = await keyboard(page, 'retired-ending', 'share-card', { escape: 'closes' })
     // closed, the focus is back on the button that made it, on the ending's card
     if (!(await page.evaluate(() => document.activeElement?.textContent.trim().startsWith('生成生涯名片图')))) found.push({ kind: 'kb:focus-not-back', text: '生成生涯名片图' })
-  }
+  } else missing('retired-ending', 'share-card')
 })
 await withSave('retired', async (page) => {
   await screens(page, 'retired', ['本周', '我的', '成就', '日志', '帮助'], { 本周: 'retired' })
@@ -613,6 +817,10 @@ await withSave('retired', async (page) => {
 // ---- one save per card the clock stops on, and a title's full-screen card
 for (const m of ['cup', 'invite', 'tryout', 'deal', 'event', 'ceremony', 'hurt', 'trait', 'season', 'title']) {
   await withSave(`modal-${m}`, async (page) => {
+    // a big moment or an achievement queued in the save comes first, as it does for a player; a title's card is the scenario itself
+    const want = m === 'ceremony' ? 'ceremony' : m === 'title' ? 'moment' : 'modal'
+    const top = await clearLayers(page, `modal-${m}`, { keep: [want] })
+    if (top?.kind !== want) { missing(`modal-${m}`, `modal:${m} (in front: ${top ? `${top.kind}「${top.name}」` : 'the page'})`); return }
     await measureAll(page, `modal-${m}`, `modal:${m}`, { shot: m === 'invite' ? 'modal-invite' : m === 'ceremony' ? 'modal-ceremony' : m === 'title' ? 'modal-title' : undefined })
     if (SWEEP && (m === 'deal' || m === 'title')) await measureAll(page, `modal-${m}`, `modal:${m}`, { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
     // a title's card opens on its own button, 收下, with the history line (me/worldline.ts) above the five as text
@@ -628,7 +836,7 @@ for (const m of ['cup', 'invite', 'tryout', 'deal', 'event', 'ceremony', 'hurt',
       await keyboard(page, `modal-${m}`, 'modal:event:result')
     }
     if (m === 'title') await titleFaces(page)
-  }, { moment: m === 'title' })
+  })
 }
 
 /**
@@ -663,7 +871,7 @@ async function titleFaces(page) {
     await page.keyboard.press('Escape')
     await settle(page, 200)
     if ((await heading()) !== title) found.push({ kind: 'faces', text: '选手卡上按 Escape 收下了下面的冠军卡' })
-    await closeTop(page)
+    await closeTop(page, 'modal-title')
     if (!(await page.evaluate(() => document.activeElement?.classList.contains('face-btn')))) found.push({ kind: 'kb:focus-not-back', text: '头像' })
   }
   keys.push({ scenario: 'modal-title', state: 'modal:title:player-card', n: 0, found })
@@ -680,6 +888,12 @@ const states = [...new Set(named.map((r) => `${r.scenario} · ${r.state}`))]
 const lines = []
 lines.push(`# 手机审计 · ${label}`, '')
 lines.push(`${new Date().toISOString()} · ${states.length} 个画面 × ${WIDTHS.length} 个宽度 · 共 ${total(named)} 处${SWEEP ? ` · 逐 16px 扫描 ${swept.length} 次，${total(swept)} 处` : ''}`, '')
+// what the run really stood in front of: a page counts once its tab is lit and nothing covers it
+lines.push('## 走到了哪里', '')
+lines.push(`- 页面：到了 ${reached.length} 个，没到 ${unreached.length} 个${unreached.length ? `（${unreached.join('、')}）` : ''}`)
+lines.push(`- 路上收起的卡：${layersSeen.length} 张${layersSeen.length ? `（${layersSeen.map((x) => `${x.scenario} · ${x.key}`).join('、')}）` : ''}`)
+lines.push(`- 按下去 ${SLOW_MS / 1000} 秒以上才有反应：${slow.length} 次${slow.length ? `（${slow.map((x) => `${x.scenario} · ${x.what} ${(x.ms / 1000).toFixed(1)}s`).join('、')}）` : ''}`)
+lines.push(`- 出错：${errors.length} 条${errors.length ? '，见文末' : ''}`, '')
 lines.push('## 每个画面 × 宽度的问题数', '')
 lines.push(`| 画面 | ${WIDTHS.join(' | ')} | 合计 |`)
 lines.push(`|---|${WIDTHS.map(() => '---:').join('|')}|---:|`)
@@ -719,6 +933,11 @@ for (const k of keys) {
 }
 if (errors.length) lines.push('', '## 运行中的错误', '', ...errors.map((e) => `- ${e}`))
 writeFileSync(`${OUT}/report.md`, lines.join('\n'))
-writeFileSync(`${OUT}/report.json`, JSON.stringify({ widths: WIDTHS, results, keys, errors }, null, 1))
-console.log(`${total(named)} offenders across ${states.length} states (${byWidth.join(' / ')})${SWEEP ? `; sweep ${total(swept)}` : ''}; keyboard ${keyBad.length}/${keys.length} cards with findings; errors ${errors.length}`)
+writeFileSync(`${OUT}/report.json`, JSON.stringify({ widths: WIDTHS, results, keys, errors, reached, unreached, layers: layersSeen, slow }, null, 1))
+console.log(`${total(named)} offenders across ${states.length} states (${byWidth.join(' / ')})${SWEEP ? `; sweep ${total(swept)}` : ''}; keyboard ${keyBad.length}/${keys.length} cards with findings`)
+console.log(`pages reached ${reached.length}, not reached ${unreached.length}; cards put away on the way ${layersSeen.length}; errors ${errors.length}`)
+for (const x of slow) console.log(`  ⚠ slow: ${x.scenario} · ${x.what} took ${(x.ms / 1000).toFixed(1)}s to answer`)
+for (const e of errors) console.log(`  ✗ ${e}`)
 console.log(`→ ${OUT}/report.md`)
+// a scene that did not come, a page not reached, an error in the page: the run did not measure what it says it did
+process.exit(errors.length ? 1 : 0)
