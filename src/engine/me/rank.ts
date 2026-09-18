@@ -382,10 +382,18 @@ export const rankShort = (r: Rank): string => (r.pos === null ? r.name : `${r.na
 /** a place said roughly, since the board wanders: 469 is 「前 500 名左右」 */
 const roundPlace = (n: number) => (n < 20 ? n : n < 200 ? Math.round(n / 10) * 10 : n < 1000 ? Math.round(n / 100) * 100 : Math.round(n / 500) * 500)
 
-/** A ladder score as a line to aim at, on my server: 「辐能战魂（国服前 500 名左右）」, 「辐能战魂（韩服第一）」. */
+/**
+ * A ladder score as a line to aim at, on my server: 「亚服排行榜前 300 名左右」, 「韩服排行榜第一」; below 神话 the
+ * division, 「超凡入圣 2」.
+ *
+ * On the board the line is a place, and only the place is said. It used to lead with the tier the place falls in —
+ * 「辐能战魂（亚服前 300 名左右）」 — which read as what 辐能战魂 asks, right under the panel's own 「排进前 500 名才是
+ * 辐能战魂」; the author, 2026-09-18: 「神话三变成赋能需要达到服务器前五百，现在的前三百也不对」. 前 300 is where clubs
+ * start to call (me/prepro.ts INVITE_LADDER), not where 辐能战魂 starts.
+ */
 export function rankBar(state: GameState, l: number): string {
   const r = rankAt(state, l)
   if (r.pos === null) return r.name
-  if (r.pos === 1) return `${r.name}（${r.server.name}第一）`
-  return `${r.name}（${r.server.name}前 ${roundPlace(r.pos).toLocaleString('en-US')} 名${r.pos >= 20 ? '左右' : ''}）`
+  if (r.pos === 1) return `${r.server.name}排行榜第一`
+  return `${r.server.name}排行榜前 ${roundPlace(r.pos).toLocaleString('en-US')} 名${r.pos >= 20 ? '左右' : ''}`
 }

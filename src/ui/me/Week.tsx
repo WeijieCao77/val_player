@@ -23,7 +23,7 @@ import { pitchBook } from '../../engine/me/pitchbook'
 import { iglLine } from '../../engine/me/igl'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
-import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, riseOf, standingOf } from '../../engine/me/rank'
+import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, riseOf, rulesAt, standingOf } from '../../engine/me/rank'
 import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupStatus, cupView } from '../../engine/me/cups'
 import CupDetail from './CupDetail'
 import { focusEvent } from './eventFocus'
@@ -486,6 +486,9 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               )}
               <p className="tiny faint" style={{ margin: '0 0 4px' }}>
                 神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR ` : ''}才是辐能战魂。不打排位分数不掉；神话起别人还在打，名次会往后掉。
+                {/* 神话 was one rank from Episode 2 until patch 3.05 (me/rank.ts rulesAt); a player who knows today's
+                    神话 1/2/3 asked why his had no number (2026-09-18) */}
+                {!rulesAt(game.year, game.day).immortalDivs ? '这时候的神话还不分 1、2、3，2021 年 9 月 8 日起才分。' : ''}
                 {me.region === 'China' && rankAt(game).server.key === 'AP' ? '国服 2023 年 7 月开服以前，都在亚服打。' : ''}
               </p>
               <p className="tiny faint" style={{ margin: 0 }}>
