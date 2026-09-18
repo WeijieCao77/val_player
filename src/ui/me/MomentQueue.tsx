@@ -2,6 +2,7 @@ import { useGame } from './ctx'
 import { compClass } from '../../engine/me/compclass'
 import { compCn } from '../../engine/me/compname'
 import { takeMoment } from '../../engine/me/moments'
+import { titleRealChamp } from '../../engine/me/worldline'
 import type { MomentItem } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { crestUrl } from '../../engine/dossier'
@@ -20,6 +21,10 @@ import { Scene } from './art/scenes'
  * the ordinary card with the stage along its top. They come before the
  * achievements they unlock and before any card the clock stopped on
  * (PlayerGame). Everything on a card is what was written the day it happened.
+ *
+ * A title this world took from somebody history gave it to says so in one line, on the full screen and the event
+ * card alike: 「真实历史里，这座奖杯属于 X」 (me/worldline.ts, the author's brief of 2026-09-18). Only who really
+ * lifted it — never why it went otherwise.
  */
 export default function MomentQueue() {
   const { game, commit, go } = useGame()
@@ -31,10 +36,12 @@ export default function MomentQueue() {
   const next = more ? `还有 ${more} 件` : undefined
 
   if (m.kind === 'title' && m.bench) {
+    const real = titleRealChamp(game, m)
     return (
       <Modal title="赛场" art={<Scene kind="stage" />} onClose={take} onBgClose={() => {}}>
         <p className="q ev-q">冠军：{compCn(m.comp ?? '')}</p>
         <p className="muted small" style={{ margin: '0 0 12px' }}>这一届你在替补席上，没有出场。奖杯有你一份，下一次要自己上场去拿。</p>
+        {real && <RealLine name={real} />}
         <div className="row" style={{ justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 }}>
           <button className="primary" onClick={take}>{more ? '下一件 →' : '知道了'}</button>
           {next && <span className="tiny faint">{next}</span>}
@@ -84,6 +91,7 @@ function cardOf(g: GameState, m: MomentItem): Card {
       const comp = m.comp ?? ''
       const cls = compClass(comp)
       const five = g.teams[g.myTeam]?.starters ?? []
+      const real = titleRealChamp(g, m)
       return {
         art: cls === 'champions' ? <TrophyChampions /> : cls === 'masters' || cls === 'lockin' ? <TrophyMasters /> : cls === 'qual' ? <PromoBadge /> : <TrophyLeague />,
         // most events carry their year in the name (「2025 全球冠军赛」): the year goes in front only when it does not
@@ -91,7 +99,12 @@ function cardOf(g: GameState, m: MomentItem): Card {
         title: cls === 'champions' ? '世界冠军' : cls === 'masters' ? '大师赛冠军' : cls === 'lockin' ? 'LOCK//IN 冠军' : cls === 'qual' ? '晋级成功' : '冠军',
         body: m.fmvp ? '决赛 MVP 是你。' : '你在首发名单上，一路打到了最后。',
         chips: m.fmvp ? [{ text: '决赛 MVP', kind: 'gold' }] : undefined,
-        extra: five.length ? <div className="mo-people"><FaceRow ids={five} /></div> : undefined,
+        extra: real || five.length ? (
+          <>
+            {real && <RealLine name={real} />}
+            {five.length > 0 && <div className="mo-people"><FaceRow ids={five} /></div>}
+          </>
+        ) : undefined,
       }
     }
     case 'sign': {
@@ -165,6 +178,11 @@ function cardOf(g: GameState, m: MomentItem): Card {
       }
     }
   }
+}
+
+/** 「真实历史里，这座奖杯属于 X」: a lower third, the way a broadcast puts a fact under the picture. */
+function RealLine({ name }: { name: string }) {
+  return <p className="mo-real">真实历史里，这座奖杯属于 <b>{name}</b></p>
 }
 
 /**

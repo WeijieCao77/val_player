@@ -2679,6 +2679,12 @@ export function realPlacesOf(comp: Competition): { name: string; place: number }
   return ev.places.slice(0, 8).map(([t, place]) => ({ name: ev.names[t] ?? t.replace(/^N:/, ''), place }))
 }
 
+/**
+ * The club in this world that a real side at an event was (teamOf), read and nothing written: for the career's
+ * ledger of what this world came out otherwise than history (engine/me/worldline.ts).
+ */
+export const realSideOf = (state: GameState, ev: CEvent, vlr: string): string | null => teamOf(state, ev, vlr)
+
 /* ------------------------------------------------------------------ */
 /*  the points tables, for the standings page                          */
 /* ------------------------------------------------------------------ */

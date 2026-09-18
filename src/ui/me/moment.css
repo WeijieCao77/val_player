@@ -51,6 +51,16 @@
 }
 .mo-arrow { font-size: 30px; font-weight: 900; color: #fff; }
 .mo-people { display: flex; justify-content: center; margin: 0 0 16px; }
+/* 「真实历史里，这座奖杯属于 X」 (me/worldline.ts): one line, a broadcast lower third — the red bar the event card's
+   question stands on, over a wash of the card's tone. On the event card (a title from the bench) the tone is the accent. */
+.mo-real {
+  width: fit-content; max-width: 100%; margin: 0 auto 14px; padding: 5px 12px 5px 10px;
+  border-left: 3px solid var(--tone, var(--accent));
+  background: color-mix(in srgb, var(--tone, var(--accent)) 10%, transparent);
+  color: var(--muted); font-size: var(--t-small, 13.5px); line-height: 1.55; text-align: left; overflow-wrap: anywhere;
+}
+.mo-real b { color: var(--text); font-weight: 700; }
+.modal-body .mo-real { margin: 0 0 12px; }
 /* no band behind it: the art takes the tone instead of white */
 .moment.bare .mo-art { color: var(--tone); filter: drop-shadow(0 0 16px color-mix(in srgb, var(--tone) 55%, transparent)); }
 .mo-eyebrow { margin: 0; font-family: var(--mono); font-size: 12px; letter-spacing: .24em; color: var(--tone); overflow-wrap: anywhere; }

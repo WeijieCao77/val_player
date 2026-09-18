@@ -467,8 +467,10 @@ export function syncTitles(state: GameState): void {
     if (started) bottleneckTitle(state, t.title, t.year, fmvp)
     // and the coach who started me in it counts on me now (me/coach.ts, 2026-09-14: 「拿了世界冠军fmvp但是一样被轮换」)
     if (started) coachAfterTitle(state, compClass(t.title), fmvp)
-    // and gets its card (me/moments.ts): the full screen for one I started in, the event card for one won from the bench
-    pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp, bench: !started })
+    // and gets its card (me/moments.ts): the full screen for one I started in, the event card for one won from the bench.
+    // The club that won it goes on the card, for the card's 「真实历史里，这座奖杯属于 X」 once the year has turned (me/worldline.ts)
+    const won = Object.values(state.comps).find((c) => c.name === t.title && !!c.champion && !!state.teams[c.champion]?.roster.includes(me.id))
+    pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp, bench: !started, teamId: won?.champion ?? state.myTeam })
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
     if (me.phase === 'pro') fireEvent(state, 'after_title')
   }

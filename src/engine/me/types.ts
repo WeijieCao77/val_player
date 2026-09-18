@@ -643,7 +643,7 @@ export interface MomentItem {
   /** title: the competition as the timeline names it, and whether I was the final's MVP */
   comp?: string
   fmvp?: boolean
-  /** sign: the club I joined and the one I left, my first pro contract, the terms as signed */
+  /** sign: the club I joined and the one I left, my first pro contract, the terms as signed; title: the club that won it (absent before 2026-09-18) */
   teamId?: string
   fromId?: string
   first?: boolean
