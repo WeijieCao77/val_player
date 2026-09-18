@@ -1185,9 +1185,9 @@ function championsDirect(state: GameState): Set<string> {
  */
 function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swaps: Swap[] } {
   if (ev.plan) return planSeeds(state, ev)
-  if (ev.projected) return projectedSeeds(state, ev)
+  if (ev.projected) return promotedIn(state, ev, projectedSeeds(state, ev))
   const book = rulesOf(ev.id)?.routes
-  if (!book) return legacySeeds(state, ev)
+  if (!book) return promotedIn(state, ev, legacySeeds(state, ev))
   const real: (string | null)[] = []
   for (const v of ev.seeds) {
     const t = teamOf(state, ev, v)
@@ -1241,7 +1241,45 @@ function seedsFor(state: GameState, ev: CEvent): { seeds: (string | null)[]; swa
     out[x.i] = now ?? null
     if (now) used.add(now)
   }
-  return { seeds: out, swaps }
+  return promotedIn(state, ev, { seeds: out, swaps })
+}
+
+/**
+ * A promotion place won in a decider this season (offerPlayIn) seats its winner in the split it sends its sides to
+ * (`feeds`), in the seat of the side that really held that place — as the decider's own event already places it
+ * (playOn: 「a promotion place won in the decider is the winner's, whoever held it in history」).
+ *
+ * Reported 2026-09-18 (the hx-wait probe, 2026 North America): the next split read its seats off the feeder's order
+ * of finish, and a promotion stage ranks below every phase that decided the event (placesFrom), so a club that won
+ * its decider finished last and was never among the seats; and a seat whose real side this world does not hold —
+ * ROSE's, the place Burger Boyz played for in NA ACE Stage 2 — was read from no feeder at all and went to fillGaps.
+ * The club won the decider and the 「下一场」 said nothing of Stage 3. Only this season's deciders are read: an event's
+ * record goes with the winter, and next season's draw is history's (legacySeeds).
+ */
+function promotedIn(state: GameState, ev: CEvent, drawn: { seeds: (string | null)[]; swaps: Swap[] }): { seeds: (string | null)[]; swaps: Swap[] } {
+  const id = ev.projected?.base ?? ev.id
+  let out = drawn.seeds
+  const swaps = drawn.swaps.slice()
+  for (const comp of Object.values(state.comps)) {
+    const c = comp.circuit
+    const m = c?.playin && /^(\d+):(\d+)$/.exec(c.playin.key)
+    if (!c || !m) continue
+    const fe = eventOf(c.id)
+    const ui = Number(m[1])
+    const rank = Number(m[2])
+    const u = fe?.units[ui]
+    if (!fe || !u || u.feeds !== id || rank > (u.promotes ?? 0)) continue
+    const f = state.fixtures.find((x) => x.id === c.playin!.fixture)
+    const won = f ? gameOf(f)?.w : null
+    // a season nobody has played names nobody at the place: its real year's side is the one it stands for
+    const real = (fe.projected ? BY_ID.get(fe.projected.base) : fe)?.units[ui]?.ranked?.[rank - 1]
+    const at = real ? ev.seeds.indexOf(real) : -1
+    if (!won || at < 0 || out[at] === won || out.includes(won)) continue
+    out = out.slice()
+    out[at] = won
+    swaps.push({ real: real!, now: won, from: comp.key })
+  }
+  return out === drawn.seeds ? drawn : { seeds: out, swaps }
 }
 
 /** Two events share a scene when their scopes meet; an international meets everyone. */
@@ -1845,7 +1883,7 @@ function outlookIn(
     const through = openOutputs(ev).filter(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
     if (!mainSeedsOf(ev).has(at) && !through.length) {
       const own = asMine || teamId === playerClub(state)
-      return own && !ev.plan && listedOnly(state, ev, seats, teamId) && deciderDoor(state, ev, team) ? { standing: 'entry' } : { standing: 'booked' }
+      return own && !ev.plan && listedOnly(state, ev, seats, teamId) && deciderDoor(state, ev, team) && deciderAhead(state, comp, ev, teamId, seats) ? { standing: 'entry' } : { standing: 'booked' }
     }
     // in by its qualifier's road, the seed is the next side's (begin)
     const mine = (s: Slot): boolean =>
@@ -2044,7 +2082,8 @@ function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: T
   // the scene it works out: this is a read — the week screen's 「下一场」 (me/nextup.ts), quietAhead, a break's lock
   // (me/outlets.ts) — and a club with no scene the roster book names had one written into the save by being looked at
   if ((asMine || teamId === playerClub(state)) && isHome(state, ev, team, teamId, false)) {
-    return deciderDoor(state, ev, team) ? 'entry' : asMine ? null : 'maybe'
+    // a door, and a side to play there or a place the draw leaves for the club (deciderAhead)
+    return deciderDoor(state, ev, team) && deciderAhead(state, comp, ev, teamId, draw.seats) ? 'entry' : asMine ? null : 'maybe'
   }
   if (asMine) return null
   // a side's place the draw as it stands would stand the player's club in for (fillGaps), wherever its home is
@@ -2164,6 +2203,100 @@ function standInPool(state: GameState, comp: Competition, ev: CEvent, taken: Set
 }
 
 /**
+ * Who the player's club plays for a qualifier's last place (offerPlayIn): the side that really took it — or, as the
+ * graph reads that place (graphOf's `slot`), the club the draw stood in for a side history has let go — and where
+ * there is no such side, the side fillGaps would stand in for it: the best side in scope not already in by any road.
+ *
+ * Reported 2026-09-18 (the hx-wait probe, 2026 North America, Burger Boyz signed on February 21): a closed league's
+ * promotion place sends its side into the league's next split, not into this event's matches, so fillGaps never
+ * fills it. 2026 NA ACE Stage 2's second promotion place was ROSE's, an open-qualifier side this world does not hold;
+ * offerPlayIn found no rival and wrote no decider, while the week's 「下一场」, which reads the place as open to the
+ * club (couldStillTake), said 「挑战者联赛 · 北美 · 第二赛段（可报名）」 for 81 days. Two of thirty North American
+ * careers then waited until November's open qualifier. A season nobody has played yet (a projected event) names no
+ * side at all, so every promotion place of 2027's Challengers leagues had the same hole.
+ */
+function deciderRival(state: GameState, comp: Competition, ev: CEvent, club: string, ui: number, rank: number): string | null {
+  const c = comp.circuit!
+  const key = `${ui}:${rank}`
+  const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+  const held = real && gone(state, real) ? c.fill?.[key] ?? null : real ?? c.fill?.[key] ?? null
+  if (held) return held
+  const taken = new Set([club, ...c.seeds.filter((x): x is string => !!x), ...Object.values(c.fill ?? {}), ...openEntrants(state, ev)])
+  return standInPool(state, comp, ev, taken)[0]?.id ?? null
+}
+
+/** The place offerPlayIn has the player's club play a decider for: a qualifier's last place, or a closed league's last promotion place. */
+function deciderPlace(state: GameState, ev: CEvent): { ui: number; rank: number } | undefined {
+  const best = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
+  if (best || state.year < 2023) return best
+  const ui = ev.units.findIndex((u) => isOpen(u) && (u.promotes ?? 0) > 0)
+  return ui >= 0 ? { ui, rank: ev.units[ui].promotes! } : undefined
+}
+
+/**
+ * Would the draw as it stands (`seats`) give the player's club something to play in an event open to it? Read the
+ * way begin makes the draw: a decider against the side that really holds the place (offerPlayIn, deciderRival); where
+ * that side is missing, a place the draw has to fill — a seat vacate empties, a qualifier place with no side — is one
+ * the club takes, is stood in for, or plays a decider for (fillGaps, seatFor); with none, a side left over to stand in
+ * for the decider's. The last one is the only guess: the draw's own rosters (syncEvent) can still take a club out.
+ */
+function deciderAhead(state: GameState, comp: Competition, ev: CEvent, club: string, seats: (string | null)[]): boolean {
+  const at = deciderPlace(state, ev)
+  if (!at) return false
+  const real = teamOf(state, ev, ev.units[at.ui].ranked?.[at.rank - 1])
+  if (real && !gone(state, real)) return real !== club
+  const vac = vacate(state, ev, seats)
+  if ([...mainSeedsOf(ev)].some((i) => !vac[i])) return true
+  for (const { ui, rank } of openOutputs(ev)) {
+    const t = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if (!t || gone(state, t)) return true
+  }
+  return standInPool(state, comp, ev, new Set([club, ...vac.filter((x): x is string => !!x), ...openEntrants(state, ev)])).length > 0
+}
+
+/**
+ * No side for the decider's place (deciderRival): the club takes a place the draw left with no side — fillGaps found
+ * nobody to stand in — and failing that plays the weakest side fillGaps stood in, for its seat. The new format's rule
+ * for an open place (planPlayIn), and a promotion bracket's for its outside seat (outsideSeat).
+ *
+ * Reported 2026-09-18 (scripts/check_nextup.ts, a North American club outside the Challengers league): 2026 NA ACE
+ * Stage 1's promotion place was ROSE's, and by its draw fillGaps had stood in every North American club there was —
+ * FUTURE ACADEMY TEAM, still free the day before, lost three of its five to the sides they really played Stage 1 for
+ * (syncEvent). The week had said 「你们可以报名」 for seventeen days, and the club got nothing.
+ */
+function seatFor(state: GameState, comp: Competition, ev: CEvent, club: string, notes: string[]): void {
+  const c = comp.circuit!
+  const name = state.teams[club].name
+  const main = [...mainSeedsOf(ev)].sort((a, b) => a - b)
+  const empty = main.find((i) => !c.seeds[i])
+  if (empty != null) {
+    c.seeds[empty] = club
+    notes.push(`📝 ${name} 报名了${comp.name}：有一个没人补上的名额，直接进正赛。`)
+    return
+  }
+  for (const { ui, rank } of openOutputs(ev)) {
+    const key = `${ui}:${rank}`
+    const real = teamOf(state, ev, ev.units[ui].ranked?.[rank - 1])
+    if ((!real || gone(state, real)) && !c.fill?.[key]) {
+      c.fill = { ...(c.fill ?? {}), [key]: club }
+      notes.push(`📝 ${name} 报名了${comp.name}：海选有一个没人补上的名额，直接进正赛。`)
+      return
+    }
+  }
+  // the seats fillGaps stood a side in for: empty in the draw as vacate leaves it
+  const drawn = vacate(state, ev, leagueOut(state, ev, takeSeat(state, ev, seedsFor(state, ev).seeds)))
+  const seat = main.filter((i) => !drawn[i] && !!c.seeds[i] && c.seeds[i] !== club)
+    .sort((a, b) => (state.teams[c.seeds[a]!]?.rating ?? 0) - (state.teams[c.seeds[b]!]?.rating ?? 0))[0]
+  if (seat == null) return
+  const rival = c.seeds[seat]!
+  const f = makeFixture(state, state.day, comp.stage, comp.key, club, rival, 3, 'KO:0:补位 · 决胜局')
+  f.node = -1
+  state.fixtures.push(f)
+  c.playin = { key: `s:${seat}`, fixture: f.id }
+  notes.push(`📝 ${comp.name} 有替补进来的名额，${name} 报名争取：打赢 ${state.teams[rival].name} 就进正赛。`)
+}
+
+/**
  * Could the draw stand `team` in for a side it is missing (fillGaps)? Only a played event fills its gaps — one nobody
  * has played yet, or one whose field has moved — and only where the draw as it stands (`seats`) leaves one, reading
  * seeds as begin does (vacate): a club history has let go, or one in by its own open qualifier, leaves its seed empty
@@ -2239,10 +2372,16 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   if (c.seeds.includes(club) && !listedOnly(state, ev, c.seeds, club)) return
   if (!isHome(state, ev, state.teams[club], club)) return
   let best: { ui: number; rank: number } | undefined = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
+  // a promotion place, and the split it sends its side to when that is this season's (promotedIn seats the winner there)
+  let promo: { to?: Competition } | undefined
   if (!best && state.year >= 2023) {
     // a closed league: the way in is its promotion stage, for the last place it sends up
     const ui = ev.units.findIndex((u) => isOpen(u) && (u.promotes ?? 0) > 0)
-    if (ui >= 0) best = { ui, rank: ev.units[ui].promotes! }
+    if (ui >= 0) {
+      best = { ui, rank: ev.units[ui].promotes! }
+      const to = ev.units[ui].feeds
+      promo = { to: to ? Object.values(state.comps).find((x) => !!x.circuit && (x.circuit.id === to || eventOf(x.circuit.id)?.projected?.base === to)) : undefined }
+    }
   }
   if (!best && state.year >= 2023) {
     // a promotion bracket played between a league's bottom sides and challengers from outside it —
@@ -2262,13 +2401,17 @@ function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: stri
   if (!best) return
   const u = ev.units[best.ui]
   const key = `${best.ui}:${best.rank}`
-  const rival = teamOf(state, ev, u.ranked?.[best.rank - 1]) ?? c.fill?.[key] ?? null
-  if (!rival || rival === club) return
-  const f = makeFixture(state, Math.max(u.last ?? 0, state.day), comp.stage, comp.key, club, rival, 3, 'KO:0:海选 · 决胜局')
+  const rival = deciderRival(state, comp, ev, club, best.ui, best.rank)
+  if (!rival) { seatFor(state, comp, ev, club, notes); return }
+  if (rival === club) return
+  const f = makeFixture(state, Math.max(u.last ?? 0, state.day), comp.stage, comp.key, club, rival, 3, promo ? 'KO:0:升降级 · 决胜局' : 'KO:0:海选 · 决胜局')
   f.node = -1
   state.fixtures.push(f)
   c.playin = { key, fixture: f.id }
-  notes.push(`📝 ${comp.name} 开放报名，${state.teams[club].name} 报了海选：打赢 ${state.teams[rival].name} 就进正赛。`)
+  // a promotion place is a seat in the league's next split, not in this event's matches: said so, and only where that split is this season's
+  notes.push(promo
+    ? `📝 ${comp.name} 的升降级赛还有一个名额，${state.teams[club].name} 报名争取：对手是 ${state.teams[rival].name}${promo.to ? `，打赢就进 ${promo.to.name}` : ''}。`
+    : `📝 ${comp.name} 开放报名，${state.teams[club].name} 报了海选：打赢 ${state.teams[rival].name} 就进正赛。`)
 }
 
 /**

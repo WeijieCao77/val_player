@@ -25,6 +25,10 @@
  *    next on at least nine days in ten. It names only an event whose draw as
  *    things stand seats the club, or one open to it; history's booking and a
  *    place results may yet earn are left unsaid, and those days are counted
+ *  - promised: an event it said the club could enter gives the club a match
+ *    there once it is drawn, the club unchanged — a decider or a seat. A fourth
+ *    career is at a North American club outside the Challengers league, whose
+ *    way in is each split's promotion place (reported 2026-09-18)
  *
  * And it counts, without failing, the days it said a phase of mine was still to
  * be settled when the club never played that event again.
@@ -55,10 +59,13 @@ import type { CEvent, CNode, Slot } from '../src/engine/circuit'
 import type { Fixture, Region } from '../src/engine/types'
 
 const seed = Number(process.argv[2] ?? 11)
-const RUNS: { label: string; region: string; start: StartPoint; year: number; years: number }[] = [
+const RUNS: { label: string; region: string; start: StartPoint; year: number; years: number; teamId?: string }[] = [
   { label: '2021 欧洲 · 强队第六人，打到 2025', region: 'Europe', start: 't1', year: 2021, years: 5 },
   { label: '2026 欧洲 · Challengers 首发，打到 2027', region: 'Europe', start: 'chal', year: 2026, years: 2 },
   { label: '2026 中国 · VCT 第六人', region: 'China', start: 't1', year: 2026, years: 1 },
+  // a club outside North America's Challengers league (Burger Boyz, vlr 15250): its way in is each split's promotion
+  // place, and Stage 2's was the side this world does not hold (reported 2026-09-18, see `promised` below)
+  { label: '2026 北美 · 联赛外的 Challengers 俱乐部', region: 'North America', start: 'chal', year: 2026, years: 1, teamId: 'V21T15250' },
 ]
 /** between events, the share of named events that may be some other event than the one played next */
 const WRONG_EVENT_MAX = 0.1
@@ -89,18 +96,19 @@ function flatOf(ev: CEvent): { nodes: FNode[]; base: number[] } {
 }
 
 interface Track { f: Fixture; year: number; seen: number; played?: number; comp: string; compName: string; evId?: string }
-interface Sample { year: number; v: number; club: string; up: NextUp; quiet: boolean }
+/** `open`: the event the panel said was open for the club to enter (「你们可以报名」), by its key */
+interface Sample { year: number; v: number; club: string; up: NextUp; quiet: boolean; open?: string }
 
 const said = (up: NextUp): string =>
   up.kind === 'fixture' ? `${roundOf(up.fixture)}（第 ${up.day} 天）`
     : up.kind === 'round' || up.kind === 'waiting' ? `${up.kind === 'waiting' ? '等本阶段名次 ' : ''}${up.name} ${up.round}（第 ${up.day} 天）`
       : up.kind === 'event' ? `下一项 ${up.name}（第 ${up.day} 天开打）` : '暂时没有排定的比赛'
 
-const sum = { days: 0, known: 0, quiet: 0, named: 0, right: 0, wrong: 0, none: 0, waitingOut: 0 }
+const sum = { days: 0, known: 0, quiet: 0, named: 0, right: 0, wrong: 0, none: 0, waitingOut: 0, promised: 0, broken: 0 }
 
 for (const o of RUNS) {
   const t1 = Date.now()
-  const state = createCareer({ name: 'Check', region: o.region as Region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: o.start, seed, year: o.year })
+  const state = createCareer({ name: 'Check', region: o.region as Region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: o.start, seed, year: o.year, ...(o.teamId ? { teamId: o.teamId } : {}) })
   const me = state.me!
   const TR: Track[] = []
   const seenF = new Map<Fixture, Track>()
@@ -132,7 +140,8 @@ for (const o of RUNS) {
     const up = nextUp(state)
     const quiet = quietAhead(state, 28)
     ms += performance.now() - at
-    samples.push({ year, v, club, up, quiet })
+    const open = up.kind === 'event' && !up.sure && !up.stage ? Object.values(state.comps).find((c) => c.name === up.name)?.key : undefined
+    samples.push({ year, v, club, up, quiet, ...(open ? { open } : {}) })
   }
   // the end of each day: advanceDay opens the next one with state.day++ (engine/season.ts)
   let dayValue = state.day
@@ -193,7 +202,7 @@ for (const o of RUNS) {
     return byNode.get(`${t.year}:${t.comp}:-1`)?.played ?? BEGIN.get(`${t.year}:${t.comp}`) ?? null
   }
 
-  const n = { days: 0, known: 0, quiet: 0, named: 0, right: 0, wrong: 0, none: 0, waitingOut: 0 }
+  const n = { days: 0, known: 0, quiet: 0, named: 0, right: 0, wrong: 0, none: 0, waitingOut: 0, promised: 0, broken: 0 }
   const outEx: string[] = []
   const wrongEx: string[] = []
   for (const s of samples) {
@@ -245,9 +254,27 @@ for (const o of RUNS) {
     const ok = up.kind === 'round' && up.name === u.compName && up.round === roundOf(u.f) && up.day <= u.f.day + 1 && u.f.day - up.day <= 3
     if (!ok) fail(`${o.label} ${md(s.year, s.v)}：${u.compName} 下一轮 ${roundOf(u.f)}（${md(u.year, u.f.day)}）已经有你，「下一场」却写「${said(up)}」`)
   }
+  // promised: every event the panel said the club could enter (「你们可以报名」) gives it a match there — a decider or a
+  // seat — once it is drawn with the club still the one it was said to. Reported 2026-09-18: 2026 NA ACE Stage 2's
+  // promotion place was the side of a team this world does not hold, and the panel promised it for 81 days with no
+  // match ever written (circuit.ts deciderRival). A promise the draw can no longer keep has to be taken back before it
+  const promised = new Map<string, Sample>()
+  for (const s of samples) if (s.open) promised.set(`${s.year}:${s.club}:${s.open}`, s)
+  const clubOn = new Map(samples.map((s) => [`${s.year}:${s.v}`, s.club]))
+  for (const s of promised.values()) {
+    const drawn = BEGIN.get(`${s.year}:${s.open}`)
+    // not drawn inside the run, or drawn with the player at another club, or without one
+    if (drawn == null || drawn < s.v || clubOn.get(`${s.year}:${drawn}`) !== s.club) continue
+    n.promised++
+    const kept = TR.some((t) => t.year === s.year && t.comp === s.open && (t.f.teamA === s.club || t.f.teamB === s.club))
+    if (kept) continue
+    n.broken++
+    fail(`${o.label} ${md(s.year, s.v)}：「下一场」写 ${(s.up as { name: string }).name} 可以报名，${md(s.year, drawn)} 抽签后没有 ${state.teams[s.club]?.name ?? s.club} 的比赛`)
+  }
   console.log(`  ${o.label}：职业日 ${n.days} · 下一轮已定、对阵还没写进赛程 ${n.known} 天`
     + ` · 两项之间写的下一项赛事 说对 ${n.right}、说成别的 ${n.wrong}${wrongEx.length ? `（${wrongEx.join('；')}）` : ''}、没写 ${n.none} 天`
     + ` · 写「本阶段名次未定」而后来没再打这项赛事 ${n.waitingOut} 天${outEx.length ? `（${outEx.join('；')}）` : ''}`
+    + ` · 写过「可以报名」的赛事 ${n.promised} 项，抽签后没有比赛 ${n.broken} 项`
     + ` · 读「下一场」和四周空窗共 ${(ms / 1000).toFixed(1)}s · ${((Date.now() - t1) / 1000).toFixed(0)}s`)
   for (const k of Object.keys(sum) as (keyof typeof sum)[]) sum[k] += n[k]
 }
@@ -258,7 +285,8 @@ if (sum.named) fail(`${sum.named} 天「下一场」写的轮次不是实际打�
 if (sum.wrong > named * WRONG_EVENT_MAX) fail(`两项赛事之间写出的下一项赛事有 ${sum.wrong}/${named} 天不是实际打的那项，超过 ${WRONG_EVENT_MAX * 100}%`)
 if (sum.known < 20) fail(`下一轮已定、对阵没写的日子只有 ${sum.known} 天，样本太少`)
 if (named < 100) fail(`两项赛事之间写出下一项赛事的日子只有 ${named} 天，样本太少`)
+if (sum.promised < 3) fail(`写过「可以报名」、抽签时还在同一家俱乐部的赛事只有 ${sum.promised} 项，样本太少`)
 console.log(bad
   ? `\n✗ ${bad} 项不对。`
-  : `\n✓ 下一轮已经有你、对阵还没写进赛程的 ${sum.known} 天，「下一场」都写出了这一轮和日子；没有一天写了不是下一场的轮次，也没有一天在四周内有比赛时说可以快进一个月；两项赛事之间写出的下一项赛事 ${sum.right}/${named} 天是实际打的那项，${sum.none} 天没写（${sum.days} 个职业日）· ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+  : `\n✓ 下一轮已经有你、对阵还没写进赛程的 ${sum.known} 天，「下一场」都写出了这一轮和日子；没有一天写了不是下一场的轮次，也没有一天在四周内有比赛时说可以快进一个月；两项赛事之间写出的下一项赛事 ${sum.right}/${named} 天是实际打的那项，${sum.none} 天没写；写过「可以报名」的 ${sum.promised} 项赛事抽签后都有你们的比赛（${sum.days} 个职业日）· ${((Date.now() - t0) / 1000).toFixed(0)}s`)
 process.exit(bad ? 1 : 0)
