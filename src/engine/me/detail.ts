@@ -1,4 +1,4 @@
-import { SEASON_DAYS } from '../season'
+import { SEASON_DAYS } from '../calendar'
 import { isFinal, isIntlComp } from './compclass'
 import type { MeMatchRecord, MeState, MeTally } from './types'
 

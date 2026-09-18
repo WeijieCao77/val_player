@@ -4,7 +4,8 @@ import { eventOf, isLeagueEvent } from '../circuit'
 import { onTimeline, regionIn, stageNameIn, stagesOf } from '../era'
 import type { Competition, GameState, Team } from '../types'
 import { pushLog } from './log'
-import type { LedgerBook, MoneyKind } from './types'
+import type { MoneyKind } from './types'
+import { addMoney, emptyBook, initLedger } from './ledger'
 import { compCn } from './compname'
 import { toCny } from './currency'
 import { money as fmtMoney } from './moneyfmt'
@@ -58,32 +59,11 @@ export const LEDGER_OUT: [MoneyKind, string][] = [
 
 export const KIND_CN: Record<string, string> = Object.fromEntries([...LEDGER_IN, ...LEDGER_OUT])
 
-const emptyBook = (): LedgerBook => ({ in: {}, out: {} })
-
-export function initLedger(state: GameState, label = ''): void {
-  const me = state.me!
-  me.ledger = { cur: emptyBook(), prev: null, label, prevLabel: '', lifetimeIn: 0, lifetimeOut: 0 }
-}
-
 /**
- * The only way money changes hands. Positive is income, negative is spending;
- * `kind` picks the row it lands on. Returns the amount actually moved so the
- * caller can print it.
+ * The book itself and addMoney, the only way money changes hands: me/ledger.ts,
+ * which keeps them apart from the prize tables below, and they are said here as well.
  */
-export function addMoney(state: GameState, kind: MoneyKind, amount: number): number {
-  const me = state.me
-  if (!me) return 0
-  const n = Math.round(amount || 0)
-  if (!n) return 0
-  if (!me.ledger) initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))
-  me.money += n
-  const led = me.ledger!
-  const side = n > 0 ? led.cur.in : led.cur.out
-  side[kind] = (side[kind] ?? 0) + Math.abs(n)
-  if (n > 0) led.lifetimeIn += n
-  else led.lifetimeOut += -n
-  return n
-}
+export { addMoney, initLedger } from './ledger'
 
 /** At a stage's end: this stage's book becomes last stage's, and a new one opens. */
 export function ledgerRotate(state: GameState): void {

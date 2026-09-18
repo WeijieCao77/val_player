@@ -1,7 +1,8 @@
 import { migrateWorld, packState, unpackState } from '../save'
 import { resumeCup } from './cups'
 import type { GameState } from '../types'
-import { buildSaveMeta, readSaveMeta, writeSaveMeta } from './saveMeta'
+import { buildSaveMeta, writeSaveMeta } from './saveMeta'
+import { AUTOSAVE, OLD_AUTOSAVE, OLD_OWNER, OWNER, adoptOldSave } from './saveInfo'
 import { migrateRuler } from './rulerMigrate'
 import { migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
@@ -51,25 +52,13 @@ import { track } from './telemetry'
  * (claimAutosave, holds): see "Which page holds the save" below.
  */
 
-const AUTOSAVE = 'val_player:save:autosave'
-const OWNER = `${AUTOSAVE}:owner`
-/** where a career used to be kept, in the manager game's namespace; left in place as a backup */
-const OLD_AUTOSAVE = 'valmanager:player:save:autosave'
-const OLD_OWNER = `${OLD_AUTOSAVE}:owner`
-/** the keys, for scripts/check_save_size.ts and scripts/check_save_tabs.ts */
-export const SAVE_KEYS = { autosave: AUTOSAVE, owner: OWNER, oldAutosave: OLD_AUTOSAVE, oldOwner: OLD_OWNER } as const
-
-/** Once: a career saved before the player game had its own keys is copied across. The old copy stays. */
-function adoptOldSave(): void {
-  try {
-    if (localStorage.getItem(AUTOSAVE) !== null) return
-    const old = localStorage.getItem(OLD_AUTOSAVE)
-    if (old === null) return
-    localStorage.setItem(AUTOSAVE, old)
-    const owner = localStorage.getItem(OLD_OWNER)
-    if (owner !== null) localStorage.setItem(OWNER, owner)
-  } catch { /* storage blocked or full: loading still falls back to the old key */ }
-}
+/*
+ * The keys, the copy across from the old ones, and the home page's card for the
+ * save (hasAutosave, autosaveInfo): me/saveInfo.ts, which the home page reads
+ * without fetching the world this module reaches. Said here as well.
+ */
+export { SAVE_KEYS, autosaveInfo, hasAutosave } from './saveInfo'
+export type { AutosaveInfo } from './saveInfo'
 
 /** The manager game's fields a career's save carried, written by the shared engine before the split. */
 const DESK_FIELDS = [
@@ -261,36 +250,6 @@ function setLost(): void {
 
 /** Another page has taken the save: said on screen until a career is opened here again (ui/me/SaveNotice.tsx). */
 export const saveLost = (): boolean => lost
-
-/** Is there a career to continue? */
-export function hasAutosave(): boolean {
-  adoptOldSave()
-  try {
-    return localStorage.getItem(AUTOSAVE) !== null || localStorage.getItem(OLD_AUTOSAVE) !== null
-  } catch { return false }
-}
-
-export interface AutosaveInfo {
-  /** the summary written beside the save (me/saveMeta.ts); null for a save from before it, or one that does not match the save */
-  meta: SaveMeta | null
-  /** how far along the save is, off its small owner record: what a save with no summary can still say without being read */
-  year: number | null
-  day: number | null
-}
-
-/**
- * The career to continue, as the home page draws it — without reading the
- * career. A summary is trusted only when it is for the same day as the save
- * beside it: a tab on an older build that saved over the career wrote no
- * summary, and the one left from before says nothing about what is there now.
- */
-export function autosaveInfo(): AutosaveInfo | null {
-  if (!hasAutosave()) return null
-  const owner = readOwner()
-  const meta = readSaveMeta()
-  const ok = !!meta && (!owner || (meta.year === owner.year && meta.day === owner.day))
-  return { meta: ok ? meta : null, year: owner?.year ?? null, day: owner?.day ?? null }
-}
 
 /** A stored save that is gzip + base64 starts with this; a raw one is JSON and starts with `{`. */
 export const PACKED = 'vpz1:'

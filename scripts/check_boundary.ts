@@ -170,6 +170,49 @@ if (notManager.length) {
   for (const f of notManager) console.log(`  ${f}`)
 }
 
-const failed = forbidden.length + stale.length + notManager.length > 0
-console.log(`\n${failed ? 'FAIL' : 'ok'}: ${forbidden.length} forbidden, ${allowed.length} allowed for now, ${stale.length} stale`)
+/*
+ * The home page fetches no world (reported 2026-09-18, an outside audit of
+ * 6d128ed, finding 05). App.tsx imported engine/save.ts to set a name, that
+ * reached the engine, and the engine every dataset, so opening the page fetched
+ * 6.7 MB (1.4 MB gzipped) before anyone pressed a button: a module the page
+ * imports is a module the page downloads first. The career and the world now
+ * come through one dynamic import (src/game.ts), when a career is opened.
+ *
+ * So: what the entry reaches without a dynamic import must not reach these. The
+ * crests and faces (dossier.json, bridge_2026.json, 64 KB) stay allowed: the save
+ * card draws its club's crest. And each of them must still be reached by the
+ * career, or this proves nothing.
+ */
+const WORLD_DATA = [
+  'src/data/world.json', 'src/data/world_2021.json', 'src/data/timeline.json', 'src/data/circuit.json',
+  'src/data/routes.json', 'src/data/routes_partnered.json', 'src/data/prospects.json', 'src/data/records.json',
+]
+const upFront = (() => {
+  const seen = new Map<string, Via | null>(ENTRIES.map((e) => [e, null]))
+  const queue = [...ENTRIES]
+  while (queue.length) {
+    const f = queue.shift()!
+    for (const e of edgesOf(f)) {
+      if (e.kind === 'type' || e.kind === 'dynamic' || seen.has(e.to)) continue
+      seen.set(e.to, { from: f, line: e.line, kind: e.kind })
+      queue.push(e.to)
+    }
+  }
+  return seen
+})()
+const heavy = WORLD_DATA.filter((f) => upFront.has(f))
+const unreached = WORLD_DATA.filter((f) => !runtime.has(f))
+console.log(`\nhome page: ${upFront.size} modules fetched before a career is opened`)
+if (listAll) for (const f of [...upFront.keys()].sort()) console.log(`  ${f}`)
+if (heavy.length) {
+  console.log(`\nFETCHED UP FRONT (${heavy.length}) — the home page reaches the world without a dynamic import (see src/game.ts):`)
+  for (const f of heavy) console.log(`  ${chainOf(upFront, f)}`)
+}
+if (unreached.length) {
+  console.log(`\nnot reached at all (${unreached.length}) — the career no longer reads these; take them off WORLD_DATA:`)
+  for (const f of unreached) console.log(`  ${f}`)
+}
+
+const failed = forbidden.length + stale.length + notManager.length + heavy.length + unreached.length > 0
+console.log(`\n${failed ? 'FAIL' : 'ok'}: ${forbidden.length} forbidden, ${allowed.length} allowed for now, ${stale.length} stale; ${heavy.length} datasets fetched with the home page`)
 process.exit(failed ? 1 : 0)

@@ -17,12 +17,14 @@
  *
  *   npx tsx scripts/check_starts.ts
  */
-import { careerRegions, createCareer, emptyTalents, startBlocked, startCnOf } from '../src/engine/me/career'
+import { careerRegions, createCareer, emptyTalents, isAcademy, startBlocked, startCnOf, startPool } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { ENTRY_YEARS, MERGED_INTO } from '../src/engine/era'
 import { hasPlace } from '../src/engine/timeline'
 import { goalOf, roadsOf, weekLine, weightsOf } from '../src/engine/me/goal'
 import type { GoalKind } from '../src/engine/me/goal'
+import { buildStartSheet } from '../src/engine/me/startSheet'
+import { entryBands } from '../src/engine/ruler'
 import { REGION_CN } from '../src/engine/types'
 import type { GameState, Region } from '../src/engine/types'
 
@@ -102,6 +104,34 @@ for (const [year, asked, want] of [
 ] as [2021 | 2026, Region, Region][]) {
   const g = createCareer({ name: 'League', region: asked, role: '先锋', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 9, year })
   if (g.me!.region !== want) fail(`${year} ${cn(asked)}开局开在了${cn(g.me!.region)}，应该是${cn(want)}`)
+}
+
+// The new-career screen reads all of this from a table worked out as the site is built (engine/me/startSheet.ts,
+// vite.config.ts), not from the world, which it no longer fetches (reported 2026-09-18, an outside audit: the home
+// page downloaded about 8 MB before any career was opened). The table says what the functions above say.
+{
+  const sheet = buildStartSheet()
+  let rows = 0
+  for (const year of ENTRY_YEARS) {
+    const y = sheet[year]
+    if (JSON.stringify(y.regions) !== JSON.stringify(careerRegions(year))) fail(`${year} 开局表的地区和 careerRegions 不一样`)
+    if (JSON.stringify(y.bands) !== JSON.stringify(entryBands(year))) fail(`${year} 开局表的首发水平和 entryBands 不一样`)
+    for (const region of new Set<Region>([...y.regions, 'China'])) {
+      for (const start of Object.keys(startCnOf(year)) as StartPoint[]) {
+        const row = y.doors[region]?.[start]
+        const label = `${year} ${cn(region)}${DOOR[start]}开局`
+        if (!row) { fail(`${label}：开局表里没有这一格`); continue }
+        rows++
+        if (row.gate !== (startBlocked(region, start, year) ?? '')) fail(`${label}：开局表说「${row.gate || '能开'}」，startBlocked 说「${startBlocked(region, start, year) ?? '能开'}」`)
+        const pool = startPool(region, start, year)
+        if (row.pool !== pool.length) fail(`${label}：开局表说 ${row.pool} 支俱乐部，startPool 有 ${pool.length} 支`)
+        if (row.academies !== (start === 'chal' && pool.some((c) => isAcademy(c, year)))) fail(`${label}：开局表对「是不是二队」说得不对`)
+      }
+    }
+  }
+  const kb = JSON.stringify(sheet).length / 1024
+  if (kb > 16) fail(`开局表有 ${kb.toFixed(1)} KB：首页随页面一起下载它，应该是几 KB 的小表`)
+  console.log(`开局页的表：${rows} 格，和引擎说的一致，${kb.toFixed(1)} KB`)
 }
 
 // the report itself

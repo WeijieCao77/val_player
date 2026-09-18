@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, autosaveInfo, checkSaveHeld, claimAutosave, flushAutosave, flushAutosaveNow, loadAutosave, onSaveStorage } from './engine/me/save'
-import { dateLabel, resumeTimeline } from './engine/season'
+import { autosave, checkSaveHeld, claimAutosave, flushAutosave, flushAutosaveNow, onSaveStorage } from './engine/me/save'
+import { setSaveNamespace } from './engine/save'
+import { dateLabel } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
@@ -20,7 +21,6 @@ import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, Modal, money } from './ui/me/common'
 import { RankBadge } from './ui/me/art/emblem'
-import NewCareer from './ui/me/NewCareer'
 import Week, { advanceOf } from './ui/me/Week'
 import MatchPlay from './ui/me/MatchPlay'
 import MeScreen from './ui/me/MeScreen'
@@ -42,13 +42,13 @@ import MatchModal from './ui/me/MatchModal'
 import PlayerCard from './ui/me/PlayerCard'
 import ThemeToggle from './ui/me/ThemeToggle'
 import SoundToggle from './ui/me/SoundToggle'
-import MusicPlayer from './ui/me/MusicPlayer'
 import { attrWord, useNumbers } from './ui/me/words'
-import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
+import { ceilingsOf } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
 import Tour from './ui/me/Tour'
-import { openTour, weekTourOf } from './ui/me/guide'
-import { countScreen, countTurn, track } from './engine/me/telemetry'
+import { openTour, useOpenTour, weekTourOf } from './ui/me/guide'
+import { countScreen, countTurn } from './engine/me/telemetry'
+import { openSavedCareer, turnShape } from './engine/me/opening'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
@@ -64,33 +64,23 @@ const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = 
   { key: 'help', label: '帮助' },
 ]
 
-/**
- * How far into a career the clock has got, as numbers and enumerated words —
- * what a turn and a resume report (engine/me/telemetry.ts). The tier is the
- * rung, never the club: 1 是 VCT，2 是 Challengers，0 是还没有俱乐部。
- */
-const turnShape = (g: GameState) => ({
-  day: g.day,
-  year: g.year,
-  phase: g.me?.phase ?? 'pre',
-  tier: g.me?.phase === 'pro' ? g.teams[g.myTeam]?.tier ?? 0 : 0,
-})
-
-/**
- * 背景音乐 (ui/me/MusicPlayer.tsx, Val Manager's music window copied whole) sits beside the game, not inside either
- * of its pages — the way Val Manager mounts it under every page, so it keeps playing across them. The cover and the
- * career below are two different trees; a window mounted in each would stop the song on 开始生涯 and on 回到首页.
- */
-export default function PlayerGame() {
-  return <><Career /><MusicPlayer /></>
-}
+// the shared engine's save slots (engine/save.ts) under the player's name, as App.tsx used to set them on every render
+// before it stopped importing the engine; the career's own save has its own keys (engine/me/save.ts)
+setSaveNamespace('player')
 
 /**
  * The player career, whole: a game of its own, drawn only from src/ui/me/
  * (scripts/check_boundary.ts keeps it that way). This shell knows about weeks,
- * whatever is waiting on me, and my club's matches.
+ * whatever is waiting on me, and my club's matches. It opens on the career the
+ * home page hands it (开始生涯, 继续: src/App.tsx, which fetches this module and
+ * the world with it through src/game.ts only then) and hands it back on 回到首页.
  */
-function Career() {
+export default function Career({ opened, onHome }: {
+  /** the career to open: a new one, or the save read back */
+  opened: GameState
+  /** back to the home page, once the save has gone in */
+  onHome: () => void
+}) {
   const gameRef = useRef<GameState | null>(null)
   const [, bump] = useReducer((x: number) => x + 1, 0)
   const [screen, setScreen] = useState('week')
@@ -110,12 +100,13 @@ function Career() {
   const trouble = useSaveTrouble()
   // another page took the save (engine/me/save.ts holds): this one writes nothing more and says so (SaveTakenNotice)
   const lost = useSaveLost()
+  // the tour walking: the update bar waits for it (ui/me/UpdateNudge.tsx)
+  const touring = !!useOpenTour().kind
   // 回到首页 waits for the save to land
   const [leaving, setLeaving] = useState(false)
   const liveRef = useRef<MeMatch | null>(null)
   useEffect(() => { liveRef.current = live }, [live])
 
-  useEffect(() => { setBooted(true) }, [])
   // a page going out of sight or away can be frozen before a background write lands: the newest career goes in at once where it fits
   // ...and one coming back asks whether another page took the save meanwhile: a page frozen in the background, or
   // kept whole by the back button, may not have heard it happen (engine/me/save.ts checkSaveHeld)
@@ -133,12 +124,11 @@ function Career() {
     }
   }, [])
   // Another page of the game wrote the save or took it (reported 2026-09-18, an outside audit): this page hears it at
-  // once, and stops writing if it held the save. On the home page the card is drawn again, so it shows what is there now.
+  // once, and stops writing if it held the save. The home page draws its card again on the same event (App.tsx).
   useEffect(() => {
     const heard = (e: StorageEvent) => {
       if (e.storageArea && e.storageArea !== window.localStorage) return
       onSaveStorage(e.key)
-      if (!gameRef.current) bump()
     }
     window.addEventListener('storage', heard)
     return () => window.removeEventListener('storage', heard)
@@ -188,27 +178,18 @@ function Career() {
     gameRef.current = g
     claimAutosave(g)
     setScreen('week')
+    // a career read back: its first autosave writes the summary a save from before it lacks
     commit()
   }, [commit])
 
   /**
-   * The save as it is now, opened: 继续 on the home page, and 「载入最新存档」 on a page another one took the save from.
-   * false when there is none, or it cannot be read.
+   * The save as it is now, opened in place: 「载入最新存档」 on a page another one took the save from (the home
+   * page's 继续 opens it through App.tsx, with the same read: engine/me/opening.ts). false when there is none, or it
+   * cannot be read.
    */
   const openSave = useCallback(async (): Promise<boolean> => {
-    const g = await loadAutosave()
-    if (!g?.me) return false
-    // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
-    // a save from before the eight ceilings gets them now, not at the end of its first week
-    resumeTimeline(g)
-    ensureCeilings(g)
-    // a career came back, and how far in it already is — the other half of
-    // 「有没有人第二天又回来了」
-    track('career_resume', {
-      ...turnShape(g),
-      pro_seasons: g.me!.seasons.filter((s) => s.tier > 0).length,
-      age: g.players[g.me!.id]?.age ?? 0,
-    })
+    const g = await openSavedCareer()
+    if (!g) return false
     // whatever was up over the career it replaces goes with it: a match in progress, a card, a run's summary
     holdCard(null)
     setLive(null)
@@ -220,6 +201,14 @@ function Career() {
     start(g)
     return true
   }, [start])
+
+  // the career the home page opened (a new one, or the save read back), taken as this mounts; a
+  // career opened after 回到首页 mounts a new shell (App.tsx keys it), so this runs once a career
+  useEffect(() => {
+    start(opened)
+    setBooted(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Whatever the dials cover is answered, and said so, before the clock moves. */
   const answerDials = useCallback((g: GameState) => {
@@ -316,14 +305,9 @@ function Career() {
     if (liveRef.current) { toast('这场比赛打完再回首页。'); return }
     // an answer's result still up goes with the career (ui/me/hold.tsx)
     holdCard(null)
-    gameRef.current = null
-    setFixture(null)
-    setPlayerId(null)
-    setSummary(null)
-    setMore(false)
-    setScreen('week')
-    bump()
-  }, [commit, leaving, live, toast])
+    // the home page takes over (App.tsx): this shell and everything open in it close with the career
+    onHome()
+  }, [commit, leaving, live, onHome, toast])
 
   const ctxValue = useMemo(() => ({
     game: gameRef.current!,
@@ -351,23 +335,8 @@ function Career() {
 
   if (!booted) return null
   const game = gameRef.current
-  if (!game || !game.me) {
-    return (
-      <>
-      {/* a build that went live while this page was open: 刷新 / 稍后 (ui/me/UpdateNudge.tsx); nothing to save before it here */}
-      <UpdateNudge />
-      {/* the same corner button as inside a career (below): 更新日志 belongs to the build, not to a career, so the
-          cover page has it too — someone who has not started yet is exactly who wants to read what changed (me.css) */}
-      <Changelog />
-      <NewCareer
-        onStart={start}
-        // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
-        save={autosaveInfo()}
-        onContinue={openSave}
-      />
-      </>
-    )
-  }
+  // the home page (App.tsx) draws the cover; this shell is only ever up with a career in it
+  if (!game || !game.me) return null
 
   const me = game.me
   const p = game.players[me.id]
@@ -530,7 +499,7 @@ function Career() {
               <>
                 <Poster />
                 <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-                  <button onClick={() => { gameRef.current = null; bump() }}>再来一局</button>
+                  <button onClick={onHome}>再来一局</button>
                 </div>
                 {Screen && screen !== 'week' && <div style={{ marginTop: 16 }}><Screen /></div>}
               </>
@@ -620,8 +589,8 @@ function Career() {
         {lost && <SaveTakenNotice onLoad={openSave} />}
         {/* a build that went live under this tab: 刷新 saves and waits for the write. A match being played lives only in memory,
             so the bar waits for it; and while a save is not going in, the save notice has the corner (a reload would lose that stretch),
-            as the notice that another page took the save does */}
-        <UpdateNudge busy={!!live || !!trouble || lost} onBeforeReload={saveNow} />
+            as the notice that another page took the save does. It waits for the tour as well */}
+        <UpdateNudge busy={!!live || !!trouble || lost || touring} onBeforeReload={saveNow} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>

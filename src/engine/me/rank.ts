@@ -373,6 +373,27 @@ const place = (r: Rank) => (r.pos === 1 ? `${r.server.name}第一` : `${r.server
 /** The words: 「超凡入圣 2」, and from 神话 up the place, which the client itself puts where the rank bar was. */
 export const rankText = (r: Rank): string => (r.pos === null ? r.name : `${r.name} · ${place(r)}`)
 
+/**
+ * The ladder in words: 「超凡入圣 2」, and from 神话 up the place on my server's
+ * board, 「神话 3 · 国服第 2,431 名」 — 辐能战魂 only inside its top 500. What the
+ * score is on the ladder is this module's to say; everything that decides reads where
+ * it stands today (standingOf).
+ *
+ * It used to be a table on the score itself, and 52–62 read 「辐能战魂」 with no
+ * place: a 辐能战魂 outside the 500 there are (reported 2026-09-14). That band is
+ * 神话 3 now, with its place.
+ *
+ * With no score given, mine as it reads today, on the board as it has climbed past me
+ * while I was not playing (boardWeek); a score given — a best, a line to aim at — is
+ * read on the board as it stands.
+ *
+ * Here and not in me/prepro.ts (which says it too) since 2026-09-18: the home page's
+ * save card is written with it (me/saveMeta.ts), and prepro reaches the whole world.
+ */
+export function ladderLabel(state: GameState, l?: number): string {
+  return rankText(rankAt(state, l))
+}
+
 /** With the 数值 switch: RR as well. */
 export const rankFull = (r: Rank): string => (r.pos === null ? `${r.name} · ${r.rr} RR` : `${r.name} · ${r.rr} RR · ${place(r)}`)
 

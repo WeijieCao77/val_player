@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
-import type { Attrs, GameState, Region, Role } from '../../engine/types'
-import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/career'
-import type { StartPoint } from '../../engine/me/career'
+import type { Attrs, Region, Role } from '../../engine/types'
+// the screen's own numbers, apart from the world (me/talent.ts); what it reads off the world was worked out as the
+// site was built (me/startSheet.ts), so the page a new player opens on fetches no roster book (reported 2026-09-18)
+import { ceilingLines, ceilingPreview, startCnOf, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/talent'
+import type { StartPoint } from '../../engine/me/talent'
+import type { CareerOpts } from '../../engine/me/career'
+import START_SHEET from 'virtual:start-sheet'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
-import { hallAchCount, hallTitle, lastRewriteLine, noteHall, readHall } from '../../engine/me/hall'
+import { hallAchCount, hallTitle, lastRewriteLine, readHall } from '../../engine/me/hall'
 import { ACHIEVEMENTS } from '../../engine/me/achievements'
-import { loadAutosave } from '../../engine/me/save'
-import type { AutosaveInfo } from '../../engine/me/save'
+import type { AutosaveInfo } from '../../engine/me/saveInfo'
 import type { SaveMeta } from '../../engine/me/saveMeta'
 import { fanTier, fansCn } from '../../engine/me/fans'
 import { compCn } from '../../engine/me/compname'
@@ -100,8 +103,8 @@ function SaveWho({ meta }: { meta: SaveMeta }) {
  * theme.css .savecont): who and where on the left with the two buttons, the
  * numbers on the right; on a phone the essentials first, the buttons, then the rest.
  */
-function SaveCard({ info, busy, bad, onContinue, onNew }: {
-  info: AutosaveInfo; busy: boolean; bad: boolean; onContinue: () => void; onNew: () => void
+function SaveCard({ info, busy, bad, onContinue, onNew, onWarm }: {
+  info: AutosaveInfo; busy: boolean; bad: boolean; onContinue: () => void; onNew: () => void; onWarm?: () => void
 }) {
   const [nums] = useNumbers()
   const meta = info.meta
@@ -141,7 +144,7 @@ function SaveCard({ info, busy, bad, onContinue, onNew }: {
         <div className="save-go">
           {bad && <p className="save-bad" role="alert">这个存档读不了：可能是旧版本写的，或者已经损坏。开新生涯不受它影响。</p>}
           <div className="row">
-            <button className="primary" onClick={onContinue} disabled={busy || bad}>{busy ? '读取中…' : '继续'}</button>
+            <button className="primary" onClick={onContinue} onPointerEnter={onWarm} onFocus={onWarm} disabled={busy || bad}>{busy ? '读取中…' : '继续'}</button>
             <button onClick={onNew} disabled={busy}>开新生涯</button>
           </div>
           <p className="tiny faint">开新生涯会覆盖这个存档。</p>
@@ -189,13 +192,21 @@ function ConfirmNew({ who, onOk, onCancel }: { who?: string; onOk: () => void; o
 }
 
 export default function NewCareer({
-  onStart, save, onContinue,
+  onStart, save, onContinue, onSeedHall, onWarm,
 }: {
-  onStart: (g: GameState) => void
+  /**
+   * make the career these choices describe and open it (App.tsx: the career and the world come with it); false when
+   * the game's files did not arrive, which App says itself
+   */
+  onStart: (opts: CareerOpts) => Promise<boolean>
   /** the career to continue, drawn from its summary without reading it; null when there is none */
   save: AutosaveInfo | null
-  /** read the save and open it; false when it cannot be read */
-  onContinue: () => Promise<boolean>
+  /** read the save and open it; false when it cannot be read, null when the game's files did not arrive (App says so) */
+  onContinue: () => Promise<boolean | null>
+  /** a save from before the summary: what it unlocked goes into the hall before a new career overwrites it */
+  onSeedHall: () => Promise<void>
+  /** a press on its way — the pointer on 继续 or 开始生涯: the career can start arriving */
+  onWarm?: () => void
 }) {
   // with a save the page opens on its card; without one, straight into making a career
   const [view, setView] = useState<'home' | 'form' | 'hall'>(save ? 'home' : 'form')
@@ -204,6 +215,8 @@ export default function NewCareer({
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [bad, setBad] = useState(false)
+  // 开始生涯 pressed: the career and the world it is made in are on their way
+  const [starting, setStarting] = useState(false)
   const [year, setYear] = useState<EntryYear>(2026)
   const [name, setName] = useState('')
   const [region, setRegion] = useState<Region>('China')
@@ -221,16 +234,20 @@ export default function NewCareer({
   const [again] = useState(() => lastRewriteLine(readHall()))
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
-  // the regions that year's world has clubs in (career.ts careerRegions), the list createCareer opens from
-  const regions = useMemo(() => careerRegions(year), [year])
-  // where a club start is placed: the game picks from these once the career starts (career.ts pickClub)
-  const pool = useMemo(() => startPool(region, start, year), [region, start, year])
-  // what createCareer would refuse here, ladder start included, in the button's words (career.ts startBlocked)
-  const gate = useMemo(() => startBlocked(region, start, year), [region, start, year])
-  const academies = useMemo(() => start === 'chal' && pool.some((c) => isAcademy(c, year)), [pool, start, year])
-  // the talent panel's ceiling and the starters beside it, from the engine and the entry year's data (me/career.ts ceilingLines)
+  // what the year's world says, as the site was built (me/startSheet.ts): the regions it has clubs in, the list
+  // createCareer opens from (career.ts careerRegions); per place and door, what createCareer would refuse, ladder start
+  // included, in the button's words (career.ts startBlocked), and how many clubs a club start is placed among — the
+  // game picks one once the career starts (career.ts startPool, pickClub) — and whether they are second teams
+  const sheet = START_SHEET[year]
+  const regions = sheet.regions
+  const door = sheet.doors[region]?.[start]
+  const pool = door?.pool ?? 0
+  // a place the table has no row for is one the year has no club in (career.ts startBlocked says the same)
+  const gate = door ? door.gate || null : `${year} 年开季时${REGION_CN[region] ?? region}没有俱乐部`
+  const academies = !!door?.academies
+  // the talent panel's ceiling and the starters beside it, from the engine and the entry year's data (me/talent.ts ceilingLines)
   const [capNums] = useNumbers()
-  const capLine = useMemo(() => ceilingLines(ceilingPreview(role, talents, originKey, year), year, capNums ? undefined : attrWord), [role, talents, originKey, year, capNums])
+  const capLine = useMemo(() => ceilingLines(ceilingPreview(role, talents, originKey, sheet.bands), year, capNums ? undefined : attrWord), [role, talents, originKey, sheet, year, capNums])
   const starts = startCnOf(year)
   // where a career grinds from, under the league it feeds; 2021 had no leagues to group by
   const groups = useMemo<{ league: Region | null; list: Region[] }[]>(() => (year >= 2023
@@ -257,15 +274,14 @@ export default function NewCareer({
     setBad(false)
     // a frame for 「读取中…」 to show: reading the save holds the page for a moment (a packed one is unzipped first, engine/me/save.ts)
     const failed = () => { setBusy(false); setBad(true) }
-    window.setTimeout(() => { onContinue().then((ok) => { if (!ok) failed() }, failed) }, 30)
+    // null: the game's files did not arrive, which is not the save's fault (App.tsx says what to do)
+    window.setTimeout(() => { onContinue().then((ok) => { if (ok === false) failed(); else if (ok === null) setBusy(false) }, failed) }, 30)
   }
   const askNew = () => (confirmed ? setView('form') : setAsking(true))
   const confirmNew = async () => {
     // a save from before the summary may never have been opened by a build with the hall: what it unlocked goes in
     // before a new career overwrites it (破晓 seeds its hall from the save on its cover, save.ts hallSeedFrom)
-    if (save && !save.meta) {
-      try { const g = await loadAutosave(); if (g?.me) noteHall(g, true) } catch { /* unreadable: nothing to note */ }
-    }
+    if (save && !save.meta) await onSeedHall()
     setAsking(false)
     setConfirmed(true)
     setView('form')
@@ -275,7 +291,7 @@ export default function NewCareer({
     return (
       <div className="newcareer nc-home">
         {cover}
-        <SaveCard info={save} busy={busy} bad={bad} onContinue={cont} onNew={askNew} />
+        <SaveCard info={save} busy={busy} bad={bad} onContinue={cont} onNew={askNew} onWarm={onWarm} />
         {/* 配色开关在生涯壳的侧栏底部，而开局页在壳外面：一个觉得黑底看着晕的人，
             本来得先开一局生涯才够得着米色。这里放一颗同样的（安静地靠右） */}
         <div className="row nc-tools">{hallButton('home')}<div className="right row"><ThemeToggle compact /></div></div>
@@ -291,9 +307,9 @@ export default function NewCareer({
     : '2021 年还没有联赛，每个赛区各打各的 Challengers。')
     + (start === 'pre'
       ? '天梯开局没有队伍：你在这里的服务器打排位，试训邀请由俱乐部发来，本地俱乐部最先注意到你。'
-      : !pool.length ? `${year} 年开季时这里没有${start === 't1' ? '一线' : '二线'}俱乐部。`
-        : academies ? `这里有 ${pool.length} 支一线队的二队，开局进其中一支。`
-          : `这里有 ${pool.length} 支${clubWord}俱乐部，开局进其中一支，弱队更愿意赌新人。`)
+      : !pool ? `${year} 年开季时这里没有${start === 't1' ? '一线' : '二线'}俱乐部。`
+        : academies ? `这里有 ${pool} 支一线队的二队，开局进其中一支。`
+          : `这里有 ${pool} 支${clubWord}俱乐部，开局进其中一支，弱队更愿意赌新人。`)
   // what is still missing, said on the button, in the order the page asks (破晓's 建档 button, main.ts viewCreate)
   const blocked = gate ? gate
     : !originKey ? '先选一个出身'
@@ -302,7 +318,7 @@ export default function NewCareer({
 
   const pickYear = (y: EntryYear) => {
     setYear(y)
-    if (!careerRegions(y).includes(region)) setRegion('China')
+    if (!START_SHEET[y].regions.includes(region)) setRegion('China')
   }
   const pickStart = (k: StartPoint) => {
     setStart(k)
@@ -335,25 +351,30 @@ export default function NewCareer({
   const shape = talentShape(talents)
   const presetOn = TALENT_PRESETS.find((x) => ATTR_KEYS.every((k) => x.t[k] === talents[k]))?.key
   const go = () => {
-    if (blocked) return
+    if (blocked || starting) return
     const ign = name.trim() || 'Rookie'
-    // What was chosen on this screen, and nothing that was typed into it: the
-    // IGN is the one free-text field in the whole game and it never leaves
-    // (engine/me/telemetry.ts). The talent goes out as its shape — the most on
-    // any one attribute, and how many got any — which is what 「天赋怎么点的」
-    // asks and carries no text at all.
-    track('career_start', {
-      year,
-      region,
-      role,
-      start,
-      origin: originKey,
-      talent_max: ATTR_KEYS.reduce((m, k) => Math.max(m, talents[k]), 0),
-      talent_spread: ATTR_KEYS.filter((k) => talents[k] > 0).length,
-      talent_points: TALENT_POINTS - left,
-    })
-    // a club start is placed by the game, off the career's seed (career.ts pickClub)
-    onStart(createCareer({ name: ign, region, role, talents, originKey, start, year }))
+    setStarting(true)
+    // a frame for 「载入中…」 to show: the career, and the world it is made in, arrive with this press (App.tsx)
+    window.setTimeout(() => {
+      onStart({ name: ign, region, role, talents, originKey, start, year }).then((ok) => {
+        if (!ok) { setStarting(false); return }
+        // What was chosen on this screen, and nothing that was typed into it: the
+        // IGN is the one free-text field in the whole game and it never leaves
+        // (engine/me/telemetry.ts). The talent goes out as its shape — the most on
+        // any one attribute, and how many got any — which is what 「天赋怎么点的」
+        // asks and carries no text at all. Said once the career has opened.
+        track('career_start', {
+          year,
+          region,
+          role,
+          start,
+          origin: originKey,
+          talent_max: ATTR_KEYS.reduce((m, k) => Math.max(m, talents[k]), 0),
+          talent_spread: ATTR_KEYS.filter((k) => talents[k] > 0).length,
+          talent_points: TALENT_POINTS - left,
+        })
+      }, () => setStarting(false))
+    }, 30)
   }
 
   return (
@@ -482,7 +503,7 @@ export default function NewCareer({
 
       <div className="row nc-go" style={{ gap: 10, justifyContent: 'flex-end' }}>
         {save && confirmed && <span className="tiny faint">开始后覆盖上次的存档</span>}
-        <button className="primary" onClick={go} disabled={!!blocked}>{blocked || '开始生涯'}</button>
+        <button className="primary" onClick={go} onPointerEnter={onWarm} onFocus={onWarm} disabled={!!blocked || starting}>{starting ? '载入中…' : blocked || '开始生涯'}</button>
       </div>
     </div>
   )

@@ -9,14 +9,15 @@
  * one in src/ui/ is the manager game's (scripts/check_boundary.ts).
  *
  * 破晓's rules, kept: 刷新 saves before it reloads; 稍后 quiets this build and
- * only a newer one asks again; it waits while the tour is walking. One more of
+ * only a newer one asks again; it waits while the tour is walking (the career says
+ * so through `busy`: the tour's module reaches the whole game, and the home page
+ * this bar is also on must not fetch it, reported 2026-09-18). One more of
  * ours: a match being played lives only in memory, so the bar waits for the
  * match to end rather than offer a reload that would lose it. The save is
  * written after the commit (engine/me/save.ts), so 刷新 waits for it to land,
  * and does not reload at all when it did not go in: the save notice says so.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useOpenTour } from './guide'
 
 const ENTRY = /assets\/index-[^"'/\s]+\.js/
 const EVERY = 5 * 60 * 1000
@@ -59,15 +60,15 @@ function start() {
 }
 
 export default function UpdateNudge({ busy = false, onBeforeReload }: {
+  /** a match being played, a save not going in, the tour walking: the bar waits */
   busy?: boolean
   /** save before the reload and wait for the write to land (PlayerGame saveNow); false when it did not go in */
   onBeforeReload?: () => boolean | Promise<boolean>
 }) {
   useEffect(() => { start() }, [])
   const v = useSyncExternalStore(subscribe, readFound, readFound)
-  const touring = !!useOpenTour().kind
   const [saving, setSaving] = useState(false)
-  if (!v || busy || touring) return null
+  if (!v || busy) return null
 
   const reload = async () => {
     setSaving(true)

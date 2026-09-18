@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
 import type { CupRun, Invite } from './types'
 import { pushLog } from './log'
-import { boardWeek, payDownAtTop, rankAt, rankText, standingOf } from './rank'
+import { boardWeek, payDownAtTop, standingOf } from './rank'
 import { push } from './pending'
 import { daysLeft } from './aside'
 import { CUPS } from './cups'
@@ -21,23 +21,8 @@ export const INVITE_DAYS = 21
 /** Where a player of this rating settles on the ladder, 0-100. */
 export const skillToLadder = (overall: number): number => clamp(45 + (overall - 60) * 1.7, 0, 100)
 
-/**
- * The ladder in words: 「超凡入圣 2」, and from 神话 up the place on my server's
- * board, 「神话 3 · 国服第 2,431 名」 — 辐能战魂 only inside its top 500. What the
- * score is on the ladder is me/rank.ts's to say; everything that decides reads where
- * it stands today (me/rank.ts standingOf).
- *
- * It used to be a table on the score itself, and 52–62 read 「辐能战魂」 with no
- * place: a 辐能战魂 outside the 500 there are (reported 2026-09-14). That band is
- * 神话 3 now, with its place.
- *
- * With no score given, mine as it reads today, on the board as it has climbed past me
- * while I was not playing (me/rank.ts boardWeek); a score given — a best, a line to
- * aim at — is read on the board as it stands.
- */
-export function ladderLabel(state: GameState, l?: number): string {
-  return rankText(rankAt(state, l))
-}
+/** The ladder in words (me/rank.ts ladderLabel, where it lives beside the rest of the ladder's words), said here as well. */
+export { ladderLabel } from './rank'
 
 /**
  * One action point of ranked: six games against the ladder's own pull.

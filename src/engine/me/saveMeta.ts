@@ -1,8 +1,10 @@
 import type { GameState } from '../types'
-import { dateLabel } from '../season'
+// from the modules that hold them apart from the world (engine/calendar.ts, me/rank.ts): the home page reads the
+// summary back with this module, and must not fetch every roster book to do it (reported 2026-09-18, an outside audit)
+import { dateLabel } from '../calendar'
 import { onTimeline, stageNameIn } from '../era'
 import { isIntlComp } from './compclass'
-import { ladderLabel } from './prepro'
+import { ladderLabel } from './rank'
 import { hallAchCount, readHall } from './hall'
 import type { Phase } from './types'
 

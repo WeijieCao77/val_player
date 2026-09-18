@@ -40,22 +40,13 @@ import {
   DOUBLE_8, GROUPS, advanceTemplate, championsGroups, championsSeeds, decided, doubleFor,
   mastersSeeds, swissDone, swissNext, swissOutcome, templateDone, MASTERS_8, TRIPLE_12, TRIPLE_12_PLACES, STAGE_8, STAGE_8_PLACES, swissRoundOf, SWISS_ROUNDS, swissRecord
 } from './bracket'
+import { SEASON_DAYS } from './calendar'
 
 /**
- * The year, in days.
- *
- * The calendar ran 336 days with one stage hard against the next: Kickoff's
- * final on a Sunday, the Masters draw on Tuesday, Stage 1 opening the day
- * after the Masters final. A manager wrote that it was 「拥挤」 — no time to
- * do business between competitions — and the sport itself does not play
- * like that. So the year is the whole year now, and the stages are shaped
- * like the real ones: a league plays twice a week for five weeks, then a
- * fortnight of playoffs, then three to four weeks off before the Masters,
- * with the market open through the break that leads into it — and three
- * weeks off after the Masters before the next league starts (see
- * LEAGUE_DAYS, and keepBreaks for the rule that holds it whatever happens).
+ * The year in days, and a day as a date: engine/calendar.ts, which holds them
+ * apart from everything this module reaches, and they are said here as well.
  */
-export const SEASON_DAYS = 364
+export { SEASON_DAYS, dateLabel } from './calendar'
 
 /**
  * The days each regional regular season is spread over.
@@ -92,13 +83,6 @@ export const BREAK_AFTER_INTERNATIONAL = 14
  */
 export const INTERNATIONAL_OPEN: Record<'masters1' | 'masters2' | 'champions', number> = {
   masters1: 76, masters2: 184, champions: 296,
-}
-
-/** Display a day index as an in-fiction date. */
-export function dateLabel(state: GameState): string {
-  const d = new Date(Date.UTC(state.year, 0, 1))
-  d.setUTCDate(d.getUTCDate() + state.day)
-  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
 }
 
 export const compKey = (stage: string, region?: Region) => (region ? `${stage}:${region}` : stage)
