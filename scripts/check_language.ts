@@ -32,10 +32,17 @@
  *    and a league of one country draw exactly as before. The word on a club by year and league (「外赛区」 by league,
  *    「国外俱乐部」 by country), on the invitation and offer cards and the transfer screen; going abroad still by
  *    country (me.abroad, 「语言会是个问题」)
+ * 九 the Chinese itself, where a slip can be caught without reading it (a copy audit, 2026-09-18, after three garbled
+ *    tryout options 「拉拉垮了」「别把手腾担累坏」「把队友喀舒服」 and 「这个价信不是不想」 in 话语权): every player-facing
+ *    literal of the career (src/engine/me, src/ui/me, PlayerGame.tsx) closes the 「」“”（）《》 it opens and puts no
+ *    space beside full-width punctuation; the words the 2026-09 wording pass took out (输球, 赢球, 球队…) stay out; and
+ *    a news line that brings its own icon gets no second one in the weekly report (「🏆 🏆 BESTIA 夺得……冠军！」)
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import ts from 'typescript'
+import { weekReport } from '../src/engine/me/press'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import {
@@ -667,5 +674,72 @@ mateOffers('North America', 2021, 'chal', 5)
 goAbroad(2026, 41)
 goAbroad(2021, 41)
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+/* ---- 九 the words themselves ---- */
+console.log('\n九 字面：引号括号成对、全角标点旁不留空格、不说别的项目的词、周报一条新闻一个图标')
+{
+  const CJK = /[㐀-鿿]/
+  const root = new URL('../', import.meta.url)
+  const files = [
+    ...readdirSync(new URL('src/engine/me/', root)).filter((f) => /\.tsx?$/.test(f)).map((f) => `src/engine/me/${f}`),
+    ...readdirSync(new URL('src/ui/me/', root)).filter((f) => /\.tsx?$/.test(f)).map((f) => `src/ui/me/${f}`),
+    'src/PlayerGame.tsx',
+  ]
+  // every literal a player can read, as one string: a template's pieces joined (its expressions are read on their own),
+  // a JSX element's text around its {…} joined the same way
+  const lits: { at: string; s: string }[] = []
+  for (const file of files) {
+    const sf = ts.createSourceFile(file, readFileSync(new URL(file, root), 'utf8'), ts.ScriptTarget.Latest, true,
+      file.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const visit = (n: ts.Node): void => {
+      let s: string | null = null
+      if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) s = n.text
+      else if (ts.isTemplateExpression(n)) s = n.head.text + n.templateSpans.map((sp) => `⟨⟩${sp.literal.text}`).join('')
+      else if ((ts.isJsxElement(n) || ts.isJsxFragment(n)) && n.children.some((c) => ts.isJsxText(c) && CJK.test(c.text))) {
+        s = n.children.map((c) => (ts.isJsxText(c) ? c.text.replace(/\s*\n\s*/g, '') : '⟨⟩')).join('')
+      }
+      if (s != null && CJK.test(s)) lits.push({ at: `${file}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`, s })
+      if (ts.isTemplateExpression(n)) { n.templateSpans.forEach((sp) => visit(sp.expression)); return }
+      ts.forEachChild(n, visit)
+    }
+    visit(sf)
+  }
+  const PAIRS = ['「」', '“”', '（）', '《》']
+  const open = (s: string): string[] => PAIRS.filter(([a, b]) => {
+    let d = 0
+    for (const ch of s) {
+      if (ch === a) d++
+      else if (ch === b && --d < 0) return true
+    }
+    return d !== 0
+  })
+  const quotes = lits.filter((l) => open(l.s).length)
+  if (quotes.length) fail(`${quotes.length} 句引号或括号没配对：${quotes.slice(0, 4).map((l) => `${l.at}「${l.s.slice(0, 40)}」缺 ${open(l.s).join(' ')}`).join('；')}`)
+  else pass(`${files.length} 个文件、${lits.length} 句中文：「」“”（）《》都成对`)
+  const SPACE = /[，。：；！？、）」”] +[㐀-鿿]|[㐀-鿿] +[，。：；！？、（「“]/
+  const spaced = lits.filter((l) => SPACE.test(l.s))
+  if (spaced.length) fail(`${spaced.length} 句全角标点旁边多了空格：${spaced.slice(0, 4).map((l) => `${l.at}「${l.s.slice(0, 40)}」`).join('；')}`)
+  else pass('全角标点旁边没有多出来的空格')
+  // 2026-09 (changelog_me 「全游戏的用词对了一遍」): 输球 / 赢球 / 球队 / 球员 / 球迷, 更衣室, 主队 / 客队 are another game's words
+  const OTHER = /输球|赢球|球队|球员|球迷|更衣室|主队|客队/
+  const other = lits.filter((l) => OTHER.test(l.s))
+  if (other.length) fail(`${other.length} 句又用了别的项目的词：${other.slice(0, 4).map((l) => `${l.at}「${l.s.match(OTHER)![0]}」`).join('；')}`)
+  else pass('没有「输球」「赢球」「球队」「更衣室」「主队」这类别的项目的词')
+
+  // the weekly report puts 🏆 before a league's news and 📰 before a transfer; the engine's own line may already carry one
+  const s = createCareer({ name: 'Words', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 9, year: 2026 })
+  s.news.push(
+    { day: s.day, kind: 'league', important: true, text: '🏆 BESTIA 夺得 挑战者联赛 · 拉美南区 冠军！' },
+    { day: s.day, kind: 'league', important: true, text: '某联赛 常规赛结束，季后赛名单：A、B。' },
+    { day: s.day, kind: 'player', important: true, text: '👋 某选手 正式挂上鼠标，结束了他的职业生涯——30 岁。' },
+    { day: s.day, kind: 'transfer', important: true, text: '某俱乐部 免费签下自由人 某选手。' },
+  )
+  const paper = weekReport(s)
+  const ICON = /^\p{Extended_Pictographic}️?\s*\p{Extended_Pictographic}/u
+  const twice = paper.filter((l) => ICON.test(l))
+  const plain = ['🏆 某联赛 常规赛结束', '📰 某俱乐部 免费签下'].filter((head) => !paper.some((l) => l.startsWith(head)))
+  if (twice.length || plain.length) fail(`周报的图标不对：${[...twice.map((l) => `「${l.slice(0, 24)}」叠了两个`), ...plain.map((h) => `「${h}」没带图标`)].join('；')}`)
+  else pass(`周报：自带图标的新闻只留自己那个（${paper.filter((l) => /🏆 BESTIA|^👋/u.test(l)).length}/2），没带的照旧加 🏆 / 📰`)
+}
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

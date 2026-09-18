@@ -402,7 +402,7 @@ function judgeSeat(state: GameState, mine: string | null, Y: TYear, notes: strin
   const reached = Object.values(state.comps).filter((c) => c.format === 'circuit' && c.teams.includes(mine)
     && (c.stage === 'masters1' || c.stage === 'masters2' || c.stage === 'champions'))
   if (!reached.length) {
-    notes.push(`🏛️ 2023 年的三十个合作席位公布了，${t.name} 不在名单上——2022 年没打进过国际赛。去 Challengers 联赛，从 Ascension 往上打。`)
+    notes.push(`🏛️ 2023 年的三十个合作席位公布了，${t.name} 不在名单上——2022 年没打进过国际赛。去 Challengers 联赛，从晋级赛往上打。`)
     return
   }
   const partners = Object.entries(Y.clubs)

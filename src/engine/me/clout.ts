@@ -322,7 +322,7 @@ export function doSign(state: GameState, targetId: string): string {
   const fee = feeOf(target)
   if (fee > myTeam.budget) {
     me.gmTrust = clamp(me.gmTrust - 5, 0, 100)
-    pushLog(state, 'bad', `你向经理提出签下 ${target.ign}。他看了一眼账，没接话。「这个价信不是不想，是真没钱。」`)
+    pushLog(state, 'bad', `你向经理提出签下 ${target.ign}。他看了一眼账，没接话。「这个价，不是不想，是真没钱。」`)
     // a club's books are the world's dollars; said in the club's own currency, RMB beside it
     const cur = leagueCurOf(myTeam.region)
     return `俱乐部出不起这个价（要 ${worldMoney(fee, cur, state.year)}，队里只有 ${worldMoney(Math.max(0, myTeam.budget), cur, state.year)}）。`

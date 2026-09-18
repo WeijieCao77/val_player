@@ -393,7 +393,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 
     const deal = makeDeal(state, t.id, 'transfer', gradeOf(d + 4), rng)
     me.deals.push(deal)
     push(state, { kind: 'deal', id: deal.id })
-    pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${foreignLeague(state, t) ? '（外赛区）' : ''} 开价了。`)
+    pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）${foreignLeague(state, t) ? '（外赛区）' : ''}开价了。`)
     n++
   }
   // a language or a gold agent: with LANG_EXTRA's chance a club of another league comes on top of a round that came,
@@ -405,7 +405,7 @@ export function rollOffers(state: GameState, rng: Rng, listed = false, weight = 
       const deal = makeDeal(state, t.id, 'transfer', gradeOf(tryoutSkill(state) - expectOf(t) + 4), lang)
       me.deals.push(deal)
       push(state, { kind: 'deal', id: deal.id })
-      pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）（外赛区） 开价了——${me.flags.lang ? '你会外语' : '金牌经纪人牵的线'}。`)
+      pushLog(state, 'deal', `转会窗：${t.name}（${leagueWord(t)}）（外赛区）开价了——${me.flags.lang ? '你会外语' : '金牌经纪人牵的线'}。`)
       n++
     }
   }

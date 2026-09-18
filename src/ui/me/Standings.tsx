@@ -162,7 +162,7 @@ export function PointsPanel({ table }: { table: PointsTable }) {
     lastDirect >= 0 || lastLcq >= 0
       ? `${[lastDirect >= 0 ? `标「冠军赛」的队${open ? '直接' : '靠积分'}去冠军赛` : '', lastLcq >= 0 ? '标「最后机会资格赛」的队去最后机会资格赛' : ''].filter(Boolean).join('，')}；标「已晋级」的队不占积分名额，名额往下顺延`
       : '',
-    live ? '「本赛事已得」是还在打的赛事里赢球拿到的分，赛事结束才加进积分' : '',
+    live ? '「本赛事已得」是还在打的赛事里赢下比赛拿到的分，赛事结束才加进积分' : '',
   ].filter(Boolean).join('。')
   const cap = Math.max(8, Math.max(lastDirect, lastLcq, marks.lastIndexOf('through')) + 3)
   const mine = rows.findIndex((r) => r.team === game.myTeam)

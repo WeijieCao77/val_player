@@ -166,7 +166,7 @@ export function doorsOf(region: Region, year: number): string {
   }
   if (year === 2022) {
     return region === 'China'
-      ? '国内只有 FGC。世界大赛要等一张外卡邀请，进东亚 LCQ 打一场定生死'
+      ? '国内只有 FGC。世界大赛要等一张外卡邀请，进东亚最后机会资格赛打一场定生死'
       : '赛区 Challengers → 两站国际大师赛 → 冠军赛'
   }
   // 2021
@@ -178,7 +178,7 @@ export function doorsOf(region: Region, year: number): string {
       return '赛区决赛 → 雷克雅未克 / 柏林 / 冠军赛'
     case 'Turkey':
     case 'CIS':
-      return '并入 EMEA Playoffs 争名额，才谈国际赛'
+      return '并入 EMEA 挑战者决赛争名额，才谈国际赛'
     case 'Brazil':
     case 'LATAM':
     case 'Korea':
@@ -186,7 +186,7 @@ export function doorsOf(region: Region, year: number): string {
     case 'SEA':
       return '赛区决赛 → 雷克雅未克 / 柏林'
     default:
-      return '先打进 SEA 区域赛，才谈国际赛'
+      return '先打进东南亚区域赛，才谈国际赛'
   }
 }
 

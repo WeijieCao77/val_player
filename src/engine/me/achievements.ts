@@ -197,7 +197,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'chal_title', route: 'chal', name: '挑战者冠军', desc: '拿下一个挑战者联赛冠军', reward: { fans: 20 }, cond: (s) => titlesIn(s, 'chal').length >= 1 },
   { key: 'chal_double', route: 'chal', name: '一年两冠', desc: '同一年拿下两个挑战者联赛冠军', reward: { heat: 20 }, cond: (s) => maxPerYear(titlesIn(s, 'chal')) >= 2 },
   { key: 'chal_years', route: 'chal', name: '挑战者老面孔', desc: '在次级联赛打满四个赛季', reward: { body: 1 }, cond: (s) => M(s).seasons.filter((x) => x.tier === 2).length >= 4 },
-  { key: 'chal_mvp', route: 'chal', name: '决赛之夜', desc: '挑战者联赛决赛赢球，MVP 是你', reward: { fans: 30 },
+  { key: 'chal_mvp', route: 'chal', name: '决赛之夜', desc: '赢下挑战者联赛决赛，MVP 是你', reward: { fans: 30 },
     cond: (s) => starts(s).some((m) => m.won && m.mvp && isFinal(m.label) && compClass(m.comp) === 'chal') },
 
   // ---- 晋级之路（2023–2026 的晋级赛，2027 起的公开资格赛）

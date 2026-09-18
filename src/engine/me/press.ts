@@ -31,6 +31,15 @@ const DESK_NEWS = /等待我们答复|我们无权拒绝|你此前正在接触/
 export const deskLine = (line: string): boolean => DESK_NOTE.test(line)
 
 /**
+ * A news line that already opens on its own icon keeps just that one. Found 2026-09-18 in a copy audit: a title
+ * read 「🏆 🏆 BESTIA 夺得 挑战者联赛 · 拉美南区 · LATAM South ACE Masters 冠军！」 in the weekly report — the
+ * engine writes 🏆 on a champion's line (engine/season.ts), 👋 on a retirement, 🏛️ on a seat, and this page put its
+ * own 🏆 or 📰 in front of every one of them.
+ */
+const OWN_ICON = /^\p{Extended_Pictographic}/u
+const marked = (icon: string, text: string): string => (OWN_ICON.test(text) ? text : `${icon} ${text}`)
+
+/**
  * The week's paper, written for a player.
  *
  * What I did (my matches, a cup run, a contract), what changed around me —
@@ -61,12 +70,12 @@ export function weekReport(state: GameState): string[] {
   for (const n of ranked) {
     if (seen.has(n.text)) continue
     seen.add(n.text)
-    out.push(`📰 ${n.text}`)
+    out.push(marked('📰', n.text))
     if (seen.size >= 3) break
   }
 
   // the league itself: a title, a qualification, a relegation
-  for (const n of news.filter((n) => n.kind === 'league' && n.important).slice(-2)) out.push(`🏆 ${n.text}`)
+  for (const n of news.filter((n) => n.kind === 'league' && n.important).slice(-2)) out.push(marked('🏆', n.text))
 
   // what is next for me is the week board's own 下一场 panel, right beside this; not repeated here
   return out

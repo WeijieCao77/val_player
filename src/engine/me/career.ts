@@ -346,7 +346,7 @@ export function talentShape(talents: Record<keyof Attrs, number>): { label: stri
 }
 
 /** The talent panel's line on the three that 综合 hardly counts, in what the engine does with them. */
-export const TALENT_TEAM_HINT = '指挥：当上主指挥才上场起作用，全队按主指挥的指挥来打。协同、沟通：关键回合的配合选项、和队友的关系、输球后会不会起争执、状态，教练在能力接近的人里选首发时也看。'
+export const TALENT_TEAM_HINT = '指挥：当上主指挥才上场起作用，全队按主指挥的指挥来打。协同、沟通：关键回合的配合选项、和队友的关系、输了比赛会不会起争执、状态，教练在能力接近的人里选首发时也看。'
 
 /** The eight, the way the new-career screen previews them. */
 export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, originKey: string, rng?: Rng): Attrs {
