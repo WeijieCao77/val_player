@@ -37,6 +37,12 @@
  *    literal of the career (src/engine/me, src/ui/me, PlayerGame.tsx) closes the 「」“”（）《》 it opens and puts no
  *    space beside full-width punctuation; the words the 2026-09 wording pass took out (输球, 赢球, 球队…) stay out; and
  *    a news line that brings its own icon gets no second one in the weekly report (「🏆 🏆 BESTIA 夺得……冠军！」)
+ * 十 a key round's line tells what happened, not the result (the same audit: 497 of them ended 「……，这回合拿下 /
+ *    丢了。」 beside a round record that already said it): no line of me/nodes.ts NODE_HL, nor the stand-in for a
+ *    missing one, ends on the round's result; and every place the career shows such a line (a `.hl` read in src/ui/me
+ *    or PlayerGame.tsx) shows the result beside it — a 拿下 / 丢了 tag, or the round's own line that says it. A match
+ *    played out keeps the result on every call that has a line, and no call's line in the engine's highlights, which
+ *    are shown with no result beside them
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
@@ -59,6 +65,8 @@ import { ATTR_KEYS } from '../src/engine/types'
 import type { GameState, Region, Team } from '../src/engine/types'
 import type { Invite } from '../src/engine/me/types'
 import { Rng, hashStr } from '../src/engine/rng'
+import { NODE_HL, nodeLine } from '../src/engine/me/nodes'
+import { MeMatch } from '../src/engine/me/matchplay'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -741,5 +749,99 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
   else pass(`周报：自带图标的新闻只留自己那个（${paper.filter((l) => /🏆 BESTIA|^👋/u.test(l)).length}/2），没带的照旧加 🏆 / 📰`)
 }
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+/* ---- 十 a key round's line: what happened in it, and its result beside it ---- */
+console.log('\n十 关键回合的句子：句尾不再报这回合拿下 / 丢了；显示这些句子的地方，旁边都有结果')
+{
+  // the round's result said once more at a line's end: 「……，这回合拿下。」「……，这回合还是丢了。」「……，赛点收下。」
+  // 「……——还好这回合还是拿下。」「……，拿下。」
+  const STAMP = /(^|[，。—])(可|好在|还好)?把?(这一波|这回合|这一回合|手枪局|赛点|回合)?(最后)?(还是|也|稳稳|照样|反而|硬是)?(拿下|丢了|没拿下|收下|没收住|没守住|抢了回来|交了出去|没翻过来|没扛住)了?。$/
+  let lines = 0
+  const stamped: string[] = []
+  for (const [id, rows] of Object.entries(NODE_HL)) {
+    rows.forEach((o, i) => {
+      for (const [cell, t] of Object.entries(o)) {
+        if (t == null) continue
+        for (const s of typeof t === 'string' ? [t] : Object.values(t)) {
+          lines++
+          if (STAMP.test(s)) stamped.push(`${id}[${i}].${cell}「${s}」`)
+        }
+      }
+    })
+  }
+  // and the stand-in for a node with no line written
+  for (const ok of [true, false]) {
+    for (const won of [true, false]) {
+      const f = nodeLine('check:none', 0, ok, { won, kills: 0 })
+      lines++
+      if (!f.fallback) fail('没写句子的节点没有走兜底句')
+      else if (STAMP.test(f.text)) stamped.push(`兜底「${f.text}」`)
+    }
+  }
+  if (stamped.length) fail(`${stamped.length} 句关键回合的句子在句尾又报了一遍结果：${stamped.slice(0, 4).join('；')}`)
+  else pass(`${lines} 句关键回合的句子（含兜底 4 句）：没有一句在句尾报这回合拿下 / 丢了`)
+
+  // every place the career shows a call's line — a `.hl` read in its screens — and the element that line sits in: the
+  // nearest 「node-line」 around it has to show the round's result too, as the tag, as the ledger's own 拿下 / 丢了 on
+  // the call's `won`, or as the round record's line
+  const root = new URL('../', import.meta.url)
+  const uiFiles = [
+    ...readdirSync(new URL('src/ui/me/', root)).filter((f) => /\.tsx$/.test(f)).map((f) => `src/ui/me/${f}`),
+    'src/PlayerGame.tsx',
+  ]
+  const shown: string[] = []
+  const bare: string[] = []
+  const says: Record<string, boolean> = {}
+  const both = (t: string): boolean => /'拿下'/.test(t) && /'丢了'/.test(t)
+  for (const file of uiFiles) {
+    const sf = ts.createSourceFile(file, readFileSync(new URL(file, root), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+    const visit = (n: ts.Node): void => {
+      // what the tag and the round record's line say, wherever they are written
+      if (ts.isFunctionDeclaration(n) && n.name && (n.name.text === 'RoundTag' || n.name.text === 'roundLine')) says[n.name.text] = both(n.getText(sf))
+      // a line put on the screen: `{x.hl}` itself, or `x.hl.map(…)` for a round's several (a filter or a condition on it shows nothing)
+      const put = !!n.parent && ((ts.isJsxExpression(n.parent) && n.parent.expression === n)
+        || (ts.isPropertyAccessExpression(n.parent) && n.parent.expression === n && n.parent.name.text === 'map'))
+      if (ts.isPropertyAccessExpression(n) && n.name.text === 'hl' && put) {
+        const at = `${file}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`
+        let p: ts.Node | undefined = n.parent
+        while (p && !(ts.isJsxElement(p) && /node-line/.test(p.openingElement.attributes.getText(sf)))) p = p.parent
+        const body = p ? p.getText(sf) : ''
+        const tag = /<RoundTag\b/.test(body) ? 'RoundTag' : /\broundLine\(/.test(body) ? 'roundLine' : both(body) ? 'text' : null
+        if (tag) shown.push(`${at}（${tag === 'text' ? '旁边的字' : tag}）`)
+        else bare.push(at)
+      }
+      ts.forEachChild(n, visit)
+    }
+    visit(sf)
+  }
+  const silent = Object.entries(says).filter(([, v]) => !v).map(([k]) => k)
+  if (bare.length) fail(`${bare.length} 处显示关键回合的句子，旁边没有这回合的结果：${bare.join('、')}`)
+  else if (silent.length) fail(`${silent.join('、')} 没有同时写「拿下」和「丢了」`)
+  else if (shown.length < 4) fail(`只找到 ${shown.length} 处显示关键回合句子的地方，应有比赛里、回合记录、终场「今晚关于你的几个回合」、临场账本 4 处：${shown.join('、')}`)
+  else pass(`显示关键回合句子的 ${shown.length} 处，旁边都有这回合的结果：${shown.join('、')}`)
+
+  // a match played out, the coach's way: every call with a line keeps its round's result for the tag, and the engine's
+  // highlights — shown on the final sheet with nothing beside them — hold no call's line
+  const s = createCareer({ name: 'Calls', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 12, year: 2026 })
+  const club = s.teams[s.myTeam]
+  const meId = s.me!.id
+  if (!club.starters.includes(meId)) club.starters = [meId, ...club.starters.filter((id) => id !== meId)].slice(0, 5)
+  const opp = Object.values(s.teams).find((t) => t.id !== s.myTeam && !t.dormant && t.roster.length >= 5 && t.tier === club.tier && !t.id.startsWith('CUP_'))
+  const comp = Object.keys(s.comps).find((k) => s.comps[k]?.region) ?? ''
+  const c = { calls: 0, noResult: 0, leaked: 0, engine: 0 }
+  for (let i = 0; opp && i < 4; i++) {
+    const rec = new MeMatch(s, { aId: s.myTeam, bId: opp.id, bo: 3, comp, label: `check:lang:calls:${i}` }).runOut()
+    c.engine += rec.highlights?.length ?? 0
+    for (const n of rec.nodes) {
+      if (!n.hl) continue
+      c.calls++
+      if (n.won === undefined) c.noResult++
+      if ((rec.highlights ?? []).some((h) => h.includes(n.hl!))) c.leaked++
+    }
+  }
+  if (!c.calls) fail('探针设置不对：打了 4 场 BO3，一次关键回合也没有')
+  else if (c.noResult || c.leaked) fail(`${c.calls} 次关键回合：${c.noResult} 次有句子却没记这回合的结果，${c.leaked} 句混进了旁边不带结果的引擎高光`)
+  else pass(`打了 4 场 BO3：${c.calls} 次关键回合都记着这回合的结果，引擎高光 ${c.engine} 句里没有一句是关键回合的句子`)
+}
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标；关键回合的句子不在句尾报结果，结果在旁边。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

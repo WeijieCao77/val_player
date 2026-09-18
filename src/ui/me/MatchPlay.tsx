@@ -38,6 +38,17 @@ function roundLine(r: RoundLog, mineIsA: boolean): string {
 }
 
 /**
+ * A call's round, taken or not, as a chip beside its line. The line itself no
+ * longer says it (2026-09-18, engine/me/nodes.ts NODE_HL): wherever a call's
+ * line is shown, the result is shown next to it — here, or in the text around
+ * it (scripts/check_language.ts 十 keeps every such place that way).
+ */
+function RoundTag({ won }: { won?: boolean }) {
+  if (won === undefined) return null
+  return <span className={won ? 'tag win' : 'tag'} style={{ marginRight: 6 }}>{won ? '拿下' : '丢了'}</span>
+}
+
+/**
  * Every round of the series so far, newest first — the round's line with the
  * score it left, the call I made on it, and what the engine wrote about it —
  * in a box of its own height that scrolls, so a thirty-round map does not push
@@ -286,11 +297,17 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         ) : <p className="muted center">你没有出场。</p>}
-        {rec.highlights && rec.highlights.length > 0 && (
+        {(rec.nodes.some((n) => n.hl) || (rec.highlights?.length ?? 0) > 0) && (
           <div className="panel" style={{ marginTop: 10 }}>
             <div className="panel-head"><h2>今晚关于你的几个回合</h2></div>
             <div className="panel-body">
-              {rec.highlights.map((h, i) => <div key={i} className="node-line">{h}</div>)}
+              {/* each call's line with its round's result beside it: the line no longer says it */}
+              {rec.nodes.filter((n) => n.hl).map((n, i) => (
+                <div key={`c${i}`} className={`node-line ${n.won ? 'ok' : 'bad'}`}>
+                  <RoundTag won={n.won} /><span className="faint">{mapCn(n.map)} 第 {n.round} 回合</span> · {n.hl}
+                </div>
+              ))}
+              {(rec.highlights ?? []).map((h, i) => <div key={i} className="node-line">{h}</div>)}
             </div>
           </div>
         )}

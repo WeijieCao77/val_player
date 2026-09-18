@@ -431,20 +431,17 @@ export class MeMatch {
   get record(): MeMatchRecord | null { return this.finished }
 
   /**
-   * The lines from this match that were about me: the engine's highlights
-   * that carry my name (it already writes the clutch and the ace — nobody was
-   * reading them), and what each of my calls did, in the order they happened.
+   * The engine's highlights from this match that carry my name (it already
+   * writes the clutch and the ace — nobody was reading them).
+   *
+   * What each of my calls did used to be written in here too, as text. Since
+   * a call's line no longer says whether its round was taken (2026-09-18, me/nodes.ts
+   * NODE_HL), the screen reads the calls off `nodes`, where the round's result
+   * sits beside each line for its 拿下 / 丢了 tag.
    */
   private myHighlights(engine: string[]): string[] {
     const ign = this.me.ign
-    const out: string[] = []
-    for (const n of this.nodes) {
-      if (n.hl) out.push(`${n.map} 第 ${n.round} 回合 · ${n.hl}`)
-    }
-    for (const h of engine) {
-      if (h.includes(ign)) out.push(h)
-    }
-    return out
+    return engine.filter((h) => h.includes(ign))
   }
 
   private finishInternal(): void {

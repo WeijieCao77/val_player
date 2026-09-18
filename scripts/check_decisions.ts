@@ -10,10 +10,13 @@
  * nobody in the chair. This check keeps all of it that way.
  *
  *   一、the copy, the premises and the hints: every node a key round can ask has
- *       its four lines per option (two for a node that decides its round), each
- *       saying the result its case is for and nothing about my kills unless picked
- *       by my kill count; a node's facts point at options it has, the attribute
- *       facts in pairs; pool hints that never claim a result
+ *       its four lines per option (two for a node that decides its round), none
+ *       saying the opposite of the result its case is for, none ending on that
+ *       result (the 拿下 / 丢了 beside the line says it, 2026-09-18 — see
+ *       scripts/check_language.ts 十 for every screen that shows one), and
+ *       nothing about my kills unless picked by my kill count; a node's facts
+ *       point at options it has, the attribute facts in pairs; pool hints that
+ *       never claim a result
  *   二、matches played call by call on fixed seeds, on both sides of the draw,
  *       answered five ways: every line read against the round record it is pinned
  *       to; every call asked in a key round and only where its premise holds — side,
@@ -71,9 +74,13 @@ const f1 = (v: number) => v.toFixed(1)
 /** a kill of mine, said in words */
 const KILL = /放倒|打掉|带走|收掉|击杀|首杀|双杀|两个都|收的|换掉/
 const TWO = /两个|连着|双杀/
-/** the round, said in words — a line has to say which, and must not say both */
+/**
+ * The round, said in words. A line used to have to say which; since 2026-09-18 the 拿下 / 丢了 beside it
+ * does, and a line must never say the other one, nor end by saying its own again (STAMP).
+ */
 const WIN = /(?<!没)拿下|收下|抢了回来|赢了下来/
 const LOSS = /丢了|没拿下|没收住|溜走|交了出去|没翻过来|没扛住|没打起来/
+const STAMP = /(^|[，。—])(可|好在|还好)?把?(这一波|这回合|这一回合|手枪局|赛点|回合)?(最后)?(还是|也|稳稳|照样|反而|硬是)?(拿下|丢了|没拿下|收下|没收住|没守住|抢了回来|交了出去|没翻过来|没扛住)了?。$/
 /** words from another game: the official ones are 辐能芯片、安装、拆除、残局 */
 const FOREIGN = /下包|炸包|拆包|包点|包已经|残血|团战/
 const CELLS: HlCell[] = ['okWin', 'okLoss', 'failWin', 'failLoss']
@@ -116,7 +123,7 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
         const variants: [string, string][] = typeof t === 'string' ? [['', t]] : Object.entries(t).filter((e): e is [string, string] => typeof e[1] === 'string')
         for (const [k, s] of variants) {
           lines++
-          if (win ? !WIN.test(s) : !LOSS.test(s)) fail(`${where}${k && `.${k}`}：没说这回合${win ? '拿下' : '丢了'}：${s}`)
+          if (STAMP.test(s)) fail(`${where}${k && `.${k}`}：句尾又报了一遍这回合${win ? '拿下' : '丢了'}（旁边的标签已经写着）：${s}`)
           if (win ? LOSS.test(s) : WIN.test(s)) fail(`${where}${k && `.${k}`}：说反了：${s}`)
           if ((k === '' || k === 'k0') && KILL.test(s)) fail(`${where}${k && `.${k}`}：不按击杀数挑，却说了你杀了人：${s}`)
           if ((k === 'k1' || k === 'k2') && !KILL.test(s)) fail(`${where}.${k}：按击杀数挑的句子没说击杀：${s}`)
@@ -420,7 +427,8 @@ function verify(c: Call): void {
   if (rl.hl?.[0] !== hl) st.unpinned++
   if (hl !== line.text + tail || e.won !== won || e.kills !== kills) st.plumbing++
   const body = hl.slice(0, hl.length - tail.length)
-  if (won ? (!WIN.test(body) || LOSS.test(body)) : (!LOSS.test(body) || WIN.test(body))) st.contra++
+  // the line no longer says the result (the tag beside it does, from e.won — checked under plumbing): it must never say the other one
+  if (won ? LOSS.test(body) : WIN.test(body)) st.contra++
   if (KILL.test(body)) { st.killLines++; if (kills === 0) st.killZero++ }
   if ((line.kills === 1 && kills < 1) || (line.kills === 2 && kills < 2) || (line.kills === 0 && kills > 0)) st.killBucket++
   if (/这张图(拿下了|丢了|打平了)/.test(hl) !== lastRound) st.mapClaim++

@@ -219,8 +219,9 @@ export interface MeMatchRecord {
   nodes: NodeLogEntry[]
   /** where I ranked by ACS on my own side, 1 = best; 0 when I did not play */
   rank: number
-  /** the rounds that were about me — engine highlights with my name on them,
-      plus what my own calls did */
+  /** the rounds that were about me — engine highlights with my name on them.
+      Until 2026-09-18 it also held what my own calls did, as text; those are
+      read off `nodes` now, with the round's result beside each */
   highlights?: string[]
   /** why it went that way: the engine's own terms, ours minus theirs */
   edge?: { key: string; label: string; diff: number; advice: string }[]
