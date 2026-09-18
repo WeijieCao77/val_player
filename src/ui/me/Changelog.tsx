@@ -6,9 +6,10 @@
  * date read is the whole of the state it keeps. The career's own copy of the
  * manager game's changelog card, reading only the career's log.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CHANGELOG_ME, LATEST_ME } from '../../data/changelog_me'
 import Rich from './rich'
+import { useLayer } from './layer'
 
 /** the newest entry this browser has opened, by date and title: a second build on one day lights the dot too */
 const SEEN = 'valplayer.changelog.seen'
@@ -57,43 +58,57 @@ export default function Changelog() {
         {fresh && <span className="dot" aria-label="有新内容" />}
       </button>
 
-      {open && (
-        <>
-          <div className="support-veil" onClick={() => setOpen(false)} />
-          <div className="support-card log-card" role="dialog" aria-label="更新日志">
-            <div className="support-head">
-              <h3>更新日志</h3>
-              <button className="sm ghost" onClick={() => setOpen(false)}>关闭 ✕</button>
-            </div>
-            <p className="small muted" style={{ margin: 0 }}>
-              这里大部分改动都来自群里的反馈。如果你提过某个 bug，多半能在下面找到。
-            </p>
-
-            <div className="log-list">
-              {CHANGELOG_ME.map((entry) => (
-                <section key={entry.date + entry.title}>
-                  <header>
-                    <b>{entry.title}</b>
-                    <span className="tiny faint mono">{entry.date}</span>
-                  </header>
-                  <ul>
-                    {entry.changes.map((c, i) => (
-                      <li key={i}>
-                        <span className={`log-kind k-${c.kind}`}>{c.kind}</span>
-                        <Rich text={c.text} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-
-            <div className="support-foot">
-              <span className="tiny faint">选手生涯 demo · 每一版改了什么都在这里，回看用</span>
-            </div>
-          </div>
-        </>
-      )}
+      {open && <LogSheet onClose={() => setOpen(false)} />}
     </>
+  )
+}
+
+/**
+ * The sheet itself, a card in front of the page like the others (layer.ts): the
+ * focus goes onto it, so the arrow keys scroll the list; Tab stays on it, and the
+ * page behind is inert until it closes, when the focus goes back to the corner
+ * button. The veil and the sheet sit in one box of their own that draws nothing
+ * (display: contents), so a click on the veil still closes it.
+ */
+function LogSheet({ onClose }: { onClose: () => void }) {
+  const wrap = useRef<HTMLDivElement>(null)
+  const card = useRef<HTMLDivElement>(null)
+  useLayer(wrap, { box: card })
+  return (
+    <div ref={wrap} style={{ display: 'contents' }}>
+      <div className="support-veil" onClick={onClose} />
+      <div ref={card} className="support-card log-card" role="dialog" aria-modal="true" aria-labelledby="log-card-t" tabIndex={-1}>
+        <div className="support-head">
+          <h3 id="log-card-t">更新日志</h3>
+          <button className="sm ghost" onClick={onClose}>关闭 ✕</button>
+        </div>
+        <p className="small muted" style={{ margin: 0 }}>
+          这里大部分改动都来自群里的反馈。如果你提过某个 bug，多半能在下面找到。
+        </p>
+
+        <div className="log-list">
+          {CHANGELOG_ME.map((entry) => (
+            <section key={entry.date + entry.title}>
+              <header>
+                <b>{entry.title}</b>
+                <span className="tiny faint mono">{entry.date}</span>
+              </header>
+              <ul>
+                {entry.changes.map((c, i) => (
+                  <li key={i}>
+                    <span className={`log-kind k-${c.kind}`}>{c.kind}</span>
+                    <Rich text={c.text} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+
+        <div className="support-foot">
+          <span className="tiny faint">选手生涯 demo · 每一版改了什么都在这里，回看用</span>
+        </div>
+      </div>
+    </div>
   )
 }

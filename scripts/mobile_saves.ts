@@ -6,8 +6,8 @@
  * What is covered: a ladder start in its first week and twenty weeks in, a
  * Challengers starter in a week of days the evening before a match, a VCT
  * club at an international event, a long career (eight seasons, long club
- * names, big money and fan numbers, an injury), its ending, and one save per
- * card the clock can stop on.
+ * names, big money and fan numbers, an injury), its ending, one save per
+ * card the clock can stop on, and a title's full-screen card.
  *
  * The numbers pushed in by hand (money, fans, titles, a tryout instead of a
  * direct offer) are test data for the layout, not something the engine would
@@ -24,6 +24,7 @@ import { packState } from '../src/engine/save'
 import { stripToTheBone } from '../src/engine/match'
 import { fireEvent } from '../src/engine/me/events'
 import { cerStart } from '../src/engine/me/ceremony'
+import { pushMoment } from '../src/engine/me/moments'
 import { startInjury } from '../src/engine/me/injury'
 import { pop, push } from '../src/engine/me/pending'
 import { declineInvite, startTryout } from '../src/engine/me/tryout'
@@ -223,6 +224,16 @@ if (groups.has('chal')) {
       const f = clone(s)
       push(f, { kind: 'trait', id: TRAITS[0].key })
       save('modal-trait', f)
+    }
+    {
+      // a title I started in: the full-screen card with my five under it (reported 2026-09-18: at 375px the five
+      // face buttons came out 0px wide, piled on one spot)
+      const f = clone(s)
+      const comp = nextRealFixtureFor(f, f.myTeam)?.comp ?? Object.keys(f.comps)[0]
+      // the only big moment waiting, so it is the card in front
+      f.me!.moments = []
+      pushMoment(f, { kind: 'title', key: 'audit-title', comp, fmvp: true })
+      save('modal-title', f)
     }
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, GameState, Region, Role } from '../../engine/types'
 import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, startBlocked, startCnOf, startPool, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/career'
@@ -20,6 +20,7 @@ import { Crest, Panel, money } from './common'
 import { toCny } from '../../engine/me/currency'
 import { attrWord, useNumbers } from './words'
 import { track } from '../../engine/me/telemetry'
+import { useLayer } from './layer'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
@@ -160,13 +161,16 @@ function SaveCard({ info, busy, bad, onContinue, onNew }: {
 
 /** 破晓 asks before 重新开一局 overwrites the save (its main.ts askConfirm on #savenew); so does this, once. */
 function ConfirmNew({ who, onOk, onCancel }: { who?: string; onOk: () => void; onCancel: () => void }) {
+  // a card in front of the page like the career's own (layer.ts): 取消 has the focus, Tab stays on the two buttons
+  const bg = useRef<HTMLDivElement>(null)
+  useLayer(bg)
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [onCancel])
   return (
-    <div className="modal-bg nc-confirm" onClick={onCancel}>
+    <div className="modal-bg nc-confirm" ref={bg} onClick={onCancel}>
       <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="nc-confirm-t" aria-describedby="nc-confirm-d" onClick={(e) => e.stopPropagation()}>
         <div className="modal-body">
           <div className="nc-confirm-eyebrow">请确认</div>

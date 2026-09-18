@@ -328,6 +328,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 }
 .nc-tools { gap: 8px; margin: 0 0 12px; }
 .nc-home .nc-intro { margin: 4px 0 0; }
+/* a card that nothing in it asks for the focus takes the focus itself (ui/me/layer.ts): the card is already the thing
+   on screen, so no ring round the whole of it — its buttons keep theirs, in every ground */
+.modal[tabindex="-1"]:focus, .support-card[tabindex="-1"]:focus, .share-card[tabindex="-1"]:focus { outline: none; }
 /* before a new career overwrites the save: one small card in the middle, 破晓's 请确认 */
 .nc-confirm .modal { max-width: 420px; margin-top: 16vh; text-align: center; }
 .nc-confirm .modal-body { padding: 18px 18px 20px; }

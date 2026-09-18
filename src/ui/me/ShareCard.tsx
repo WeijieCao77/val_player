@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGame } from './ctx'
 import { CARD_FILE, canShareFile, careerCardUrl, dataUrlToFile } from './share'
+import { useLayer } from './layer'
 
 /**
  * The card, on screen, with the two ways of keeping it.
@@ -12,6 +13,10 @@ import { CARD_FILE, canShareFile, careerCardUrl, dataUrlToFile } from './share'
  */
 export default function ShareCard({ onClose }: { onClose: () => void }) {
   const { game } = useGame()
+  // in front of the career's last card (layer.ts): the focus on the card itself, Tab round its buttons, back to 生成生涯名片图 after
+  const bg = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLElement>(null)
+  useLayer(bg, { box })
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -35,8 +40,8 @@ export default function ShareCard({ onClose }: { onClose: () => void }) {
   const shareable = !!file && canShareFile(file)
 
   return (
-    <div className="modal-bg share-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <section className="share-card" role="dialog" aria-modal="true" aria-label="生涯名片">
+    <div className="modal-bg share-overlay" ref={bg} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <section className="share-card" ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label="生涯名片">
         <header className="share-head">
           <b>生涯名片</b>
           <button className="sm" onClick={onClose}>关闭 ×</button>

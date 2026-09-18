@@ -10,6 +10,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Rays } from './art/fx'
 import { chime } from './sfx'
+import { isTopLayer, useLayer } from './layer'
 import './moment.css'
 
 export interface MomentChip { text: string; kind?: 'up' | 'dn' | 'gold' }
@@ -35,9 +36,13 @@ export default function Moment({
   /** a line under the buttons, e.g. how many more are waiting */
   next?: string
 }) {
+  const bg = useRef<HTMLDivElement>(null)
   const btn = useRef<HTMLButtonElement>(null)
   const press = useRef(primary.onClick)
   press.current = primary.onClick
+  // in front of the page like every card (layer.ts): Tab goes round its own buttons — the five faces on a title, the
+  // two presses — and not out to the page or the music window
+  useLayer(bg, { first: () => btn.current })
 
   // each new card: the primary button takes the focus, and the chime plays if the player turned sound on (sfx.ts)
   useEffect(() => {
@@ -47,6 +52,8 @@ export default function Moment({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' && e.key !== 'Escape') return
+      // a player's card opened from a title's five stands in front of it: the keys are that card's
+      if (!isTopLayer(bg.current)) return
       // Enter on the focused secondary button is that button's own press
       const at = document.activeElement
       if (e.key === 'Enter' && at instanceof HTMLButtonElement && at !== btn.current) return
@@ -58,7 +65,7 @@ export default function Moment({
   }, [])
 
   return (
-    <div className="moment-bg" role="dialog" aria-modal="true" aria-labelledby="mo-title">
+    <div className="moment-bg" ref={bg} role="dialog" aria-modal="true" aria-labelledby="mo-title">
       <div className={`moment-glow${tone === 'gold' ? ' gold' : ''}`}>
         <div className={`moment${band ? '' : ' bare'}`}>
           <div className="mo-hero" aria-hidden="true">

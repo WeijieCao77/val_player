@@ -26,13 +26,13 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
   const close = useRef(onClose)
   close.current = onClose
 
-  // Escape closes it, and the keyboard lands on the way out; it goes back to the row it came from
+  // Escape closes it, and the keyboard lands on the way out; the card (common.tsx Modal, layer.ts) keeps Tab
+  // inside and gives the focus back to the row it came from
   useEffect(() => {
-    const back = document.activeElement as HTMLElement | null
     box.current?.closest('.modal')?.querySelector<HTMLButtonElement>('.modal-head button')?.focus()
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close.current() }
     window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('keydown', onKey); back?.focus?.() }
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const raw = cupOf(cupKey)

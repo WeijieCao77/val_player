@@ -7,9 +7,10 @@
  * manager's scouting. The radars keep the viewBox the phone pass gave them, so
  * they scale down inside a narrow card instead of being cut off.
  */
-import { useContext } from 'react'
+import { useContext, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { GameCtx } from './ctx'
+import { useLayer } from './layer'
 import { roleColor } from '../../engine/player'
 import { crestUrl } from '../../engine/dossier'
 import { AGENT_ROLE, agentCn, canonAgent } from '../../engine/content'
@@ -167,17 +168,37 @@ export function Stat({ k, v, small }: { k: string; v: ReactNode; small?: boolean
   )
 }
 
+/**
+ * A card in front of the page. A dialog to a screen reader, named by its title;
+ * the focus goes into it, Tab stays in it and the page behind is inert until it
+ * closes (ui/me/layer.ts, reported 2026-09-18). A card that asks something
+ * starts on its first answer; any other starts on itself, so a key meant for
+ * the page never answers it. Escape does nothing here — a card that closes on
+ * it says so itself (CupDetail).
+ */
 export function Modal({
-  title, onClose, onBgClose, children, wide, art,
+  title, label, onClose, onBgClose, children, wide, art,
 }: {
   title: ReactNode; onClose: () => void; onBgClose?: () => void; children: ReactNode; wide?: boolean
+  /** what a screen reader calls a card with no title */
+  label?: string
   /** a scene strip between the header and the text (事件档, ui/me/art/scenes.tsx) */
   art?: ReactNode
 }) {
+  const bg = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const id = useId()
+  useLayer(bg, { box })
   return (
-    <div className="modal-bg" onClick={onBgClose ?? onClose}>
+    <div className="modal-bg" ref={bg} onClick={onBgClose ?? onClose}>
       <div
         className="modal"
+        ref={box}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? id : undefined}
+        aria-label={title ? undefined : label}
+        tabIndex={-1}
         style={wide ? { maxWidth: 1020 } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
@@ -185,7 +206,7 @@ export function Modal({
           {/* a card that carries its own headline passes none: the career-end
               card's 「生涯结束」 sat one line above its own verdict. The head
               stays for the way out. */}
-          {title ? <h3>{title}</h3> : null}
+          {title ? <h3 id={id}>{title}</h3> : null}
           <div className="spacer" style={{ flex: 1 }} />
           <button className="sm ghost" onClick={onClose}>关闭 ✕</button>
         </div>
