@@ -62,6 +62,12 @@
 .hall-page .hc-t.intl { border-color: var(--gold); color: var(--gold); }
 .hall-page .hc-t.ring { border-style: dashed; opacity: .75; }
 .hall-page .hc-hx { color: var(--gold); }
+/* 你的世界线 (ui/me/Worldline.tsx): the same 转播红 bar down the left, at the card's size */
+.hall-page .hc-rw {
+  display: flex; flex-direction: column; gap: 1px; margin: 2px 0; padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--accent); background: var(--accent-wash); color: var(--muted); overflow-wrap: anywhere;
+}
+.hall-page .hc-rw b { color: var(--text); font-weight: 650; }
 
 .hall-page .hall-route { border-bottom: 1px solid var(--line-soft); }
 .hall-page .hall-route:last-child { border-bottom: 0; }

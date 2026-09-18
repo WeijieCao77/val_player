@@ -1,0 +1,27 @@
+/* ---------------------------------------------------------------- 「我改写了历史」 (ui/me/Worldline.tsx)
+
+   「这个赛季改写的历史」 on the season's card and 「你的世界线」 on the ending's card and the 生涯 table, as a
+   broadcast lower third in the 转播红 the moment cards use (moment.css): a red slanted name strip for the label,
+   and under it the facts on a wash of the same red with its bar down the left, the way .mo-real sets its one line.
+   Every rule sits under .wl, so none of it reaches the screens around it. */
+.wl { margin: 0 0 10px; min-width: 0; }
+.wl-tag {
+  display: inline-block; margin: 0; padding: 3px 20px 3px 10px;
+  background: var(--accent-fill, var(--accent)); color: #fff;
+  font-size: var(--t-tiny, 12px); font-weight: 800; letter-spacing: .14em; line-height: 1.6;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.wl-body {
+  padding: 8px 12px 9px; border-left: 3px solid var(--accent);
+  background: var(--accent-wash, color-mix(in srgb, var(--accent) 10%, transparent));
+  text-align: left;
+}
+.wl-row + .wl-row { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--accent-line, var(--line-soft)); }
+.wl-ev { display: block; font-size: var(--t-small, 13.5px); font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.wl-l { margin: 2px 0 0; font-size: var(--t-small, 13.5px); line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.wl-you { margin: 3px 0 0; font-size: var(--t-tiny, 12px); font-weight: 650; color: var(--accent); overflow-wrap: anywhere; }
+.wl-big { margin: 0; font-size: var(--t-body, 14.5px); font-weight: 750; color: var(--text); overflow-wrap: anywhere; }
+/* on the ending's card: between the deep runs and the year-by-year */
+.poster-me .wl-career { margin: 12px 0 0; }
+/* under the 生涯 table, inside its flush panel */
+.wl.wl-table { margin: 10px 12px 12px; }

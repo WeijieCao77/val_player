@@ -46,6 +46,8 @@ import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
 import { noteQualify, pushMoment } from './moments'
 import { intlLinesOf, noteIntlRun } from './intl'
+import { seasonLedger } from './worldline'
+import type { SeasonLedger } from './worldline'
 import { iglWeek } from './igl'
 import { roomWeek } from './room'
 import { pitchDay } from './selfpitch'
@@ -337,8 +339,12 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // the eight before the day: a turn of the year ages them, and a slip is said (onSeasonEnd)
     const attrsBefore = { ...p.attrs }
     const pro = me.phase === 'pro'
+    // the season's history ledger, read on its last day before the winter clears the year's events (me/worldline.ts):
+    // the season's row keeps it (onSeasonEnd)
+    let ledger: SeasonLedger | undefined
+    const beforeSeasonEnd = (s: GameState) => { ledger = seasonLedger(s) }
     // one match of mine a day: a second due the same day is mine tomorrow, not the engine's today
-    const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true })
+    const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true, beforeSeasonEnd })
     me.weekDay++
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
     const rng = new Rng(hashStr(`me:day:${state.seed}:${state.year}:${state.day}`))
@@ -363,7 +369,7 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // and the day one of them ends, how my club did there, for the season's own line (me/intl.ts)
     noteIntlRun(state)
     closingClub(state)
-    if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore)
+    if (r.seasonEnded || state.year !== yearBefore) onSeasonEnd(state, yearBefore, rng, attrsBefore, ledger)
     // a team-mate's birthday, a year at the club, my age at the year's turn (me/life.ts)
     lifeDay(state, state.year !== yearBefore)
     if (state.gameOver) return { kind: 'game-over' }
@@ -585,7 +591,7 @@ export function settleWeek(state: GameState): void {
 }
 
 /** The winter: my season on the record, the contract question, and whether there is a next one. */
-function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): void {
+function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs, ledger?: SeasonLedger): void {
   const me = state.me!
   const p = state.players[me.id]
   const team = state.teams[state.myTeam]
@@ -603,6 +609,9 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs): 
     acs: s.starts ? Math.round(s.acsSum / s.starts) : 0,
     overallFrom: s.overall, overallTo: p.overall, titles,
     ...(quals.length ? { quals } : {}), ...(intl.length ? { intl } : {}),
+    // 这个赛季改写的历史 (me/worldline.ts), read on the season's last day: kept with a season that had none too, so
+    // the career's pages can tell it from a season written before there was a ledger to keep
+    ...(ledger ? { ...(ledger.rewrites.length ? { rewrites: ledger.rewrites } : {}), retitled: ledger.retitled } : {}),
   })
   // 打完一个赛季 — the funnel's fourth step, which the cumulative turn counter
   // cannot honestly answer. Reported where the season's record is written, not

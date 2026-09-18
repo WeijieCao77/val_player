@@ -2,9 +2,11 @@ import { eventOf, eventsOf, onwardOf, realSideOf, worldIdOf } from '../circuit'
 import type { CEvent, Onward } from '../circuit'
 import { realName } from '../names'
 import type { Competition, Fixture, GameState } from '../types'
-import { compClass, isIntlComp } from './compclass'
+import { compClass, isIntlComp, isQualifier } from './compclass'
 import { compCn } from './compname'
-import type { MeMatchRecord, MomentItem } from './types'
+import { KEEP, REWRITE_WEIGHT, SHOWN } from './rewrites'
+import type { RewriteKind } from './rewrites'
+import type { MeMatchRecord, MeRewrite, MomentItem } from './types'
 
 /**
  * 「我改写了历史」: the events this world played that came out otherwise than they really did.
@@ -28,11 +30,15 @@ import type { MeMatchRecord, MomentItem } from './types'
  * on the roster, starting or not. Never 「因为你」: other clubs' results after the fork are not necessarily mine.
  * Each side is named as it was named at that event: a real side as the event named it (circuit.ts reads that off
  * engine/names.ts), a club here by clubNameAt.
+ *
+ * Phase B (2026-09-18): the year's competitions are gone once the year turns, so the season's last day keeps its
+ * heaviest few on the season's row (seasonLedger, called from me/week.ts before the winter runs), worded then; the
+ * season's card, the ending's, the hall's and the share card read them back (me/rewrites.ts). That is the career's
+ * own record, like me/intl.ts's campaigns — the world is still only read.
  */
 
-/** What an entry is about, heaviest first: an international's title, a qualification place, a regional title, and only my club's placing. */
-export type RewriteKind = 'intl' | 'qual' | 'region' | 'place'
-export const REWRITE_WEIGHT: Record<RewriteKind, number> = { intl: 3, qual: 2, region: 1, place: 0 }
+export type { RewriteKind } from './rewrites'
+export { REWRITE_WEIGHT } from './rewrites'
 
 /** A place at a later event this one decided, that went to another side than it really did. */
 export interface RewriteSeat {
@@ -290,20 +296,17 @@ export function historyLedger(state: GameState): Rewrite[] {
 
 const placeCn = (p: number): string => (p === 1 ? '夺冠' : `第 ${p} 名`)
 
-/**
- * An entry in words: only 「真实历史里是 X，这个世界里是 Y」 and whether I was there. For the pages that will list the
- * ledger (the season's end, the career's) — the title card says its one line itself (titleRealChamp).
- */
-export function rewriteLines(e: Rewrite): string[] {
-  const out: string[] = []
-  const ev = compCn(e.name)
+/** An entry's facts, each without the event's name in front: its title, the places it gave, my club's placing. */
+function factsOf(e: Rewrite): { title: string | null; seats: string[]; place: string | null } {
+  let title: string | null = null
   if (e.champChanged && e.real) {
     const r = e.real
     const after = r.place != null ? `，${r.name} ${placeCn(r.place)}`
       : r.id && r.gone ? `，${r.name} 在这个世界里已经解散`
         : r.id ? `，${r.name} 没有参加这一站` : ''
-    out.push(`${ev}：真实历史里的冠军是 ${r.name}；这个世界里是 ${e.champ.name}${after}。`)
+    title = `真实历史里的冠军是 ${r.name}；这个世界里是 ${e.champ.name}${after}`
   }
+  const seats: string[] = []
   const told = new Set<string>()
   e.seats.forEach((s, i) => {
     // the title's own place (a Masters' winner's at Champions, a Last Chance Qualifier's): the line above says it
@@ -314,21 +317,119 @@ export function rewriteLines(e: Rewrite): string[] {
       ? `${s.passed.join('、')} 在这个世界里已经解散，名额往下顺延` : ''
     if (past) told.add(s.key)
     if (own && !past) return
-    out.push(own
-      ? `${ev}给${compCn(s.event)}的名额：${past}。`
-      : `${ev}给${compCn(s.event)}的名额：真实历史里是 ${s.real}；这个世界里是 ${s.nowName ?? '空缺'}${s.realGone ? `，${s.real} 在这个世界里已经解散` : ''}${past ? `；${past}` : ''}。`)
+    seats.push(own
+      ? `给${compCn(s.event)}的名额：${past}`
+      : `给${compCn(s.event)}的名额：真实历史里是 ${s.real}；这个世界里是 ${s.nowName ?? '空缺'}${s.realGone ? `，${s.real} 在这个世界里已经解散` : ''}${past ? `；${past}` : ''}`)
   })
+  let place: string | null = null
   const m = e.mine
-  if (m) {
-    if (placeMoved(m)) {
-      const was = m.realPlace == null ? `真实历史里 ${m.name} 没打进这一站` : `真实历史里 ${m.name} ${placeCn(m.realPlace)}`
-      const now = m.place != null ? `这个世界里${placeCn(m.place)}` : m.played ? '这个世界里没打进这一站' : '这个世界里没有参加这一站'
-      out.push(`${ev}：${was}；${now}。`)
-    }
-    if (m.there === 'started') out.push('你首发出场。')
-    else if (m.there === 'bench') out.push('你在名单上，没有上场。')
+  if (m && placeMoved(m)) {
+    const was = m.realPlace == null ? `真实历史里 ${m.name} 没打进这一站` : `真实历史里 ${m.name} ${placeCn(m.realPlace)}`
+    const now = m.place != null ? `这个世界里${placeCn(m.place)}` : m.played ? '这个世界里没打进这一站' : '这个世界里没有参加这一站'
+    place = `${was}；${now}`
   }
+  return { title, seats, place }
+}
+
+/**
+ * An entry in words: only 「真实历史里是 X，这个世界里是 Y」 and whether I was there, each line with the event's name
+ * in front. The title card says its one line itself (titleRealChamp); the season's row keeps its own wording (keptOf).
+ */
+export function rewriteLines(e: Rewrite): string[] {
+  const ev = compCn(e.name)
+  const f = factsOf(e)
+  const out: string[] = []
+  if (f.title) out.push(`${ev}：${f.title}。`)
+  for (const s of f.seats) out.push(`${ev}${s}。`)
+  if (f.place) out.push(`${ev}：${f.place}。`)
+  if (e.mine?.there === 'started') out.push('你首发出场。')
+  else if (e.mine?.there === 'bench') out.push('你在名单上，没有上场。')
   return out
+}
+
+/* ------------------------------------------------------------------ */
+/*  the season's row: what the career keeps of the ledger               */
+/* ------------------------------------------------------------------ */
+
+export { KEEP, SHOWN } from './rewrites'
+
+/** my part in an entry: on my club's roster for its matches — the club my own record of them puts me on — started or not */
+const partOf = (e: Rewrite): 'started' | 'bench' | null => e.mine?.there ?? null
+/** its title went elsewhere than history gave it — to my club at the event, with me on its roster */
+const oursOf = (e: Rewrite): boolean => e.champChanged && !!e.mine?.there && e.champ.id === e.mine.id
+/** how much of it was mine: started above the bench, and the title ours above not */
+const partRank = (e: Rewrite): number => (partOf(e) === 'started' ? 4 : partOf(e) === 'bench' ? 2 : 0) + (oursOf(e) ? 1 : 0)
+
+/**
+ * The season card's order: phase A's weight — an international's title, a qualification place, a regional title,
+ * my club's placing — and within a weight the one I was part of, then as they ended.
+ */
+const seasonOrder = (a: Rewrite, b: Rewrite): number =>
+  b.weight - a.weight || partRank(b) - partRank(a) || a.end - b.end || a.key.localeCompare(b.key)
+
+/**
+ * My club's placing is said only where I was on its roster: the club the ledger falls back on is the one I play for
+ * now, which at an event from before I signed was not mine. An entry that is nothing but that placing is not kept.
+ */
+const tellable = (e: Rewrite): boolean => e.kind !== 'place' || !!partOf(e)
+
+/** A title the career would call a trophy: a qualifier's winner goes through, it lifts nothing (me/compclass.ts). */
+const trophyRetitled = (e: Rewrite): boolean => e.champChanged && !isQualifier(e.name)
+
+/** 「挑战者赛 3」 then 「的」: a space after a name that ends in a letter or a digit */
+const glue = (s: string): string => (/[0-9A-Za-z]$/.test(s) ? `${s} ` : s)
+
+/** The entry in one line, the year in front: its title, else the first place it gave elsewhere, else my club's placing. */
+function oneOf(e: Rewrite): string {
+  const cn = compCn(e.name)
+  const at = cn.includes(String(e.year)) ? cn : `${e.year} ${cn}`
+  if (e.champChanged && e.real) return `${glue(at)}的冠军是 ${e.champ.name}（真实历史：${e.real.name}）`
+  const s = e.seats.find((x) => x.nowName) ?? e.seats[0]
+  if (s) return `${glue(at)}给${compCn(s.event)}的名额${s.nowName ? `给了 ${s.nowName}` : '空着'}（真实历史：${s.real}）`
+  const m = e.mine
+  if (!m) return at
+  const now = m.place != null ? placeCn(m.place) : m.played ? '没打进这一站' : '没有参加这一站'
+  return `${at}，${m.name} ${now}（真实历史：${m.realPlace == null ? '没打进这一站' : placeCn(m.realPlace)}）`
+}
+
+/** One entry as the season's row keeps it: worded now, the names as they were at the event. */
+export function keptOf(e: Rewrite): MeRewrite {
+  const f = factsOf(e)
+  const there = partOf(e)
+  return {
+    kind: e.kind, comp: e.name,
+    lines: [f.title, ...f.seats, there ? f.place : null].filter((l): l is string => !!l),
+    one: oneOf(e),
+    ...(e.champChanged && e.real ? { title: 1 as const } : {}),
+    ...(there ? { there } : {}),
+    ...(oursOf(e) ? { ours: 1 as const } : {}),
+  }
+}
+
+export interface SeasonLedger {
+  /** at most KEEP, the season card's order: its SHOWN first, then what the career's pages need of mine */
+  rewrites: MeRewrite[]
+  /** trophies in the whole ledger that went to another side than they really did */
+  retitled: number
+}
+
+/**
+ * The season's ledger as its row keeps it, read on its last day (me/week.ts, before the winter). The card's three
+ * come first; the other two places go to what the career's pages look for (me/rewrites.ts careerRewrites), where the
+ * three are the world's — a title my club took with me starting, the heaviest I started in, a title my club took,
+ * the heaviest I was on the roster for — so a season whose three are other people's Masters still keeps mine.
+ */
+export function seasonLedger(state: GameState): SeasonLedger {
+  const led = historyLedger(state)
+  const all = led.filter(tellable).sort(seasonOrder)
+  const pick = all.slice(0, SHOWN)
+  const add = (e: Rewrite | undefined) => { if (e && !pick.includes(e) && pick.length < KEEP) pick.push(e) }
+  add(all.find((e) => oursOf(e) && partOf(e) === 'started'))
+  add(all.find((e) => partOf(e) === 'started'))
+  add(all.find(oursOf))
+  add(all.find((e) => partOf(e) === 'bench'))
+  for (const e of all) add(e)
+  return { rewrites: pick.sort(seasonOrder).map(keptOf), retitled: led.filter(trophyRetitled).length }
 }
 
 /**

@@ -7,6 +7,7 @@ import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
 import { compCn } from '../../engine/me/compname'
 import { compClass } from '../../engine/me/compclass'
 import { cny } from '../../engine/me/moneyfmt'
+import { careerRewrites, retitledLine, shareLine } from '../../engine/me/rewrites'
 
 /**
  * The career card as a picture you can keep.
@@ -63,6 +64,29 @@ function wrap(g: CanvasRenderingContext2D, text: string, x: number, y: number, m
   }
   if (line) { g.fillText(line, x, y + n * lh); n++ }
   return n
+}
+
+/**
+ * Lines for a box sized to its text, at most maxLines, the last cut with 「…」. Per character like wrap(), except that
+ * a club's name stays whole: 「TUBEPLE Gaming」 is not broken into 「TUBEPLE Gamin」 and 「g」.
+ */
+function linesOf(g: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
+  const out: string[] = []
+  let line = ''
+  for (const tok of String(text ?? '').match(/[\p{Script=Latin}\d'’.&-]+ ?|./gu) ?? []) {
+    const t = line + tok
+    if (g.measureText(t).width > maxW && line) {
+      out.push(line.trimEnd())
+      line = tok.trimStart()
+    } else line = t
+  }
+  if (line) out.push(line)
+  if (out.length <= maxLines) return out
+  const cut = out.slice(0, maxLines)
+  let last = cut[maxLines - 1]
+  while (last.length > 1 && g.measureText(`${last}…`).width > maxW) last = last.slice(0, -1)
+  cut[maxLines - 1] = `${last}…`
+  return cut
 }
 
 /** Shrink until it fits, then truncate if it still does not. */
@@ -203,6 +227,40 @@ export function drawCareerCard(state: GameState): HTMLCanvasElement | null {
   } else {
     g.fillText('没有奖杯', PAD, y)
     y += 40
+  }
+
+  // 在你的世界线里 (engine/me/rewrites.ts, the author's brief of 2026-09-18): one strip, the heaviest rewrite I started
+  // in or whose title went to my club, as a broadcast lower third in the card's red — the count on the red name strip,
+  // the entry under it. What the world did without me is never put on this card as mine; with nothing, no strip.
+  const rw = careerRewrites(me)
+  if (rw?.share) {
+    const top = y + 4
+    const tw = W - PAD * 2 - 52
+    const strip = shareLine(rw.share)
+    g.font = FONT(500, 26)
+    const rows = linesOf(g, strip, tw, 3)
+    const h = 72 + rows.length * 38
+    g.fillStyle = CO.panel
+    roundRect(g, PAD, top, W - PAD * 2, h, 10)
+    g.fill()
+    g.fillStyle = CO.red
+    g.fillRect(PAD, top, 6, h)
+    const label = retitledLine(rw) || '你的世界线'
+    g.font = FONT(700, 22)
+    const lw = Math.min(W - PAD * 2 - 30, g.measureText(label).width + 44)
+    g.beginPath()
+    g.moveTo(PAD + 6, top + 14)
+    g.lineTo(PAD + 6 + lw, top + 14)
+    g.lineTo(PAD + 6 + lw - 12, top + 48)
+    g.lineTo(PAD + 6, top + 48)
+    g.closePath()
+    g.fill()
+    g.fillStyle = '#fff'
+    fitText(g, label, PAD + 22, top + 39, lw - 40, 22, 700)
+    g.font = FONT(500, 26)
+    g.fillStyle = CO.ink
+    rows.forEach((l, i) => g.fillText(l, PAD + 26, top + 90 + i * 38))
+    y = top + h
   }
 
   // Year by year. This is the part that has to fit whatever the career was:

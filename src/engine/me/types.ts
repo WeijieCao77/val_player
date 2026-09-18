@@ -278,6 +278,32 @@ export interface MeSeason {
    * in words — see me/intl.ts. Absent in older saves and in a season with none.
    */
   intl?: string[]
+  /**
+   * 这个赛季改写的历史 (me/worldline.ts): the season's ledger as it stood on its last day, before the year's events
+   * were cleared — its heaviest few (at most KEEP), worded that day; absent in a season with none. `retitled`: how
+   * many trophies in the whole ledger went to another side than they really did. Both absent in a season written
+   * before 2026-09-18, which says nothing rather than 「暂无」.
+   */
+  rewrites?: MeRewrite[]
+  retitled?: number
+}
+
+/** One entry of a season's history ledger as the season's row keeps it (me/worldline.ts keptOf). */
+export interface MeRewrite {
+  /** heaviest first: an international's title, a qualification place, a regional title, my club's placing */
+  kind: 'intl' | 'qual' | 'region' | 'place'
+  /** the competition's stored name (me/compname.ts puts it into words) */
+  comp: string
+  /** what came out otherwise, one fact a line: 「真实历史里是 X；这个世界里是 Y」 — my club's placing only where I was there */
+  lines: string[]
+  /** the same in one line with the year in front, for the career's pages and the share card */
+  one: string
+  /** its title went to another side than it really did */
+  title?: 1
+  /** I was on my club's roster for its matches: started one, or started none */
+  there?: 'started' | 'bench'
+  /** the title went to my club at the event, and I was on its roster there */
+  ours?: 1
 }
 
 /** One 大师赛 / 冠军赛 campaign of my club's, written down the day it ended — see me/intl.ts. */

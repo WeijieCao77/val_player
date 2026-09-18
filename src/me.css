@@ -331,6 +331,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 /* a card that nothing in it asks for the focus takes the focus itself (ui/me/layer.ts): the card is already the thing
    on screen, so no ring round the whole of it — its buttons keep theirs, in every ground */
 .modal[tabindex="-1"]:focus, .support-card[tabindex="-1"]:focus, .share-card[tabindex="-1"]:focus { outline: none; }
+/* 「上一局，你的世界线改写了 N 座奖杯的归属。」 (me/hall.ts lastRewriteLine): one line, the 转播红 bar of ui/me/worldline.css */
+.nc-again { width: fit-content; max-width: 100%; margin: -4px 0 12px; padding: 3px 12px 3px 9px;
+  border-left: 3px solid var(--accent); background: var(--accent-wash);
+  font-size: var(--t-small); color: var(--text); overflow-wrap: anywhere; }
 /* before a new career overwrites the save: one small card in the middle, 破晓's 请确认 */
 .nc-confirm .modal { max-width: 420px; margin-top: 16vh; text-align: center; }
 .nc-confirm .modal-body { padding: 18px 18px 20px; }

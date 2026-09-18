@@ -11,6 +11,7 @@ import type { MeSeason, MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
 import { attrWord, useNumbers } from './words'
+import { CareerRewrites } from './Worldline'
 
 /**
  * The career on one card: the last thing a save ever shows.
@@ -105,6 +106,10 @@ export default function Poster() {
           {runs.length > 4 && <span className="pm-run faint">另有 {runs.length - 4} 次</span>}
         </div>
       )}
+
+      {/* 你的世界线 (engine/me/rewrites.ts): the trophies it took from their real owners, and the heaviest rewrite I started in */}
+      <CareerRewrites seasons={me.seasons} />
+
 
       <div className="pm-years">
         {me.seasons.map((s) => {

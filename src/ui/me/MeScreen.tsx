@@ -14,6 +14,7 @@ import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, tacWord, useNumb
 import { TAC_MAX } from '../../engine/me/prepro'
 import RivalsPanel from './Rivals'
 import { wornTitle } from '../../engine/me/achievements'
+import { CareerRewrites } from './Worldline'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -235,6 +236,8 @@ export default function MeScreen() {
               </tbody>
             </table>
             </div>
+            {/* 你的世界线, over the seasons played so far (engine/me/rewrites.ts): nothing where no season kept a ledger */}
+            <CareerRewrites seasons={me.seasons} className="wl-table" />
           </Panel>
         )}
       </div>

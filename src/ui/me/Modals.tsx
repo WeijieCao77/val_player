@@ -30,6 +30,8 @@ import MatchPlay from './MatchPlay'
 import { useNumbers } from './words'
 import Poster from './Poster'
 import ShareCard from './ShareCard'
+import { SeasonRewrites } from './Worldline'
+import { SHOWN } from '../../engine/me/rewrites'
 import CeremonyModal from './Ceremony'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
@@ -539,6 +541,8 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
           </div>
         </div>
       ) : null}
+      {/* 这个赛季改写的历史 (engine/me/worldline.ts): kept on the season's last day, its heaviest three shown */}
+      {s?.rewrites?.length ? <SeasonRewrites rows={s.rewrites.slice(0, SHOWN)} /> : null}
       <p className="small muted">你 {p.age} 岁了。{me.phase === 'pro' ? `合同还剩 ${p.contractYears} 年。` : me.phase === 'free' ? '还是自由身。' : '还没有合同。'}</p>
       {me.retireAsk && me.phase !== 'retired' && (
         <div className="panel alert" style={{ marginTop: 8 }}>

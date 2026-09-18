@@ -5,7 +5,7 @@ import { careerRegions, ceilingLines, ceilingPreview, createCareer, isAcademy, s
 import type { StartPoint } from '../../engine/me/career'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
-import { hallAchCount, hallTitle, noteHall, readHall } from '../../engine/me/hall'
+import { hallAchCount, hallTitle, lastRewriteLine, noteHall, readHall } from '../../engine/me/hall'
 import { ACHIEVEMENTS } from '../../engine/me/achievements'
 import { loadAutosave } from '../../engine/me/save'
 import type { AutosaveInfo } from '../../engine/me/save'
@@ -217,6 +217,8 @@ export default function NewCareer({
   const [talents, setTalents] = useState(zeroTalents())
   // the 成就殿堂 opens from here, and its newest 称号 rides on the button
   const [hallName] = useState(() => hallTitle(readHall()))
+  // the last career's world line, where it took trophies from their real owners: a second career can take them again
+  const [again] = useState(() => lastRewriteLine(readHall()))
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
   // the regions that year's world has clubs in (career.ts careerRegions), the list createCareer opens from
@@ -358,6 +360,7 @@ export default function NewCareer({
     <div className="newcareer">
       {cover}
       <p className="muted" style={{ marginTop: 0 }}>{intro}</p>
+      {again && <p className="nc-again">{again}</p>}
       <div className="row wrap nc-tools">
         {save && <button className="sm ghost" onClick={() => setView('home')}>← 回到存档</button>}
         {hallButton('form')}

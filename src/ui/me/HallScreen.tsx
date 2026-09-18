@@ -8,7 +8,7 @@ import { compCn } from '../../engine/me/compname'
 import { originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
 import {
-  MILESTONES, MILESTONE_BY_KEY, START_SHORT, exportHall, hallAchCount, hallRecords, hallTitle,
+  MILESTONES, MILESTONE_BY_KEY, START_SHORT, cardRetitled, exportHall, hallAchCount, hallRecords, hallTitle,
   importHall, isIntlClass, milestoneDone, peekCareerId, readHall,
 } from '../../engine/me/hall'
 import type { HallCard, HallRecord } from '../../engine/me/hall'
@@ -201,6 +201,13 @@ function CareerCard({ c, mine }: { c: HallCard; mine: boolean }) {
       )}
       {c.best && (
         <div className="tiny faint">最好的一季 {c.best.year} · {c.best.team}{c.best.titles ? ` · ${c.best.titles} 冠` : ''}{c.best.acs ? ` · ACS ${c.best.acs}` : ''}</div>
+      )}
+      {/* 你的世界线 (engine/me/rewrites.ts): kept on the card when the career ended; a card from before it has none */}
+      {c.rw && (
+        <div className="tiny hc-rw">
+          {cardRetitled(c) && <b>{cardRetitled(c)}</b>}
+          {c.rw.top && <span>{c.rw.top}</span>}
+        </div>
       )}
       {/* the coach asked, years before the end, and he said yes (me/events_more.ts vet_staff) */}
       {c.staff && <div className="tiny faint">退役后留在了教练组</div>}

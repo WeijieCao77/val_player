@@ -15,6 +15,14 @@
  *    4 June 2021); the real champion dissolved; a place passed down past a dissolved club (circuit.ts nextFinisher);
  *    an event replayed as it went, and one nobody has played, never in the ledger
  * 四 a 2026 start: its ledger holds only 2026's real events, and from 2027 — every event projected — it is empty
+ * 五 phase B, the season's row (engine/me/worldline.ts seasonLedger, me/rewrites.ts): at every turn of the year in 一's
+ *    careers, a copy of the world taken the week before is played up to the moment before the winter
+ *    (engine/season.ts beforeSeasonEnd) and the row must hold exactly the ledger read there — at most KEEP, the card's
+ *    SHOWN the heaviest, the count of trophies that changed hands the ledger's own; each 你首发 / 你在名单上 against my
+ *    own match records, my club's placing only where I was there, a title called ours against the fixture's sides, and
+ *    「因为你」 exactly where the title went to my club and I started. Then the careers are hung up: the hall's card counts
+ *    what the rows kept, round-trips, and gives the new-career line; the share card's strip is one I started in or my
+ *    club's title. A save from before keeps nothing and says nothing — never 「暂无」.
  *
  *   npx tsx scripts/check_worldline.ts
  */
@@ -29,14 +37,19 @@ const mem: Record<string, string> = {}
 } as Storage
 ;(globalThis as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error('offline'))
 
+import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents, startPool } from '../src/engine/me/career'
 import type { CareerOpts } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { clubNameAt, historyLedger, placeMoved, rewriteLines, rewriteOf, titleRealChamp } from '../src/engine/me/worldline'
-import type { Rewrite } from '../src/engine/me/worldline'
-import { isIntlComp } from '../src/engine/me/compclass'
+import { KEEP, SHOWN, clubNameAt, historyLedger, keptOf, placeMoved, rewriteLines, rewriteOf, seasonLedger, titleRealChamp } from '../src/engine/me/worldline'
+import type { Rewrite, SeasonLedger } from '../src/engine/me/worldline'
+import { REWRITE_WEIGHT, becauseOfMe, careerLine, careerRewrites, keptOrder, partLine, retitledLine, shareLine } from '../src/engine/me/rewrites'
+import { cleanHall, careerIdOf, lastRewriteLine, noteHall, readHall } from '../src/engine/me/hall'
+import { retire } from '../src/engine/me/endings'
+import { isIntlComp, isQualifier } from '../src/engine/me/compclass'
 import { eventOf, eventsOf, progressCircuit, realPlacesOf, realSideOf, worldIdOf } from '../src/engine/circuit'
-import type { MomentItem } from '../src/engine/me/types'
+import { SEASON_DAYS, advanceDay } from '../src/engine/season'
+import type { MeSeason, MomentItem } from '../src/engine/me/types'
 import type { Competition, GameState } from '../src/engine/types'
 
 let bad = 0
@@ -116,8 +129,67 @@ function verifyTitle(state: GameState, m: MomentItem, where: string): Card | nul
   return { m, line, comp: comp.key }
 }
 
+// ---------------------------------------------------------------- 五 the season's row (phase B)
+const J = (x: unknown) => JSON.stringify(x)
+const tellable = (e: Rewrite) => e.kind !== 'place' || !!e.mine?.there
+
+/**
+ * The season's ledger as its row must keep it, read off a copy of the world taken before the week the year turned
+ * in and played up to the moment before the winter (engine/season.ts beforeSeasonEnd) — then checked against that
+ * world: the cap, the card's three being the heaviest, the title count, my part in each against my own match records,
+ * a title called ours against the fixture's sides, and 「因为你」 exactly under its rule.
+ */
+function atTheTurn(c: GameState, y: number, where: string): SeasonLedger | null {
+  let kept: SeasonLedger | null = null
+  let guard = 0
+  while (c.year === y && guard++ < 30) {
+    const pro = c.me!.phase === 'pro'
+    advanceDay(c, {
+      deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true,
+      beforeSeasonEnd: (s) => {
+        check(s.day >= SEASON_DAYS && s.year === y, `${where}：只在赛季最后一天、冬歇之前读（${s.year} 第 ${s.day} 天）`)
+        const k = seasonLedger(s)
+        kept = k
+        const full = historyLedger(s)
+        const told = full.filter(tellable)
+        check(k.rewrites.length <= KEEP && k.rewrites.length === Math.min(KEEP, told.length),
+          `${where}：一季最多存 ${KEEP} 条，能说的有 ${told.length} 条，存了 ${k.rewrites.length} 条`)
+        check(k.retitled === full.filter((e) => e.champChanged && !isQualifier(e.name)).length,
+          `${where}：换了主人的奖杯 ${k.retitled} 座，账本里是 ${full.filter((e) => e.champChanged && !isQualifier(e.name)).length} 座`)
+        const pairs = k.rewrites.map((r) => ({ r, e: full.find((x) => J(keptOf(x)) === J(r)) }))
+        check(pairs.every((p) => !!p.e), `${where}：存下的每一条都是那一刻账本里的一条`)
+        const shown = Math.min(...k.rewrites.slice(0, SHOWN).map((r) => REWRITE_WEIGHT[r.kind]))
+        const left = told.filter((e) => !pairs.some((p) => p.e === e))
+        check(left.every((e) => e.weight <= shown), `${where}：赛季卡的三条是最重的（没存下的 ${left.filter((e) => e.weight > shown).map((e) => e.name).join('、')} 更重）`)
+        const recs = s.me!.matches.filter((m) => m.year === y && !m.friendly)
+        for (const { r, e } of pairs) {
+          if (!e) continue
+          const mine = recs.filter((m) => m.comp === e.name)
+          if (r.there) check(mine.length > 0 && (r.there === 'started') === mine.some((m) => m.started),
+            `${where} ${e.name}：写「${r.there === 'started' ? '你首发' : '你在名单上'}」，我自己的比赛记录是 ${mine.length} 场、首发 ${mine.filter((m) => m.started).length} 场`)
+          else check(!r.lines.some((l) => l.startsWith('真实历史里 ')), `${where} ${e.name}：我不在名单上，就不写我的俱乐部的名次（${r.lines.join(' / ')}）`)
+          if (r.ours) {
+            // on the champion's side of one of its fixtures: the opponent I wrote down is the other side
+            const onIt = mine.some((m) => {
+              const f = s.fixtures.find((x) => x.id === m.fixtureId)
+              const other = f?.teamA === e.champ.id ? f.teamB : f?.teamB === e.champ.id ? f.teamA : null
+              return !!other && (s.teams[other]?.name === m.opp || s.teams[other]?.tag === m.oppTag)
+            })
+            check(!!r.title && onIt, `${where} ${e.name}：说冠军是我的俱乐部（${e.champ.name}），我的比赛记录里我不在它那一边`)
+          }
+          const says = [partLine(r) ?? '', ...(r.there ? [careerLine(r), shareLine(r)] : [])].join('｜')
+          check(says.includes('因为你') === becauseOfMe(r) && (!becauseOfMe(r) || (!!r.title && !!r.ours && r.there === 'started')),
+            `${where} ${e.name}：「因为你」只在冠军换成了我的俱乐部、而且我首发时说（${says}）`)
+          check(![...r.lines, r.one].some((l) => /因为/.test(l)), `${where} ${e.name}：事实行只说真实历史和这个世界各是什么（${r.lines.join(' / ')}）`)
+        }
+      },
+    })
+  }
+  return kept
+}
+
 // ---------------------------------------------------------------- 一、二 careers
-function career(label: string, o: Partial<CareerOpts>, seasons: number): Map<string, Rewrite> {
+function career(label: string, o: Partial<CareerOpts>, seasons: number): { seen: Map<string, Rewrite>; state: GameState } {
   const t0 = Date.now()
   const state = createCareer({ name: 'Worldline', region: 'North America', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', year: 2021, ...o } as CareerOpts)
   const me = state.me!
@@ -126,6 +198,7 @@ function career(label: string, o: Partial<CareerOpts>, seasons: number): Map<str
   let writes = 0
   let reads = 0
   let order = true
+  let turns = 0
   const until = state.year + seasons
   let weeks = 0
   while (me.phase !== 'retired' && state.year < until && weeks++ < 70 * seasons) {
@@ -141,14 +214,25 @@ function career(label: string, o: Partial<CareerOpts>, seasons: number): Map<str
     for (const m of me.moments ?? []) if (m.kind === 'title') { const c = verifyTitle(state, m, label); if (c) cards.push(c) }
     me.moments = []
     const y = state.year
-    if (autoWeek(state).kind === 'game-over') break
+    // the week the year may turn in: a copy to play up to the moment before the winter (atTheTurn)
+    const copy = state.day >= SEASON_DAYS - 10 ? before : null
+    const stop = autoWeek(state)
     if (state.year !== y) {
       for (const c of cards.filter((x) => x.m.year === y && x.comp)) {
         const later = titleRealChamp(state, c.m)
         check(later === c.line, `${label}：${c.m.comp} 的冠军卡，跨年以后再读应该一样（当年「${c.line}」，跨年「${later}」）`)
       }
+      const row = me.seasons.find((s) => s.year === y)
+      const at = copy ? atTheTurn(JSON.parse(copy) as GameState, y, `${label} ${y} 赛季末`) : null
+      if (check(!!row && !!at, `${label}：${y} 年底要有这一季的记录，也要能在冬歇前读到账本`)) {
+        turns++
+        check(J({ rewrites: row!.rewrites ?? [], retitled: row!.retitled }) === J({ rewrites: at!.rewrites, retitled: at!.retitled }),
+          `${label}：${y} 赛季记录里存的，就是赛季最后一天、冬歇之前那一刻的账本`)
+      }
     }
+    if (stop.kind === 'game-over') break
   }
+  check(turns >= Math.min(seasons, state.year - 2021), `${label}：每个跨年都核对了存下的账本（${turns} 次）`)
   check(writes === 0, `${label}：读账本 ${reads} 次，有 ${writes} 次改了世界`)
   check(order, `${label}：账本按分量排，国际赛冠军在前`)
   const all = [...seen.values()]
@@ -158,14 +242,77 @@ function career(label: string, o: Partial<CareerOpts>, seasons: number): Map<str
   for (const c of cards) console.log(`    冠军卡 ${c.m.year} ${c.m.comp}${c.m.bench ? '（替补）' : ''}：${c.line ? `真实历史里，这座奖杯属于 ${c.line}` : '（没有这一行）'}`)
   for (const e of all.sort((a, b) => a.year - b.year || b.weight - a.weight || a.end - b.end).slice(0, 14)) console.log(`    ${e.year} ${rewriteLines(e).join(' ')}`)
   check(reads > 20 && all.length > 0, `${label}：账本真的读到了东西（${all.length} 条）`)
-  if (!bad) pass(`${label}：每一条都对得上真实名次和这个世界的结果，只读不写`)
-  return seen
+  for (const s of me.seasons) {
+    console.log(`    ${s.year} 赛季卡「这个赛季改写的历史」（存 ${s.rewrites?.length ?? 0} 条，换了主人的奖杯 ${s.retitled ?? '—'} 座）：`)
+    for (const r of s.rewrites ?? []) console.log(`      [${r.kind}] ${r.lines.join(' / ')}${partLine(r) ? ` · ${partLine(r)}` : ''}`)
+  }
+  if (!bad) pass(`${label}：每一条都对得上真实名次和这个世界的结果，只读不写；每个赛季末存下的就是冬歇前那一刻的账本`)
+  return { seen, state }
+}
+
+/** The career hung up and noted in the hall: its card counts exactly the titles its rows kept. */
+function hallOf(label: string, state: GameState): void {
+  const me = state.me!
+  const c = careerRewrites(me)
+  if (me.phase !== 'retired') retire(state, '世界线检查到此为止', 'chose')
+  noteHall(state, true)
+  const h = readHall()!
+  const card = h.cards.find((x) => x.id === careerIdOf(state))
+  const sum = me.seasons.reduce((n, s) => n + (s.retitled ?? 0), 0)
+  check(!!card && (card.rw?.n ?? 0) === sum, `${label}：殿堂卡上「改写了 N 座奖杯的归属」是 ${card?.rw?.n}，各赛季存下的加起来是 ${sum}`)
+  check(card?.rw?.top === (c?.top ? careerLine(c.top) : undefined), `${label}：殿堂卡上最重的一笔（${card?.rw?.top}）就是生涯总览那一笔`)
+  check(J(cleanHall(JSON.parse(J(h))).cards.find((x) => x.id === card?.id)?.rw) === J(card?.rw), `${label}：殿堂导出再读回，这一项原样`)
+  check(lastRewriteLine(readHall()) === (sum ? `上一局，你的世界线改写了 ${sum} 座奖杯的归属。` : ''), `${label}：开新生涯那一行（${lastRewriteLine(readHall())}）`)
+  const all = me.seasons.flatMap((s) => (s.rewrites ?? []).map((r) => ({ ...r, year: s.year })))
+  const mine = all.filter((r) => r.there === 'started' || (!!r.ours && !!r.there))
+  check(!!c?.share === mine.length > 0, `${label}：有我首发或我的俱乐部夺冠的一条才有生涯名片那一条（${mine.length} 条能写）`)
+  if (c?.share) {
+    check(c.share.there === 'started' || (!!c.share.ours && !!c.share.there), `${label}：生涯名片上那一条，要么我首发，要么冠军是我的俱乐部`)
+    check(!mine.some((r) => keptOrder(r, c.share!) < 0), `${label}：生涯名片上那一条是能写的里面最重的（「因为你」在前，再按分量）`)
+  }
+  if (c?.top) {
+    const started = all.filter((r) => r.there === 'started')
+    check(!!c.top.there && (c.top.there === 'started' || !started.length), `${label}：生涯总览那一笔先挑我首发的，没有才挑我在名单上的`)
+    check(!(c.top.there === 'started' ? started : all.filter((r) => !!r.there)).some((r) => keptOrder(r, c.top!) < 0), `${label}：生涯总览那一笔是同一类里最重的`)
+  }
+  console.log(`    殿堂卡：${card?.rw ? [retitledLine({ retitled: card.rw.n, from: card.rw.from }), card.rw.top].filter(Boolean).join(' ｜ ') : '（没有这一项）'}`)
+  console.log(`    生涯名片：${c?.share ? shareLine(c.share) : '（没有这一条）'}`)
+  console.log(`    开新生涯：${lastRewriteLine(readHall()) || '（没有这一行）'}`)
 }
 
 const A = career('一 2021 北美 · Sentinels', { region: 'North America', teamId: 'V21T2', seed: 1 }, 1)
 const B = career('一 2021 欧洲 · 强队替补', { region: 'Europe', seed: 1 }, 2)
-check([...A.values(), ...B.values()].some((e) => e.kind === 'intl'), '两局里至少有一项国际赛换了冠军（否则这一步什么也没验）')
-check([...A.values(), ...B.values()].some((e) => !!e.mine?.there), '两局里至少有一条写了我在不在场（否则这一步什么也没验）')
+check([...A.seen.values(), ...B.seen.values()].some((e) => e.kind === 'intl'), '两局里至少有一项国际赛换了冠军（否则这一步什么也没验）')
+check([...A.seen.values(), ...B.seen.values()].some((e) => !!e.mine?.there), '两局里至少有一条写了我在不在场（否则这一步什么也没验）')
+// a Challengers start in Korea whose club takes 2021's third stage from Vision Strikers with me starting: 「因为你」
+const C = career('一 2021 韩国 · 二线', { region: 'Korea', start: 'chal', seed: 7 }, 1)
+check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some((r) => !!r.there))), '存下的赛季记录里至少有一条写了我在场（否则这一步什么也没验）')
+check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some(becauseOfMe))), '存下的赛季记录里至少有一条「因为你」（否则这一步什么也没验）')
+
+// ---------------------------------------------------------------- 五 the hall, and saves from before
+console.log('\n五 殿堂、生涯名片、开新生涯')
+hallOf('一 北美', A.state)
+hallOf('一 欧洲', B.state)
+hallOf('一 韩国', C.state)
+{
+  // a save from before 2026-09-18: its rows keep neither field, and nothing is said — never 「暂无」
+  const strip = (s: MeSeason): MeSeason => { const x = { ...s }; delete x.rewrites; delete x.retitled; return x }
+  const rows = B.state.me!.seasons
+  check(careerRewrites({ seasons: rows.map(strip) }) == null, '老存档（赛季记录里没有账本）：生涯总览、殿堂卡、生涯名片都没有这一项')
+  // a career that crossed the update: the count says from when
+  const mixed = [strip(rows[0]), ...rows.slice(1)]
+  const c = careerRewrites({ seasons: mixed })
+  const later = rows.slice(1).reduce((n, s) => n + (s.retitled ?? 0), 0)
+  check(!c || (c.from === rows[1].year && c.retitled === later && (!later || retitledLine(c).startsWith(`从 ${rows[1].year} 赛季起，`))),
+    `跨过这次更新的存档：只数存下账本的赛季，说「从 ${rows[1].year} 赛季起」（${c ? retitledLine(c) : '无'}）`)
+  const old = cleanHall({ v: 1, ach: {}, hx: {}, cards: readHall()!.cards.map((x) => { const y = { ...x }; delete y.rw; return y }) })
+  check(old.cards.every((x) => !x.rw) && lastRewriteLine(old) === '', '老殿堂卡：没有这一项，开新生涯也不写那一行')
+  const quoted = ['src/ui/me/Worldline.tsx', 'src/engine/me/rewrites.ts', 'src/ui/me/share.ts', 'src/ui/me/HallScreen.tsx']
+    .some((f) => /['"`][^'"`\n]*暂无/.test(readFileSync(f, 'utf8')))
+  check(!quoted, '这几页没有一处写「暂无」')
+  check([A, B].every((x) => x.state.me!.seasons.every((s) => (s.rewrites?.length ?? 0) <= KEEP)), `每一季最多存 ${KEEP} 条`)
+  if (!bad) pass('老存档什么都不写；殿堂卡的数字就是各赛季存下的换了主人的奖杯数')
+}
 
 // ---------------------------------------------------------------- 三 built cases
 console.log('\n三 造出来的情形（2021 年的世界）')
@@ -329,4 +476,5 @@ if (bad) {
   console.log(`\n✗ 世界线账本有 ${bad} 处不对。`)
   process.exit(1)
 }
-console.log('\n✓ 世界线账本只记这个世界打过、结果和真实历史不一样的赛事，逐条对得上真实名次；只读不写；改名、解散、名额顺延都按那一站的样子写；冠军卡的那一行只在奖杯本来不属于我们时出现。')
+console.log('\n✓ 世界线账本只记这个世界打过、结果和真实历史不一样的赛事，逐条对得上真实名次；只读不写；改名、解散、名额顺延都按那一站的样子写；冠军卡的那一行只在奖杯本来不属于我们时出现；'
+  + '赛季记录存的就是冬歇前那一刻的账本，最多五条，「因为你」只在冠军换成我的俱乐部且我首发时出现；殿堂卡的数字对得上，老存档什么都不写。')

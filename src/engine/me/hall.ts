@@ -5,6 +5,7 @@ import { regionIn } from '../era'
 import { ACHIEVEMENTS, ACH_BY_KEY } from './achievements'
 import { compClass, isQualifier } from './compclass'
 import type { CompClass } from './compclass'
+import { careerLine, careerRewrites, retitledLine } from './rewrites'
 import type { MeState } from './types'
 
 /**
@@ -92,6 +93,13 @@ export interface HallCard {
   hx?: string[]
   /** said yes when the coach asked about staying on as staff (me/events_more.ts vet_staff) */
   staff?: 1
+  /**
+   * 「我改写了历史」 (me/rewrites.ts): trophies whose real owner is another side, over the seasons that kept their
+   * ledger — `from` the first of them, where the career began before 2026-09-18 — and the heaviest rewrite I started
+   * in (else was on the roster for), in words. Absent for a career with none, and on every card noted before it.
+   * Read by the hall's pages and the new-career screen, never by anything that counts.
+   */
+  rw?: { n: number; from?: number; top?: string }
 }
 
 export interface Hall {
@@ -195,6 +203,10 @@ function cleanCard(x: unknown): HallCard | null {
   const acs = obj(o.acs)
   const at = str(o.at, 10)
   const hx = list(o.hx).filter((k): k is string => typeof k === 'string' && !!MILESTONE_BY_KEY[k])
+  const rw = obj(o.rw)
+  const rwN = rw ? Math.max(0, Math.min(9999, int(rw.n))) : 0
+  const rwFrom = rw ? int(rw.from) : 0
+  const rwTop = rw ? str(rw.top, 200) : ''
   return {
     id: str(o.id, 12), name: str(o.name, 24), role: str(o.role, 8), entry: int(o.entry),
     start: o.start === 'chal' || o.start === 't1' ? o.start : 'pre',
@@ -215,6 +227,7 @@ function cleanCard(x: unknown): HallCard | null {
     at: DAY.test(at) ? at : '',
     ...(hx.length ? { hx } : {}),
     ...(o.staff ? { staff: 1 as const } : {}),
+    ...(rwN || rwTop ? { rw: { n: rwN, ...(rwFrom > 0 ? { from: rwFrom } : {}), ...(rwTop ? { top: rwTop } : {}) } } : {}),
   }
 }
 
@@ -318,6 +331,7 @@ function cardOf(state: GameState, id: string): HallCard {
   const steady = played.filter((x) => x.starts >= 10)
   const acs = [...(steady.length ? steady : played)].sort((a, b) => b.acs - a.acs)[0]
   const entry = entryOf(state)
+  const rw = careerRewrites(me)
   return {
     id, name: p?.ign ?? '', role: roleOf(state), entry, start: startOf(state), origin: me.originKey, home: me.region,
     from: entry, to: me.ending?.year ?? state.year, seasons: pro.length, clubs,
@@ -330,6 +344,7 @@ function cardOf(state: GameState, id: string): HallCard {
     ach: me.achievements.filter((k) => !!ACH_BY_KEY[k]),
     at: today(),
     ...(me.flags.staffYes ? { staff: 1 as const } : {}),
+    ...(rw ? { rw: { n: rw.retitled, ...(rw.from != null ? { from: rw.from } : {}), ...(rw.top ? { top: careerLine(rw.top) } : {}) } } : {}),
   }
 }
 
@@ -453,6 +468,19 @@ export function hallLine(state: GameState): string {
   if (mine.length) return `殿堂 · 这一局凑齐「${mine.join('」「')}」`
   const t = hallTitle(h)
   return t ? `殿堂称号 · ${t}` : ''
+}
+
+/** A card's 「你的世界线改写了 N 座奖杯的归属」, or '' for a card with none or noted before it. */
+export const cardRetitled = (c: HallCard): string => (c.rw ? retitledLine({ retitled: c.rw.n, from: c.rw.from }) : '')
+
+/**
+ * The new-career screen's one line (the author's brief of 2026-09-18: a second career is a chance to rewrite it
+ * again): what the last career that ended did, where its world line took trophies from their real owners.
+ */
+export function lastRewriteLine(h: Hall | null): string {
+  const c = h?.cards[h.cards.length - 1]
+  if (!c?.rw?.n) return ''
+  return `上一局${c.rw.from ? `从 ${c.rw.from} 赛季起` : ''}，你的世界线改写了 ${c.rw.n} 座奖杯的归属。`
 }
 
 export type HallRecordKey = 'titles' | 'intl' | 'seasons' | 'peak' | 'acs' | 'mvps'

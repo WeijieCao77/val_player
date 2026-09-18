@@ -860,6 +860,12 @@ export interface AdvanceOpts {
   autoScrims?: boolean
   /** a Masters pick that falls to the manager is made by the coaches (headless runs) */
   autoResolveDrawDecisions?: boolean
+  /**
+   * The season's last day, once its matches are played and before the winter runs (endSeason): the year's
+   * competitions are cleared at the turn, so whatever a caller keeps of them is read here. The career keeps its
+   * season's history ledger this way (engine/me/week.ts, me/worldline.ts).
+   */
+  beforeSeasonEnd?: (state: GameState) => void
 }
 
 /** Each fixture gets its own stream, so a result never depends on play order. */
@@ -1202,6 +1208,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
 
   let seasonEnded = false
   if (state.day >= SEASON_DAYS) {
+    opts.beforeSeasonEnd?.(state)
     notes.push(`—— ${state.year} 赛季结束 ——`)
     endSeason(state, rng, notes)
     seasonEnded = true
