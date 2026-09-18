@@ -25,6 +25,9 @@ import { stripToTheBone } from '../src/engine/match'
 import { fireEvent } from '../src/engine/me/events'
 import { cerStart } from '../src/engine/me/ceremony'
 import { pushMoment } from '../src/engine/me/moments'
+import { titleRealChamp } from '../src/engine/me/worldline'
+import { compClass } from '../src/engine/me/compclass'
+import { eventsOf } from '../src/engine/circuit'
 import { startInjury } from '../src/engine/me/injury'
 import { pop, push } from '../src/engine/me/pending'
 import { declineInvite, startTryout } from '../src/engine/me/tryout'
@@ -227,12 +230,17 @@ if (groups.has('chal')) {
     }
     {
       // a title I started in: the full-screen card with my five under it (reported 2026-09-18: at 375px the five
-      // face buttons came out 0px wide, piled on one spot)
+      // face buttons came out 0px wide, piled on one spot). Last year's Masters, which history gave to somebody
+      // else, so the card carries its lower third 「真实历史里，这座奖杯属于 X」 as well (me/worldline.ts)
       const f = clone(s)
-      const comp = nextRealFixtureFor(f, f.myTeam)?.comp ?? Object.keys(f.comps)[0]
+      const last = eventsOf(f.year - 1).filter((e) => !e.projected && !e.plan && e.places.length)
+      const real = last.find((e) => compClass(e.cn) === 'masters' && last.filter((x) => x.cn === e.cn).length === 1)
+      const comp = real?.cn ?? nextRealFixtureFor(f, f.myTeam)?.comp ?? Object.keys(f.comps)[0]
       // the only big moment waiting, so it is the card in front
       f.me!.moments = []
-      pushMoment(f, { kind: 'title', key: 'audit-title', comp, fmvp: true })
+      pushMoment(f, { kind: 'title', key: 'audit-title', comp, fmvp: true, teamId: f.myTeam })
+      if (real) f.me!.moments![0].year = f.year - 1
+      if (!titleRealChamp(f, f.me!.moments![0])) console.log('  (modal-title: no 「真实历史里」 line)')
       save('modal-title', f)
     }
   }

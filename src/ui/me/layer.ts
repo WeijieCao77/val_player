@@ -108,8 +108,20 @@ function bench(): void {
     steps.push(parent)
   }
   if (typeof MutationObserver === 'undefined') return
-  watch = new MutationObserver(bench)
+  watch = new MutationObserver(rebench)
   for (const el of steps) watch.observe(el, { childList: true })
+}
+
+/**
+ * The page changed beside the card. If what had the focus went with it — a bar that stays live over the cards, like
+ * 「这个存档已在另一个页面更新」 once its 载入最新存档 has opened the career again under the same card — the focus
+ * goes back into the card rather than being left on nothing.
+ */
+function rebench(): void {
+  bench()
+  const t = topLayer()
+  const at = document.activeElement
+  if (t && (!at || at === document.body)) enter(t)
 }
 
 const zOf = (el: Element): number => {

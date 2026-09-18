@@ -610,8 +610,11 @@ for (const m of ['cup', 'invite', 'tryout', 'deal', 'event', 'ceremony', 'hurt',
   await withSave(`modal-${m}`, async (page) => {
     await measureAll(page, `modal-${m}`, `modal:${m}`, { shot: m === 'invite' ? 'modal-invite' : m === 'ceremony' ? 'modal-ceremony' : m === 'title' ? 'modal-title' : undefined })
     if (SWEEP && (m === 'deal' || m === 'title')) await measureAll(page, `modal-${m}`, `modal:${m}`, { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
+    // a title's card opens on its own button, 收下, with the history line (me/worldline.ts) above the five as text
+    const primary = m === 'title' && await page.evaluate(() => document.activeElement === document.querySelector('.moment-bg .mo-acts .primary'))
     // the cards that are answered, not closed: Escape leaves them up
-    await keyboard(page, `modal-${m}`, `modal:${m}`, { escape: m === 'event' || m === 'tryout' ? 'stays' : undefined })
+    const found = await keyboard(page, `modal-${m}`, `modal:${m}`, { escape: m === 'event' || m === 'tryout' ? 'stays' : undefined })
+    if (m === 'title' && !primary) found.push({ kind: 'kb:not-primary', text: '收下' })
     if (m === 'event') {
       // answered from the keyboard: the result goes up in front, with the focus in it
       await page.evaluate(() => document.querySelector('.modal-bg .node-opt button')?.focus())
