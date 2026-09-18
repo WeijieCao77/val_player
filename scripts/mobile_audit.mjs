@@ -204,7 +204,11 @@ const results = []
 /** what the keyboard found on each card in front of the page (keyboard below) */
 const keys = []
 const errors = []
-const browser = await chromium.launch()
+// never a sound out of the machine running it (2026-09-18: preview tabs played the game's music out loud on the
+// author's computer): Chromium muted, and the music window (ui/me/MusicPlayer.tsx) seeded paused and silent below
+const browser = await chromium.launch({ args: ['--mute-audio'] })
+const MUSIC_KEY = 'valplayer.music'
+const MUSIC_OFF = JSON.stringify({ vol: 0, muted: true, loop: 'all', track: 0, off: true, open: false })
 
 const settle = async (page, ms = 60) => {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
@@ -326,16 +330,17 @@ async function withSave(name, fn, opts = {}) {
   if (file && !existsSync(file)) { errors.push(`${name}: no save file`); return }
   const text = file ? readFileSync(file, 'utf8') : null
   const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 1 })
-  await ctx.addInitScript(([key, text]) => {
+  await ctx.addInitScript(([key, text, musicKey, musicOff]) => {
     try {
       if (sessionStorage.getItem('audit-seeded')) return
       localStorage.clear()
+      localStorage.setItem(musicKey, musicOff)
       if (text) localStorage.setItem(key, text)
       localStorage.setItem('val_player.tour.off', '1')
       for (const k of ['pre', 'club', 'season']) localStorage.setItem(`val_player.tour.${k}`, '1')
       sessionStorage.setItem('audit-seeded', '1')
     } catch (e) { console.error('seed failed: ' + e) }
-  }, [SAVE_KEY, text])
+  }, [SAVE_KEY, text, MUSIC_KEY, MUSIC_OFF])
   const page = await ctx.newPage()
   page.setDefaultTimeout(20000)
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`))
