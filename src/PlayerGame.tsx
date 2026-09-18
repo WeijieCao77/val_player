@@ -5,7 +5,7 @@ import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
 import type { Fixture, GameState } from './engine/types'
-import { advanceTurn, carriesOn, weekCalendar, weekInDays, weekMatches } from './engine/me/week'
+import { advanceTurn, carriesOn, staminaLeft, weekCalendar, weekInDays, weekMatches } from './engine/me/week'
 import { MeMatch } from './engine/me/matchplay'
 import { isCupRound } from './engine/me/cups'
 import { advanceUntil, leftToMe, runAutoPilot, stopLine } from './engine/me/auto'
@@ -343,6 +343,9 @@ function Career() {
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
+  // 体力 now, and what this week's plan leaves of it (engine/me/week.ts staminaLeft, the 本周行动 panel's bar)
+  const stamina = Math.round(100 - p.fatigue)
+  const planned = staminaLeft(game)
   // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
   // under a card's scrim could not be pressed (z45 against z50), and the tour's veil covered it too
   // the big moments first (me/moments.ts), then the achievements they unlocked, then the cards the clock stopped on
@@ -367,56 +370,58 @@ function Career() {
   return (
     <GameCtx.Provider value={ctxValue}>
       <div className="app career">
-        <header className="topbar">
-          <button className="brand as-link" onClick={() => goScreen('week')}>
-            VAL<span>选手生涯</span><em className="by">demo</em>
-          </button>
-          <div className="spacer" />
-          <button className="sm ghost" onClick={toHome} disabled={leaving} title="回到存档首页：存档留着，点「继续」接着打">{leaving ? '存档中…' : '回到首页'}</button>
-        </header>
-
-        {/* who I am, where I am, and the six numbers that matter — the rest
-            live one row down, as numbers or as words */}
-        <section className="hero" aria-label="总览">
+        {/* The top of a career, two lines (asked 2026-09-18: 「上面这个信息栏太大了，弄得操作空间特别局促」 — at
+            1280×667 the wordmark bar, this card and the line under it took 302px of 667). The wordmark and 回到首页 ride
+            the first line with who I am, where, and the day, the way 破晓 folds its title into a strip once a career is
+            open; the five numbers are label and value on the second. 体力 went down a line, beside the week's action
+            points, where the two budgets of a week stay on screen together (me.css .pinbar). */}
+        <header className="hero" aria-label="总览">
           <div className="hero-row">
-            <div className="hero-who">
-              <b className="hero-name">{p.ign}</b>
-              <span className="muted">{p.role} · {p.age} 岁</span>
-            </div>
-            <div className="hero-club">
-              {team ? (
-                <>
-                  <Crest id={game.myTeam} size={20} />
-                  <b>{team.name}</b>
-                  <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
-                  <span className="muted">·</span>
-                  {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
-                </>
-              ) : (
-                <b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b>
-              )}
+            <button className="brand as-link" onClick={() => goScreen('week')}>
+              VAL<span>选手生涯</span><em className="by">demo</em>
+            </button>
+            {/* before who I am in the page's order, so a phone can hold it at the right of the wordmark's line; a monitor
+                puts it back at the end of the line (me.css .hero-home) */}
+            <button className="sm ghost hero-home" onClick={toHome} disabled={leaving} title="回到存档首页：存档留着，点「继续」接着打">{leaving ? '存档中…' : '回到首页'}</button>
+            <div className="hero-id">
+              <div className="hero-who">
+                <b className="hero-name">{p.ign}</b>
+                <span className="muted">{p.role} · {p.age} 岁</span>
+              </div>
+              <div className="hero-club">
+                {team ? (
+                  <>
+                    <Crest id={game.myTeam} size={18} />
+                    <b>{team.name}</b>
+                    <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
+                    <span className="muted">·</span>
+                    {me.trial ? <b style={{ color: 'var(--accent)' }}>试用中</b> : starter ? <b style={{ color: 'var(--win)' }}>首发</b> : <b style={{ color: 'var(--loss)' }}>替补</b>}
+                  </>
+                ) : (
+                  <b>{me.phase === 'retired' ? '已退役' : me.phase === 'free' ? '自由人' : '自由身'}</b>
+                )}
+              </div>
+              <div className="hero-stage">
+                <b>{stageNameIn(game.year, game.stage, onTimeline(game))}</b>
+                <span className="muted">{dateLabel(game)}</span>
+              </div>
             </div>
           </div>
-          <div className="hero-stage">
-            <b>{stageNameIn(game.year, game.stage, onTimeline(game))}</b>
-            <span className="muted">{dateLabel(game)}</span>
-            {/* the week's button, mirrored where the page opens — shown on a phone only (me.css .hero-go), where the
-                real one is a long scroll down at the end of the week's panel; 破晓's HUD carries the same copy */}
-            {!Screen && me.phase !== 'retired' && (() => {
-              const go = advanceOf(game)
-              return <button className="primary hero-go" onClick={advance} title={go.title}>{go.label}</button>
-            })()}
-          </div>
+          {/* the week's button, mirrored where the page opens — shown on a phone only (me.css .hero-go), where the
+              real one is a long scroll down at the end of the week's panel; 破晓's HUD carries the same copy */}
+          {!Screen && me.phase !== 'retired' && (() => {
+            const go = advanceOf(game)
+            return <button className="primary hero-go" onClick={advance} title={go.title}>{go.label}</button>
+          })()}
           <div className="tiles">
             <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
             <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(game)}{nums && me.phase !== 'retired' && <em>{rankAt(game).rr} RR</em>}</b></div>
             <div className="tile" title={`${fanTier(me.fans).name} · ${fansCn(me.fans)}`}><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
             <div className="tile"><small>资金</small><b>{money(me.money)}</b></div>
-            <div className={`tile ${p.fatigue >= 60 ? 'dn' : ''}`}><small>体力</small><b>{Math.round(100 - p.fatigue)}</b></div>
             {/* 气压 has no tile of its own: past 55 it is the only state worth saying */}
             <div className={`tile ${me.tilt >= 55 || p.form <= 60 ? 'dn' : p.form >= 78 ? 'up' : ''}`}><small>状态</small><b>{me.tilt >= 55 ? '心态崩了' : p.form >= 78 ? '火热' : p.form >= 68 ? '正常' : p.form >= 60 ? '一般' : '低迷'}{nums && <em>{Math.round(p.form)}</em>}</b></div>
           </div>
-        </section>
+        </header>
 
         {game.timelinePause && (
           <div className="small" style={{ margin: '10px 0', padding: '10px 14px', border: '1px solid var(--accent)', borderRadius: 8 }}>
@@ -427,16 +432,33 @@ function Career() {
         {/* One line under the tiles, not a row of every dimension (asked 2026-09-11: 「段位下方有足足13个维度」).
             The eight, 心态, 体质, 疲劳 and 气压 all still drive every sum; they are read in full on 我的. */}
         {/* The numbers switch rides the end of this line on every screen, 我的 included, the way 破晓 keeps 「数值」 on its attribute bar. */}
-        <div className="pinbar" role="status" aria-label="能力">
-          {screen !== 'me' && (
-            <>
-              <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
-              {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
-                <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
-              )}
-              <button className="sm ghost to-me" onClick={() => goScreen('me')}>看八项属性 →</button>
-            </>
-          )}
+        {/* The week's two budgets lead it, on every screen (asked 2026-09-18: 「行动点应该是冻结一直出现在界面里，不然往下划一点就不知道还有多少行动点了」):
+            what is left of the week's action points, and 体力 with what this week's plan leaves of it — the same two
+            figures as the 本周行动 panel's title and bar, which scroll away with the cards under them. 破晓 puts 行动 first on its bar. */}
+        <div className="pinbar" role="group" aria-label="本周行动与能力">
+          {/* the readings wrap among themselves on a narrow phone, and the two buttons keep the line's end */}
+          <div className="pin-list">
+            {me.phase !== 'retired' && (
+              // read out when it changes, as a card is planned or taken back; the rest of the line is not
+              <span className={`chip ap-chip${me.ap > 0 ? '' : ' spent'}`} role="status" title={me.ap > 0 ? '这周还能安排的行动点，推进以后没用完的作废' : '这周的行动点用完了'}>
+                本周行动<b>剩 {me.ap} 点</b>
+              </span>
+            )}
+            <span className={`pin stamina${p.fatigue >= 60 ? ' dn' : ''}`}>
+              <span>体力</span><b>{stamina}</b>
+              {planned < stamina && <em className={planned < 40 ? 'dn' : ''}>安排后 {planned}</em>}
+            </span>
+            {screen !== 'me' && (
+              <>
+                <span className="sep" aria-hidden="true" />
+                <span className="pin"><span>综合</span><b>{nums ? p.overall : attrWord(p.overall)}</b></span>
+                {ATTR_KEYS.some((k) => p.attrs[k] >= caps[k]) && (
+                  <span className="pin cap" title="怎么破看「我的」"><span>卡在瓶颈</span><b>{ATTR_KEYS.filter((k) => p.attrs[k] >= caps[k]).map((k) => ATTR_CN[k]).join('、')}</b></span>
+                )}
+              </>
+            )}
+          </div>
+          {screen !== 'me' && <button className="sm ghost to-me" onClick={() => goScreen('me')}>看八项属性 →</button>}
           <button className={`sm ghost num-switch${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
             数值 {nums ? '开' : '关'}
           </button>

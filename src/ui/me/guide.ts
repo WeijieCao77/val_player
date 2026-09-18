@@ -136,7 +136,7 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
         : '「我的」看属性和瓶颈，「转会」看各档俱乐部要什么水平。「帮助」里有规则说明，也能重看导览。',
     },
     {
-      screen: WEEK, at: [{ sel: '.topbar .chip' }], title: '行动点',
+      screen: WEEK, at: [{ sel: '.ap-chip' }], title: '行动点',
       body: pro
         ? `签约后每周 ${AP_SEASON} 点，受伤时只有 ${AP_HURT} 点。推进以后，没用完的作废。`
         : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。推进以后，没用完的作废。`,

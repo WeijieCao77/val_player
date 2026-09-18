@@ -2,15 +2,25 @@
 
 .pinbar {
   position: sticky; top: 0; z-index: 5;
-  display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
-  padding: 6px 14px; background: var(--bg-rail); border-bottom: 1px solid var(--line);
+  display: flex; gap: 4px 12px; align-items: center;
+  padding: 5px 16px; background: var(--bg-rail); border-bottom: 1px solid var(--line);
   font-size: var(--t-small); color: var(--muted);
 }
+.pinbar .pin-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; flex: 1 1 auto; min-width: 0; }
 .pinbar .pin { display: inline-flex; gap: 4px; align-items: baseline; white-space: nowrap; }
 .pinbar .pin b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 650; }
 .pinbar .pin.up b { color: var(--win); }
 .pinbar .pin.dn b { color: var(--loss); }
 .pinbar .sep { width: 1px; height: 14px; background: var(--line); }
+/* the week's action points: the one figure every card on 本周 spends, lit while there is any left and quiet once
+   it is gone (破晓's bar lights 行动 gold above zero and dims it at zero) */
+.pinbar .ap-chip { gap: 6px; padding: 3px 10px; color: var(--text); border-color: var(--accent-line); background: var(--accent-wash); }
+.pinbar .ap-chip b { color: var(--accent); }
+.pinbar .ap-chip.spent { color: var(--faint); border-color: var(--line); background: none; }
+.pinbar .ap-chip.spent b { color: var(--muted); }
+/* 体力, and what this week's plan leaves of it: the 本周行动 panel's bar, in words */
+.pinbar .stamina em { font-style: normal; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pinbar .stamina em.dn { color: var(--loss); }
 
 .act-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 1100px) { .act-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -20,27 +30,46 @@
   background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; min-height: 96px;
 }
 .act-card.on { border-color: var(--accent-line); background: var(--accent-wash); }
-/* overview block under the top bar: who / where / six big numbers */
-.hero { margin: 8px 14px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
-.hero-row { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.hero-who { display: flex; align-items: baseline; gap: 10px; }
-.hero-name { font-size: 20px; font-weight: 700; letter-spacing: .02em; }
-.hero-club { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: var(--t-small); }
-.hero-stage { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
-.hero-stage small { color: var(--accent); letter-spacing: .12em; font-weight: 700; }
-.hero-stage b { font-size: 22px; font-weight: 700; }
+/* ---- the top of a career: two lines and the pinned one under them ----
+   2026-09-18, a tester on a 1920×1000 screen: 「上面这个信息栏太大了，弄得操作空间特别局促」 — about 460 of its 1000 pixels
+   were above the working area, and 段位 wrapped to a second line. Measured here at 1280×667 (that screen at 150%): the
+   wordmark bar, the overview card and the line under it were 302px of 667; at 1366×768 and 1920×1000, 279px.
+   Now, 破晓's way once a career is open (its title folds to a strip, its HUD is who / now / the numbers):
+   - one line for the wordmark, who I am, the club or 自由身, the stage and the day, and 回到首页 at its end;
+   - one line of the five numbers as label and value, each kept on one line;
+   - the pinned line (.pinbar) leads with the week's action points and 体力.
+   About 120px on a monitor. Nothing went: 体力 moved down a line, beside the action points. */
+.hero { flex-shrink: 0; background: var(--bg-rail); border-bottom: 1px solid var(--line); }
+.hero-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; padding: 5px 16px; min-height: 44px; border-bottom: 1px solid var(--line-soft); }
+.hero-row .brand { flex: none; }
+/* who, where, when: one sentence with a hairline between its parts, wrapping as a sentence does when the window is
+   narrow. No hairline opens a line: each part carries its own 14px to its left and is pulled back over the 29px gap,
+   so a part that starts a line has its hairline past the clipped edge (the same for the numbers below). */
+.hero-id { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 29px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.hero-id > * { margin-left: -15px; padding-left: 14px; border-left: 1px solid var(--line); }
+.hero-who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.hero-name { font-size: 17px; font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
+.hero-club, .hero-stage { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hero-club { flex-wrap: wrap; }
+.hero-club b { overflow-wrap: anywhere; }
+.hero-stage { align-items: baseline; gap: 8px; }
+.hero-stage b { font-weight: 700; }
+/* first in the page's order so a phone can keep it beside the wordmark; a monitor puts it at the end of the line */
+.hero-home { order: 1; flex: none; margin-left: auto; }
 /* the week's button mirrored into the overview: a phone only (below) */
 .hero-go { display: none; }
-.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.tile { padding: 10px 14px; border-right: 1px solid var(--line); min-width: 0; }
-.tile:last-child { border-right: 0; }
-.tile small { display: block; color: var(--muted); font-size: var(--t-small); margin-bottom: 4px; }
-/* a figure wraps rather than trails off: 「这个项目的门面 1318 万」 is one tile at 1280 and at 320 */
-.tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; display: block; line-height: 1.3; overflow-wrap: anywhere; }
-.tile b em { font-style: normal; font-size: var(--t-small); color: var(--muted); margin-left: 4px; white-space: nowrap; display: inline-block; }
+/* the five numbers: label and value side by side, and a value never broken over two lines. The side's room is a
+   transparent border rather than padding, so the clipped edge the hairlines go past is where the text starts. */
+.tiles {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 29px; overflow: hidden;
+  padding: 5px 16px 5px 1px; border-left: 15px solid transparent; background: var(--panel);
+}
+.tile { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; margin-left: -15px; padding-left: 14px; border-left: 1px solid var(--line); }
+.tile small { color: var(--muted); font-size: var(--t-small); white-space: nowrap; }
+.tile b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.4; white-space: nowrap; }
+.tile b em { font-style: normal; font-weight: 400; font-size: var(--t-small); color: var(--muted); margin-left: 6px; }
 .tile.up b { color: var(--win); }
 .tile.dn b { color: var(--loss); }
-@media (max-width: 900px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tile { border-bottom: 1px solid var(--line); } }
 
 /* the whiteboard in a live match */
 .map-board { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: center; margin: 6px 0 10px; }
@@ -690,36 +719,38 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career > .body { display: block; }
   .app.career > .body > .main { overflow: visible; padding: 10px 10px calc(var(--dock-h) + var(--safe-b) + 64px); }
 
-  /* -- the top: the wordmark, and the corner buttons at its right end (below), because the bottom of the screen is the tabs' */
-  .app.career > .topbar { min-height: 48px; padding: 4px 10px; flex-wrap: nowrap; }
+  /* -- the top: the wordmark with 回到首页 at the right end of its line (the bottom of the screen is the tabs'), then
+        who I am, the week's button, and the five numbers as label and value, wrapping as a sentence does */
   .app.career .brand { font-size: 14px; min-height: 40px; }
   .app.career .support-card { max-height: calc(100dvh - 16px); }
-
-  /* -- the overview: the same six numbers, three to a row */
-  .app.career > .hero { margin: 6px 10px 0; }
-  .app.career .hero-row { padding: 8px 12px; gap: 2px 10px; }
-  .app.career .hero-who { flex-wrap: wrap; min-width: 0; gap: 2px 8px; }
-  .app.career .hero-name { font-size: 19px; overflow-wrap: anywhere; }
-  .app.career .hero-club { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; row-gap: 2px; }
-  .app.career .hero-club b { overflow-wrap: anywhere; }
-  .app.career .hero-stage { padding: 6px 12px; gap: 2px 10px; flex-wrap: wrap; }
-  .app.career .hero-stage b { font-size: 17px; }
-  .app.career .tile { padding: 7px 10px; }
-  .app.career .tile:nth-child(3n) { border-right: 0; }
-  .app.career .tile:nth-last-child(-n + 3) { border-bottom: 0; }
-  .app.career .tile small { font-size: var(--t-tiny); margin-bottom: 2px; }
-  .app.career .tile b { font-size: 16px; }
-  .app.career .tile b em { display: block; margin: 1px 0 0; white-space: normal; }
+  .app.career .hero-row { padding: 4px 10px 6px; gap: 0 10px; }
+  .app.career .hero-home { order: 0; }
+  .app.career .hero-id { order: 2; flex: 1 1 100%; row-gap: 2px; }
+  .app.career .hero-who { flex-wrap: wrap; gap: 2px 8px; }
+  .app.career .hero-name { font-size: 19px; }
+  .app.career .hero-club, .app.career .hero-stage { flex-wrap: wrap; row-gap: 2px; }
+  .app.career .tiles { row-gap: 3px; padding: 6px 10px 6px 1px; border-left-width: 9px; }
+  .app.career .tile { gap: 6px; }
+  /* one line where it fits (「神话 · 亚服第 1,750 名」 does at 375); on the narrowest phone a figure breaks rather than being cut off */
+  .app.career .tile b { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
+  .app.career .tile b em { white-space: nowrap; }
   /* the changelog card: its kind badges were 10.5px, and a line of code in it one unbreakable word */
   .app.career .log-kind { font-size: var(--t-tiny); }
   .app.career .log-list li { min-width: 0; overflow-wrap: anywhere; }
 
-  /* -- the one line under it stays on top while the page scrolls; 我的 is on the tab bar, so the shortcut to it goes; 数值 keeps its end */
-  .app.career > .pinbar { min-height: 48px; padding: 4px 12px; flex-wrap: nowrap; gap: 4px 14px; }
+  /* -- the one line under it stays on top while the page scrolls; 我的 is on the tab bar, so the shortcut to it goes; 数值 keeps its end.
+        It leads with the week's action points and 体力; a narrow phone, or a plan that leaves 体力 lower, wraps it to a second line
+        rather than cutting a word off */
+  .app.career > .pinbar { min-height: 48px; padding: 4px 12px; gap: 10px; }
+  .app.career > .pinbar .pin-list { gap: 2px 10px; }
   .app.career > .pinbar .pin { white-space: normal; min-width: 0; }
   .app.career > .pinbar .pin > span { white-space: nowrap; }
+  .app.career > .pinbar .ap-chip { padding: 3px 8px; }
+  .app.career > .pinbar .sep { display: none; }
   .app.career > .pinbar > .to-me { display: none; }
   .app.career > .pinbar > .num-switch { flex: none; margin-left: auto; }
+  /* whatever the tour brings into view from its top lands under the pinned line, not behind it (ui/me/Tour.tsx scrollIntoView) */
+  html:has(.app.career) { scroll-padding-top: 80px; }
 
   /* -- the screens: a tab bar along the bottom, four and 更多 */
   .app.career .nav {
@@ -752,7 +783,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
   /* -- the week page: the button ends the week's panel, and its copy sits in the overview where the page opens
         (破晓: 进入下一周 in the row under the actions; its HUD's 主按钮镜像 takes the full width on a phone) */
-  .app.career .hero-go { display: block; flex: 1 1 100%; min-height: 44px; margin: 4px 0 2px; font-size: 16px; }
+  .app.career .hero-go { display: block; width: calc(100% - 20px); min-height: 44px; margin: 6px 10px 0; font-size: 16px; }
   .app.career .advance-me button.primary { min-height: 44px; font-size: 16px; }
   /* 16px: a smaller select zooms the whole page on iOS when it opens */
   .app.career .advance-me select.advance-far { width: auto; min-height: 44px; font-size: 16px; }
