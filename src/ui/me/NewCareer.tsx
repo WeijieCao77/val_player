@@ -161,9 +161,11 @@ function SaveCard({ info, busy, bad, onContinue, onNew }: {
 
 /** 破晓 asks before 重新开一局 overwrites the save (its main.ts askConfirm on #savenew); so does this, once. */
 function ConfirmNew({ who, onOk, onCancel }: { who?: string; onOk: () => void; onCancel: () => void }) {
-  // a card in front of the page like the career's own (layer.ts): 取消 has the focus, Tab stays on the two buttons
+  // a card in front of the page like the career's own (layer.ts): 取消 has the focus — said to the layer, not only by
+  // autoFocus, which the layer's own mount would otherwise leave behind — and Tab stays on the two buttons
   const bg = useRef<HTMLDivElement>(null)
-  useLayer(bg)
+  const no = useRef<HTMLButtonElement>(null)
+  useLayer(bg, { first: () => no.current })
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
     window.addEventListener('keydown', key)
@@ -178,7 +180,7 @@ function ConfirmNew({ who, onOk, onCancel }: { who?: string; onOk: () => void; o
           <p id="nc-confirm-d">{who ? `${who} 的存档` : '上次的存档'}会在新生涯开始时被覆盖，回不来了。</p>
           <div className="row">
             <button className="primary" onClick={onOk}>开新生涯</button>
-            <button autoFocus onClick={onCancel}>取消</button>
+            <button ref={no} autoFocus onClick={onCancel}>取消</button>
           </div>
         </div>
       </div>

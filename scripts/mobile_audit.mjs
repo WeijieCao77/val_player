@@ -15,7 +15,7 @@
  *   font<12        on a phone, any text under 12px
  *   font<13        on a phone, text between 12 and 13px (12px is the tiny step, 13px and up is body and small)
  *   tap<40         on a phone, a button, select, link or clickable row under 40px either way
- *   squashed       at any width, a button, select or link under 1px either way
+ *   squashed       at any width, a button, select or link under 8px either way
  *
  * and, from a keyboard, each card in front of the page (the list of 键盘 at the
  * end of the report): a dialog with a name, the focus inside it — on its first
@@ -152,9 +152,9 @@ function measure({ phone, root, exclude }) {
       else if (fs > 12.01 && fs < 12.99) add('font<13', el, fs)
     }
 
-    // 4a. something to tap squeezed to nothing on one side while what it holds still shows, at any width (reported
-    //     2026-09-18: a title's five face buttons came out 0×40, the faces piled on one spot)
-    if (el.matches(TAP) && (r.width < 1 || r.height < 1)) add('squashed', el, Math.min(r.width, r.height), { size: `${Math.round(r.width)}x${Math.round(r.height)}` })
+    // 4a. something to tap squeezed to a sliver on one side while what it holds still shows, at any width (reported
+    //     2026-09-18: a title's five face buttons came out 0×40 on a phone and 5×22 on a computer, piled on one spot)
+    if (el.matches(TAP) && (r.width < 8 || r.height < 8)) add('squashed', el, Math.min(r.width, r.height), { size: `${Math.round(r.width)}x${Math.round(r.height)}` })
 
     // 4b. something to tap, on a phone
     if (phone) {
@@ -261,7 +261,10 @@ async function keyboard(page, scenario, state, opts = {}) {
     const a = document.activeElement
     const tabs = [...top.querySelectorAll('button, a[href], select, input, textarea, summary, [tabindex]')]
       .filter((el) => el.tabIndex >= 0 && !el.disabled && el.getClientRects().length > 0)
-    const behind = document.querySelector('.app.career > .body, .newcareer')
+    // a control on the page behind that is still live (the music window, the update and save bars and the tour's card
+    // stand above the cards and stay live on purpose)
+    const live = [...document.querySelectorAll('button, a[href], select, input, textarea')].find((el) =>
+      !top.contains(el) && !el.closest('.bgm, .toast, .update-nudge, .save-chip, .mt-card') && el.getClientRects().length > 0 && !el.closest('[inert]'))
     const label = dlg && (dlg.getAttribute('aria-label') || document.getElementById(dlg.getAttribute('aria-labelledby') ?? '')?.textContent)
     return {
       dialog: !!dlg,
@@ -271,7 +274,7 @@ async function keyboard(page, scenario, state, opts = {}) {
       asks: !!top.querySelector('.node-opt button'),
       first: !!a && a === top.querySelector('.node-opt button'),
       n: tabs.length,
-      behindLive: !!behind && !top.contains(behind) && !behind.closest('[inert]'),
+      behindLive: live ? (live.getAttribute('aria-label') || live.textContent || live.tagName).trim().replace(/\s+/g, ' ').slice(0, 24) : null,
       musicInert: !!document.querySelector('.bgm')?.closest('[inert]'),
     }
   }, CARDS)
@@ -285,7 +288,7 @@ async function keyboard(page, scenario, state, opts = {}) {
     }
     if (!at.inside) add('kb:focus-outside')
     else if (at.asks && !at.first) add('kb:not-first-answer')
-    if (at.behindLive) add('kb:page-live')
+    if (at.behindLive) add('kb:page-live', at.behindLive)
     if (at.musicInert) add('kb:music-inert')
     for (const key of ['Tab', 'Shift+Tab']) {
       for (let i = 0; i < at.n + 2; i++) {
@@ -628,6 +631,9 @@ for (const m of ['cup', 'invite', 'tryout', 'deal', 'event', 'ceremony', 'hurt',
  */
 async function titleFaces(page) {
   const found = []
+  // the achievements the run unlocked are big cards too, next in line: the title is told by its own words
+  const heading = () => page.evaluate(() => document.querySelector('.moment-bg .mo-title')?.textContent ?? null)
+  const title = await heading()
   const n = await page.evaluate(() => {
     const b = [...document.querySelectorAll('.mo-people .face-btn')]
     b[1]?.focus()
@@ -648,7 +654,7 @@ async function titleFaces(page) {
     if (!card.focus) found.push({ kind: 'kb:focus-outside', text: '选手卡' })
     await page.keyboard.press('Escape')
     await settle(page, 200)
-    if (!(await page.$('.moment-bg'))) found.push({ kind: 'faces', text: '选手卡上按 Escape 收下了下面的冠军卡' })
+    if ((await heading()) !== title) found.push({ kind: 'faces', text: '选手卡上按 Escape 收下了下面的冠军卡' })
     await closeTop(page)
     if (!(await page.evaluate(() => document.activeElement?.classList.contains('face-btn')))) found.push({ kind: 'kb:focus-not-back', text: '头像' })
   }
