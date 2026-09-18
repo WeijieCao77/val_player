@@ -1,5 +1,5 @@
 /**
- * 后台统计的边角 —— 跨零点、写盘出错、隔天重启、不合规的属性值。
+ * 后台统计的边角 —— 跨零点、写盘出错、隔天重启、不合规的属性值、探活。
  *
  * scripts/check_stats.ts 核的是「一份手算好的 JSONL 重放出来，看板上每个数都对」。这里核的是
  * 那份核查碰不到的几种时刻，每一种都是一次外部审查（2026-09-18）真的复现出来的：
@@ -18,6 +18,7 @@
  *  - 属性值：原来只核属性名，值是任意 48 个字以内的字符串、任意有限数——region / role /
  *    start / 结局 key 能变成随便什么聚合键，active_s 能报 1e308。现在按 stats-contract.js
  *    的值规则收：枚举、类型、范围。
+ *  - /healthz：dist/index.html 不在就回 503（railway.json 拿它探活，页面都没有的部署不该算上线）。
  *
  * 另外把几件已经对的事钉住，改服务器的时候不许弄坏：/api/e 回 204；看板的 404 / 401 / 429 /
  * 200；背景音乐的 Range（206 / 416）；前端路由回 index.html；三档缓存头；/manager 302 回 /。
@@ -137,7 +138,7 @@ async function boot(s: Site, data: string, t0: number, env: Record<string, strin
       await sleep(80)
       if (proc.exitCode !== null) break
       try {
-        // 起来了就行，哪一个状态码都算
+        // 起来了就行，哪一个状态码都算：没有 dist/ 的那一个 /healthz 本来就该是 503
         const r = await fetch(`http://127.0.0.1:${port}/healthz`)
         if (r.status) { up = true; break }
       } catch { /* 还没起来 */ }
@@ -487,7 +488,22 @@ try {
     await kill(s)
   }
 
-  /* ================= 五、已经对的事，不许弄坏 ================= */
+  /* ================= 五、探活 ================= */
+  console.log('\n/healthz：')
+  {
+    const bare = site('bare', false)
+    const s = await boot(bare, path.join(tmp, 'd-bare'), bj(D1, '12:00'))
+    const r = await fetch(`http://127.0.0.1:${s.port}/healthz`)
+    eq(r.status, 503, '没有 dist/index.html：/healthz 回 503，这样的部署不该上线')
+    eq((await fetch(`http://127.0.0.1:${s.port}/`)).status, 503, '首页也是 503（dist/ 还没构建）')
+    eq(await post(s, batch('h1', 's-h1', [{ name: 'session_start', n: 1 }])), 204, '事件照收')
+    await kill(s)
+    const s2 = await boot(web, path.join(tmp, 'd-web'), bj(D1, '12:00'))
+    eq((await fetch(`http://127.0.0.1:${s2.port}/healthz`)).status, 200, '有 dist/index.html：/healthz 回 200')
+    await kill(s2)
+  }
+
+  /* ================= 六、已经对的事，不许弄坏 ================= */
   console.log('\n已经对的事（改服务器时不许弄坏）：')
   {
     const s = await boot(web, path.join(tmp, 'd-regress'), bj(D1, '12:00'))
@@ -542,4 +558,4 @@ if (bad) {
   process.exit(1)
 }
 console.log('\n✓ 后台统计的边角：跨零点的会话只记涨出来的那一截（活的、重启的、重发的都一样）；写盘出错记下来、重试、退出前写完，'
-  + '半行不粘坏后面；隔天重启按字节数认缓存；不合规的属性值进不来；原有的门、Range、缓存头都没动。')
+  + '半行不粘坏后面；隔天重启按字节数认缓存；不合规的属性值进不来；没有 dist/ 时 /healthz 是 503；原有的门、Range、缓存头都没动。')

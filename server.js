@@ -9,7 +9,7 @@
    · assets/ 下是带 hash 的文件，缓存一年；index.html 每次校验（no-cache）；
    · music/ 下是背景音乐（照抄 Val Manager），网址带版本号，缓存一周；带 Range 的请求回 206
      只发那一段——Safari 碰上整文件回 200 的服务器就不放声音；
-   · /healthz 给 Railway 探活；
+   · /healthz 给 Railway 探活（railway.json 的 healthcheckPath）：dist/index.html 不在就回 503；
    · Railway 注入 PORT，本地默认 3000。
 
    ================== 隐私：这条线不许越过 ==================
@@ -1106,7 +1106,11 @@ const server = http.createServer((req, res) => {
     if (p === '/api/e') { try { return handleIngest(req, res) } catch (e) { logErr('post', e); return send(res, 204, '') } }
     return send(res, 405, 'method not allowed')
   }
-  if (p === '/healthz') return send(res, 200, 'ok')
+  // Railway 拿它探活（railway.json 的 healthcheckPath）：页面都没构建出来的部署不算上线，
+  // 回 503 让它别把流量切过来——原来这里永远是 200（外部审查 2026-09-18）
+  if (p === '/healthz') {
+    return fs.existsSync(path.join(DIST, 'index.html')) ? send(res, 200, 'ok') : send(res, 503, 'dist/ 还没构建')
+  }
   if (/^\/(manager|cards)(\/|$)/.test(p)) {
     res.writeHead(302, { location: '/', 'cache-control': 'no-store' })
     return res.end()

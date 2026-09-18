@@ -183,8 +183,9 @@ async function start(env: Record<string, string>, dir: string): Promise<Srv> {
       await sleep(100)
       if (proc.exitCode !== null) break
       try {
+        // 起来了就行，哪个状态码都算：/healthz 在没有 dist/index.html 的工作区里本来就是 503
         const r = await fetch(`http://127.0.0.1:${port}/healthz`)
-        if (r.ok) { up = true; break }
+        if (r.status) { up = true; break }
       } catch { /* 还没起来 */ }
     }
     if (up) return { proc, port, dir }
@@ -566,7 +567,10 @@ try {
   servers.push(s4)
   eq((await dash(s4)).status, 404, '没配 STATS_KEY：/dash 是 404，当这页不存在')
   eq((await dash(s4, null)).status, 404, '没配 STATS_KEY 且不带钥匙：还是 404，不弹框')
-  eq((await fetch(`http://127.0.0.1:${s4.port}/healthz`)).status, 200, '没配钥匙不影响游戏：/healthz 照样 200')
+  // /healthz 只看 dist/index.html 在不在（没构建的工作区里本来就是 503），和钥匙无关
+  const built = fs.existsSync(path.join(ROOT, 'dist', 'index.html'))
+  eq((await fetch(`http://127.0.0.1:${s4.port}/healthz`)).status, built ? 200 : 503,
+    `没配钥匙不影响游戏：/healthz 照样只看 dist/ 构建了没有（${built ? '构建了' : '这个工作区没构建'}）`)
   eq(await post(s4, batch('nk1', 's-nk1', [{ name: 'session_start', n: 1 }])), 204, '没配钥匙时事件照记')
   stop(s4)
 
