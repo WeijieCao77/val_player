@@ -16,7 +16,7 @@ import { EDGE_NEED, duelTarget, standingLine } from '../../engine/me/coach'
 import { autoPlan, quietAhead, runBlocked, stopLine } from '../../engine/me/auto'
 import { asideReminders } from '../../engine/me/aside'
 import { fixturesFor } from '../../engine/season'
-import { WAIT_CN, nextUp } from '../../engine/me/nextup'
+import { WAIT_CN, nextUp, roadAhead, roadLines } from '../../engine/me/nextup'
 import { dateCn, inviteBlock, signedThisPeriod, windowLine } from '../../engine/me/window'
 import { PITCH_AP, PITCH_MAX } from '../../engine/me/selfpitch'
 import { pitchBook } from '../../engine/me/pitchbook'
@@ -66,6 +66,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const starter = !!team && team.starters.includes(me.id)
   // my club's next match, its tie written or not, or else the next event that is its own (engine/me/nextup.ts)
   const up = pro ? nextUp(game) : undefined
+  // nothing named: the rest of the season and the next one (engine/me/nextup.ts roadAhead)
+  const road = up?.kind === 'none' ? roadAhead(game) : undefined
   const next = up?.kind === 'fixture' ? up.fixture : undefined
   const oppId = next ? (next.teamA === game.myTeam ? next.teamB : next.teamA) : up?.kind === 'round' ? up.opponent : null
   const opp = oppId ? game.teams[oppId] ?? null : null
@@ -73,7 +75,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const nextKey = !up ? undefined
     : up.kind === 'fixture' ? up.fixture.comp
       : up.kind === 'round' || up.kind === 'waiting' ? up.comp?.key
-        : up.kind === 'event' ? Object.values(game.comps).find((c) => c.name === up.name)?.key : undefined
+        : up.kind === 'event' ? Object.values(game.comps).find((c) => c.name === up.name)?.key
+          : road?.next || road?.maybe ? Object.values(game.comps).find((c) => c.name === (road.next ?? road.maybe)!.name)?.key : undefined
   const nextComp = nextKey ? game.comps[nextKey] : undefined
   const soon = pro ? fixturesFor(game, game.myTeam).filter((f) => !f.played && f.day > game.day && f.day <= game.day + 7) : []
   const recent = pro ? fixturesFor(game, game.myTeam).filter((f) => f.played && f.comp !== 'scrim').slice(-3).reverse() : []
@@ -383,7 +386,10 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                       {/* my club's first tie there comes after the event opens: said when it opens (engine/me/nextup.ts) */}
                       {!up.stage && <p className="tiny faint" style={{ margin: '4px 0 0' }}>{up.sure ? `${up.day > up.opens ? `赛事 ${fmtDay(up.opens, game.year)} 开打，` : ''}对阵开打前一天才排出来。` : '你们可以报名，名单开打前一天定。'}</p>}
                     </>
-                  ) : <p className="muted" style={{ margin: 0 }}>暂时没有排定的比赛。</p>}
+                  ) : (
+                    // nothing named: why, in words, and what comes next — never a blank panel (engine/me/nextup.ts roadLines)
+                    roadLines(game, road).map((l, i) => <p key={i} className="small" style={{ margin: i ? '4px 0 0' : 0 }}>{l}</p>)
+                  )}
                 </>
               )}
               {(() => {

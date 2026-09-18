@@ -23,6 +23,7 @@ import { DIM_CN } from '../../engine/me/nodes'
 import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
 import { PITCH_MAX, closePitchReply, oddsWord, whyText } from '../../engine/me/selfpitch'
 import { pitchBook } from '../../engine/me/pitchbook'
+import { clubNextLine } from '../../engine/me/nextup'
 import { countCup } from '../../engine/me/telemetry'
 import { attrWord, gapWord } from './words'
 import { fansCn } from '../../engine/me/fans'
@@ -237,6 +238,8 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: (aside?: 
           {!hasPlace(game, team) && <span className="warn">（这家俱乐部今年没有联赛席位，签过去可能无赛可打）</span>}
         </p>
       )}
+      {/* when this club plays next, as the week's 「下一场」 would read it with me on it (engine/me/nextup.ts clubNextLine) */}
+      <p className="small" style={{ margin: '4px 0' }}>{clubNextLine(game, team.id)}。</p>
       <p className="tiny faint">
         {inv.direct ? '他们看够了，免试训直接谈合同。' : `${tryoutDays(game).length === 3 ? '三' : '四'}天试训，每天一个选择。`}
         {withinCn(daysLeft(game, inv))}答复；回绝了今年不会再来。点右上角「关闭」可以先放着，它留在「转会」页。
@@ -351,6 +354,8 @@ function DealModal({ dealId, onDone }: { dealId: string; onDone: (aside?: boolea
         </table>
       </div>
       {last && <div className="node-line">{last}</div>}
+      {/* a new club: when it plays next, as the week's 「下一场」 would read it with me on it (engine/me/nextup.ts clubNextLine) */}
+      {d.kind !== 'renew' && <p className="small" style={{ margin: '6px 0' }}>{clubNextLine(game, team.id)}。</p>}
       {(() => {
         // signed under a roster lock, the move is made once the event is over (engine/me/contract.ts settleMove)
         const w = d.kind === 'renew' ? null : windowAt(game, d.teamId)

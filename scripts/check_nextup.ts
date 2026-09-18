@@ -29,6 +29,9 @@
  *    there once it is drawn, the club unchanged — a decider or a seat. A fourth
  *    career is at a North American club outside the Challengers league, whose
  *    way in is each split's promotion place (reported 2026-09-18)
+ *  - blank: with nothing named, the panel still says why and what comes next
+ *    (roadLines): an event later in the season, a place that may come, the
+ *    next season, or that nothing is left — counted by which
  *
  * And it counts, without failing, the days it said a phase of mine was still to
  * be settled when the club never played that event again.
@@ -52,7 +55,7 @@ import { advanceTurn } from '../src/engine/me/week'
 import { autoResolve, quietAhead } from '../src/engine/me/auto'
 import { pop } from '../src/engine/me/pending'
 import { MeMatch } from '../src/engine/me/matchplay'
-import { nextUp } from '../src/engine/me/nextup'
+import { nextUp, roadAhead, roadLines } from '../src/engine/me/nextup'
 import type { NextUp } from '../src/engine/me/nextup'
 import { eventOf } from '../src/engine/circuit'
 import type { CEvent, CNode, Slot } from '../src/engine/circuit'
@@ -96,8 +99,12 @@ function flatOf(ev: CEvent): { nodes: FNode[]; base: number[] } {
 }
 
 interface Track { f: Fixture; year: number; seen: number; played?: number; comp: string; compName: string; evId?: string }
-/** `open`: the event the panel said was open for the club to enter (「你们可以报名」), by its key */
-interface Sample { year: number; v: number; club: string; up: NextUp; quiet: boolean; open?: string }
+/**
+ * `open`: the event the panel said was open for the club to enter (「你们可以报名」), by its key; `road`: with nothing
+ * named, what the panel says instead — an event later this season (`next`), a place that may come (`maybe`), next
+ * season (`later`), or only that nothing is left (`nothing`)
+ */
+interface Sample { year: number; v: number; club: string; up: NextUp; quiet: boolean; open?: string; road?: 'next' | 'maybe' | 'later' | 'nothing' }
 
 const said = (up: NextUp): string =>
   up.kind === 'fixture' ? `${roundOf(up.fixture)}（第 ${up.day} 天）`
@@ -141,7 +148,14 @@ for (const o of RUNS) {
     const quiet = quietAhead(state, 28)
     ms += performance.now() - at
     const open = up.kind === 'event' && !up.sure && !up.stage ? Object.values(state.comps).find((c) => c.name === up.name)?.key : undefined
-    samples.push({ year, v, club, up, quiet, ...(open ? { open } : {}) })
+    // never a blank panel: with nothing named it says why and what comes next (reported 2026-09-18)
+    let road: Sample['road']
+    if (up.kind === 'none') {
+      const r = roadAhead(state)
+      road = r.next ? 'next' : r.maybe ? 'maybe' : r.later ? 'later' : 'nothing'
+      if (!roadLines(state, r).some((l) => l.length > 8)) fail(`${o.label} ${md(year, v)}：「下一场」什么都没写`)
+    }
+    samples.push({ year, v, club, up, quiet, ...(open ? { open } : {}), ...(road ? { road } : {}) })
   }
   // the end of each day: advanceDay opens the next one with state.day++ (engine/season.ts)
   let dayValue = state.day
@@ -275,6 +289,7 @@ for (const o of RUNS) {
     + ` · 两项之间写的下一项赛事 说对 ${n.right}、说成别的 ${n.wrong}${wrongEx.length ? `（${wrongEx.join('；')}）` : ''}、没写 ${n.none} 天`
     + ` · 写「本阶段名次未定」而后来没再打这项赛事 ${n.waitingOut} 天${outEx.length ? `（${outEx.join('；')}）` : ''}`
     + ` · 写过「可以报名」的赛事 ${n.promised} 项，抽签后没有比赛 ${n.broken} 项`
+    + ` · 四个月内没有比赛的 ${samples.filter((x) => x.road).length} 天写了：今年后面的赛事 ${samples.filter((x) => x.road === 'next').length}、要看名额 ${samples.filter((x) => x.road === 'maybe').length}、下个赛季 ${samples.filter((x) => x.road === 'later').length}、只说今年没有了 ${samples.filter((x) => x.road === 'nothing').length}`
     + ` · 读「下一场」和四周空窗共 ${(ms / 1000).toFixed(1)}s · ${((Date.now() - t1) / 1000).toFixed(0)}s`)
   for (const k of Object.keys(sum) as (keyof typeof sum)[]) sum[k] += n[k]
 }

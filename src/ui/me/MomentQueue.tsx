@@ -3,6 +3,7 @@ import { compClass } from '../../engine/me/compclass'
 import { compCn } from '../../engine/me/compname'
 import { takeMoment } from '../../engine/me/moments'
 import { titleRealChamp } from '../../engine/me/worldline'
+import { clubNextLine } from '../../engine/me/nextup'
 import type { MomentItem } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { crestUrl } from '../../engine/dossier'
@@ -109,6 +110,8 @@ function cardOf(g: GameState, m: MomentItem): Card {
     }
     case 'sign': {
       const to = m.teamId ? g.teams[m.teamId] : undefined
+      // when the club plays next, read the day the card is up — the day I joined (engine/me/nextup.ts clubNextLine)
+      const ahead = m.teamId && m.year === g.year && m.day === g.day && g.myTeam === m.teamId ? clubNextLine(g, m.teamId, 'we') : ''
       return {
         wide: true,
         art: (
@@ -122,6 +125,7 @@ function cardOf(g: GameState, m: MomentItem): Card {
         title: `加盟 ${to?.name ?? '新俱乐部'}`,
         body: `${m.years ?? 1} 年合同${m.role ? `，${m.role}` : ''}。`,
         chips: m.pay ? [{ text: `年薪 ${m.pay}` }] : undefined,
+        extra: ahead ? <p className="mo-real">{ahead}。</p> : undefined,
         page: { label: '去队伍页', screen: 'team' },
       }
     }

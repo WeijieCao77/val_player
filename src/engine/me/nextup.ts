@@ -1,4 +1,4 @@
-import { drawOutlook, eventOf, outlookAsMine, roundAheadOf } from '../circuit'
+import { drawOutlook, eventOf, nextSeasonFor, outlookAsMine, roundAheadOf } from '../circuit'
 import type { DrawStanding, RoundAhead } from '../circuit'
 import { formatOf, onTimeline, stagesOf } from '../era'
 import { nextInEvent, upcomingInternational } from '../qualify'
@@ -89,8 +89,25 @@ export function roundsAhead(state: GameState): Ahead[] {
   return out.sort((a, b) => a.day - b.day)
 }
 
+type Outlook = { standing: DrawStanding; day?: number; via?: 'fill' | 'route' } | null
 /** My club's standing with each event, read once a day: each read draws the event's whole field. */
-const STANDING = new WeakMap<GameState, { at: string; of: Map<string, { standing: DrawStanding; day?: number } | null> }>()
+const STANDING = new WeakMap<GameState, { at: string; of: Map<string, Outlook> }>()
+
+/** My club's standing with an event not drawn yet, off the day's book (STANDING). */
+function outlookOf(state: GameState, club: string, c: Competition): Outlook {
+  const at = `${state.year}:${state.day}:${club}`
+  let book = STANDING.get(state)
+  if (book?.at !== at) {
+    book = { at, of: new Map() }
+    STANDING.set(state, book)
+  }
+  let o = book.of.get(c.key)
+  if (o === undefined) {
+    o = drawOutlook(state, c, club)
+    book.of.set(c.key, o)
+  }
+  return o
+}
 
 /** An event not drawn yet that seats my club as its draw stands (`sure`), or is open for it to enter, and the day my club would first play there. */
 interface Soon { comp: Competition; sure: boolean; day: number }
@@ -110,13 +127,6 @@ interface Soon { comp: Competition; sure: boolean; day: number }
  * (scripts/check_nextup.ts, seed 11).
  */
 function eventsAhead(state: GameState, club: string, until: number): { first?: Soon; any?: Competition } {
-  const at = `${state.year}:${state.day}:${club}`
-  let book = STANDING.get(state)
-  if (book?.at !== at) {
-    book = { at, of: new Map() }
-    STANDING.set(state, book)
-  }
-  const known = book.of
   // an event's first tie can come on the eve of its first day: a qualifier's decider is written and played with the draw (circuit.ts begin)
   const future = Object.values(state.comps)
     .filter((c) => !!c.circuit && !c.circuit.mode && !c.champion && !c.circuit.done && c.circuit.start > state.day && c.circuit.start - 1 <= until)
@@ -125,11 +135,7 @@ function eventsAhead(state: GameState, club: string, until: number): { first?: S
   for (const c of future) {
     // an event opening later has nothing of the club's sooner: not even a decider comes before its eve
     if (out.first && c.circuit!.start - 1 >= out.first.day) break
-    let o = known.get(c.key)
-    if (o === undefined) {
-      o = drawOutlook(state, c, club)
-      known.set(c.key, o)
-    }
+    const o = outlookOf(state, club, c)
     if (o && !out.any) out.any = c
     if (o?.standing !== 'seated' && o?.standing !== 'entry') continue
     const sure = o.standing === 'seated'
@@ -266,4 +272,144 @@ export function mineBy(state: GameState, until: number): boolean {
   if (state.me?.phase !== 'pro' || !club || !state.teams[club]) return false
   if (roundsAhead(state).some((r) => r.day <= until)) return true
   return !!eventsAhead(state, club, until).any
+}
+
+/* ------------------------------------------------------------------ */
+/*  past what 「下一场」 names                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What lies ahead of my club when nothing is named within EVENT_DAYS (nextUp's `none`): the rest of the season read
+ * the way nextUp reads its first four months, and past it the next season's calendar.
+ *
+ *  - next: this season's first event whose draw as it stands seats the club (`sure`), or that is open for it to
+ *    enter — the day of its first tie there, or the day it opens
+ *  - booked: before it, an event history lists the club in with nothing for it to play — its open qualifier, which
+ *    this world replays as it went (circuit.ts drawOutlook `booked`)
+ *  - maybe: before it, a place the club may still get: one the draw fills for a side it is missing (`fill`,
+ *    circuit.ts fillGaps), or one results elsewhere may earn (`route`)
+ *  - later: with nothing this season, next season's first event for the club (circuit.ts nextSeasonFor): its seat by
+ *    history's booking or its league (`seat`), or a way in for a club not in the draw (`open`) — nothing drawn yet
+ *
+ * Reported 2026-09-18 (the hx-wait probe): on the day a ladder player joined his club, the week's 「下一场」 said
+ * nothing at all in 58 of 82 long 2021 waits and 43 of 74 long 2026 waits — history's open-qualifier list, an event
+ * more than four months off (2026's November open qualifiers for 2027's Kickoff), or a season whose doors had shut.
+ */
+export interface Road {
+  next?: { name: string; day: number; sure: boolean }
+  booked?: { name: string; day: number }
+  maybe?: { name: string; day: number; via: 'fill' | 'route' }
+  later?: { name: string; year: number; day: number; seat: boolean }
+}
+
+export function roadAhead(state: GameState): Road {
+  const club = state.myTeam
+  const out: Road = {}
+  if (state.me?.phase !== 'pro' || !club || !state.teams[club] || !onTimeline(state)) return out
+  const first = eventsAhead(state, club, state.day + 400).first
+  if (first) out.next = { name: first.comp.name, day: first.sure ? first.day : first.comp.circuit!.start, sure: first.sure }
+  const until = first ? first.comp.circuit!.start : Infinity
+  const future = Object.values(state.comps)
+    .filter((c) => !!c.circuit && !c.circuit.mode && !c.champion && !c.circuit.done && c.circuit.start > state.day && c.circuit.start < until)
+    .sort((a, b) => a.circuit!.start - b.circuit!.start || a.key.localeCompare(b.key))
+  for (const c of future) {
+    const o = outlookOf(state, club, c)
+    if (o?.standing === 'booked') out.booked ??= { name: c.name, day: c.circuit!.start }
+    else if (o?.standing === 'maybe') out.maybe ??= { name: c.name, day: c.circuit!.start, via: o.via ?? 'route' }
+  }
+  if (!first) {
+    const n = nextSeasonFor(state, state.teams[club])
+    if (n) out.later = { name: n.ev.cn || n.ev.name, year: state.year + 1, day: n.day, seat: n.door === 'seat' }
+  }
+  return out
+}
+
+const monthOf = (year: number, day: number): number => new Date(Date.UTC(year, 0, 1 + day)).getUTCMonth() + 1
+
+/** How far off a day is, in the panel's words: 「3 天后」「约 5 周后」「约 4 个月后」. */
+function farCn(from: number, day: number): string {
+  const d = day - from
+  return d < 14 ? `${Math.max(1, d)} 天后` : d < 70 ? `约 ${Math.round(d / 7)} 周后` : `约 ${Math.round(d / 30)} 个月后`
+}
+
+/**
+ * The week's 「下一场」 with nothing named: why, in words, and what comes next (roadAhead). Never empty for a signed
+ * player — a season with nothing left says so, and what the next one holds.
+ */
+export function roadLines(state: GameState, road = roadAhead(state)): string[] {
+  const out: string[] = []
+  const y = state.year
+  const booked = road.booked ? `${road.booked.name}：你们只在真实历史的海选名单上，这里的海选照真实结果走，没有你们的比赛。` : ''
+  // said in the order they come: history's list, or a place that may still come, whichever is first
+  const bookedFirst = !!road.booked && (!road.maybe || road.booked.day <= road.maybe.day)
+  if (bookedFirst) out.push(booked)
+  const maybe = road.maybe
+    ? `${road.maybe.name}（${monthOf(y, road.maybe.day)} 月），${road.maybe.via === 'fill' ? '要看有没有空出来的名额轮到你们' : '要看之前比赛的名次和积分'}，抽签前说不准。`
+    : ''
+  if (road.next) {
+    out.push(`四个月内没有你们的比赛。下一站：${road.next.name}，${monthOf(y, road.next.day)} 月${road.next.sure ? '，已经有你们的位置' : '，可以报名'}（${farCn(state.day, road.next.day)}）。`)
+    if (maybe) out.push(`在那之前，${maybe}`)
+    if (booked && !bookedFirst) out.push(booked)
+    return out
+  }
+  if (maybe) out.push(`下一站：${maybe}`)
+  if (booked && !bookedFirst) out.push(booked)
+  const left = maybe ? '除此以外，今年' : '今年'
+  if (road.later) {
+    out.push(`${left}已经没有你们能打的赛事。下一站要等 ${road.later.year} 赛季：${road.later.name}（约 ${monthOf(road.later.year, road.later.day)} 月）${road.later.seat ? '，真实历史里有你们的位置' : '，可以去争公开的名额'}，到时候抽签才定。`)
+  } else {
+    out.push(`${left}已经没有你们能打的赛事，${y + 1} 赛季的赛程里也还看不到。`)
+  }
+  return out
+}
+
+/**
+ * A club's next match or event in one line, as 「下一场」 would read it if I were on it — for a club asking me to a
+ * tryout or offering terms (ui/me/Modals.tsx), and the day I join (ui/me/MomentQueue.tsx). 「这家俱乐部下一场：
+ * 3 月 · 挑战者联赛 · 北美 · 第二赛段（可以报名）」, 「这家俱乐部今年已经没有能打的赛事，下一站是 2022 赛季的 …」.
+ *
+ * Read as the club's player would read it, because the world moves for the player's club: a decider in an event
+ * open to it is offered to his club only (circuit.ts offerPlayIn). The club is his for the read and given back.
+ */
+const CLUB_LINE = new WeakMap<GameState, { at: string; of: Map<string, string> }>()
+export function clubNextLine(state: GameState, teamId: string, who: 'club' | 'we' = 'club'): string {
+  const me = state.me
+  if (!me || !state.teams[teamId]) return ''
+  const at = `${state.year}:${state.day}:${me.phase}:${state.myTeam}:${who}`
+  let book = CLUB_LINE.get(state)
+  if (book?.at !== at) {
+    book = { at, of: new Map() }
+    CLUB_LINE.set(state, book)
+  }
+  const hit = book.of.get(teamId)
+  if (hit != null) return hit
+  const phase = me.phase
+  const mine = state.myTeam
+  let line = ''
+  try {
+    me.phase = 'pro'
+    state.myTeam = teamId
+    line = clubLine(state, who === 'we' ? '你们' : '这家俱乐部', who === 'we' ? '你们' : '它')
+  } finally {
+    me.phase = phase
+    state.myTeam = mine
+  }
+  book.of.set(teamId, line)
+  return line
+}
+
+function clubLine(state: GameState, who: string, it: string): string {
+  const y = state.year
+  const up = nextUp(state)
+  const when = (day: number) => `${monthOf(y, day)} 月`
+  if (up.kind === 'fixture') return `${who}下一场：${when(up.day)} · ${state.comps[up.fixture.comp]?.name ?? up.fixture.comp}`
+  if (up.kind === 'round' || up.kind === 'waiting') return `${who}下一场：${when(up.day)} · ${up.name}${up.kind === 'waiting' ? '（要看这一阶段的名次）' : ''}`
+  if (up.kind === 'event') return `${who}下一场：${when(up.day)} · ${up.name}${up.stage || up.sure ? '' : '（可以报名）'}`
+  const road = roadAhead(state)
+  const booked = road.booked ? `（${road.booked.name} 里只有海选名单上的位置，没有${it}的比赛）` : ''
+  if (road.next) return `${who}四个月内没有比赛${booked}，下一站：${when(road.next.day)} · ${road.next.name}${road.next.sure ? '' : '（可以报名）'}`
+  // a place that may come this season, and failing it, next season's first
+  const later = road.later ? `，下一站是 ${road.later.year} 赛季的 ${road.later.name}（约 ${monthOf(road.later.year, road.later.day)} 月）` : `，${y + 1} 赛季的赛程里也还看不到`
+  if (road.maybe) return `${who}下一站要看 ${road.maybe.name}（${when(road.maybe.day)}）${road.maybe.via === 'fill' ? `空出来的名额能不能轮到${it}` : '之前比赛的名次和积分'}${booked}；不然今年已经没有能打的赛事${later}`
+  return `${who}今年已经没有能打的赛事${booked}${later}`
 }

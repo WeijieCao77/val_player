@@ -1830,7 +1830,7 @@ export function drawStanding(state: GameState, comp: Competition, teamId: string
  * the qualifier for a month as the club's next event, and then its group round
  * over Stage 3's (engine/me/nextup.ts, scripts/check_nextup.ts seed 11).
  */
-export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number; from?: number } | null {
+export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number; from?: number; via?: 'fill' | 'route' } | null {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
   const team = state.teams[teamId]
@@ -1872,7 +1872,7 @@ export function outlookAsMine(state: GameState, comp: Competition): ((team: Team
  */
 function outlookIn(
   state: GameState, comp: Competition, ev: CEvent, team: Team, draw: DrawNow, depth: number, asMine: boolean,
-): { standing: DrawStanding; day?: number; from?: number } | null {
+): { standing: DrawStanding; day?: number; from?: number; via?: 'fill' | 'route' } | null {
   const c = comp.circuit!
   const teamId = team.id
   const seats = draw.seats
@@ -1898,7 +1898,43 @@ function outlookIn(
     return { standing: 'seated', day, from }
   }
   const more = couldStillTake(state, comp, ev, team, depth, draw, asMine)
-  return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
+  // a place the club may still get: one the draw fills for a side it is missing (`fill`), or one results elsewhere may earn (`route`)
+  if (more === 'gap') return { standing: 'maybe', via: 'fill' }
+  return more ? { standing: more, ...(more === 'maybe' ? { via: 'route' as const } : {}) } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
+}
+
+/**
+ * Next season's first event for a club, as the calendar and history have it today, once this season holds nothing
+ * more for it (engine/me/nextup.ts roadAhead): one history books it into (`seat`) — a seat its own matches are drawn
+ * from, or the place its open qualifier really sent it on to — its league's Kickoff for a VCT league club, or the
+ * first of its own scene's with a way in for a club not in its draw (`open`): an open qualifier's last place, a closed
+ * league's promotion place, the new format's open seats. Nothing is drawn until the season turns: a read, not a promise.
+ */
+export function nextSeasonFor(state: GameState, team: Team): { ev: CEvent; door: 'seat' | 'open'; day: number } | null {
+  const y = state.year + 1
+  const own = new Set<string>()
+  if (team.id.startsWith('V21T')) own.add(team.id.slice(4))
+  for (const [from, to] of Object.entries(state.heirs ?? {})) if (to === team.id && from.startsWith('V21T')) own.add(from.slice(4))
+  const league = inVctLeague(state, team)
+  const scene = sceneFor(state, team, false)
+  // isHome, for next season
+  const home = (ev: CEvent): boolean => {
+    if (y < 2023) return inScope(ev, team.region)
+    if (league && tierOf(ev) === 2) return false
+    if (ev.scene) return !!scene && ev.scene === scene
+    return !isLeagueEvent(y, ev) && inScope(ev, team.region)
+  }
+  for (const ev of eventsOf(y).filter((e) => e.start != null && e.end != null).sort((a, b) => a.start! - b.start!)) {
+    const booked = !ev.projected && ev.seeds.some((v, i) => own.has(v)
+      && (mainSeedsOf(ev).has(i) || openOutputs(ev).some(({ ui, rank }) => ev.units[ui].ranked?.[rank - 1] === v)))
+    // a seat plays from the event's own first match, past the open qualifier that came before it
+    const main = ev.units.filter((u) => !isOpen(u)).flatMap((u) => (u.nodes ?? []).map((n) => n.day))
+    if (booked || (league && isLeagueEvent(y, ev) && ev.region === regionIn(team.region, y) && ev.stage === 'kickoff')) return { ev, door: 'seat', day: main.length ? Math.min(...main) : ev.start! }
+    if (league || !home(ev)) continue
+    const door = ev.plan ? ev.plan.seats.some((s) => s.from === 'pool') : !!deciderPlace(y, ev)
+    if (door) return { ev, door: 'open', day: ev.start! }
+  }
+  return null
 }
 
 /** A phase's first day: an open qualifier's own days are on record, any other unit's first match is its opening. */
@@ -2066,8 +2102,11 @@ function mainSeedsOf(ev: CEvent): Set<number> {
  * An event not drawn yet whose draw as it stands leaves the club out: could anything still put it in? See drawStanding.
  * `asMine`: the club read as if it were the player's, for a call's draw (outlookAsMine) — and only a decider it can
  * enter counts there: a place its results may still earn, or one the draw may yet stand it in for, is no match of its own.
+ * `gap`: a place the draw fills for a side it is missing (fillGaps) — drawOutlook's `maybe` by way of `fill`.
  */
-function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number, draw: DrawNow, asMine = false): 'entry' | 'maybe' | null {
+function couldStillTake(
+  state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number, draw: DrawNow, asMine = false,
+): 'entry' | 'maybe' | 'gap' | null {
   const teamId = team.id
   const deeper = (id: string): boolean => {
     const f = state.comps[`ev:${id}`]
@@ -2083,11 +2122,11 @@ function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: T
   // (me/outlets.ts) — and a club with no scene the roster book names had one written into the save by being looked at
   if ((asMine || teamId === playerClub(state)) && isHome(state, ev, team, teamId, false)) {
     // a door, and a side to play there or a place the draw leaves for the club (deciderAhead)
-    return deciderDoor(state, ev, team) && deciderAhead(state, comp, ev, teamId, draw.seats) ? 'entry' : asMine ? null : 'maybe'
+    return deciderDoor(state, ev, team) && deciderAhead(state, comp, ev, teamId, draw.seats) ? 'entry' : asMine ? null : 'gap'
   }
   if (asMine) return null
   // a side's place the draw as it stands would stand the player's club in for (fillGaps), wherever its home is
-  if (teamId === playerClub(state) && standsIn(state, comp, ev, team, draw)) return 'maybe'
+  if (teamId === playerClub(state) && standsIn(state, comp, ev, team, draw)) return 'gap'
   const book = rulesOf(ev.id)?.routes
   if (!book) return null
   for (const r of Object.values(book)) {
@@ -2226,9 +2265,9 @@ function deciderRival(state: GameState, comp: Competition, ev: CEvent, club: str
 }
 
 /** The place offerPlayIn has the player's club play a decider for: a qualifier's last place, or a closed league's last promotion place. */
-function deciderPlace(state: GameState, ev: CEvent): { ui: number; rank: number } | undefined {
+function deciderPlace(year: number, ev: CEvent): { ui: number; rank: number } | undefined {
   const best = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
-  if (best || state.year < 2023) return best
+  if (best || year < 2023) return best
   const ui = ev.units.findIndex((u) => isOpen(u) && (u.promotes ?? 0) > 0)
   return ui >= 0 ? { ui, rank: ev.units[ui].promotes! } : undefined
 }
@@ -2241,7 +2280,7 @@ function deciderPlace(state: GameState, ev: CEvent): { ui: number; rank: number 
  * for the decider's. The last one is the only guess: the draw's own rosters (syncEvent) can still take a club out.
  */
 function deciderAhead(state: GameState, comp: Competition, ev: CEvent, club: string, seats: (string | null)[]): boolean {
-  const at = deciderPlace(state, ev)
+  const at = deciderPlace(state.year, ev)
   if (!at) return false
   const real = teamOf(state, ev, ev.units[at.ui].ranked?.[at.rank - 1])
   if (real && !gone(state, real)) return real !== club
