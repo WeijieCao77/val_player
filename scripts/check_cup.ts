@@ -12,6 +12,7 @@
  *   二、on autopilot: pre-pro weeks as the bot plays them; fast-forward at a round
  *   三、forfeit, signing mid-run, and saves from the blocking model
  *   四、the call a deep run can bring, once the run is over
+ *   五、the cup's own page (ui/me/CupDetail.tsx): its days, its state and its greyed 报名 as the engine has them
  *
  *   npx tsx scripts/check_cup.ts
  */
@@ -23,7 +24,7 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { advanceUntil, autoPlan, autoResolve, leftToMe, matchLoad, runAutoPilot, runBlocked } from '../src/engine/me/auto'
 import { advanceTurn, advanceWeek, planBlock, setPlan } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
-import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupFor, cupRng, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, skipCup } from '../src/engine/me/cups'
+import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupEntryBlock, cupFor, cupOf, cupOpensOn, cupRng, cupRoundDay, cupStatus, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, roundDayAfter, skipCup } from '../src/engine/me/cups'
 import { buyRelax } from '../src/engine/me/shop'
 import { reachableClubs } from '../src/engine/me/prepro'
 import { migratePlayerSave } from '../src/engine/me/save'
@@ -476,5 +477,56 @@ console.log(`\n四、杯赛带来的试训邀请 · ${secs()}`)
   }
 }
 
-console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上，走得远会有人来电话。 · ${secs()}`)
+/* ---- 五、the cup's own page ---- */
+// Reported 2026-09-18: 「右边可以看到今年的赛事……但是没地方点进去看具体赛程或者比赛信息、报名信息」. The page a
+// cup now opens (ui/me/CupDetail.tsx) says the week its card comes up, the first round's day, where the cup stands
+// and why 报名 is greyed — every one of them read off engine/me/cups.ts, and here held to what the engine then does.
+console.log(`\n五、赛事详情页说的和引擎做的一样 · ${secs()}`)
+for (const c of CAREERS) {
+  const s = make(c.o)
+  const me = s.me!
+  const def = cupOf('city')!
+  const tag = c.label
+  const st0 = cupStatus(s, 'city')
+  const ahead = def.week - Math.floor(s.day / 7)
+  const opens = cupOpensOn(s, def)
+  const first = roundDayAfter(s.year, opens)
+  if (st0.kind !== 'ahead' || st0.weeks !== ahead) fail(`${tag}：开档时详情页写「${st0.kind === 'ahead' ? `${st0.weeks} 周后` : st0.kind}」，应是 ${ahead} 周后`)
+  const it = toEntry(s, 'city')
+  if (!it) { fail(`${tag}：没等到报名卡`); continue }
+  if (s.day !== opens) fail(`${tag}：详情页说 ${date(s, opens)} 那一周弹卡，卡在 ${date(s, s.day)} 弹出`)
+  if (cupStatus(s, 'city').kind !== 'now') fail(`${tag}：报名卡挂着，详情页写的是「${cupStatus(s, 'city').kind}」`)
+  if (cupRoundDay(s) !== first) fail(`${tag}：详情页说首轮 ${date(s, first)}，报名卡说 ${date(s, cupRoundDay(s))}`)
+  // greyed with the reason, the way the card's 报名 is: short of the fee, then an invitation short of followers
+  const skip = clone(s)
+  skip.me!.money = def.fee - 1
+  const why = cupEntryBlock(skip, 'city')
+  const refused = enterCup(clone(skip), 'city', new Rng(1))
+  if (!why || !refused) fail(`${tag}：钱不够时详情页${why ? '' : '没'}说报不了，报名${refused ? '' : '却'}成功了`)
+  const inv = clone(s)
+  inv.me!.fans = 0
+  if (!cupEntryBlock(inv, 'streamer')?.includes('粉丝')) fail(`${tag}：粉丝不够时详情页没说邀请制的门槛（${cupEntryBlock(inv, 'streamer')}）`)
+  skipCup(skip, 'city')
+  if (cupStatus(skip, 'city').kind !== 'skipped') fail(`${tag}：选了不打，详情页写的是「${cupStatus(skip, 'city').kind}」`)
+  // entered: the run's first round on the day the page named, then each round kept as it went
+  const entered = signUp(s, tag)
+  if (entered == null) continue
+  if (me.pre.cup?.next !== first) fail(`${tag}：详情页说首轮 ${date(s, first)}，报了名排在 ${date(s, me.pre.cup?.next ?? -1)}`)
+  if (cupStatus(s, 'city').kind !== 'running') fail(`${tag}：报了名，详情页写的是「${cupStatus(s, 'city').kind}」`)
+  const r = pressThrough(s, restWeek, `${tag} · 详情页`)
+  const st = cupStatus(s, 'city')
+  const rec = st.kind === 'done' ? st.run : undefined
+  const cup = cupFor(s, 'city')!
+  if (!rec) fail(`${tag}：打完了，详情页写的是「${st.kind}」`)
+  else if (rec.results?.length !== r.rows.length || !rec.results.every((x, i) => x.startsWith(`${cup.rounds[i].label} `))) fail(`${tag}：详情页的轮次记录 ${JSON.stringify(rec.results)}，实际打了 ${r.rows.map((x) => x.label).join('、')}`)
+  else console.log(`  ${tag}：开档写 ${ahead} 周后，${date(s, opens)} 弹卡、首轮 ${date(s, first)}，都和引擎一样；打完记下 ${rec.results.join(' · ')}`)
+  // a week gone by with no card — a club then, or no career yet: 错过了
+  const late = clone(s)
+  late.me!.pre.cups = late.me!.pre.cups.filter((x) => x.key !== 'premier')
+  late.me!.pre.seen = late.me!.pre.seen.filter((x) => !x.endsWith(':premier'))
+  late.day = Math.max(late.day, (cupOf('premier')!.week + 1) * 7)
+  if (cupStatus(late, 'premier').kind !== 'missed') fail(`${tag}：挑战者组那一周过去了也没弹卡，详情页写的是「${cupStatus(late, 'premier').kind}」`)
+}
+
+console.log(bad ? `\n✗ ${bad} 项不对。 · ${secs()}` : `\n✓ 杯赛一周一轮，两轮之间能休息、训练、买东西，比赛日才弹卡，快进和联赛一个规矩，老存档接得上，走得远会有人来电话；详情页说的日子和状态都是引擎的。 · ${secs()}`)
 if (bad) process.exit(1)

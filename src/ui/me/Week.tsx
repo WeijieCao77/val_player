@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { useGame } from './ctx'
 import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
@@ -23,7 +23,9 @@ import { iglLine } from '../../engine/me/igl'
 import { trustLabel } from './words'
 import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../../engine/me/prepro'
 import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, riseOf, standingOf } from '../../engine/me/rank'
-import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupView } from '../../engine/me/cups'
+import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupStatus, cupView } from '../../engine/me/cups'
+import CupDetail from './CupDetail'
+import { focusEvent } from './eventFocus'
 import { FRIENDLY_MAP_FATIGUE } from '../../engine/me/matchplay'
 import { fansCn } from '../../engine/me/fans'
 import { useNumbers } from './words'
@@ -65,6 +67,12 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const next = up?.kind === 'fixture' ? up.fixture : undefined
   const oppId = next ? (next.teamA === game.myTeam ? next.teamB : next.teamA) : up?.kind === 'round' ? up.opponent : null
   const opp = oppId ? game.teams[oppId] ?? null : null
+  // the event this names, a click from its own panel on 「积分榜」 — its table, its bracket, its dates (ui/me/eventFocus.ts)
+  const nextKey = !up ? undefined
+    : up.kind === 'fixture' ? up.fixture.comp
+      : up.kind === 'round' || up.kind === 'waiting' ? up.comp?.key
+        : up.kind === 'event' ? Object.values(game.comps).find((c) => c.name === up.name)?.key : undefined
+  const nextComp = nextKey ? game.comps[nextKey] : undefined
   const soon = pro ? fixturesFor(game, game.myTeam).filter((f) => !f.played && f.day > game.day && f.day <= game.day + 7) : []
   const recent = pro ? fixturesFor(game, game.myTeam).filter((f) => f.played && f.comp !== 'scrim').slice(-3).reverse() : []
   const target = pro ? duelTarget(game) : null
@@ -85,6 +93,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const quiet = quietAhead(game, 28)
   // two or more of my club's matches this week: it goes a day to a press, its seven days laid out over the button (engine/me/week.ts weekInDays)
   const days = weekInDays(game)
+  // the cup opened from 「今年的赛事」 (ui/me/CupDetail.tsx)
+  const [cupOpen, setCupOpen] = useState<string | null>(null)
 
   const plan = (k: typeof ACTIONS[number]['key'], d: 1 | -1) => {
     const why = setPlan(game, k, d)
@@ -305,7 +315,13 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
       <div>
         {pro ? (
           <>
-            <Panel title="下一场" className={starter ? 'own' : ''}>
+            <Panel
+              title="下一场"
+              className={starter ? 'own' : ''}
+              actions={nextComp ? (
+                <button className="sm ghost" title={`到「积分榜」看${nextComp.name}`} onClick={() => { focusEvent(nextComp.key); go('standings') }}>赛事详情 →</button>
+              ) : undefined}
+            >
               {up && (up.kind === 'fixture' || up.kind === 'round') && team ? (
                 <>
                   <div className="score-line" style={{ padding: '4px 0 8px' }}>
@@ -409,7 +425,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               const on = (d: number) => `${fmtDay(d, game.year)} 周${'日一二三四五六'[new Date(Date.UTC(game.year, 0, 1 + d)).getUTCDay()]}`
               const bo = c.rounds[run.round]?.bo ?? 3
               return (
-                <Panel title={`杯赛 · ${c.name}`} className="own">
+                <Panel title={`杯赛 · ${c.name}`} className="own" actions={<button className="sm ghost" aria-haspopup="dialog" onClick={() => setCupOpen(run.key)}>赛事详情</button>}>
                   <div role="list" aria-label="赛程" style={{ marginBottom: 8 }}>
                     {c.rounds.map((r, i) => {
                       const past = i < run.round
@@ -459,25 +475,32 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               </p>
             </Panel>
             <Panel title="今年的赛事">
-              {CUPS.map((raw) => {
-                const c = cupView(raw, game.year, p.region)
-                const done = me.pre.cups.find((x) => x.key === c.key && x.year === game.year)
-                // entering a cup marks it seen, exactly as skipping one does: a cup still being played is neither
-                const running = me.pre.cup?.key === c.key
-                const seen = me.pre.seen.includes(`${game.year}:${c.key}`)
-                const when = week < c.week ? `${c.week - week} 周后` : week === c.week ? '本周' : ''
-                return (
-                  <p key={c.key} className="small" style={{ margin: '0 0 4px' }}>
-                    <b>{c.name}</b>{when ? ` · ${when}` : ''}{c.minFans ? ` · 邀请制（粉丝过 ${fansCn(c.minFans)}）` : ''}
-                    {done
-                      ? ` · ${done.won ? '冠军' : done.forfeit ? `${c.rounds[Math.min(done.reached, c.rounds.length - 1)].label}弃权` : `止步${c.rounds[Math.min(done.reached, c.rounds.length - 1)].label}`}`
-                      : running ? ` · 已报名 · ${c.rounds[me.pre.cup!.round]?.label ?? ''}${me.pre.cup!.next != null ? ` ${fmtDay(me.pre.cup!.next, game.year)}` : ''}`
-                        : seen ? ' · 没参加' : week > c.week ? ' · 错过了' : ''}
-                  </p>
-                )
-              })}
-              <p className="tiny faint" style={{ margin: '6px 0 0' }}>俱乐部要什么水平：看「转会」页。</p>
+              {/* each cup opens its own page: when, the rounds, who can enter, what it gives, how it went
+                  (ui/me/CupDetail.tsx). Reported 2026-09-18: the list could be read and not opened */}
+              <div className="cup-list">
+                {CUPS.map((raw) => {
+                  const c = cupView(raw, game.year, p.region)
+                  const st = cupStatus(game, c.key)
+                  const at = (i: number) => c.rounds[Math.min(i, c.rounds.length - 1)].label
+                  const when = st.kind === 'ahead' ? `${st.weeks} 周后` : st.kind === 'now' ? '本周' : ''
+                  const how = st.kind === 'done'
+                    ? (st.run.won ? '冠军' : st.run.forfeit ? `${at(st.run.reached)}弃权` : `止步${at(st.run.reached)}`)
+                    : st.kind === 'running' ? `已报名 · ${c.rounds[me.pre.cup!.round]?.label ?? ''}${me.pre.cup!.next != null ? ` ${fmtDay(me.pre.cup!.next, game.year)}` : ''}`
+                      : st.kind === 'skipped' ? '没参加' : st.kind === 'missed' ? '错过了' : ''
+                  const over = st.kind === 'done' || st.kind === 'skipped' || st.kind === 'missed'
+                  return (
+                    <button key={c.key} type="button" className={`cup-row${over ? ' over' : ''}${st.kind === 'running' || st.kind === 'now' ? ' on' : ''}`} aria-haspopup="dialog" onClick={() => setCupOpen(c.key)}>
+                      <span className="t">
+                        <b>{c.name}</b>{when ? ` · ${when}` : ''}{c.minFans ? ` · 邀请制（粉丝过 ${fansCn(c.minFans)}）` : ''}{how ? ` · ${how}` : ''}
+                      </span>
+                      <span className="go" aria-hidden="true">›</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>点一项看赛程、报名条件和奖励。俱乐部要什么水平：看「转会」页。</p>
             </Panel>
+            {cupOpen && <CupDetail cupKey={cupOpen} onClose={() => setCupOpen(null)} />}
             <Panel title="怎么被看见">
               <p className="tiny faint" style={{ margin: 0 }}>
                 四条路：杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，或者在「转会」页挑一家发自荐（每次 {PITCH_AP} 行动点，一个转会期最多 {PITCH_MAX} 次）。天梯看的是现在的名次，停排会被别人超过。

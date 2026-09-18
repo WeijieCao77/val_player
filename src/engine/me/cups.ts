@@ -186,16 +186,72 @@ export function dropTempTeams(state: GameState): void {
  */
 export const CUP_ROUND_GAP = 7
 
-/** The day of the next round: next week's Saturday, or its Sunday. */
-export function cupRoundDay(state: GameState): number {
-  const me = state.me!
-  const start = state.day - me.weekDay + 7
+/** The Saturday, or else the Sunday, of the week after the one that begins on `weekStart`. */
+export function roundDayAfter(year: number, weekStart: number): number {
+  const start = weekStart + 7
   for (const want of [6, 0]) {
     for (let j = 1; j <= 6; j++) {
-      if (new Date(Date.UTC(state.year, 0, 1 + start + j)).getUTCDay() === want) return start + j
+      if (new Date(Date.UTC(year, 0, 1 + start + j)).getUTCDay() === want) return start + j
     }
   }
   return start + 1
+}
+
+/** The day of the next round: next week's Saturday, or its Sunday. */
+export function cupRoundDay(state: GameState): number {
+  return roundDayAfter(state.year, state.day - state.me!.weekDay)
+}
+
+/**
+ * The first day of the week a cup's entry card comes up: the week's end whose
+ * day falls in the cup's week of the year (me/prepro.ts cupThisWeek, read at
+ * me/week.ts settleWeek), counted on my own weeks.
+ */
+export function cupOpensOn(state: GameState, c: CupDef): number {
+  const at = c.week * 7
+  const start = state.day - (state.me?.weekDay ?? 0)
+  return at + (((start - at) % 7) + 7) % 7
+}
+
+/**
+ * Where one of this year's cups stands for me. The week page's list and the
+ * cup's own page (ui/me/CupDetail.tsx) both read it, so the two never say
+ * different things.
+ */
+export type CupStatus =
+  | { kind: 'ahead'; weeks: number }
+  /** its week: the entry card is up, or was not put (a career begun that week) */
+  | { kind: 'now' }
+  | { kind: 'running' }
+  | { kind: 'done'; run: CupRun }
+  /** answered 「不打」, or passed on by 托管 */
+  | { kind: 'skipped' }
+  /** its week went by with no card: I had a club then, or the career had not begun */
+  | { kind: 'missed' }
+
+export function cupStatus(state: GameState, key: string): CupStatus {
+  const me = state.me!
+  const c = cupOf(key)
+  const done = me.pre.cups.find((x) => x.key === key && x.year === state.year)
+  if (done) return { kind: 'done', run: done }
+  // entering a cup marks it seen, exactly as skipping one does: a cup still being played is neither
+  if (me.pre.cup?.key === key) return { kind: 'running' }
+  if (me.pre.seen.includes(`${state.year}:${key}`)) return { kind: 'skipped' }
+  const week = Math.floor(state.day / 7)
+  if (!c || week > c.week) return { kind: 'missed' }
+  return week === c.week ? { kind: 'now' } : { kind: 'ahead', weeks: c.week - week }
+}
+
+/** Why the 报名 button is greyed today, or null: a run still going, the fee, the invitation — as enterCup refuses. */
+export function cupEntryBlock(state: GameState, key: string): string | null {
+  const me = state.me!
+  const cup = cupFor(state, key)
+  if (!cup) return '没有这项赛事'
+  const run = me.pre.cup
+  if (run && run.key !== key) return `还在打${cupFor(state, run.key)?.name ?? '另一项赛事'}，打完才能报名`
+  if (me.money < cup.fee) return `报名费 ${cny(cup.fee)}，你只有 ${cny(Math.max(0, me.money))}`
+  if (me.fans < cup.minFans) return `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}`
+  return null
 }
 
 /** 「2月20日（周六）」 */
@@ -295,7 +351,8 @@ function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, r
   dropTempTeams(state)
   const reached = run.round
   const prize = cup.prize[Math.min(reached, cup.prize.length - 1)] ?? 0
-  const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize, ...(forfeit ? { forfeit: true } : {}) }
+  // the rounds as they went, kept for the cup's own page (ui/me/CupDetail.tsx): 「八强 负 1-2」
+  const rec: CupRun = { key: run.key, year: state.year, reached, rounds: cup.rounds.length, won: won && reached >= cup.rounds.length, prize, ...(forfeit ? { forfeit: true } : {}), results: [...run.results] }
   me.pre.cups.push(rec)
   me.pre.cup = undefined
   pop(state, 'cup', run.key)

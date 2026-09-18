@@ -322,6 +322,8 @@ export interface CupRun {
   prize: number
   /** given up on a round's day instead of played (me/cups.ts forfeitCup) */
   forfeit?: boolean
+  /** each round as it went, 「八强 负 1-2」 (me/cups.ts endRun); a run from before 2026-09-18 has none */
+  results?: string[]
 }
 
 export interface Invite {

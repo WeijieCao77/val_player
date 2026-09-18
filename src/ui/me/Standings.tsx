@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGame } from './ctx'
 import { OvrBadge, Panel, Crest } from './common'
 import Bracket from './Bracket'
@@ -7,6 +7,7 @@ import { DRAW_KIND_CN, drawsOf } from '../../engine/draw'
 import { PLAYOFF_CUT } from '../../engine/season'
 import { formatOf, onTimeline, regionIn, regionsOf, stagesOf } from '../../engine/era'
 import CircuitPanel, { circuitShows } from './CircuitPanel'
+import { eventAnchor, letEventGo, wantedEvent } from './eventFocus'
 import { circuitBonus, circuitPaid, eventOf, pointsTables } from '../../engine/circuit'
 import type { PointsBasis, PointsRow, PointsTable } from '../../engine/circuit'
 import { eventTables } from '../../engine/eventTable'
@@ -279,7 +280,19 @@ export default function Standings() {
   // on itself, as it did.
   const home: Region | undefined = game.teams[game.myTeam]?.region ?? game.me?.region
   const start: Region = (home && tabOf(home, tabs, game.year)) ?? home ?? 'China'
-  const [picked, setRegion] = useState<Region | null>(null)
+  // an event the week page asked for (ui/me/eventFocus.ts): opened on a tab that shows it, then brought into view
+  const [focus] = useState(wantedEvent)
+  const [picked, setRegion] = useState<Region | null>(() => {
+    const c = focus ? game.comps[focus] : undefined
+    if (!c) return null
+    const on = (r: string): boolean => (c.format === 'circuit' ? circuitShows(c, r) : !c.region || c.region === r)
+    return on(start) || (!!home && on(home)) ? null : tabs.find(on) ?? null
+  })
+  useEffect(() => {
+    if (!focus) return
+    letEventGo()
+    document.getElementById(eventAnchor(focus))?.scrollIntoView({ block: 'start' })
+  }, [focus])
   const region: Region = picked && tabs.includes(picked) ? picked : start
   // the home tab still shows what my own place plays: a Challengers circuit is filed under its place, not its league
   const here: Region = region === start && home ? home : region
@@ -387,6 +400,7 @@ export default function Standings() {
           {shown.map((c) => c.format === 'circuit' ? <CircuitPanel key={c.key} comp={c} /> : c.region ? (
             <Panel
               key={c.key}
+              id={eventAnchor(c.key)}
               title={`${c.name}${c.champion ? ` · 冠军 ${game.teams[c.champion]?.name}` : ''}`}
               flush
             >
@@ -419,7 +433,7 @@ export default function Standings() {
               <DrawHistory comp={c} />
             </Panel>
           ) : (
-            <Panel key={c.key} title={`${c.name}（国际赛事${c.city ? ` · ${c.city}` : ''}）${c.champion ? ` · 冠军 ${game.teams[c.champion]?.name}` : ''}`}>
+            <Panel key={c.key} id={eventAnchor(c.key)} title={`${c.name}（国际赛事${c.city ? ` · ${c.city}` : ''}）${c.champion ? ` · 冠军 ${game.teams[c.champion]?.name}` : ''}`}>
               <Bracket comp={c} />
               <DrawHistory comp={c} />
               {!!c.champion && c.finished.length > 0 && (

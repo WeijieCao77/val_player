@@ -135,15 +135,17 @@ export function AgentIcon({
 }
 
 export function Panel({
-  title, children, actions, flush, className, tut,
+  title, children, actions, flush, className, tut, id,
 }: {
   title?: string; children: ReactNode; actions?: ReactNode
   flush?: boolean; className?: string
   /** stable hook for the tour to spotlight this panel */
   tut?: string
+  /** an anchor another screen can bring into view (ui/me/eventFocus.ts) */
+  id?: string
 }) {
   return (
-    <div className={`panel${className ? ` ${className}` : ''}`} data-tut={tut}>
+    <div className={`panel${className ? ` ${className}` : ''}`} data-tut={tut} id={id}>
       {(title || actions) && (
         <div className="panel-head">
           {title && <h2>{title}</h2>}

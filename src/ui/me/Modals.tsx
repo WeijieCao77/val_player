@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useGame } from './ctx'
 import { Crest, Modal, money, moneyIn } from './common'
 import type { PendingItem } from '../../engine/me/types'
-import { cupFor, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
+import { cupFor, cupEntryBlock, enterCup, skipCup, mountCupMatch, afterCupMatch, TEMP_MINE, TEMP_OPP, cupRng, cupDateCn, cupRoundDay, forfeitCup } from '../../engine/me/cups'
 import { FRIENDLY_MAP_FATIGUE, MeMatch } from '../../engine/me/matchplay'
 import { declineInvite, startTryout, tryoutChoose, tryoutDays, tryoutFatiguePenalty } from '../../engine/me/tryout'
 import { awayWord, expectOf, skillRead, skillReadCn, tryoutSkill, CLUB_TIER_CN, SKILL_READ_CN } from '../../engine/me/prepro'
@@ -155,11 +155,8 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
       </Modal>
     )
   }
-  // 报名 greyed with the reason under it: a run still going, the fee, the invitation
-  const why = run
-    ? `还在打${cupFor(game, run.key)?.name ?? '另一项赛事'}，打完才能报名`
-    : me.money < cup.fee ? `报名费 ${money(cup.fee)}，你只有 ${money(Math.max(0, me.money))}`
-      : me.fans < cup.minFans ? `邀请制：粉丝要过 ${fansCn(cup.minFans)}，你现在 ${fansCn(me.fans)}` : null
+  // 报名 greyed with the reason under it: a run still going, the fee, the invitation — the cup's own page says the same (engine/me/cups.ts)
+  const why = cupEntryBlock(game, cupKey)
   return (
     <Modal title={cup.name} onClose={() => { countCup('skip'); skipCup(game, cupKey); commit(); onDone() }} onBgClose={() => {}}>
       <p className="small" style={{ marginTop: 0 }}>{cup.blurb}</p>

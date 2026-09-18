@@ -195,6 +195,57 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .week-day.past { opacity: .55; }
 .week-day.next { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
+/* 「今年的赛事」: each cup a row that opens its page (ui/me/CupDetail.tsx). A row reads as the line it was,
+   with a chevron at its end and the panel's hover under it; one that is over is set back, never hidden. */
+.cup-list { display: flex; flex-direction: column; margin: -2px 0 0; }
+.cup-row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  background: transparent; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0;
+  padding: 7px 4px; font-size: var(--t-small); line-height: 1.5;
+}
+.cup-row:last-child { border-bottom: 0; }
+.cup-row:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line-soft); }
+.cup-row .t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.cup-row .go { flex: none; color: var(--faint); font-size: 16px; line-height: 1; }
+.cup-row:hover .go { color: var(--accent); }
+.cup-row.over .t { color: var(--muted); }
+.cup-row.on { box-shadow: inset 2px 0 0 var(--accent); padding-left: 8px; }
+
+/* a cup's own page: where it stands, then when / the rounds / the doors / the five / what it gives */
+.cup-state { padding: 8px 12px; border: 1px solid var(--line); border-left: 2px solid var(--line-hi); border-radius: var(--radius); background: var(--panel-2); font-size: var(--t-small); }
+.cup-state.own { border-left-color: var(--accent); }
+.cup-state.good { border-left-color: var(--win); }
+.cup-facts { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 12px 12px; margin: 0; font-size: var(--t-small); line-height: 1.6; }
+.cup-facts dt { color: var(--faint); font-size: var(--t-tiny); padding-top: 2px; }
+.cup-facts dd { margin: 0; min-width: 0; }
+.cup-ladder { list-style: none; margin: 6px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cup-step {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2);
+}
+.cup-step .bo { font-size: var(--t-tiny); color: var(--muted); }
+.cup-step .st { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cup-step .pz { margin-left: auto; font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; }
+.cup-step.win { border-left: 2px solid var(--win); }
+.cup-step.win .st { color: var(--win); }
+.cup-step.lost { border-left: 2px solid var(--loss); }
+.cup-step.lost .st { color: var(--text); }
+.cup-step.now { border-color: var(--accent-line); background: var(--accent-wash); }
+.cup-step.now .st { color: var(--accent); font-weight: 650; }
+.cup-step.off { opacity: .55; }
+.cup-gates, .cup-gets { margin: 4px 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.cup-gates li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.cup-gates li.no > span:first-child { color: var(--muted); }
+.cup-gets li { padding-left: 12px; position: relative; }
+.cup-gets li::before { content: '·'; position: absolute; left: 2px; color: var(--faint); }
+/* an event's panel on 「积分榜」, brought into view from the week page's 「赛事详情 →」 (ui/me/eventFocus.ts) */
+.panel[id^="ev-"] { scroll-margin-top: 12px; }
+@media (max-width: 560px) {
+  .cup-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .cup-facts dd { margin-bottom: 10px; }
+  .app.career .cup-row { min-height: 44px; align-items: center; }
+}
+
 /* 页尾那 104px 是给右下角「更新日志」留的：正文栏最宽 860，屏幕一窄到正文栏顶住右边（约 892 以下），
    页面最后那颗右对齐的按钮就和钉在屏幕角上的按钮撞在一起——量出来 721 和 860 宽都实实在在叠着。
    留出按钮的高度（它顶边离屏幕底 96px）比按宽度写一条特例稳：正文栏、按钮大小以后怎么改都不会漏。 */

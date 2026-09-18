@@ -1,4 +1,5 @@
 import { useGame } from './ctx'
+import { eventAnchor } from './eventFocus'
 import { Crest, Panel, fmtDay } from './common'
 import { eventOf, realPlacesOf, realResultOf } from '../../engine/circuit'
 import { eventTables, onwardSets, roundCn } from '../../engine/eventTable'
@@ -89,6 +90,7 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
 
   return (
     <Panel
+      id={eventAnchor(comp.key)}
       title={`${comp.name}${champName ? ` · 冠军 ${champName}` : ''}`}
       actions={<span className={`tag${c.why === 'mine' ? ' t1' : ''}`}>{badge}</span>}
       flush
