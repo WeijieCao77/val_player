@@ -1,5 +1,5 @@
 /**
- * 导览：第一周怎么过，和第一次签约以后多出来的几件事。
+ * 导览：这一段要干什么，这周怎么过，和第一次签约以后多出来的几件事。
  *
  * The career opened on a week screen that said nothing about how a week works,
  * and a first game is kept or dropped in that first week. 破晓 walks a new
@@ -7,6 +7,14 @@
  * season, and keeps the same text on a help page; this is that mechanism, in
  * our own words. One real element lit at a time, one or two short sentences,
  * skippable at every step.
+ *
+ * Goal first (reported 2026-09-18: 「没有进来的引导教学，不知道下一步要点哪，不知道
+ * 哪些是重要的事情哪些是休赛期点的」). The tour used to be twelve steps naming the
+ * regions of the page — 这一块是你, 数值, 栏目, 天梯 … — and never said what they
+ * were for. Now it opens on the phase's goal (engine/me/goal.ts), then answers
+ * 「现在做什么」 in five steps: which cards serve the goal, the recommended plan,
+ * the clock, and what stops it. What a region of the page is has moved to 帮助
+ * (pageNotes), in the same words.
  *
  * Every sentence says what the code does, and the numbers in it — the action
  * points, the recommended plan's 体力, the transfer windows — are read from the
@@ -25,11 +33,11 @@ import { useSyncExternalStore } from 'react'
 import type { GameState } from '../../engine/types'
 import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from '../../engine/me/actions'
 import { AP_PRE } from '../../engine/me/prepro'
-import { TRIAL_MATCHES } from '../../engine/me/coach'
+import { PROMISE_FLOOR, TRIAL_MATCHES } from '../../engine/me/coach'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
 import { windowLine } from '../../engine/me/window'
 import { weekInDays } from '../../engine/me/week'
-import { goalOf } from '../../engine/me/goal'
+import { cupAhead, goalOf } from '../../engine/me/goal'
 import type { GoalPhase } from '../../engine/me/goal'
 
 /** The week screen without a club, the week screen with one, and what signing adds. */
@@ -147,26 +155,48 @@ const WEEK = 'week'
 const panel = (title: string): TourTarget => ({ sel: '.panel', text: title })
 const ADVANCE: TourTarget = { sel: '.advance-me button', text: ['推进一周', '推进一天', '打今天的比赛'] }
 
+/**
+ * The phase's goal, lit on the 下一步 card when it is up (ui/me/NextStep.tsx), standing in the middle
+ * when it has been put away. Without a club: the four roads, which the card measures.
+ */
+function goalStep(g: GameState, title: (goal: string) => string): TourStep[] {
+  const goal = goalOf(g)
+  if (!goal) return []
+  const card = nextCardDue(g)
+  const how = goal.phase === 'pre'
+    ? `${goal.how}${card ? '这张卡写着每条路还差多远，和这周最值得做的一件事。' : ''}`
+    : `${goal.how}${card ? '这张卡写着离它还差什么，和这周最值得做的一件事。' : ''}`
+  return [{ screen: WEEK, at: card ? [{ sel: '.next-step' }] : undefined, title: title(goal.title), body: how }]
+}
+
+/** the blocks of the week board holding this goal's 重点 cards (Week.tsx data-group) */
+function focusGroups(g: GameState): TourTarget[] {
+  const kind = goalOf(g)?.kind
+  if (kind === 'contract') return [{ sel: '.act-group[data-group="train"]' }]
+  if (kind === 'seat') return [{ sel: '.act-group[data-group="team"]' }]
+  return [{ sel: '.act-group[data-group="train"]' }, { sel: '.act-group[data-group="team"]' }]
+}
+
+/** what the 重点 tags mark for this goal, and when the 调剂 ones are right (engine/me/goal.ts weightsOf, fillerNote) */
+function focusBody(g: GameState): string {
+  const kind = goalOf(g)?.kind
+  const tap = '点卡片安排一次，「−」退回。'
+  if (kind === 'contract') {
+    return `标「重点」的卡对目标最有用：枪法、复盘、道具涨综合，杯赛和试训都看它；打排位爬天梯。标「调剂」的几张，体力见底、缺钱或想走粉丝这条路时再点。${tap}`
+  }
+  const filler = '标「调剂」的几张，体力见底、缺钱或签了直播合约时再点。'
+  if (kind === 'seat') return `标「重点」的是对位挑战和跟队训练赛：对位当场就打，训练赛让教练看得见你。${filler}${tap}`
+  return `标「重点」的是跟队训练赛和眼下最值的一项练习：教练看得见你，综合也在涨。${filler}${tap}`
+}
+
 export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
   if (kind === 'season') return seasonSteps(g)
   const pro = kind === 'club'
   const days = pro && weekInDays(g)
   const calm = 100 - WEEK_END_FATIGUE
+  const cup = pro ? null : cupAhead(g)
   const week: TourStep[] = [
-    {
-      screen: WEEK, at: [{ sel: '.hero' }, { sel: '.pinbar' }], title: '这一块是你',
-      body: `${pro ? '效力的队、首发还是替补' : '段位、粉丝、资金'}、体力、状态都在这里。下面一行是综合能力，有卡在瓶颈的会点出来；八项属性的细节在「我的」页。`,
-    },
-    {
-      screen: WEEK, at: [{ sel: '.num-switch' }], title: '文字还是数字',
-      body: '属性默认用文字说：职业级、一流、顶级……「综合」那一行右端的「数值」换成具体数字，再点一下换回来。',
-    },
-    {
-      screen: WEEK, at: [{ sel: '.nav' }], title: '栏目',
-      body: pro
-        ? '「队伍」看名单和首发之争，「赛程」看你队的比赛，「转会」看合同和报价。「帮助」里有规则说明，也能重看导览。'
-        : '「我的」看属性和瓶颈，「转会」看各档俱乐部要什么水平。「帮助」里有规则说明，也能重看导览。',
-    },
+    ...goalStep(g, (goal) => `目标：${goal}`),
     {
       screen: WEEK, at: [{ sel: '.ap-chip' }], title: '行动点',
       body: pro
@@ -174,18 +204,14 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
         : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。推进以后，没用完的作废。`,
     },
     {
-      screen: WEEK, at: [{ sel: '.act-group' }], title: '行动卡',
-      body: '点一下卡片就安排一次，「−」退回，一周结束时一起结算。灰掉的卡下面写着还差什么。',
-    },
-    {
-      screen: WEEK, at: [{ sel: '.winbar-row', text: '体力' }], title: '体力',
-      body: '安排的事先从这条上扣，休息和身体自己回的那些在周末补上。低于四成，状态和比赛发挥明显下滑。',
+      screen: WEEK, at: focusGroups(g), title: '这周做什么',
+      body: focusBody(g),
     },
     {
       screen: WEEK, at: [{ sel: '.advance-me button', text: '按推荐安排' }], title: '按推荐安排',
       body: pro
-        ? `把剩下的点按稳妥的路子填满，这周要打的比赛也算进去，周末体力留在 ${calm} 上下。填完还能改。`
-        : `把剩下的点按稳妥的路子填满：补短板、打排位，周末体力留在 ${calm} 上下。填完还能改。`,
+        ? `不知道怎么排就按这个：剩下的点按稳妥的路子填满，这周要打的比赛也算进去，周末体力留在 ${calm} 上下。填完还能改。`
+        : `不知道怎么排就按这个：剩下的点按稳妥的路子填满，补短板、打排位，周末体力留在 ${calm} 上下。填完还能改。`,
     },
     pro
       ? {
@@ -196,32 +222,76 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
       }
       : {
         screen: WEEK, at: [ADVANCE], title: '推进',
-        body: '「推进一周」结算这周，时间往前走。旁边的「快进到…」一次推几周，空窗期可以推一个月：没排的周按推荐来，事件这类小事替你定，合同和试训邀请停下来等你。',
+        body: '「推进一周」结算这周。空窗期用旁边的「快进到…」一次推几周：没排的周按推荐来，小事替你定，合同和试训邀请会停下来等你。',
       },
     {
       screen: WEEK, at: [{ sel: '.advance-me .hint' }], title: '停下来等你的事',
-      body: `${pro ? '事件、报价、仪式' : '杯赛、试训邀请、事件'}会弹成卡片，时钟停下来等你选，选完接着走。`,
+      body: pro
+        ? '比赛日、事件、报价、仪式会弹成卡片，时钟停下来等你选，选完接着走。'
+        : `杯赛报名、试训邀请、合同会弹成卡片，时钟停下来等你选，选完接着走。${cup ? (cup.weeks === 0 ? `这周就是${cup.name}报名。` : `下一项杯赛是 ${cup.weeks} 周后的${cup.name}。`) : ''}`,
     },
   ]
-  const side: TourStep[] = pro
-    ? [
-      { screen: WEEK, at: [panel('下一场')], title: '下一场', body: '对手、赛事、纸面赢面，还有教练这周排没排你首发。' },
-      { screen: WEEK, at: [panel('教练怎么看你')], title: '教练怎么看你', body: '他的信任决定你能不能留在首发。跟队训练赛、对位挑战和正赛表现都会改变它。' },
-    ]
-    : [
-      { screen: WEEK, at: [panel('天梯')], title: '天梯', body: '一点行动打六把排位，分数朝你的真实水平走，越高越难爬。不打分数不掉，但神话起别人还在涨分，名次会往后掉。' },
-      { screen: WEEK, at: [panel('今年的赛事')], title: '今年的赛事', body: '到了开打那一周，会弹卡片问你报不报名。四个路人队友，走得越远越容易被俱乐部记住。' },
-      { screen: WEEK, at: [panel('怎么被看见')], title: '怎么被看见', body: '俱乐部从杯赛、天梯、粉丝三处发现你；不想干等，也可以在「转会」页挑一家发自荐。邀请来了去试训，拿到合同就进了职业。' },
-    ]
-  return [...week, ...side]
+  return week
 }
 
-/** The first club: who plays, how to get in, what a match asks of you, and when the market opens. */
-function seasonSteps(g: GameState): TourStep[] {
-  return [
+/**
+ * What each region of the week page is, for 帮助: the steps the tour used to walk before it went goal
+ * first, in the same words, so the page and the help cannot say two things.
+ */
+export function pageNotes(g: GameState): { title: string; body: string }[] {
+  const pro = g.me?.phase === 'pro'
+  const notes = [
     {
-      screen: 'team', at: [panel('名单')], title: '首发名单',
-      body: '教练每周一排出首发五人，看综合、状态、疲劳和他对你的信任。合同写明首发的，他会让你首发。',
+      title: '下一步',
+      body: '本周页最上面那张卡：这一段的目标、这周最值得做的一件事；没有队伍时还写着离每条路还差多远。没有队伍的整段时间和签约后的第一个赛季里都在；点「收起」就不再显示，这一页最上面能恢复。',
+    },
+    {
+      title: '「重点」和「调剂」',
+      body: '行动卡右上角的小字。「重点」对眼下的目标最有用；「调剂」是赛场外的事，体力见底、缺钱、想走粉丝这条路或者签了直播合约时，它们才是对的选择。没有标的卡，看情况。',
+    },
+    {
+      title: '上面一块是你',
+      body: `${pro ? '效力的队、首发还是替补' : '段位、粉丝、资金'}、体力、状态都在这里。下面一行是综合能力，有卡在瓶颈的会点出来；八项属性的细节在「我的」页。`,
+    },
+    {
+      title: '文字还是数字',
+      body: '属性默认用文字说：职业级、一流、顶级……「综合」那一行右端的「数值」换成具体数字，再点一下换回来。',
+    },
+    {
+      title: '栏目',
+      body: pro
+        ? '「队伍」看名单和首发之争，「赛程」看你队的比赛，「转会」看合同和报价。「帮助」里有规则说明，也能重看导览。'
+        : '「我的」看属性和瓶颈，「转会」看各档俱乐部要什么水平、发自荐。「帮助」里有规则说明，也能重看导览。',
+    },
+    {
+      title: '体力',
+      body: '安排的事先从这条上扣，休息和身体自己回的那些在周末补上。低于四成，状态和比赛发挥明显下滑。',
+    },
+  ]
+  return notes.concat(pro
+    ? [
+      { title: '下一场', body: '对手、赛事、纸面赢面，还有教练这周排没排你首发。' },
+      { title: '教练怎么看你', body: '他的信任决定你能不能留在首发。跟队训练赛、对位挑战和正赛表现都会改变它。' },
+    ]
+    : [
+      { title: '天梯', body: '一点行动打六把排位，分数朝你的真实水平走，越高越难爬。不打分数不掉，但神话起别人还在涨分，名次会往后掉。' },
+      { title: '今年的赛事', body: '到了开打那一周，会弹卡片问你报不报名。四个路人队友，走得越远越容易被俱乐部记住。' },
+      { title: '怎么被看见', body: '俱乐部从杯赛、天梯、粉丝三处发现你；不想干等，也可以在「转会」页挑一家发自荐。邀请来了去试训，拿到合同就进了职业。' },
+    ])
+}
+
+/**
+ * The first club: the new goal, who plays, how to get in, what a match asks of you, and when the market
+ * opens. A club start was told its goal on the week's own tour a day or two before, so it is not told twice.
+ */
+function seasonSteps(g: GameState): TourStep[] {
+  const told = tourSeen('club') && (g.me?.week ?? 0) <= 2
+  return [
+    ...(told ? [] : goalStep(g, (goal) => `新目标：${goal}`)),
+    {
+      // the roster panel is titled with the club's name, so 「名单」 found nothing and this step was always skipped
+      screen: 'team', at: [panel('首发之争')], title: '首发之争',
+      body: `教练每周一排出首发五人，看综合、状态、疲劳和他对你的信任。合同写明首发的，前 ${PROMISE_FLOOR} 场写死是你的，之后归教练排。`,
     },
     {
       screen: WEEK, at: [{ sel: '.act-card', text: '对位挑战' }], title: '对位挑战',
@@ -233,8 +303,13 @@ function seasonSteps(g: GameState): TourStep[] {
     },
     {
       screen: 'transfer', at: [panel('市场怎么看你')], title: '转会窗',
-      // the year's own rule and today's state (engine/me/window.ts); the full rule is on the help page
-      body: `${windowLine(g)}。${g.year <= 2022 ? '这两年没有固定窗口，俱乐部不打大赛就能转' : '俱乐部打赛事期间整段锁名单，只有两项赛事之间的空档和休赛期开窗'}（详见「帮助」）。赛段里打得好，别队教练会记下你，窗口开着就可能来报价。`,
+      // the year's own rule and today's state (engine/me/window.ts); the full rule is on the help page.
+      // An open-era line already says there is no fixed window: the rule is not said a second time
+      body: (() => {
+        const line = windowLine(g)
+        const rule = g.year <= 2022 ? '这两年没有固定窗口，俱乐部不打大赛就能转' : '俱乐部打赛事期间整段锁名单，只有两项赛事之间的空档和休赛期开窗'
+        return `${line}${line.includes('没有固定窗口') ? '' : `。${rule}`}（详见「帮助」）。赛段里打得好，别队教练会记下你，窗口开着就可能来报价。`
+      })(),
     },
   ]
 }

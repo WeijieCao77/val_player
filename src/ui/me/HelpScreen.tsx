@@ -1,6 +1,6 @@
 import { useGame } from './ctx'
 import { Panel } from './common'
-import { nextCardWindow, openTour, setNextHidden, setToursOff, useNextHidden, useToursOff, weekTourOf } from './guide'
+import { nextCardWindow, openTour, pageNotes, setNextHidden, setToursOff, useNextHidden, useToursOff, weekTourOf } from './guide'
 import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'
 import { ABROAD_CAP, AP_PRE, LANG_EXTRA, MATE_SHARE } from '../../engine/me/prepro'
@@ -142,7 +142,7 @@ export default function HelpScreen() {
   const hidden = useNextHidden(goal?.phase ?? 'pre')
   // a greyed tour says why, and what opens it
   const why = retired ? '生涯已经结束，没有本周页可讲。'
-    : !pro ? '签约后的导览讲首发名单、对位挑战、比赛里的决定和转会窗，签下一支队以后才能看。' : ''
+    : !pro ? '签约后的导览讲新目标、首发之争、对位挑战、比赛里的决定和转会窗，签下一支队以后才能看。' : ''
   return (
     <div>
       <Panel title="导览">
@@ -159,6 +159,12 @@ export default function HelpScreen() {
           </p>
         )}
       </Panel>
+      {/* what each region of the week page is — the steps the tour walked before it went goal first (ui/me/guide.ts pageNotes) */}
+      {!retired && (
+        <Panel title="本周页上有什么">
+          <ul className="help-list">{pageNotes(game).map((n) => <li key={n.title}><b>{n.title}</b>：{n.body}</li>)}</ul>
+        </Panel>
+      )}
       <div className="help-grid">
         {SECTIONS.map((s) => {
           // the transfer rules are the save's year's (engine/me/window.ts), not written once for every year

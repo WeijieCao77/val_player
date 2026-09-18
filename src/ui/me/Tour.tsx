@@ -115,6 +115,9 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
   const [hole, setHole] = useState<Box | null>(null)
   const [ready, setReady] = useState(false)
   const [ch, setCh] = useState(150)
+  // steps whose targets are not on their page: skipped, and not counted — 破晓's count only counts what is there
+  // (its tour once said 13 steps and walked 8). A page is checked once the tour stands on it.
+  const [gone, setGone] = useState<ReadonlySet<number>>(() => new Set())
   const dir = useRef<1 | -1>(1)
   // where it was opened — the week, or 帮助 — and where it goes back to
   const from = useRef(screen)
@@ -122,7 +125,9 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
   const cardRef = useRef<HTMLDivElement>(null)
   const nextRef = useRef<HTMLButtonElement>(null)
   const step = steps[Math.min(i, steps.length - 1)]
-  const last = i >= steps.length - 1
+  const last = steps.every((_, j) => j <= i || gone.has(j))
+  const shownAt = i + 1 - Array.from(gone).filter((j) => j < i).length
+  const shownOf = steps.length - gone.size
 
   const close = (how: 'done' | 'skip' | 'never') => {
     markTourSeen(kind)
@@ -145,6 +150,9 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
     if (screen !== step.screen) { go(step.screen); return }
     setReady(false)
     const t = window.setTimeout(() => {
+      // every step on this page whose targets are all missing: the page does not change under the tour
+      const miss = steps.flatMap((s, j) => (s.screen === screen && s.at?.length && !findAll(s.at).length ? [j] : []))
+      if (miss.some((j) => !gone.has(j))) setGone(new Set([...gone, ...miss]))
       const els = findAll(step.at)
       if (step.at?.length && !els.length) {
         // not on the page right now: on to the next step the same way (a missing first step goes forward)
@@ -225,7 +233,7 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
         style={{ left: pos.left, top: pos.top, width: pos.width, visibility: ready ? 'visible' : 'hidden' }}
       >
         <div className="mt-head">
-          <span className="mt-count">{kind === 'season' ? '签约之后' : '导览'} · {i + 1}/{steps.length}</span>
+          <span className="mt-count">{kind === 'season' ? '签约之后' : '导览'} · {shownAt}/{shownOf}</span>
           <button className="sm ghost" onClick={() => close('skip')}>跳过</button>
         </div>
         <h3 id="mt-title">{step.title}</h3>
