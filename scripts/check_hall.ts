@@ -14,6 +14,12 @@
  *  - saving and deleting a save, or starting a career, leaves the hall alone
  *  - a broken record reads as an empty hall
  *  - a browser whose storage throws plays a whole career; one that cannot write keeps the hall as it was
+ *  - 卡面 (2026-09-18, 「但是殿堂不影响游戏里的数值」): each look opens with its condition, credited to the
+ *    career that met it; every look is drawn (a palette for the picture, a block for the card) and only an open
+ *    one can be chosen; 另一条世界线 opens on a 「因为你」 and on nothing else; the choice survives export → import;
+ *    a hall that cannot store has only the default. And no number reads them: the same career played with every
+ *    look open and one chosen, and with an empty hall, is the same career byte for byte — and nothing in
+ *    the engine but the hall itself (and the save tile's count) imports the hall
  *
  *   npx tsx scripts/check_hall.ts
  */
@@ -25,9 +31,13 @@ import { regionsOf } from '../src/engine/era'
 import { deleteSave, packState, saveGame, setSaveNamespace, unpackState } from '../src/engine/save'
 import type { GameState, Region } from '../src/engine/types'
 import {
-  HALL_KEY, MILESTONES, careerIdOf, cleanHall, exportHall, hallLine, hallRecords, importHall, milestoneDone, noteHall, readHall,
+  HALL_KEY, LOOKS, MILESTONES, careerIdOf, chooseLook, cleanHall, endingKinds, exportHall, hallLine, hallRecords, importHall,
+  lookOf, milestoneDone, noteHall, openLooks, readHall,
 } from '../src/engine/me/hall'
-import type { HallCard } from '../src/engine/me/hall'
+import type { Hall, HallCard, LookKey } from '../src/engine/me/hall'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const mem: Record<string, string> = {}
 const good = {
@@ -128,6 +138,46 @@ check(milestoneDone(ms('leagues'), ['Thailand', 'Turkey', 'North America', 'Chin
 const champ = { year: 2030, name: '2030 全球冠军赛', cls: 'champions' as const, started: true }
 check(milestoneDone(ms('lives'), [fake('cv1', {}), fake('cv2', { titles: [champ] })]), '「两种人生」：一局无冠、一局冠军赛')
 
+// ------------------------------------------------------------------ 卡面: what opens them, and choosing one
+console.log('\n卡面')
+{
+  const holds = (k: LookKey, cs: HallCard[]) => { const l = LOOKS.find((x) => x.key === k)!; return !l.open || l.open(cs) }
+  const shut = LOOKS.filter((l) => l.open && !holds(l.key, h.cards)).map((l) => l.key)
+  check(LOOKS.every((l) => !l.open || !!h.looks[l.key] === holds(l.key, h.cards)),
+    `卡面和三张卡对得上：开了 ${Object.keys(h.looks).join('、') || '无'}；没开 ${shut.join('、')}`)
+  check(LOOKS.every((l) => {
+    const m = h.looks[l.key]
+    if (!m) return true
+    const i = h.cards.findIndex((_, k) => holds(l.key, h.cards.slice(0, k + 1)))
+    return m.id === h.cards[i]?.id
+  }), '每套卡面记在第一张凑齐条件的卡名下')
+  check(!!h.looks.film && h.looks.film.id === idB && !!h.hx.eras, '「胶片档案」跟「跨时代」一起开，记在 B 名下')
+  check(!!h.looks.night === (endingKinds(h.cards) >= 2), `「夜场转播」：${endingKinds(h.cards)} 种结局，${h.looks.night ? '开了' : '没开'}`)
+  check(lookOf(h) === 'studio' && openLooks(h).has('studio'), '没选过：默认「演播室」')
+  before = snap()
+  const shutOne = LOOKS.find((l) => !openLooks(h).has(l.key))
+  check(!shutOne || (!chooseLook(shutOne.key) && snap() === before), `没解锁的${shutOne ? `「${shutOne.name}」` : ''}选不了，殿堂不动`)
+  check(chooseLook('film') && lookOf(readHall()) === 'film' && readHall()!.look === 'film', '选「胶片档案」：记进殿堂')
+  noteHall(C.state, true)
+  check(lookOf(readHall()) === 'film', '再记一遍生涯：选的卡面还在')
+  check(chooseLook('studio') && readHall()!.look === undefined && chooseLook('film'), '换回默认，再换回来')
+  // 「因为你」 as the hall card keeps it: the seasons' rows counted, a card with none carries none
+  const { becauseOfMe } = await import('../src/engine/me/rewrites')
+  const kept = (st: GameState) => st.me!.seasons.reduce((n, x) => n + (x.rewrites ?? []).filter(becauseOfMe).length, 0)
+  check([A, B, C].every((r) => (h.cards.find((c) => c.id === careerIdOf(r.state))?.rw?.mine ?? 0) === kept(r.state)),
+    `殿堂卡记下「因为你」几条：${[A, B, C].map((r) => kept(r.state)).join(' · ')}`)
+  const rwCard = (id: string, rw: HallCard['rw']): HallCard => ({ ...h.cards[0], id, rw })
+  const red = LOOKS.find((l) => l.key === 'redline')!
+  check(!!red.open?.([rwCard('cw1', { n: 3, mine: 1 })]), '「另一条世界线」：有一局「因为你」，开')
+  check(!!red.open?.([rwCard('cw2', { n: 2, top: '因为你，2026 挑战者联赛 · 北欧与东欧 · 揭幕赛的冠军是 X（真实历史：Y）· 你首发' })]),
+    '「另一条世界线」：这一条之前记的卡，最重的一条写着「因为你」，也开')
+  check(!red.open?.([rwCard('cw3', { n: 99, top: '2021 柏林大师赛的冠军是 X（真实历史：Y）· 你首发' })]) && !red.open?.([rwCard('cw4', undefined)]),
+    '「另一条世界线」：改写得再多，没有一条是「因为你」，不开')
+  // a hand-edited record naming a look it has not opened reads as the default
+  check(lookOf(cleanHall({ ...JSON.parse(snap()), look: 'paper' })) === (openLooks(h).has('paper') ? 'paper' : 'studio'), '记录里写着没解锁的卡面：照默认画')
+  h = readHall()!
+}
+
 // ------------------------------------------------------------------ carrying it to another device
 const text = exportHall()!
 before = snap()
@@ -136,6 +186,7 @@ check(importHall(text) === 'ok' && JSON.stringify(readHall()) === JSON.stringify
 before = snap()
 check(importHall(text) === 'ok' && snap() === before, '同一段再导入一次：不多算')
 check(importHall('{"format":"nope"}') === 'bad' && importHall('not json') === 'bad', '不是殿堂的文本不收')
+check(readHall()!.look === 'film' && JSON.stringify(readHall()!.looks) === JSON.stringify(h.looks), '导出 → 导入：选的卡面和解锁记录都在')
 
 // ------------------------------------------------------------------ saves and new careers do not touch it
 setSaveNamespace('player')
@@ -161,6 +212,7 @@ try {
   const D = play('D 2026 天梯 中国 哨卫（存储一碰就抛错）', { name: 'HallD', seed: 15, year: 2026, role: '哨卫' }, 1)
   check(D.state.me!.phase === 'retired' && !!D.state.me!.ending, 'D 照常打完、照常有结局')
   check(readHall() === null && exportHall() === null && hallLine(D.state) === '' && importHall(text) === 'nostore', '读成「存不下」：名片那一行空着，导入说存不下')
+  check(lookOf(readHall()) === 'studio' && openLooks(readHall()).size === 1 && !chooseLook('film'), '存不下：只有默认卡面，选别的也不抛错')
 } catch (e) {
   threw = (e as Error).message
 }
@@ -225,6 +277,82 @@ G.localStorage = good
   other.titles = [{ year: y, title: quals[0] }, { year: y, title: '挑战者联赛 · 法国 · 第一赛段' }]
   const shelf = shelfOf(Q, null, other.id)
   check(shelf.length === 1 && !shelf.some((h) => h.label.includes('资格赛')), '别人的奖杯柜：出线不上架，挑战者赛段照上')
+}
+
+// ------------------------------------------------------------------ 卡面 count for nothing
+// The author, 2026-09-18: 殿堂可以解锁新的东西 — 「但是殿堂不影响游戏里的数值」. The same career, played
+// the way PlayerGame plays it (the hall noted after every week), once beside a hall that opens every look with one
+// chosen and once beside an empty one: every attribute, coin, action point, start and result must come out the same.
+G.localStorage = good
+{
+  // a real 「因为你」: a 2026 start whose first season's Challengers title went to my club over history's champion
+  {
+    const { becauseOfMe } = await import('../src/engine/me/rewrites')
+    delete mem[HALL_KEY]
+    const R = play('R 2026 二线 欧洲 决斗者（一季）', { name: 'HallR', seed: 7, year: 2026, start: 'chal', region: 'Europe' as Region }, 1)
+    const rh = readHall()!
+    const rc = rh.cards.find((c) => c.id === careerIdOf(R.state))
+    const mine = R.state.me!.seasons.reduce((n, x) => n + (x.rewrites ?? []).filter(becauseOfMe).length, 0)
+    check(mine > 0 && rc?.rw?.mine === mine && !!rc.rw.top?.startsWith('因为你') && openLooks(rh).has('redline') && rh.looks.redline?.id === rc.id,
+      `一局 2026 开局就有「因为你」（${rc?.rw?.top ?? '无'}）：「另一条世界线」开了，记在这一局名下`)
+  }
+
+  console.log('\n卡面不碰数值')
+  const base = h.cards[0]
+  const card = (id: string, x: Partial<HallCard>): HallCard => ({ ...base, id, ach: [], titles: [], hx: undefined, seasons: 3, ...x })
+  const champ = { year: 2030, name: '2030 全球冠军赛', cls: 'champions' as const, started: true }
+  const league = { year: 2029, name: 'VCT 太平洋联赛 · 第一赛段', cls: 'league' as const, started: true }
+  const ends = ['world', 'journeyman', 'flash', 'shore', 'titled']
+  const cards: HallCard[] = [
+    ...['决斗者', '先锋', '控场', '哨卫'].map((role, i) => card(`cz${i}`, {
+      role, entry: i % 2 ? 2021 : 2026, home: ['Korea', 'Turkey', 'North America', 'China'][i],
+      start: (['pre', 'chal', 't1', 'pre'] as const)[i], titles: i < 3 ? [league] : [],
+      ending: { key: ends[i], title: ends[i] }, ach: i === 0 ? ['loyal5'] : i === 1 ? ['abroad2'] : [],
+    })),
+    card('cz4', { titles: [champ], ending: { key: ends[4], title: ends[4] } }),
+    { ...card('cz5', { ending: { key: 'world', title: 'world' } }), rw: { n: 9, mine: 1 } } as HallCard,
+  ]
+  const full: Hall = cleanHall({ v: 1, ach: {}, cards, hx: {}, looks: {}, look: 'paper' })
+  check(LOOKS.every((l) => openLooks(full).has(l.key)) && lookOf(full) === 'paper', `满殿堂：${LOOKS.length} 套卡面全开，选的是「体育版头条」`)
+  const runOnce = (label: string, hall: string | null): string => {
+    if (hall === null) delete mem[HALL_KEY]
+    else mem[HALL_KEY] = hall
+    return JSON.stringify(play(label, { name: 'HallL', seed: 32, year: 2026 }, 2).state)
+  }
+  const withAll = runOnce('L1 2026 天梯 中国 决斗者（殿堂全开，选「体育版头条」）', JSON.stringify(full))
+  const withNone = runOnce('L2 同一局（殿堂是空的）', null)
+  let at = 0
+  while (at < withAll.length && withAll[at] === withNone[at]) at++
+  check(withAll === withNone, withAll === withNone
+    ? `全开和空殿堂打出的是同一局：整局存档 ${(withAll.length / 1024).toFixed(0)} KB，一个字节不差`
+    : `全开和空殿堂在第 ${at} 个字符分开：…${withAll.slice(Math.max(0, at - 80), at + 40)}…`)
+
+  // and nothing that counts can reach it. The engine may write the hall — note a career (noteHall), fold in a hall
+  // carried from elsewhere (mergeHallFrom) — carry its record inside a save backup beside the save, never in it
+  // (backup.ts: readHall, cleanHall), and count its achievements for the save tile (saveMeta.ts). Nothing else.
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => {
+    const x = path.join(d, f)
+    return statSync(x).isDirectory() ? walk(x) : /\.tsx?$/.test(f) ? [x] : []
+  })
+  const rel = (f: string) => path.relative(root, f).split(path.sep).join('/')
+  const src = walk(path.join(root, 'src')).map((f) => ({ f: rel(f), t: readFileSync(f, 'utf8') }))
+  const uses = src.filter((x) => x.f.startsWith('src/engine/') && x.f !== 'src/engine/me/hall.ts').flatMap((x) =>
+    [...x.t.matchAll(/import\s*(type\s*)?\{([^}]*)\}\s*from\s*'[./a-z]*\/hall'/g)]
+      .map((m) => ({ f: x.f.replace('src/engine/me/', ''), type: !!m[1], names: m[2].split(',').map((n) => n.trim()).filter(Boolean) })))
+  const CARRY: Record<string, string[]> = { 'backup.ts': ['readHall', 'cleanHall'], 'saveMeta.ts': ['hallAchCount', 'readHall'] }
+  const fine = (u: (typeof uses)[number]) => u.type
+    || u.names.every((n) => n === 'noteHall' || n === 'mergeHallFrom' || (CARRY[u.f] ?? []).includes(n))
+  check(uses.length > 0 && uses.every(fine),
+    `引擎里碰殿堂的只有：记生涯、合并带来的殿堂、把殿堂装进存档备份、存档卡片的成就计数——${uses.map((u) => `${u.f}（${u.names.join('、')}）`).join('；')}`)
+  // nothing listed that cannot be drawn: every look has its palette on the picture and its block on the card
+  const css = src.find((x) => x.f === 'src/ui/me/looks.css')?.t ?? readFileSync(path.join(root, 'src/ui/me/looks.css'), 'utf8')
+  const share = src.find((x) => x.f === 'src/ui/me/share.ts')!.t
+  const pal = share.slice(share.indexOf('const PALETTES'), share.indexOf('const FONT'))
+  const undrawn = LOOKS.filter((l) => l.key !== 'studio' && (!css.includes(`.poster-me.look-${l.key} {`) || !new RegExp(`\\b${l.key}: \\{`).test(pal)))
+  check(!undrawn.length, `每套卡面都画了（分享图的配色、名片的样式）${undrawn.length ? `：缺 ${undrawn.map((l) => l.name).join('、')}` : ''}`)
+  const lookers = src.filter((x) => x.f !== 'src/engine/me/hall.ts' && /\b(lookOf|openLooks|chooseLook|LOOK_BY_KEY|LOOKS|useLook)\b/.test(x.t)).map((x) => x.f)
+  check(lookers.length > 0 && lookers.every((f) => f.startsWith('src/ui/')), `读卡面的都是界面：${lookers.join('、')}`)
 }
 
 console.log(bad ? `\n✗ ${bad} 项没过。` : '\n✓ 殿堂探针全部通过。')

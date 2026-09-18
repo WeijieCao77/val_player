@@ -514,7 +514,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   padding: 10px 8px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius); }
 .poster-me .pm-t-ic { display: block; width: 26px; height: 26px; color: var(--muted); font-style: normal; line-height: 1; }
 .poster-me .pm-t-ic svg { display: block; width: 100%; height: 100%; }
-.poster-me .pm-t-n { font-size: var(--t-small); font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+/* breaks where the name has a space — 「VCT欧洲 / 第一赛段」, never 「第一赛 / 段」; a word too long for the tile still wraps */
+.poster-me .pm-t-n { font-size: var(--t-small); font-weight: 700; color: var(--text); word-break: keep-all; overflow-wrap: anywhere; }
 .poster-me .pm-t-y { font-size: var(--t-tiny); font-style: normal; color: var(--faint); letter-spacing: .06em; }
 /* 冠军赛 takes the metal and the room; 大师赛 the accent; a 赛区冠军 the plain border */
 .poster-me .pm-t.champions { width: 158px; border-color: var(--gold);

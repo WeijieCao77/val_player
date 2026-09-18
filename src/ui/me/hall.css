@@ -27,6 +27,10 @@
 .hall-page .hall-row.locked b { color: var(--muted); }
 .hall-page .hall-row .desc { margin-left: 6px; }
 .hall-page .won { color: var(--win); }
+/* 卡面 (ui/me/looks.css): the swatch where the star goes */
+.hall-page .hall-look { grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: start; }
+.hall-page .hall-look .lp-sw { height: 34px; margin-top: 2px; }
+.hall-page .hall-look.locked .lp-sw { filter: grayscale(1) brightness(.8); opacity: .5; }
 
 .hall-page .parts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
 .hall-page .part {

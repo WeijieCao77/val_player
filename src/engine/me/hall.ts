@@ -5,7 +5,7 @@ import { regionIn } from '../era'
 import { ACHIEVEMENTS, ACH_BY_KEY } from './achievements'
 import { compClass, isQualifier } from './compclass'
 import type { CompClass } from './compclass'
-import { careerLine, careerRewrites, retitledLine } from './rewrites'
+import { becauseOfMe as becauseOfRow, careerLine, careerRewrites, retitledLine } from './rewrites'
 import type { MeState } from './types'
 
 /**
@@ -19,10 +19,13 @@ import type { MeState } from './types'
  * On top of the cards sit a handful of 殿堂成就 that one career cannot finish:
  * each asks for careers that differ — the other entry year, another start,
  * another role, another league, a life with no trophy beside one with the
- * biggest. What they give is a 称号 on the career card and nothing else: as in
- * 破晓, the hall gives no numbers and unlocks nothing for the next career (two
- * unlockable origin cards were taken out on the author's word, 2026-09-11).
- * No number anywhere in a career reads the hall.
+ * biggest. What they give is a 称号 on the career card, and with the 卡面
+ * below, new looks for the career-end card and the share picture. The hall
+ * unlocks looks only, never numbers: as in 破晓 it gives no attribute, money,
+ * action point, success rate, start or origin (two unlockable origin cards were
+ * taken out on the author's word, 2026-09-11, and stay out: they touched
+ * numbers). No number anywhere in a career reads the hall
+ * (scripts/check_hall.ts plays a career with every look open and with none).
  *
  * One localStorage record under its own key. Every read and write is caught:
  * a browser that stores nothing (private mode, storage off, quota full) has no
@@ -99,7 +102,7 @@ export interface HallCard {
    * in (else was on the roster for), in words. Absent for a career with none, and on every card noted before it.
    * Read by the hall's pages and the new-career screen, never by anything that counts.
    */
-  rw?: { n: number; from?: number; top?: string }
+  rw?: { n: number; from?: number; top?: string; mine?: number }
 }
 
 export interface Hall {
@@ -108,9 +111,13 @@ export interface Hall {
   cards: HallCard[]
   /** 殿堂成就 by key: the career that completed each */
   hx: Record<string, HallMark>
+  /** 卡面 by key: the career whose card opened each (the default is never listed) */
+  looks: Record<string, HallMark>
+  /** the 卡面 chosen for the career-end card and the share picture; absent is the default */
+  look?: LookKey
 }
 
-export const emptyHall = (): Hall => ({ v: 1, ach: {}, cards: [], hx: {} })
+export const emptyHall = (): Hall => ({ v: 1, ach: {}, cards: [], hx: {}, looks: {} })
 
 const INTL: CompClass[] = ['champions', 'masters', 'lockin']
 export const isIntlClass = (c: CompClass): boolean => INTL.includes(c)
@@ -166,6 +173,129 @@ export function milestoneDone(m: HallMilestone, cards: HallCard[]): boolean {
 }
 
 /* ------------------------------------------------------------------ */
+/*  卡面                                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The author, 2026-09-18: 「殿堂可以解锁新的东西，比如不同的生涯结算界面的 ui
+ * 分享卡面」 — 「但是殿堂不影响游戏里的数值」. A look is how the career-end card
+ * (ui/me/Poster.tsx) and the share picture (ui/me/share.ts) are dressed, and
+ * nothing else: every one is a variation on the 转播红 family the moments wear
+ * (red slant band, sharp lines, white trophy), drawn in code, no official art.
+ *
+ * What opens one is read off the finished careers the hall already keeps — a
+ * 殿堂成就, how many different endings, a trophy that changed hands because of
+ * me (the world-line ledger) — so a look says what careers its owner has
+ * played. Every look listed is drawn; a shut one is listed greyed with what
+ * opens it, never hidden.
+ *
+ * Read by the UI only. Nothing in a career reads a look (scripts/check_hall.ts).
+ */
+
+export type LookKey = 'studio' | 'night' | 'film' | 'paper' | 'led' | 'vault' | 'split' | 'redline'
+
+export interface HallLook {
+  key: LookKey
+  name: string
+  /** what opens it, whole: the hall page and the chip's tooltip */
+  cond: string
+  /** the same in a few characters, on the chip itself */
+  short: string
+  /** what it changes, in words */
+  what: string
+  /** over the finished careers; the default has none and is always open */
+  open?: (cards: HallCard[]) => boolean
+  /** how far along, where the condition is a count */
+  progress?: (cards: HallCard[]) => string
+}
+
+/** how many of the fourteen endings (me/endings.ts) the finished careers have reached */
+export const endingKinds = (cards: HallCard[]): number => new Set(cards.map((c) => c.ending.key).filter(Boolean)).size
+const kinds = (n: number) => ({
+  open: (cs: HallCard[]) => endingKinds(cs) >= n,
+  progress: (cs: HallCard[]) => `已有 ${Math.min(n, endingKinds(cs))}/${n} 种`,
+})
+const milestone = (key: string) => (cs: HallCard[]) => milestoneDone(MILESTONE_BY_KEY[key], cs)
+/**
+ * 「因为你」 on a career's hall card (me/rewrites.ts becauseOfMe): a title that went to my club instead of the side
+ * history gave it to, with me starting. First drafted as a count — twenty trophies retitled — but a probe of
+ * 2026-09-18 (six seasons each, autopilot) read 27 and 34 for two 2021 starts and 0 and 3 for two 2026 starts:
+ * past 2026 there is no real history left to differ from, so the count only asked for a long 2021 career. This
+ * one is the player's own doing, and a 2026 start reaches it in its first season. `mine` is written on every card
+ * from this day; a card noted before it says the same in its words, the heaviest rewrite starting 「因为你，」.
+ */
+const becauseOfMe = (c: HallCard): boolean => (c.rw?.mine ?? 0) > 0 || !!c.rw?.top?.startsWith('因为你')
+
+export const LOOKS: HallLook[] = [
+  { key: 'studio', name: '演播室', cond: '默认卡面', short: '默认',
+    what: '现在的样子：深色底、金色的结局和奖杯墙、红色刊头' },
+  { key: 'night', name: '夜场转播', cond: '打出两种不同的结局', short: '两种结局', ...kinds(2),
+    what: '近黑的底加扫描线，顶上一整条红色斜带，名字压成一条转播字幕条，奖杯是白的，夺冠那年亮红边' },
+  { key: 'film', name: '胶片档案', cond: '殿堂成就「跨时代」：2021 和 2026 两个入口各打完一局', short: '殿堂 · 跨时代',
+    open: milestone('eras'),
+    what: '旧胶片的棕褐底和颗粒，两边是齿孔，红带褪成砖红，结局放进双线框的字幕卡，每个赛季算一卷' },
+  { key: 'paper', name: '体育版头条', cond: '打出五种不同的结局', short: '五种结局', ...kinds(5),
+    what: '米白的新闻纸，黑色宋体大标题配红色斜角报眉，冠军赛奖杯是黑底白杯，逐年成绩排成比分栏' },
+  { key: 'led', name: '场馆大屏', cond: '殿堂成就「四海」：从四大赛区的服务器各出发一次，都打上职业', short: '殿堂 · 四海',
+    open: milestone('leagues'),
+    what: '黑底点阵屏，顶上一条红色滚动条，结局用红色的点亮起来，年份和数字是琥珀色的灯' },
+  { key: 'vault', name: '奖杯室', cond: '殿堂成就「条条大路」：天梯、二线、替补三种开局，各首发拿过冠军', short: '殿堂 · 条条大路',
+    open: milestone('doors'),
+    what: '深色展柜，顶光打在一座白色大奖杯上，结局刻在红色铭牌上，每座奖杯一格展位' },
+  { key: 'split', name: '对开版', cond: '殿堂成就「两种人生」：一局没有冠军，另一局首发捧起冠军赛奖杯', short: '殿堂 · 两种人生',
+    open: milestone('lives'),
+    what: '一条红色斜带把卡面切成一暗一亮两半：结局在暗的一半，奖杯和赛季在亮的一半' },
+  { key: 'redline', name: '另一条世界线', cond: '有一局，因为你，一座奖杯换了主人：你首发的队伍拿走了真实历史里属于别队的冠军', short: '有一局，因为你，一座奖杯换了主人',
+    open: (cs) => cs.some(becauseOfMe),
+    what: '真实历史是一条灰线，你的世界线从入行那年岔出去成一条红线，你的奖杯钉在红线上' },
+]
+
+export const LOOK_BY_KEY: Record<string, HallLook> = Object.fromEntries(LOOKS.map((l) => [l.key, l]))
+
+function lookHolds(l: HallLook, cards: HallCard[]): boolean {
+  if (!l.open) return true
+  try { return l.open(cards) } catch { return false }
+}
+
+/** The looks open on this hall: the default always, the rest by record or by the cards now. No hall, only the default. */
+export function openLooks(h: Hall | null): Set<LookKey> {
+  const out = new Set<LookKey>(['studio'])
+  if (!h) return out
+  for (const l of LOOKS) if (h.looks[l.key] || lookHolds(l, h.cards)) out.add(l.key)
+  return out
+}
+
+/** The look to dress the card in: the one chosen, while it is open; otherwise the default. */
+export function lookOf(h: Hall | null): LookKey {
+  const k = h?.look
+  return k && LOOK_BY_KEY[k] && openLooks(h).has(k) ? k : 'studio'
+}
+
+/** Choose a look. False, and nothing written, when it is shut or the browser stores nothing. */
+export function chooseLook(key: LookKey): boolean {
+  try {
+    const h = readHall()
+    const l = LOOK_BY_KEY[key]
+    if (!h || !l || !openLooks(h).has(key)) return false
+    if (key === 'studio') delete h.look
+    else h.look = key
+    return writeHall(h)
+  } catch {
+    return false
+  }
+}
+
+/** Looks the cards now open that the hall has not written down, each credited to the card that first opened it. */
+function sweepLooks(h: Hall): void {
+  for (const l of LOOKS) {
+    if (!l.open || h.looks[l.key] || !lookHolds(l, h.cards)) continue
+    const i = h.cards.findIndex((_, k) => lookHolds(l, h.cards.slice(0, k + 1)))
+    const c = h.cards[i < 0 ? h.cards.length - 1 : i]
+    h.looks[l.key] = { id: c.id, who: c.name, year: c.to, at: today() }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  storage                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -207,6 +337,7 @@ function cleanCard(x: unknown): HallCard | null {
   const rwN = rw ? Math.max(0, Math.min(9999, int(rw.n))) : 0
   const rwFrom = rw ? int(rw.from) : 0
   const rwTop = rw ? str(rw.top, 200) : ''
+  const rwMine = rw ? Math.max(0, Math.min(999, int(rw.mine))) : 0
   return {
     id: str(o.id, 12), name: str(o.name, 24), role: str(o.role, 8), entry: int(o.entry),
     start: o.start === 'chal' || o.start === 't1' ? o.start : 'pre',
@@ -227,7 +358,7 @@ function cleanCard(x: unknown): HallCard | null {
     at: DAY.test(at) ? at : '',
     ...(hx.length ? { hx } : {}),
     ...(o.staff ? { staff: 1 as const } : {}),
-    ...(rwN || rwTop ? { rw: { n: rwN, ...(rwFrom > 0 ? { from: rwFrom } : {}), ...(rwTop ? { top: rwTop } : {}) } } : {}),
+    ...(rwN || rwTop ? { rw: { n: rwN, ...(rwFrom > 0 ? { from: rwFrom } : {}), ...(rwTop ? { top: rwTop } : {}), ...(rwMine ? { mine: rwMine } : {}) } } : {}),
   }
 }
 
@@ -253,6 +384,11 @@ export function cleanHall(raw: unknown): Hall {
     const m = cleanMark(v)
     if (m && MILESTONE_BY_KEY[key]) h.hx[key] = m
   }
+  for (const [key, v] of Object.entries(obj(o.looks) ?? {})) {
+    const m = cleanMark(v)
+    if (m && LOOK_BY_KEY[key]?.open) h.looks[key] = m
+  }
+  if (typeof o.look === 'string' && o.look !== 'studio' && LOOK_BY_KEY[o.look]) h.look = o.look as LookKey
   return h
 }
 
@@ -332,6 +468,8 @@ function cardOf(state: GameState, id: string): HallCard {
   const acs = [...(steady.length ? steady : played)].sort((a, b) => b.acs - a.acs)[0]
   const entry = entryOf(state)
   const rw = careerRewrites(me)
+  // 「因为你」 kept in the seasons' rows: what opens the 另一条世界线 卡面 (LOOKS)
+  const mine = me.seasons.reduce((n, s) => n + (s.rewrites ?? []).filter(becauseOfRow).length, 0)
   return {
     id, name: p?.ign ?? '', role: roleOf(state), entry, start: startOf(state), origin: me.originKey, home: me.region,
     from: entry, to: me.ending?.year ?? state.year, seasons: pro.length, clubs,
@@ -344,7 +482,7 @@ function cardOf(state: GameState, id: string): HallCard {
     ach: me.achievements.filter((k) => !!ACH_BY_KEY[k]),
     at: today(),
     ...(me.flags.staffYes ? { staff: 1 as const } : {}),
-    ...(rw ? { rw: { n: rw.retitled, ...(rw.from != null ? { from: rw.from } : {}), ...(rw.top ? { top: careerLine(rw.top) } : {}) } } : {}),
+    ...(rw ? { rw: { n: rw.retitled, ...(rw.from != null ? { from: rw.from } : {}), ...(rw.top ? { top: careerLine(rw.top) } : {}), ...(mine ? { mine } : {}) } } : {}),
   }
 }
 
@@ -352,6 +490,7 @@ function cardOf(state: GameState, id: string): HallCard {
 function sweep(h: Hall): HallMilestone[] {
   const last = h.cards[h.cards.length - 1]
   if (!last) return []
+  sweepLooks(h)
   const fresh = MILESTONES.filter((m) => !h.hx[m.key] && milestoneDone(m, h.cards))
   if (!fresh.length) return []
   for (const m of fresh) h.hx[m.key] = { id: last.id, who: last.name, year: last.to, at: today() }
@@ -422,6 +561,12 @@ export function mergeHall(into: Hall, from: Hall): Hall {
     const r = into.hx[key]
     if (!r || (m.at && m.at < r.at)) into.hx[key] = { ...m }
   }
+  for (const [key, m] of Object.entries(from.looks)) {
+    const r = into.looks[key]
+    if (!r || (m.at && m.at < r.at)) into.looks[key] = { ...m }
+  }
+  // the look is this device's choice; one carried in only fills an empty one
+  if (!into.look && from.look) into.look = from.look
   return into
 }
 

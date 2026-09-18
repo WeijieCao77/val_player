@@ -12,6 +12,8 @@ import type { GameState } from '../../engine/types'
 import { TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
 import { attrWord, useNumbers } from './words'
 import { CareerRewrites } from './Worldline'
+import { useLook } from './looks'
+import type { LookKey } from '../../engine/me/hall'
 
 /**
  * The career on one card: the last thing a save ever shows.
@@ -54,24 +56,42 @@ export default function Poster() {
   // every trophy on the shelf was watched from the bench — the 「板凳上的冠军」 ending
   const benchOnly = trophies.length > 0 && startedN === 0
   const runs = deepRuns(me)
+  // 卡面 (me/hall.ts LOOKS): how the card is dressed, never what it says
+  const { look } = useLook()
+  const kick = kickOf(look, me)
+
+  // 奖杯室: the heaviest trophy started for stands on the plinth, lit from above; an empty plinth where there is none
+  const cup = trophies.find((t) => t.started) ?? trophies[0]
 
   return (
-    <div className="poster-me">
-      <div className="pm-top">
-        <span className="pm-mark">无畏契约 · 选手生涯</span>
-        <span className="pm-span">{first}–{last}</span>
-      </div>
+    <div className={`poster-me look-${look}`}>
+      {look !== 'studio' && <div className="pm-deco" aria-hidden="true" />}
+      {/* the head — brand, verdict, who — one block, so a look can set it apart (对开版 puts it on the dark half) */}
+      <div className="pm-head">
+        <div className="pm-top">
+          <span className="pm-mark">无畏契约 · 选手生涯</span>
+          <span className="pm-span">{first}–{last}</span>
+        </div>
 
-      {/* the verdict (me/endings.ts): the card's thesis, not its footnote */}
-      <div className="pm-hero">
-        <h1 className="pm-verdict">{me.ending?.title ?? '生涯'}</h1>
-        {me.ending?.text && <p className="pm-story">{me.ending.text}</p>}
-      </div>
+        {/* the verdict (me/endings.ts): the card's thesis, not its footnote */}
+        <div className="pm-hero">
+          {look === 'vault' && (
+            <i className={`pm-cup${cup ? '' : ' none'}`} aria-hidden="true">{cup ? ICON[cup.tier] : <Plinth />}</i>
+          )}
+          {kick && <span className="pm-kick">{kick}</span>}
+          <h1 className="pm-verdict">{me.ending?.title ?? '生涯'}</h1>
+          {me.ending?.text && <p className="pm-story">{me.ending.text}</p>}
+        </div>
 
-      <p className="pm-id">
-        <b>{p.ign}</b> · {p.role}
-        {clubs.length ? ` · ${clubs[clubs.length - 1]}` : ''} · {p.age} 岁
-      </p>
+        <p className="pm-id">
+          <b>{p.ign}</b> · {p.role}
+          {clubs.length ? ` · ${clubs[clubs.length - 1]}` : ''} · {p.age} 岁
+        </p>
+      </div>
+      {/* 对开版: the red band down the cut between the dark half and the light */}
+      {look === 'split' && <div className="pm-cut" aria-hidden="true" />}
+      {/* 另一条世界线: real history as a grey line, this career's as a red one off it */}
+      {look === 'redline' && <WorldLines me={me} />}
 
       <div className="pm-wall">
         {trophies.length ? trophies.map((t, i) => {
@@ -147,6 +167,69 @@ export default function Poster() {
       </div>
       {/* the 成就殿堂's line: what this career completed there, or the hall's 称号 (me/hall.ts) */}
       {(() => { const l = hallLine(game); return l ? <div className="hall-sig">{l}</div> : null })()}
+    </div>
+  )
+}
+
+/**
+ * The line a look sets over the verdict: a broadcast's slate, an archive's reel count, a front page's flag, the
+ * board's name, the showcase's count, the fold, the line's name.
+ */
+function kickOf(look: LookKey, me: MeState): string {
+  if (look === 'night') return '生涯重播'
+  if (look === 'film') return `生涯档案 · 共 ${me.seasons.length} 卷`
+  if (look === 'paper') return '头条'
+  if (look === 'led') return '现场大屏'
+  if (look === 'vault') return me.titles.length ? `奖杯室 · ${me.titles.length} 座` : '奖杯室 · 展位空着'
+  if (look === 'split') return '对开'
+  if (look === 'redline') return '另一条世界线'
+  return ''
+}
+
+/** 奖杯室 with nothing on the shelf: the three steps a cup would stand on (art/fx.tsx TrophyChampions' base). */
+function Plinth() {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M24 44h16v4H24zM20 48h24v4H20zM16 52h32v6H16z" fill="currentColor" fillOpacity=".16" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  )
+}
+
+/**
+ * 另一条世界线: every season on one axis. The grey line is real history; the red one leaves it the year the
+ * career began and runs above it — a dot for each season, a bigger one where the ledger kept trophies whose owner
+ * this world changed (MeSeason.retitled, me/worldline.ts), a white cup where I started for a title. Only what the
+ * save holds: a season from before the ledger is a plain dot.
+ */
+function WorldLines({ me }: { me: MeState }) {
+  const n = Math.max(1, me.seasons.length)
+  const x = (i: number) => ((i + 0.5) / n) * 100
+  const x0 = x(0)
+  const RED = 34
+  const GREY = 68
+  return (
+    <div className="pm-wl">
+      <div className="pm-wl-plot">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path className="real" d={`M0 ${GREY}H100`} />
+          <path className="mine" d={`M0 ${GREY}H${Math.max(0, x0 - 5)}C${x0 - 1} ${GREY} ${x0 - 1} ${RED} ${x0 + 3} ${RED}H100`} />
+        </svg>
+        {me.seasons.map((s, i) => {
+          const won = me.titles.filter((t) => t.year === s.year && t.started)
+          return (
+            <span key={s.year} className="pm-wl-at" style={{ left: `${x(i)}%` }}>
+              {won.length > 0 && (
+                <i className="pm-wl-cup" title={won.map((t) => compCn(t.title)).join('、')}>
+                  {ICON[tierOf(won[0].title)]}{won.length > 1 ? <em>×{won.length}</em> : null}
+                </i>
+              )}
+              <i className={`pm-wl-n${s.retitled ? ' rw' : ''}`} title={s.retitled ? `这一季改写了 ${s.retitled} 座奖杯的归属` : undefined} />
+              <em className="pm-wl-y">{s.year}</em>
+            </span>
+          )
+        })}
+      </div>
+      <p className="pm-wl-key"><i className="real" />真实历史<i className="mine" />你的世界线<span>大点：这一季有奖杯换了主人</span></p>
     </div>
   )
 }

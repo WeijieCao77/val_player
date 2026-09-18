@@ -32,6 +32,7 @@ import Poster from './Poster'
 import ShareCard from './ShareCard'
 import { SeasonRewrites } from './Worldline'
 import { SHOWN } from '../../engine/me/rewrites'
+import { LookPicker } from './looks'
 import CeremonyModal from './Ceremony'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
@@ -593,6 +594,8 @@ function EndingModal({ onDone }: { onDone: () => void }) {
       {/* no title: the card's own verdict (me/endings.ts) is the headline */}
       <Modal wide title={null} label="生涯结束" onClose={close} onBgClose={() => {}}>
         <Poster />
+        {/* 卡面: what the hall has opened, the shut ones greyed with what opens them (me/hall.ts LOOKS) */}
+        <LookPicker game={game} />
         {/* a screenshot comes with the address bar and no way in for whoever sees it */}
         <div className="row" style={{ justifyContent: 'center', gap: 10, marginTop: 12 }}>
           <button onClick={() => setCard(true)}>生成生涯名片图</button>

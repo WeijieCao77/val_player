@@ -5,6 +5,10 @@
  *   case:  champ | breaker | ring | regional | none | shore
  *   theme: dark | light | cream
  *   bare=1  draw the card alone, no modal chrome, for a clean screenshot
+ *   hall:  none | some | all — seed this port's 成就殿堂 first, for the 卡面 (me/hall.ts LOOKS):
+ *          none empties it, some is two careers (夜场转播 and 胶片档案 open, the rest shut),
+ *          all opens all eight; left out, the hall is whatever this port already has
+ *   look:  a look to choose once seeded (night | film | paper …), as the picker would
  *
  * Runs a career forward with the autopilot, replaces its trophy shelf with the
  * one the case is about, retires the player, and mounts the real pending card
@@ -27,6 +31,8 @@ import { GameCtx } from '../src/ui/me/ctx'
 import { paintTheme } from '../src/ui/me/theme'
 import type { Theme } from '../src/ui/me/theme'
 import type { MeIntlRun } from '../src/engine/me/types'
+import { HALL_KEY, chooseLook, cleanHall } from '../src/engine/me/hall'
+import type { HallCard, LookKey } from '../src/engine/me/hall'
 import '../src/ui/me/base.css'
 import '../src/me.css'
 
@@ -115,6 +121,42 @@ const kase = CASES[key] ?? CASES.champ
 const theme = (q.get('theme') ?? 'dark') as Theme
 const bare = q.get('bare') === '1'
 paintTheme(theme)
+
+/** Finished careers for the hall, shaped the way me/hall.ts writes them, each a different life. */
+function hallCard(i: number, x: Partial<HallCard>): HallCard {
+  return {
+    id: `cp${i}`, name: ['Kairo', 'Veil', 'Mako', 'Sunny', 'Brisk', 'Lune'][i] ?? `P${i}`, role: '决斗者', entry: 2026, start: 'pre',
+    origin: 'netcafe', home: 'China', from: 2026, to: 2030, seasons: 3, clubs: [], titles: [],
+    ending: { key: 'journeyman', title: '泯然众人' }, peak: 70, mvps: 0, ach: [], at: '2026-09-1' + i, ...x,
+  }
+}
+const HALLS: Record<string, HallCard[]> = {
+  none: [],
+  // 2021 and 2026, two endings: 夜场转播 and 胶片档案 open, 体育版头条 at 2/5, the rest shut
+  some: [
+    hallCard(0, { entry: 2021, from: 2021, to: 2026, ending: { key: 'flash', title: '昙花一现' } }),
+    hallCard(1, { ending: { key: 'journeyman', title: '泯然众人' } }),
+  ],
+  // every condition met
+  all: [
+    hallCard(0, { entry: 2021, from: 2021, home: 'Korea', role: '先锋', start: 'chal', ending: { key: 'titled', title: '拿过冠军' },
+      titles: [{ year: 2023, name: 'VCT 太平洋联赛 · 第一赛段', cls: 'league', started: true }], rw: { n: 31, mine: 1 } }),
+    hallCard(1, { home: 'Turkey', role: '控场', start: 't1', ending: { key: 'world', title: '世界冠军' },
+      titles: [{ year: 2029, name: '2029 全球冠军赛', cls: 'champions', started: true }] }),
+    hallCard(2, { home: 'North America', role: '哨卫', ending: { key: 'regional', title: '赛区功勋' },
+      titles: [{ year: 2028, name: 'VCT 美洲联赛 · 第二赛段', cls: 'league', started: true }] }),
+    hallCard(3, { ending: { key: 'flash', title: '昙花一现' } }),
+    hallCard(4, { ending: { key: 'journeyman', title: '泯然众人' } }),
+  ],
+}
+const hallCase = q.get('hall')
+if (hallCase && HALLS[hallCase]) {
+  try {
+    if (hallCase === 'none') localStorage.removeItem(HALL_KEY)
+    else localStorage.setItem(HALL_KEY, JSON.stringify(cleanHall({ v: 1, ach: {}, cards: HALLS[hallCase], hx: {}, looks: {} })))
+  } catch { /* a browser that stores nothing: the default look only */ }
+}
+if (q.get('look')) chooseLook(q.get('look') as LookKey)
 
 const state = createCareer({
   name: 'Probe', region: 'Europe', role: '决斗者',

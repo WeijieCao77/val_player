@@ -8,12 +8,13 @@ import { compCn } from '../../engine/me/compname'
 import { originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
 import {
-  MILESTONES, MILESTONE_BY_KEY, START_SHORT, cardRetitled, exportHall, hallAchCount, hallRecords, hallTitle,
-  importHall, isIntlClass, milestoneDone, peekCareerId, readHall,
+  LOOKS, MILESTONES, MILESTONE_BY_KEY, START_SHORT, cardRetitled, exportHall, hallAchCount, hallRecords, hallTitle,
+  importHall, isIntlClass, lookOf, milestoneDone, openLooks, peekCareerId, readHall,
 } from '../../engine/me/hall'
 import type { HallCard, HallRecord } from '../../engine/me/hall'
 import { attrWord, useNumbers } from './words'
 import './hall.css'
+import './looks.css'
 
 /** Inside the career: 成就 → 成就殿堂, and back. */
 export default function HallPage() {
@@ -83,7 +84,7 @@ export function HallView({ game, onBack }: { game?: GameState | null; onBack: ()
         <div><b>{achN}<em>/{ACHIEVEMENTS.length}</em></b><small>成就</small></div>
         <div><b>{hxN}<em>/{MILESTONES.length}</em></b><small>殿堂成就</small></div>
       </div>
-      <p className="tiny faint hall-note">记在这台设备上，开新生涯不会清。殿堂只给称号，不加任何数值，也不给下一局解锁东西。</p>
+      <p className="tiny faint hall-note">记在这台设备上，开新生涯不会清。殿堂只给称号和卡面，不加任何数值：属性、钱、行动点、成功率、开局和出身都不看殿堂。</p>
 
       <Panel title="殿堂成就">
         {MILESTONES.map((m) => {
@@ -105,6 +106,33 @@ export function HallView({ game, onBack }: { game?: GameState | null; onBack: ()
             </div>
           )
         })}
+      </Panel>
+
+      {/* 卡面 (me/hall.ts LOOKS): chosen on the career-end card and the share picture; listed here, shut ones greyed */}
+      <Panel title={`卡面 · ${LOOKS.filter((l) => openLooks(h).has(l.key)).length}/${LOOKS.length}`}>
+        {LOOKS.map((l) => {
+          const open = openLooks(h).has(l.key)
+          const mark = h.looks[l.key]
+          const on = lookOf(h) === l.key
+          const prog = !open && l.progress ? l.progress(h.cards) : ''
+          return (
+            <div key={l.key} className={`hall-row hall-look${open ? ' got' : ' locked'}`}>
+              <span className={`lp-sw sw-${l.key}`} aria-hidden="true" />
+              <div>
+                <b>{l.name}</b>
+                {on && <span className="tag" style={{ marginLeft: 6 }}>使用中</span>}
+                <span className="tiny muted desc">{l.what}</span>
+                <div className="parts">
+                  {mark
+                    ? <span className="tiny won">{mark.who} · {mark.year} 解锁</span>
+                    : open ? <span className="tiny won">{l.key === 'studio' ? '默认就有' : '已解锁'}</span>
+                      : <span className="tiny faint">{l.cond}{prog ? `（${prog}）` : ''}</span>}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <p className="tiny faint" style={{ margin: '6px 0 0' }}>在生涯结束的名片和分享图上换。</p>
       </Panel>
 
       <Panel title="纪录">

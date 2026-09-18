@@ -1,0 +1,453 @@
+/* 卡面 (me/hall.ts LOOKS, ui/me/looks.tsx): the picker, and the looks the
+   career-end card (ui/me/Poster.tsx .poster-me) wears.
+
+   A look is a physical object — a broadcast slate, a strip of film, a page of
+   newsprint — so, like the cards in base.css, it keeps its own colours under
+   every ground: each look re-binds the tokens the poster is drawn with inside
+   its own box, and adds its dressing on top. The default (演播室) has no rules
+   here at all: it is the poster exactly as it was. Every look stays in the
+   转播红 family of the moments (moment.css): a red slant band, sharp lines, a
+   white trophy. All of it is drawn in CSS; no image. */
+
+/* ---------------------------------------------------------------- the picker */
+.look-pick { margin: 12px 0 0; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.look-pick .lp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 8px; }
+.look-pick .lp-head b { font-size: var(--t-small); }
+.look-pick .lp-note { font-size: var(--t-tiny); color: var(--faint); }
+.look-pick .lp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .look-pick .lp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.look-pick .lp-item {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0;
+  margin: 0; padding: 6px 6px 7px; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.look-pick .lp-item:hover:not(:disabled) { border-color: var(--line-hi); }
+.look-pick .lp-item.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.look-pick .lp-item.fresh { border-color: var(--gold); }
+.look-pick .lp-name { font-size: var(--t-small); font-weight: 700; line-height: 1.35; }
+.look-pick .lp-state { font-size: var(--t-tiny); line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.look-pick .lp-item.on .lp-state { color: var(--accent); }
+.look-pick .lp-item.fresh .lp-state { color: var(--gold); }
+/* shut: greyed, and it says what opens it — never hidden */
+.look-pick .lp-item.locked { cursor: not-allowed; background: transparent; border-style: dashed; }
+.look-pick .lp-item.locked .lp-name { color: var(--muted); }
+.look-pick .lp-item.locked .lp-state { color: var(--faint); }
+.look-pick .lp-item.locked .lp-sw { filter: grayscale(1) brightness(.8); opacity: .5; }
+.look-pick .lp-msg { margin: 8px 0 0; font-size: var(--t-tiny); color: var(--warn); }
+/* the share card's sheet is 440px: four to a row, smaller swatches */
+.look-pick.compact { margin: 0; padding: 8px 12px 10px; border: 0; border-top: 1px solid var(--line); border-radius: 0; flex: none; }
+.look-pick.compact .lp-head { margin-bottom: 6px; }
+.look-pick.compact .lp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.look-pick.compact .lp-item { padding: 4px 4px 5px; }
+.look-pick.compact .lp-sw { height: 22px; }
+.look-pick.compact .lp-name { font-size: var(--t-tiny); }
+/* on a phone the picture is the thing: the looks go in one row that scrolls sideways, every one still in it */
+@media (max-width: 560px) {
+  .look-pick.compact .lp-note { display: none; }
+  .look-pick.compact .lp-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 112px;
+    overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
+}
+
+/* ------------------------------------------------ the swatches: each look in a thumbnail */
+.lp-sw { position: relative; display: block; height: 34px; overflow: hidden; border-radius: 2px; }
+.lp-sw::before, .lp-sw::after { content: ''; position: absolute; }
+.sw-studio { background: linear-gradient(180deg, #16202c, #1e2b39); box-shadow: inset 0 2px 0 #ff4655; }
+.sw-studio::before { left: 30%; right: 30%; top: 38%; height: 5px; background: #f0c14b; }
+.sw-studio::after { left: 22%; right: 22%; top: 62%; height: 3px; background: #3c536b; }
+.sw-night { background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 3px), #07090c; }
+.sw-night::before { inset: 0 0 auto; height: 60%; background: linear-gradient(100deg, #ff4655, #a51d29); clip-path: polygon(0 0, 100% 0, 100% 50%, 0 100%); }
+.sw-night::after { left: 10%; width: 46%; bottom: 18%; height: 5px; background: #fff; box-shadow: inset 6px 0 0 #ff4655; }
+.sw-film { background: linear-gradient(90deg, #0b0907 0 9px, transparent 9px calc(100% - 9px), #0b0907 calc(100% - 9px)), radial-gradient(90% 90% at 50% 50%, #2a2219, #15110d); }
+.sw-film::before { inset: 0; background:
+  linear-gradient(#d8c9a8 0 4px, transparent 4px 8px) 2px 2px / 5px 8px repeat-y,
+  linear-gradient(#d8c9a8 0 4px, transparent 4px 8px) calc(100% - 2px) 2px / 5px 8px repeat-y; }
+.sw-film::after { left: 30%; right: 30%; top: 30%; bottom: 30%; border: 2px double #efe4cb; }
+.sw-paper { background: #f3efe5; box-shadow: inset 0 0 0 1px #d6cfbf; }
+.sw-paper::before { left: 12%; right: 12%; top: 7px; height: 3px; border-bottom: 3px double #17140f; }
+.sw-paper::after { left: 12%; width: 40%; top: 17px; height: 9px; background: #17140f; box-shadow: -3px -1px 0 -1px #c8232f; }
+.sw-led { background: radial-gradient(circle, #ff4655 1.2px, transparent 1.6px) 0 0 / 4px 4px, #050505; }
+.sw-led::before { inset: 0; background: linear-gradient(90deg, transparent 0 18%, #050505 18% 30%, transparent 30% 55%, #050505 55% 62%, transparent 62%); opacity: .8; }
+.sw-vault { background: radial-gradient(40% 90% at 50% 0, rgba(240, 193, 75, .55), transparent 70%), #0b0a08; }
+.sw-vault::before { left: calc(50% - 5px); top: 7px; width: 10px; height: 16px; background: #fff; clip-path: polygon(0 0, 100% 0, 80% 60%, 60% 70%, 60% 100%, 40% 100%, 40% 70%, 20% 60%); }
+.sw-vault::after { left: 20%; right: 20%; bottom: 4px; height: 3px; background: #ff4655; }
+.sw-split { background: linear-gradient(115deg, #0b0e13 0 45%, #ff4655 45% 55%, #f3efe5 55%); }
+.sw-redline { background: #0b0e13; }
+.sw-redline::before { left: 6%; right: 6%; top: 60%; height: 2px; background: #6b7785; }
+.sw-redline::after { left: 30%; right: 6%; top: 28%; height: 2px; background: #ff4655; transform: skewY(-8deg); transform-origin: left; }
+
+/* the head (Poster.tsx .pm-head) holds what used to be the card's own first children: they keep standing above the
+   dressing (.pm-deco) and the inner hairline, as `.poster-me > *` had them */
+.poster-me .pm-head > * { position: relative; }
+
+/* ---------------------------------------------------------------- 夜场转播 */
+.poster-me.look-night {
+  --panel: #0b0e13; --panel-2: #06080b; --panel-3: #151a21;
+  --text: #f5f5f3; --muted: #aab2bc; --faint: #818b97;
+  --line: #2b313a; --line-soft: #1b2028; --line-hi: #3b434e;
+  --gold: #ffffff; --accent: #ff4655; --accent-fill: #d4323f; --accent-line: rgba(255, 70, 85, .55); --accent-wash: rgba(255, 70, 85, .12);
+  color-scheme: dark; color: var(--text);
+  padding-top: 0; border-color: #1f242c; border-radius: 0;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .022) 0 1px, transparent 1px 3px), linear-gradient(180deg, #0b0e13, #06080b);
+  clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+}
+.poster-me.look-night::before { inset: 6px; border-radius: 0; border-color: rgba(255, 255, 255, .06); }
+.poster-me.look-night > .pm-deco {
+  position: absolute; inset: 0 0 auto; height: 150px; pointer-events: none;
+  background: linear-gradient(100deg, #ff4655, #a51d29); clip-path: polygon(0 0, 100% 0, 100% 46%, 0 100%);
+}
+.poster-me.look-night > .pm-deco::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(100deg, transparent 0 22px, rgba(255, 255, 255, .07) 22px 25px); }
+.poster-me.look-night .pm-top { padding-top: 16px; color: rgba(255, 255, 255, .8); }
+.poster-me.look-night .pm-mark { color: #fff; font-weight: 700; }
+.poster-me.look-night .pm-hero { text-align: left; margin: 30px 0 16px; }
+.poster-me.look-night .pm-kick {
+  display: inline-flex; align-items: center; gap: 7px; margin: 0 0 10px; padding: 3px 12px 3px 10px;
+  background: #06080b; color: #fff; font-family: var(--mono); font-size: 12px; letter-spacing: .24em;
+}
+.poster-me.look-night .pm-kick::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #ff4655; box-shadow: 0 0 8px #ff4655; }
+.poster-me.look-night .pm-verdict { font-size: 46px; font-weight: 900; color: #fff; letter-spacing: .04em; text-shadow: 0 2px 12px rgba(0, 0, 0, .45); }
+.poster-me.look-night .pm-story { margin: 0; max-width: 38em; }
+/* the name as a broadcast lower third: a white strip with the red edge */
+.poster-me.look-night .pm-id {
+  width: fit-content; max-width: 100%; margin: 0 0 16px; padding: 6px 22px 6px 16px; text-align: left;
+  background: #f5f5f3; color: #3a404a; box-shadow: inset 8px 0 0 #ff4655;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
+.poster-me.look-night .pm-id b { color: #06080b; font-weight: 800; }
+.poster-me.look-night .pm-wall { border-color: #2b313a; }
+.poster-me.look-night .pm-t { border-radius: 0; background: #0f1319; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.poster-me.look-night .pm-t.champions { border-color: #ff4655; background: linear-gradient(160deg, #ff4655, #a51d29); }
+.poster-me.look-night .pm-t.champions .pm-t-ic, .poster-me.look-night .pm-t.champions .pm-t-n { color: #fff; }
+.poster-me.look-night .pm-t.champions .pm-t-y { color: rgba(255, 255, 255, .78); }
+.poster-me.look-night .pm-t.masters { border-color: rgba(255, 255, 255, .55); }
+.poster-me.look-night .pm-t.masters .pm-t-ic { color: #fff; }
+.poster-me.look-night .pm-years { border-radius: 0; }
+.poster-me.look-night .pm-yr.won { background: rgba(255, 70, 85, .12); box-shadow: inset 4px 0 0 #ff4655; }
+.poster-me.look-night .pm-nums small { color: #ff4655; font-family: var(--mono); letter-spacing: .14em; }
+
+/* ---------------------------------------------------------------- 胶片档案 */
+.poster-me.look-film {
+  --panel: #1d1813; --panel-2: #16120e; --panel-3: #2a231b;
+  --text: #efe4cb; --muted: #c0b090; --faint: #9c8c6f;
+  --line: #3d3428; --line-soft: #2d261d; --line-hi: #5b4d3a;
+  --gold: #e3c27e; --accent: #d8684f; --accent-fill: #b23c28; --accent-line: rgba(196, 69, 47, .55); --accent-wash: rgba(196, 69, 47, .14);
+  color-scheme: dark; color: var(--text);
+  padding-left: 44px; padding-right: 44px; border-color: #0b0907; border-radius: 2px;
+  background:
+    radial-gradient(120% 85% at 50% 42%, transparent 52%, rgba(0, 0, 0, .55)),
+    radial-gradient(rgba(255, 236, 200, .05) 1px, transparent 1.3px) 0 0 / 4px 4px,
+    linear-gradient(180deg, #231d16, #17130f);
+}
+/* the two edges of the strip, where the frames stop */
+.poster-me.look-film::before { inset: 0 26px; border: 0; border-radius: 0; border-left: 1px solid rgba(239, 228, 203, .14); border-right: 1px solid rgba(239, 228, 203, .14); }
+.poster-me.look-film > .pm-deco { position: absolute; inset: 0; pointer-events: none; }
+/* the sprocket holes, down both sides */
+.poster-me.look-film > .pm-deco::before, .poster-me.look-film > .pm-deco::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 24px;
+  background: linear-gradient(#d8c9a8 0 10px, transparent 10px 26px) center 10px / 10px 26px repeat-y, #0b0907;
+}
+.poster-me.look-film > .pm-deco::before { left: 0; }
+.poster-me.look-film > .pm-deco::after { right: 0; }
+.poster-me.look-film .pm-top { color: var(--muted); }
+.poster-me.look-film .pm-mark { color: #d0654f; }
+/* the verdict on an intertitle: a double-ruled card */
+.poster-me.look-film .pm-hero { margin: 18px auto 16px; padding: 16px 18px 18px; max-width: 36em; border: 3px double rgba(239, 228, 203, .5); }
+.poster-me.look-film .pm-kick {
+  display: inline-block; margin: 0 0 10px; padding: 2px 16px; background: #c4452f; color: #f6ecd6;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .16em; opacity: .9;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.poster-me.look-film .pm-verdict, .poster-me.look-film .pm-story {
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+}
+.poster-me.look-film .pm-verdict { font-size: 42px; color: #efe4cb; letter-spacing: .22em; }
+.poster-me.look-film .pm-story { color: var(--muted); }
+.poster-me.look-film .pm-id { font-family: var(--mono); }
+.poster-me.look-film .pm-t { border-radius: 0; background: rgba(0, 0, 0, .22); border-color: #5b4d3a; }
+.poster-me.look-film .pm-t.champions { background: linear-gradient(180deg, rgba(227, 194, 126, .16), rgba(0, 0, 0, .2)); }
+/* the seasons as a contact sheet: one frame each */
+.poster-me.look-film .pm-years { gap: 4px; background: transparent; border: 0; border-radius: 0; }
+.poster-me.look-film .pm-yr { background: #120f0b; border: 1px solid #3d3428; font-family: var(--mono); }
+.poster-me.look-film .pm-yr-t { font-family: inherit; }
+
+/* ---------------------------------------------------------------- 体育版头条 */
+.poster-me.look-paper {
+  --panel: #f3efe5; --panel-2: #ebe6d9; --panel-3: #e2dccb;
+  --text: #17140f; --muted: #463f35; --faint: #5f584b;
+  --line: #bdb5a3; --line-soft: #d3ccbb; --line-hi: #8e8675;
+  --gold: #17140f; --accent: #c8232f; --accent-fill: #c8232f; --accent-line: rgba(200, 35, 47, .5); --accent-wash: rgba(200, 35, 47, .07);
+  --win: #1d6b39; --pos-ink: #1d6b39;
+  color-scheme: light; color: var(--text);
+  border-color: #cfc7b5; border-radius: 1px;
+  background: radial-gradient(rgba(0, 0, 0, .035) 1px, transparent 1.3px) 0 0 / 3px 3px, linear-gradient(180deg, #f6f2e8, #ebe5d6);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .28);
+}
+.poster-me.look-paper::before { border: 0; }
+.poster-me.look-paper .pm-deco { display: none; }
+/* the masthead */
+.poster-me.look-paper .pm-top {
+  align-items: flex-end; padding-bottom: 6px; border-bottom: 4px double #17140f;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif; letter-spacing: .06em; color: #463f35;
+}
+.poster-me.look-paper .pm-mark { color: #17140f; font-size: 22px; font-weight: 900; letter-spacing: .14em; }
+.poster-me.look-paper .pm-hero { text-align: left; margin: 14px 0 12px; }
+.poster-me.look-paper .pm-kick {
+  display: inline-block; margin: 0 0 6px; padding: 2px 18px 2px 10px; background: #c8232f; color: #fff;
+  font-size: 13px; font-weight: 800; letter-spacing: .3em; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.poster-me.look-paper .pm-verdict {
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  font-size: 54px; font-weight: 900; line-height: 1.08; letter-spacing: .02em; color: #17140f;
+}
+/* the lede in two columns, as a page sets it */
+.poster-me.look-paper .pm-story { max-width: none; margin: 0; column-count: 2; column-gap: 22px; column-rule: 1px solid #bdb5a3; text-align: justify; color: #2b261f; }
+.poster-me.look-paper .pm-id { text-align: left; padding: 4px 0; border-top: 1px solid #17140f; border-bottom: 1px solid #17140f; color: #463f35; }
+.poster-me.look-paper .pm-wall { border-top: 2px solid #17140f; border-bottom: 1px solid #bdb5a3; }
+.poster-me.look-paper .pm-t { border-radius: 0; border-color: #17140f; background: transparent; }
+/* the world title in black, the trophy white on it */
+.poster-me.look-paper .pm-t.champions { background: #17140f; border-color: #17140f; }
+.poster-me.look-paper .pm-t.champions .pm-t-ic, .poster-me.look-paper .pm-t.champions .pm-t-n { color: #fff; }
+.poster-me.look-paper .pm-t.champions .pm-t-y { color: rgba(255, 255, 255, .7); }
+.poster-me.look-paper .pm-t.masters { border-color: #c8232f; }
+.poster-me.look-paper .pm-t.masters .pm-t-ic { color: #c8232f; }
+.poster-me.look-paper .pm-t.league .pm-t-ic { color: #17140f; }
+/* year by year as a box score */
+.poster-me.look-paper .pm-years { gap: 0; background: transparent; border: 0; border-top: 2px solid #17140f; border-bottom: 2px solid #17140f; border-radius: 0; }
+.poster-me.look-paper .pm-yr { background: transparent; border-bottom: 1px dotted #8e8675; }
+.poster-me.look-paper .pm-yr:last-child { border-bottom: 0; }
+.poster-me.look-paper .pm-yr b { color: #17140f; }
+.poster-me.look-paper .pm-yr.won { background: rgba(200, 35, 47, .07); box-shadow: inset 3px 0 0 #c8232f; }
+.poster-me.look-paper .pm-yr.won b { color: #c8232f; }
+.poster-me.look-paper .pm-nums { border-top: 2px solid #17140f; border-bottom: 1px solid #17140f; }
+
+/* ---------------------------------------------------------------- 场馆大屏 */
+.poster-me.look-led {
+  --panel: #0a0a0a; --panel-2: #050505; --panel-3: #151515;
+  --text: #f2efe8; --muted: #c2b597; --faint: #978b72;
+  --line: #2a2620; --line-soft: #1a1814; --line-hi: #3d372d;
+  --gold: #ffffff; --accent: #ff4655; --accent-fill: #d4323f; --accent-line: rgba(255, 70, 85, .5); --accent-wash: rgba(255, 70, 85, .1);
+  color-scheme: dark; color: var(--text);
+  padding-top: 0; border-color: #222; border-radius: 0;
+  background: radial-gradient(circle, rgba(255, 178, 62, .07) 1px, transparent 1.4px) 0 0 / 5px 5px, #050505;
+}
+.poster-me.look-led::before { inset: 6px; border-radius: 0; border-color: rgba(255, 178, 62, .12); }
+/* the ticker across the top: a red slant band made of lamps */
+.poster-me.look-led > .pm-deco {
+  position: absolute; inset: 0 0 auto; height: 58px; pointer-events: none;
+  background: radial-gradient(circle, transparent 1.2px, rgba(0, 0, 0, .38) 1.6px) 0 0 / 4px 4px, linear-gradient(100deg, #ff4655, #a51d29);
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 0 100%);
+}
+.poster-me.look-led .pm-top { padding-top: 14px; color: rgba(255, 255, 255, .85); font-weight: 700; }
+.poster-me.look-led .pm-mark { color: #fff; }
+/* the board: black, amber corner brackets */
+.poster-me.look-led .pm-hero {
+  margin: 30px 0 14px; padding: 16px 14px 18px;
+  background:
+    linear-gradient(#ffb23e, #ffb23e) 0 0 / 18px 2px no-repeat, linear-gradient(#ffb23e, #ffb23e) 0 0 / 2px 18px no-repeat,
+    linear-gradient(#ffb23e, #ffb23e) 100% 0 / 18px 2px no-repeat, linear-gradient(#ffb23e, #ffb23e) 100% 0 / 2px 18px no-repeat,
+    linear-gradient(#ffb23e, #ffb23e) 0 100% / 18px 2px no-repeat, linear-gradient(#ffb23e, #ffb23e) 0 100% / 2px 18px no-repeat,
+    linear-gradient(#ffb23e, #ffb23e) 100% 100% / 18px 2px no-repeat, linear-gradient(#ffb23e, #ffb23e) 100% 100% / 2px 18px no-repeat,
+    #000;
+  box-shadow: inset 0 0 40px rgba(255, 70, 85, .08);
+}
+.poster-me.look-led .pm-kick {
+  display: inline-block; margin: 0 0 6px; font-family: var(--mono); font-size: 12px; letter-spacing: .3em;
+  color: #ffb23e; text-shadow: 0 0 6px rgba(255, 178, 62, .6);
+}
+/* the verdict in lamps: the glyphs seen through a grid of dots */
+.poster-me.look-led .pm-verdict {
+  font-size: 56px; font-weight: 900; letter-spacing: .08em; color: #ff4655;
+  text-shadow: 0 0 14px rgba(255, 70, 85, .8), 0 0 2px #ff8a94;
+  -webkit-mask-image: radial-gradient(circle, #000 1.3px, rgba(0, 0, 0, .3) 1.8px); -webkit-mask-size: 4px 4px;
+  mask-image: radial-gradient(circle, #000 1.3px, rgba(0, 0, 0, .3) 1.8px); mask-size: 4px 4px;
+}
+.poster-me.look-led .pm-story { color: #cfc3a6; }
+.poster-me.look-led .pm-id { font-family: var(--mono); }
+.poster-me.look-led .pm-id b { color: #ffb23e; }
+.poster-me.look-led .pm-t { border-radius: 0; background: #000; border-color: #2a2620; }
+.poster-me.look-led .pm-t .pm-t-ic { color: #e8dfcc; }
+.poster-me.look-led .pm-t.champions { border-color: #ff4655; background: #0d0103; box-shadow: 0 0 14px rgba(255, 70, 85, .35), inset 0 0 14px rgba(255, 70, 85, .2); }
+.poster-me.look-led .pm-t.champions .pm-t-ic, .poster-me.look-led .pm-t.champions .pm-t-n { color: #fff; }
+.poster-me.look-led .pm-t.masters { border-color: rgba(255, 178, 62, .6); }
+.poster-me.look-led .pm-t.masters .pm-t-ic { color: #ffb23e; }
+.poster-me.look-led .pm-years { border-radius: 0; background: #1a1814; }
+.poster-me.look-led .pm-yr { background: #000; font-family: var(--mono); }
+.poster-me.look-led .pm-yr b { color: #ffb23e; text-shadow: 0 0 6px rgba(255, 178, 62, .5); }
+.poster-me.look-led .pm-yr.won { background: #140204; box-shadow: inset 3px 0 0 #ff4655; }
+.poster-me.look-led .pm-yr.won b { color: #ff4655; text-shadow: 0 0 6px rgba(255, 70, 85, .6); }
+.poster-me.look-led .pm-nums small { letter-spacing: .14em; }
+.poster-me.look-led .pm-nums b { color: #ffb23e; font-family: var(--mono); text-shadow: 0 0 8px rgba(255, 178, 62, .5); }
+.poster-me.look-led .pm-nums b.w { font-family: inherit; }
+
+/* ---------------------------------------------------------------- 奖杯室 */
+.poster-me.look-vault {
+  --panel: #12100c; --panel-2: #0b0a08; --panel-3: #1c1812;
+  --text: #f4efe4; --muted: #bdb198; --faint: #968a73;
+  --line: #332c21; --line-soft: #231e17; --line-hi: #4a4030;
+  --gold: #e9c77b; --accent: #ff4655; --accent-fill: #c9303c; --accent-line: rgba(255, 70, 85, .45); --accent-wash: rgba(255, 70, 85, .08);
+  color-scheme: dark; color: var(--text);
+  border-color: #2a241b; border-radius: 0;
+  background:
+    radial-gradient(55% 30% at 50% 0, rgba(255, 236, 190, .2), transparent 70%),
+    radial-gradient(120% 50% at 50% 100%, rgba(0, 0, 0, .55), transparent 60%),
+    linear-gradient(180deg, #15120d, #0b0a08);
+}
+.poster-me.look-vault::before { inset: 8px; border-radius: 0; border-color: rgba(233, 199, 123, .2); }
+/* the light from above, a cone down onto the plinth */
+.poster-me.look-vault > .pm-deco {
+  position: absolute; top: 0; left: 50%; width: min(460px, 90%); height: 300px; transform: translateX(-50%); pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 240, 205, .16), transparent 85%);
+  clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+}
+.poster-me.look-vault .pm-top { font-family: var(--mono); }
+.poster-me.look-vault .pm-mark { color: #e9c77b; }
+.poster-me.look-vault .pm-hero { margin: 10px 0 14px; }
+.poster-me.look-vault .pm-cup {
+  display: block; width: 104px; height: 104px; margin: 0 auto; color: #fff; font-style: normal;
+  filter: drop-shadow(0 0 20px rgba(255, 240, 205, .45));
+}
+.poster-me.look-vault .pm-cup svg { display: block; width: 100%; height: 100%; }
+.poster-me.look-vault .pm-cup.none { color: #bdb198; filter: none; opacity: .7; }
+/* the shelf the cup stands on */
+.poster-me.look-vault .pm-cup::after { content: ''; display: block; width: 160px; height: 2px; margin: -2px auto 0; background: linear-gradient(90deg, transparent, #e9c77b, transparent); }
+.poster-me.look-vault .pm-kick { display: block; margin: 12px 0 8px; font-family: var(--mono); font-size: 12px; letter-spacing: .3em; color: #e9c77b; }
+/* the verdict on the red plate */
+.poster-me.look-vault .pm-verdict {
+  display: inline-block; margin: 0 0 10px; padding: 6px 34px 8px; font-size: 38px; font-weight: 900; letter-spacing: .12em; color: #fff;
+  background: linear-gradient(180deg, #e0404d, #a51d29); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
+  clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+}
+.poster-me.look-vault .pm-id b { color: #e9c77b; }
+/* a niche for each trophy, lit from its top, a brass shelf under it */
+.poster-me.look-vault .pm-wall { border-color: #332c21; }
+.poster-me.look-vault .pm-t {
+  border-radius: 0; border-color: #332c21;
+  background: radial-gradient(80% 60% at 50% 0, rgba(255, 240, 205, .13), transparent 70%), #0e0c09;
+  box-shadow: inset 0 -3px 0 #4a4030;
+}
+.poster-me.look-vault .pm-t .pm-t-ic { color: #fff; }
+.poster-me.look-vault .pm-t.champions { border-color: #e9c77b; box-shadow: inset 0 -3px 0 #e9c77b, 0 0 16px rgba(233, 199, 123, .2); }
+.poster-me.look-vault .pm-t.champions .pm-t-ic, .poster-me.look-vault .pm-t.masters .pm-t-ic { color: #fff; }
+.poster-me.look-vault .pm-t.ring .pm-t-ic { color: #968a73; }
+.poster-me.look-vault .pm-years { border-radius: 0; }
+.poster-me.look-vault .pm-yr { background: #100e0b; }
+
+/* ---------------------------------------------------------------- 对开版 */
+.poster-me.look-split {
+  --panel: #f2efe8; --panel-2: #e8e3d8; --panel-3: #ddd6c7;
+  --text: #15171b; --muted: #454a52; --faint: #5c6169;
+  --line: #c9c2b3; --line-soft: #dcd6c9; --line-hi: #9d968a;
+  --gold: #15171b; --accent: #cf2835; --accent-fill: #cf2835; --accent-line: rgba(207, 40, 53, .45); --accent-wash: rgba(207, 40, 53, .07);
+  --win: #1d6b39; --pos-ink: #1d6b39;
+  color-scheme: light; color: var(--text);
+  border-color: #0b0e13; border-radius: 0;
+  background: linear-gradient(180deg, #f4f1ea, #ebe6db);
+}
+.poster-me.look-split::before { display: none; }
+.poster-me.look-split .pm-deco { display: none; }
+/* the dark half: the brand, the verdict, who — cut along a slant */
+.poster-me.look-split .pm-head {
+  --text: #f5f5f3; --muted: #aab2bc; --faint: #8a94a0; --gold: #ffffff; --accent: #ff4655;
+  color: var(--text);
+  margin: -26px -24px 0; padding: 26px 24px 58px;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .02) 0 1px, transparent 1px 3px), #0b0e13;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 40px), 0 100%);
+}
+/* the red band along the cut: the same 40px fall, so it lies on the edge at any width */
+.poster-me.look-split > .pm-cut {
+  height: 56px; margin: -40px -24px 2px; background: linear-gradient(100deg, #ff4655, #c21f2c);
+  clip-path: polygon(0 40px, 100% 0, 100% 16px, 0 56px);
+}
+.poster-me.look-split .pm-hero { text-align: left; margin: 22px 0 12px; }
+.poster-me.look-split .pm-kick {
+  display: inline-block; margin: 0 0 8px; padding: 2px 18px 2px 10px; background: #ff4655; color: #fff;
+  font-size: 12px; font-weight: 800; letter-spacing: .3em; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.poster-me.look-split .pm-verdict { font-size: 48px; font-weight: 900; color: #fff; }
+.poster-me.look-split .pm-story { margin: 0; max-width: 40em; }
+.poster-me.look-split .pm-id { text-align: left; margin-bottom: 0; }
+/* the light half: black lines on the paper, the world title white on black */
+.poster-me.look-split .pm-wall { border-top: 0; border-bottom-color: #c9c2b3; }
+.poster-me.look-split .pm-t { border-radius: 0; border-color: #15171b; background: #fbfaf7; }
+.poster-me.look-split .pm-t .pm-t-ic { color: #15171b; }
+.poster-me.look-split .pm-t.champions { background: #0b0e13; border-color: #0b0e13; }
+.poster-me.look-split .pm-t.champions .pm-t-ic, .poster-me.look-split .pm-t.champions .pm-t-n { color: #fff; }
+.poster-me.look-split .pm-t.champions .pm-t-y { color: rgba(255, 255, 255, .7); }
+.poster-me.look-split .pm-t.masters { border-color: #cf2835; }
+.poster-me.look-split .pm-t.masters .pm-t-ic { color: #cf2835; }
+.poster-me.look-split .pm-years { border-radius: 0; background: #dcd6c9; }
+.poster-me.look-split .pm-yr { background: #f8f6f1; }
+.poster-me.look-split .pm-yr b { color: #15171b; }
+.poster-me.look-split .pm-yr.won { background: #fbe9e8; box-shadow: inset 3px 0 0 #cf2835; }
+.poster-me.look-split .pm-yr.won b { color: #cf2835; }
+
+/* ---------------------------------------------------------------- 另一条世界线 */
+.poster-me.look-redline {
+  --panel: #0c0f14; --panel-2: #07090d; --panel-3: #161b22;
+  --text: #eef0f3; --muted: #a3acb8; --faint: #808a97;
+  --line: #262d37; --line-soft: #18202a; --line-hi: #36404c;
+  --gold: #ffffff; --accent: #ff4655; --accent-fill: #d4323f; --accent-line: rgba(255, 70, 85, .5); --accent-wash: rgba(255, 70, 85, .1);
+  color-scheme: dark; color: var(--text);
+  border-color: #1c222b; border-radius: 0;
+  background: linear-gradient(180deg, #0c0f14, #07090d);
+}
+.poster-me.look-redline::before { inset: 6px; border-radius: 0; border-color: rgba(255, 255, 255, .05); }
+/* a short red slash over the top-left corner */
+.poster-me.look-redline > .pm-deco {
+  position: absolute; top: 0; left: 0; width: 44%; height: 7px; pointer-events: none; background: #ff4655;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+}
+.poster-me.look-redline .pm-hero { text-align: left; margin: 16px 0 8px; }
+.poster-me.look-redline .pm-kick { display: inline-block; margin: 0 0 6px; font-family: var(--mono); font-size: 12px; letter-spacing: .24em; color: #ff4655; }
+.poster-me.look-redline .pm-verdict { font-size: 44px; font-weight: 900; color: #fff; }
+.poster-me.look-redline .pm-story { margin: 0; max-width: 40em; }
+.poster-me.look-redline .pm-id { text-align: left; margin-bottom: 6px; }
+.poster-me.look-redline .pm-t { border-radius: 0; background: #0f131a; }
+.poster-me.look-redline .pm-t.champions { border-color: #ff4655; background: linear-gradient(180deg, rgba(255, 70, 85, .18), transparent); }
+.poster-me.look-redline .pm-t.champions .pm-t-ic { color: #fff; }
+.poster-me.look-redline .pm-years { border-radius: 0; }
+.poster-me.look-redline .pm-yr.won { background: rgba(255, 70, 85, .1); box-shadow: inset 3px 0 0 #ff4655; }
+/* the two lines (Poster.tsx WorldLines): grey for history, red for mine, a mark per season */
+.poster-me .pm-wl { margin: 12px 0 14px; }
+.poster-me .pm-wl-plot { position: relative; height: 96px; }
+.poster-me .pm-wl svg { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 76px; overflow: visible; }
+.poster-me .pm-wl svg path { fill: none; vector-effect: non-scaling-stroke; }
+.poster-me .pm-wl svg .real { stroke: #5b6674; stroke-width: 2; }
+.poster-me .pm-wl svg .mine { stroke: #ff4655; stroke-width: 3; filter: drop-shadow(0 0 4px rgba(255, 70, 85, .6)); }
+.poster-me .pm-wl-at { position: absolute; top: 0; bottom: 0; width: 0; }
+.poster-me .pm-wl-n {
+  position: absolute; top: 25.8px; left: 0; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%;
+  background: #ff4655; box-shadow: 0 0 0 3px #0c0f14;
+}
+.poster-me .pm-wl-n.rw { width: 16px; height: 16px; margin: -8px 0 0 -8px; background: #fff; box-shadow: 0 0 0 3px #ff4655, 0 0 10px rgba(255, 70, 85, .7); }
+.poster-me .pm-wl-cup { position: absolute; bottom: calc(100% - 18px); left: 0; width: 22px; height: 22px; transform: translateX(-50%); color: #fff; font-style: normal; }
+.poster-me .pm-wl-cup svg { display: block; width: 100%; height: 100%; }
+.poster-me .pm-wl-cup em { position: absolute; left: 100%; top: 0; font-size: 10px; font-style: normal; color: #fff; }
+.poster-me .pm-wl-y { position: absolute; bottom: 0; left: 0; transform: translateX(-50%); font-family: var(--mono); font-size: 11px; font-style: normal; color: #808a97; }
+.poster-me .pm-wl-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 0; font-size: var(--t-tiny); color: #808a97; }
+.poster-me .pm-wl-key i { display: inline-block; width: 22px; height: 3px; background: #5b6674; }
+.poster-me .pm-wl-key i.mine { margin-left: 6px; background: #ff4655; }
+.poster-me .pm-wl-key span { margin-left: 6px; }
+
+@media (max-width: 560px) {
+  .poster-me.look-night > .pm-deco { height: 118px; }
+  .poster-me.look-night .pm-hero { margin-top: 22px; }
+  .poster-me.look-night .pm-verdict { font-size: 34px; }
+  .poster-me.look-film { padding-left: 28px; padding-right: 28px; }
+  .poster-me.look-film::before { inset: 0 16px; }
+  .poster-me.look-film > .pm-deco::before, .poster-me.look-film > .pm-deco::after {
+    width: 16px; background: linear-gradient(#d8c9a8 0 8px, transparent 8px 20px) center 8px / 7px 20px repeat-y, #0b0907;
+  }
+  .poster-me.look-film .pm-hero { padding: 12px 10px 14px; }
+  .poster-me.look-film .pm-verdict { font-size: 30px; letter-spacing: .12em; }
+  .poster-me.look-paper .pm-mark { font-size: 17px; }
+  .poster-me.look-paper .pm-verdict { font-size: 38px; }
+  .poster-me.look-paper .pm-story { column-count: 1; }
+  .poster-me.look-led .pm-verdict { font-size: 38px; letter-spacing: .04em; }
+  .poster-me.look-vault .pm-cup { width: 84px; height: 84px; }
+  .poster-me.look-vault .pm-verdict { font-size: 28px; padding: 5px 24px 6px; }
+  .poster-me.look-split .pm-head { margin: -18px -13px 0; padding: 18px 13px 50px; }
+  .poster-me.look-split > .pm-cut { margin: -40px -13px 2px; }
+  .poster-me.look-split .pm-verdict { font-size: 34px; }
+  .poster-me.look-redline .pm-verdict { font-size: 34px; }
+  .poster-me .pm-wl-y { font-size: 10px; }
+}

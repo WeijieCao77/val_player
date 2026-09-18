@@ -36,6 +36,7 @@ import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
 import Poster from './ui/me/Poster'
+import { LookPicker } from './ui/me/looks'
 import Schedule from './ui/me/Schedule'
 import Standings from './ui/me/Standings'
 import MatchModal from './ui/me/MatchModal'
@@ -498,6 +499,7 @@ export default function Career({ opened, onHome }: {
             {me.phase === 'retired' ? (
               <>
                 <Poster />
+                <LookPicker game={game} />
                 <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
                   <button onClick={onHome}>再来一局</button>
                 </div>

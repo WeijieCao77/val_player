@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useGame } from './ctx'
 import { CARD_FILE, canShareFile, careerCardUrl, dataUrlToFile } from './share'
 import { useLayer } from './layer'
+import { LookPicker, useLook } from './looks'
 
 /**
  * The card, on screen, with the two ways of keeping it.
@@ -19,16 +20,18 @@ export default function ShareCard({ onClose }: { onClose: () => void }) {
   useLayer(bg, { box })
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  // the 卡面 the hall has opened (me/hall.ts LOOKS): chosen here or on the card behind, drawn again on a change
+  const { look } = useLook()
 
   useEffect(() => {
     // drawing 1080×1620 takes a beat; let the overlay paint first
     const t = setTimeout(() => {
-      const u = careerCardUrl(game)
+      const u = careerCardUrl(game, look)
       if (u) setUrl(u)
       else setFailed(true)
     }, 30)
     return () => clearTimeout(t)
-  }, [game])
+  }, [game, look])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -51,6 +54,7 @@ export default function ShareCard({ onClose }: { onClose: () => void }) {
             : failed ? <div className="share-loading">这台设备画不出图片，直接截图也一样能发。</div>
               : <div className="share-loading">正在生成…</div>}
         </div>
+        <LookPicker game={game} compact />
         <footer className="share-foot">
           <span className="share-tip">
             {!url ? '正在生成…'
