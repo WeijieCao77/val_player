@@ -79,9 +79,77 @@ export default function TransferScreen() {
     return { ...h, current, span: current ? `${h.from} 至今` : end > h.from ? `${h.from}–${end}` : `${h.from}` }
   }).reverse()
 
+  // 桌上的报价 and 邀请, built once and put where they belong: first on the page while anything is in them.
+  // Found 2026-09-18 walking a ladder career: a contract won at a tryout and closed to think it over (先放着) goes,
+  // the toast says, to the 转会 page — and there it sat under the 自荐 list, 1,522px down at 1920×1000 under an open
+  // group of 13 clubs, and 2,524px down on a 375 phone, three screens. What waits for an answer is what this page is
+  // opened for; with nothing in them they go back under 自荐, 合同 and 市场怎么看你, where they were.
+  const onTable = me.deals.length > 0
+  const asked = me.pre.invites.length > 0
+  const offersPanel = (
+    <Panel title="桌上的报价">
+      {me.deals.length === 0
+        ? <p className="muted small" style={{ margin: 0 }}>现在没有报价。来了会弹卡片，这里也会列着，过期之前随时可以回来谈。</p>
+        : me.deals.map((d) => {
+          const left = daysLeft(game, d)
+          return (
+            <div key={d.id} className="tr-row">
+              <Crest id={d.teamId} size={22} />
+              <span className="tr-main">
+                <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
+                <small>
+                  {d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 ·{' '}
+                  <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>
+                </small>
+              </span>
+              <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
+            </div>
+          )
+        })}
+      {/* the way back from a card closed to think it over (engine/me/aside.ts) */}
+      {me.deals.length > 0 && (
+        <p className="tiny faint" style={{ margin: '6px 0 0' }}>
+          卡片上点「关闭」就是先放着，报价一直留在这里；到期前一天「本周」页会提醒你。{me.auto.career ? '放着的报价托管「生涯」不会替你答复。' : ''}
+        </p>
+      )}
+    </Panel>
+  )
+  // a man under contract hears from clubs too (engine/me/transfer.ts vctApproach): his invitations were listed
+  // nowhere, so one closed and set aside had no way back
+  const invitesPanel = (!pro || asked) && (
+    <Panel title="邀请">
+      {me.pre.invites.length === 0
+        ? (!pro && <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你；也可以在上面挑一家发自荐。</p>)
+        : me.pre.invites.map((i) => {
+          const left = daysLeft(game, i)
+          // the tryout being played on it has its own card; this row is not a way back into it
+          const onTryout = me.tryout?.inviteId === i.id
+          return (
+            <div key={i.id} className="tr-row">
+              <Crest id={i.teamId} size={22} />
+              <span className="tr-main">
+                <b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b>
+                <small>
+                  {i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} ·{' '}
+                  {onTryout ? '试训进行中' : <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>}
+                </small>
+              </span>
+              {!onTryout && <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>}
+            </div>
+          )
+        })}
+      {!pro && declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
+      {!pro && me.moveAfter && (
+        <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 期间名单锁定，{dateCn(moveLifts(game) ?? absDay(game.year, me.moveAfter.until), game.year)}后正式签约。</p>
+      )}
+    </Panel>
+  )
+
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
+        {onTable && offersPanel}
+        {asked && invitesPanel}
         {!pro && me.phase !== 'retired' && <PitchPanel />}
         {pro && team && pay && (
           <Panel title="合同">
@@ -124,62 +192,8 @@ export default function TransferScreen() {
             <ContactBlock />
           </Panel>
         )}
-        <Panel title="桌上的报价">
-          {me.deals.length === 0
-            ? <p className="muted small" style={{ margin: 0 }}>现在没有报价。来了会弹卡片，这里也会列着，过期之前随时可以回来谈。</p>
-            : me.deals.map((d) => {
-              const left = daysLeft(game, d)
-              return (
-                <div key={d.id} className="tr-row">
-                  <Crest id={d.teamId} size={22} />
-                  <span className="tr-main">
-                    <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
-                    <small>
-                      {d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 ·{' '}
-                      <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>
-                    </small>
-                  </span>
-                  <button className="sm primary" onClick={() => openCard('deal', d.id)}>去谈</button>
-                </div>
-              )
-            })}
-          {/* the way back from a card closed to think it over (engine/me/aside.ts) */}
-          {me.deals.length > 0 && (
-            <p className="tiny faint" style={{ margin: '6px 0 0' }}>
-              卡片上点「关闭」就是先放着，报价一直留在这里；到期前一天「本周」页会提醒你。{me.auto.career ? '放着的报价托管「生涯」不会替你答复。' : ''}
-            </p>
-          )}
-        </Panel>
-        {/* a man under contract hears from clubs too (engine/me/transfer.ts vctApproach): his invitations were
-            listed nowhere, so one closed and set aside had no way back */}
-        {(!pro || me.pre.invites.length > 0) && (
-          <Panel title="邀请">
-            {me.pre.invites.length === 0
-              ? (!pro && <p className="muted small" style={{ margin: 0 }}>还没有俱乐部来电话。杯赛走得远、天梯打到{rankBar(game, INVITE_LADDER)}、粉丝过 {fansCn(INVITE_FANS)}，都会有人注意到你；也可以在上面挑一家发自荐。</p>)
-              : me.pre.invites.map((i) => {
-                const left = daysLeft(game, i)
-                // the tryout being played on it has its own card; this row is not a way back into it
-                const onTryout = me.tryout?.inviteId === i.id
-                return (
-                  <div key={i.id} className="tr-row">
-                    <Crest id={i.teamId} size={22} />
-                    <span className="tr-main">
-                      <b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b>
-                      <small>
-                        {i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} ·{' '}
-                        {onTryout ? '试训进行中' : <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>}
-                      </small>
-                    </span>
-                    {!onTryout && <button className="sm primary" onClick={() => openCard('invite', i.id)}>去答复</button>}
-                  </div>
-                )
-              })}
-            {!pro && declined.length > 0 && <p className="tiny faint">今年回绝过：{declined.map((id) => game.teams[id]?.tag).join('、')}</p>}
-            {!pro && me.moveAfter && (
-              <p className="small">已和 <b>{game.teams[me.moveAfter.deal.teamId]?.name}</b> 谈妥：{me.moveAfter.event} 期间名单锁定，{dateCn(moveLifts(game) ?? absDay(game.year, me.moveAfter.until), game.year)}后正式签约。</p>
-            )}
-          </Panel>
-        )}
+        {!onTable && offersPanel}
+        {!asked && invitesPanel}
         <Panel title={`转会动态 · ${game.year} 赛季`}>
           {seasonLines.length === 0
             ? <p className="muted small" style={{ margin: 0 }}>这个赛季还没有转会消息。谁来找过你、谁开了价、试训怎么样、签了什么合同，都会记在这里。</p>

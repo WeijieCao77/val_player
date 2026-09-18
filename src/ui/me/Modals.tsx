@@ -239,7 +239,14 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: (aside?: 
         {withinCn(daysLeft(game, inv))}答复；回绝了今年不会再来。点右上角「关闭」可以先放着，它留在「转会」页。
       </p>
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
-        <button className="primary" onClick={() => { startTryout(game, inv.id); commit(); onDone() }}>{inv.direct ? '看合同' : '去试训'}</button>
+        {/* refused, it says why and the way on: this card's 去试训 with another club's tryout under way did nothing and
+            said nothing (found 2026-09-18, a save from before the tryout took the invitation's place: me/pending.ts pushFront) */}
+        <button className="primary" onClick={() => {
+          const why = startTryout(game, inv.id)
+          commit()
+          onDone()
+          if (why) toast(game.me!.tryout ? `${why}点右上角「关闭」先放着，那边打完再来答复。` : why)
+        }}>{inv.direct ? '看合同' : '去试训'}</button>
         <button onClick={() => { declineInvite(game, inv.id); commit(); onDone() }}>回绝</button>
       </div>
     </Modal>

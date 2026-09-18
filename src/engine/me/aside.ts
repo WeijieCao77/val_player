@@ -1,6 +1,6 @@
 import type { GameState } from '../types'
 import type { Deal, Invite } from './types'
-import { pop, push } from './pending'
+import { pop, pushFront } from './pending'
 import { countOffer } from './telemetry'
 
 /**
@@ -104,11 +104,7 @@ export function setAside(state: GameState, kind: AsideKind, id: string): string 
 
 /** 去谈 / 去答复: its card back in front of everything (ui/me/TransferScreen.tsx), and only ever one of it. */
 export function reopen(state: GameState, kind: AsideKind, id: string): void {
-  const me = state.me
-  if (!me) return
-  push(state, { kind, id })
-  const i = me.pending.findIndex((x) => x.kind === kind && x.id === id)
-  if (i > 0) me.pending.unshift(...me.pending.splice(i, 1))
+  pushFront(state, { kind, id })
 }
 
 /** 「DetonatioN FocusMe 的转会报价明天过期」, 「… 5 天后过期」 */

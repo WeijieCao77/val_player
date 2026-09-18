@@ -17,6 +17,29 @@ export function push(state: GameState, item: Omit<PendingItem, 'day'>): void {
   else if (item.kind === 'invite') countOffer('invite_in', item.id)
 }
 
+/** A card already waiting, brought to the head of the list: the next one on screen. */
+export function toFront(state: GameState, kind: PendingItem['kind'], id?: string): void {
+  const me = state.me
+  if (!me) return
+  const i = me.pending.findIndex((x) => x.kind === kind && x.id === id)
+  if (i > 0) me.pending.unshift(...me.pending.splice(i, 1))
+}
+
+/**
+ * The card that follows from the one just answered, in that card's place at the head of the list instead of at
+ * the back of it: 去试训 opens the tryout, a tryout passed opens its contract, 看合同 opens the contract.
+ *
+ * Found 2026-09-18 walking a ladder career, two clubs calling the same day (a call and the language's extra one,
+ * me/prepro.ts callFrom): 去试训 on the first put the second club's invitation in front of the tryout, and its own
+ * 去试训 did nothing — startTryout refuses a second tryout, and the card stayed up with no word — until it was
+ * closed or turned down. And a tryout passed, or a 免试训 offer taken, left its contract behind that same
+ * invitation: the contract the player had just earned was not the next thing on screen.
+ */
+export function pushFront(state: GameState, item: Omit<PendingItem, 'day'>): void {
+  push(state, item)
+  toFront(state, item.kind, item.id)
+}
+
 export function head(state: GameState): PendingItem | undefined {
   return state.me?.pending[0]
 }

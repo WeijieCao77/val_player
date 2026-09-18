@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import type { GameState } from '../types'
 import type { NodeDim, TryoutDayLog } from './types'
 import { pushLog } from './log'
-import { pop, push } from './pending'
+import { pop, pushFront, toFront } from './pending'
 import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
@@ -113,14 +113,17 @@ export function startTryout(state: GameState, inviteId: string): string | null {
     // a man under contract is bought, not signed: his club is paid (me/contract.ts joinClub)
     const deal = makeDeal(state, inv.teamId, me.phase === 'pro' ? 'transfer' : 'sign', 'A', tryoutRng(state, 9))
     me.deals.push(deal)
-    push(state, { kind: 'deal', id: deal.id })
+    // 看合同 opens the contract, not another club's card waiting behind this one (me/pending.ts pushFront)
+    pushFront(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `${state.teams[inv.teamId]?.name} 免了试训，直接给了合同。`)
     return null
   }
   me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [] }
   // the first hour at the base is a night of its own (me/nights.ts), on screen before day one
   tryoutNight(state)
-  push(state, { kind: 'tryout', id: inviteId })
+  // in the invitation's place: another club's invitation behind it waits until this tryout is over (me/pending.ts pushFront)
+  pushFront(state, { kind: 'tryout', id: inviteId })
+  toFront(state, 'ceremony', 'tryout')
   return null
 }
 
@@ -184,7 +187,8 @@ function finishTryout(state: GameState): void {
   // a professional trialled by a VCT club that came for him (me/transfer.ts vctApproach) is bought from his club
   const deal = makeDeal(state, team.id, me.phase === 'pro' ? 'transfer' : 'sign', grade, tryoutRng(state, 8))
   me.deals.push(deal)
-  push(state, { kind: 'deal', id: deal.id })
+  // passed: the contract is the next card on screen, in the tryout's place (me/pending.ts pushFront)
+  pushFront(state, { kind: 'deal', id: deal.id })
   pushLog(state, 'deal', `${team.name} 试训评级 <b>${grade}</b>。${GRADE_TEXT[grade]}他们给了一份合同。`)
   me.tryout = undefined
 }
