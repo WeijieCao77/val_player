@@ -5,6 +5,7 @@ import { onTimeline, regionIn } from './era'
 import { realName } from './names'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
+import { SEASON_DAYS } from './calendar'
 import { rulerClubRating, rulerOn, rulerShift } from './ruler'
 import { offPoolOn } from './staffStints'
 import type { RawTeam } from './teams'
@@ -621,6 +622,24 @@ export function foldDue(state: GameState, teamId: string): boolean {
     const heir = state.heirs?.[id]
     return (heir && state.teams[heir] ? heir : id) === teamId && state.day >= f.day
   })
+}
+
+/**
+ * The days until history lets this club go (foldsOf): its day this year — none left once that day has come and it
+ * is still finishing an event here — or its day early next year; null for a club history carries on. For a call's
+ * draw (engine/me/prepro.ts FOLD_AHEAD): a club about to close is not signing anybody. The player's own club closes
+ * on its own notice (historyFolds), and a call never comes from it.
+ */
+export function foldAhead(state: GameState, teamId: string): number | null {
+  if (!isTimelineWorld(state)) return null
+  for (const [year, off] of [[state.year, 0], [state.year + 1, SEASON_DAYS]] as const) {
+    for (const f of foldsOf(year)) {
+      const id = clubId(f.vlr)
+      const heir = state.heirs?.[id]
+      if ((heir && state.teams[heir] ? heir : id) === teamId) return Math.max(0, f.day + off - state.day)
+    }
+  }
+  return null
 }
 
 export interface YearSync {

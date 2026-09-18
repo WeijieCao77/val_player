@@ -7,7 +7,7 @@ import { push } from './pending'
 import { daysLeft } from './aside'
 import { CUPS } from './cups'
 import { formatOf, regionIn } from '../era'
-import { hasPlace } from '../timeline'
+import { foldAhead, hasPlace } from '../timeline'
 import { clubOpen, inviteBlock } from './window'
 import { noteRankPeak } from './moments'
 import { callerRead } from './igl'
@@ -397,12 +397,37 @@ export function holdAbroad(w: readonly number[], away: readonly boolean[]): numb
   return w.map((v, i) => (away[i] ? v * k : v))
 }
 
+/**
+ * A club history lets go within this many days is not holding tryouts (engine/timeline.ts foldAhead): no call comes
+ * from it. Clubs still fold as history had them — the player is only no longer called by one about to.
+ *
+ * The author approved it 2026-09-18, on scripts/probe_first_match_wait.ts: a call never read history's list of clubs
+ * it lets go, and 17 of 120 first contracts of a 2021 ladder start (托管, 30 seeds × China, Europe, North America,
+ * Korea) were with a club on that year's list — Opportunists signed a man in April and dissolved four weeks later;
+ * 13 of the 17 folded under him before his first match. A club goes three to five weeks after its last real event
+ * (foldsOf), so sixteen weeks is a club into its last stage: at twelve to sixteen weeks from its day, 79–98% of the
+ * clubs history let go in 2022–2025 had at most one real event left. The same 120 careers (with the decider of
+ * circuit.ts offerPlayIn already in), eight, sixteen and twenty-six weeks: first contracts with a club on the list
+ * 17 → 10, 8 and 0, none of them folding before the first match (3 did); the median wait 9.1 → 8.9, 9.1 and 9.0
+ * weeks, and one contract of 120 later (another club called first, and the tryout did not end in a deal). Past
+ * sixteen weeks the clubs left on the list still had a stage to play — 95% of those sixteen to twenty weeks out would
+ * have given the man a match first — and reading further ahead is hindsight no club had.
+ */
+export const FOLD_AHEAD = 16 * 7
+
+/** History lets this club go within FOLD_AHEAD days. */
+export const foldingSoon = (state: GameState, t: Team): boolean => {
+  const d = foldAhead(state, t.id)
+  return d != null && d <= FOLD_AHEAD
+}
+
 /** The draw a call is made from. `abroad`: the language's own call (callFrom) — clubs of other 赛区 only, weighed among themselves. */
 function pickClub(state: GameState, rng: Rng, prefer: 1 | 2 | 0, abroad = false): Team | null {
   const me = state.me!
-  // a club whose window is shut or whose roster is locked is not holding tryouts (me/window.ts): with no club of my own, only its window counts
+  // a club whose window is shut or whose roster is locked is not holding tryouts (me/window.ts): with no club of my own, only its window counts;
+  // nor is one history is about to let go (FOLD_AHEAD)
   const pool = reachableClubs(state).filter((t) => !me.pre.invites.some((i) => i.teamId === t.id) && clubOpen(state, t.id)
-    && (!abroad || abroadClub(state, t)))
+    && !foldingSoon(state, t) && (!abroad || abroadClub(state, t)))
   if (!pool.length) return null
   if (abroad) return rng.weighted(pool, pool.map((t) => inviteWeight(state, t, prefer)))
   const away = pool.map((t) => abroadClub(state, t))
