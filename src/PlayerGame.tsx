@@ -41,6 +41,7 @@ import MatchModal from './ui/me/MatchModal'
 import PlayerCard from './ui/me/PlayerCard'
 import ThemeToggle from './ui/me/ThemeToggle'
 import SoundToggle from './ui/me/SoundToggle'
+import MusicPlayer from './ui/me/MusicPlayer'
 import { attrWord, useNumbers } from './ui/me/words'
 import { ceilingsOf, ensureCeilings } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
@@ -75,11 +76,20 @@ const turnShape = (g: GameState) => ({
 })
 
 /**
+ * 背景音乐 (ui/me/MusicPlayer.tsx, Val Manager's music window copied whole) sits beside the game, not inside either
+ * of its pages — the way Val Manager mounts it under every page, so it keeps playing across them. The cover and the
+ * career below are two different trees; a window mounted in each would stop the song on 开始生涯 and on 回到首页.
+ */
+export default function PlayerGame() {
+  return <><Career /><MusicPlayer /></>
+}
+
+/**
  * The player career, whole: a game of its own, drawn only from src/ui/me/
  * (scripts/check_boundary.ts keeps it that way). This shell knows about weeks,
  * whatever is waiting on me, and my club's matches.
  */
-export default function PlayerGame() {
+function Career() {
   const gameRef = useRef<GameState | null>(null)
   const [, bump] = useReducer((x: number) => x + 1, 0)
   const [screen, setScreen] = useState('week')
@@ -277,6 +287,18 @@ export default function PlayerGame() {
     startTutorial: () => openTour(weekTourOf(gameRef.current)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [commit, toast, gameRef.current, screen])
+
+  // The shell — rail down the left, tab bar along the bottom of a phone —
+  // is marked on the document while it is up, so a fixed thing outside this
+  // component (the music window) can step out of its way with one CSS rule.
+  // Above the early returns: a hook after one of those is a hook that is
+  // sometimes not called, which React refuses. (Val Manager's ManagerGame, as it is.)
+  const shell = booted && !!gameRef.current?.me
+  useEffect(() => {
+    if (!shell) return
+    document.documentElement.dataset.shell = '1'
+    return () => { delete document.documentElement.dataset.shell }
+  }, [shell])
 
   if (!booted) return null
   const game = gameRef.current

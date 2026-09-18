@@ -7,6 +7,8 @@
 
    · 只从 dist/ 出，路径规范化后不在 dist/ 下的一律 403；
    · assets/ 下是带 hash 的文件，缓存一年；index.html 每次校验（no-cache）；
+   · music/ 下是背景音乐（照抄 Val Manager），网址带版本号，缓存一周；带 Range 的请求回 206
+     只发那一段——Safari 碰上整文件回 200 的服务器就不放声音；
    · /healthz 给 Railway 探活；
    · Railway 注入 PORT，本地默认 3000。
 
@@ -59,6 +61,7 @@ const MIME = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
   '.ogg': 'audio/ogg',
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
@@ -918,12 +921,38 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(target).toLowerCase()
   const type = MIME[ext] ?? 'application/octet-stream'
   const hashed = target.split(path.sep).includes('assets')
-  res.writeHead(200, {
+  // 背景音乐（public/music，照抄 Val Manager）：一首两三兆，网址带 ?v= 版本号（src/data/music_me.ts），
+  // 换了文件就是新网址，所以缓存一周
+  const music = path.relative(DIST, target).split(path.sep)[0] === 'music'
+  const head = {
     'content-type': type,
-    'content-length': st.size,
-    'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'cache-control': hashed ? 'public, max-age=31536000, immutable' : music ? 'public, max-age=604800' : 'no-cache',
     'x-content-type-options': 'nosniff',
-  })
+  }
+  // 以下照抄 Val Manager 的 server.js：
+  // A media player asks for a file in pieces — the first few kilobytes to
+  // read the header, then wherever the listener drags to — and Safari will
+  // not play audio at all from a server that answers a range request with
+  // the whole file. Honoured for everything; it costs nothing.
+  head['accept-ranges'] = 'bytes'
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
+  if (range && (range[1] || range[2])) {
+    const size = st.size
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+    if (start >= size || start > end) {
+      res.writeHead(416, { 'content-range': `bytes */${size}` }).end()
+      return
+    }
+    head['content-range'] = `bytes ${start}-${end}/${size}`
+    head['content-length'] = end - start + 1
+    res.writeHead(206, head)
+    if (req.method === 'HEAD') return res.end()
+    fs.createReadStream(target, { start, end }).pipe(res)
+    return
+  }
+  head['content-length'] = st.size
+  res.writeHead(200, head)
   if (req.method === 'HEAD') return res.end()
   fs.createReadStream(target).pipe(res)
 })

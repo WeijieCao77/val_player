@@ -17,6 +17,14 @@ export interface ChangeEntry {
 export const CHANGELOG_ME: ChangeEntry[] = [
   {
     date: '2026-09-18',
+    title: '有背景音乐了',
+    changes: [
+      { kind: '新增', text: '<b>进来会放 VALORANT 的歌</b>，一共六首：Die For You、When the World Ends、Ticking Away、SUPERPOWER、La Lumière、Break In (Strings Remix)。开关在左下角的小浮窗里（手机上在底栏上面）：暂停、切歌、调音量、选循环方式，也能收成一张小唱片；按住唱片能拖到别处。浏览器不让网页自己出声的时候，点一下页面就开始放；暂停之后，下次进来也不放。' },
+      { kind: '新增', text: '<b>音乐和「音效」是两个开关</b>，互不影响：关掉音乐，大事卡的提示音照旧；关掉音效，歌照样放。' },
+    ],
+  },
+  {
+    date: '2026-09-18',
     title: '「今年的赛事」每一项都点得开：什么时候打、怎么打、谁能报、打出来有什么',
     changes: [
       { kind: '新增', text: '<b>本周页右边「今年的赛事」，每一项都能点开了。</b>哪一周弹卡问你报不报名、第一轮大概哪天、一周一轮打几轮；每一轮 BO 几、赢下来奖金到多少；报名费和邀请制的粉丝门槛，旁边写着你现在够不够；四个路人队友怎么来；走得远会带来什么。以前只看得到名字和「几周后」，点不进去。' },
