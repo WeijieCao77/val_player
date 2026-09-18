@@ -73,9 +73,11 @@ export function Bar({ value, max = 100, color }: { value: number; max?: number; 
 /**
  * A club's crest.
  *
- * 76 of the world's 78 clubs have one, so this renders nothing at all rather
- * than a placeholder for the other two — a missing crest should leave the
- * layout as it was, not put a grey box in it.
+ * A club without one gets nothing at all rather than a placeholder — a missing
+ * crest should leave the layout as it was, not put a grey box in it. That is
+ * most of the tier-two clubs (9 of the 11 Chinese ones in 2021), so a row that
+ * keeps a grid track for the crest places its other cells by column (me.css
+ * .sp-row, .tr-row), or the name slides into the crest's track.
  *
  * A club my club carried on as under another name wears that name's crest:
  * read off the running game, or `heirs` where there is none (the front page).

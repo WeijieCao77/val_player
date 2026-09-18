@@ -320,6 +320,14 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .sp-odds.lo { color: var(--loss); }
 .sp-why { grid-column: 2 / -1; font-size: var(--t-tiny, 12px); color: var(--warn); overflow-wrap: anywhere; }
 .sp-why.faint { color: var(--faint); }
+/* Every cell of these rows goes in its own column. Crest renders nothing for a club without a logo (9 of the
+   11 Chinese clubs a 2021 ladder start can pitch to), and left to auto-placement the name then fell into the
+   crest's 22px track and ran one character per line (reported 2026-09-18: 「除了第一个队伍，后面的都字展开的很长」).
+   Placed by column, a club without a crest keeps its name where the others have theirs. */
+.tr-row > .crest, .tr-hist li > .crest, .sp-row > .crest { grid-column: 1; }
+.tr-row > .tr-main, .tr-hist li > .tr-main, .sp-row > .tr-main { grid-column: 2; }
+.tr-row > button, .sp-row > .sp-odds { grid-column: 3; }
+.sp-row > button { grid-column: 4; }
 .sp-sent { margin: 6px 0; padding: 6px 10px; border-radius: var(--radius); background: var(--well); font-size: var(--t-small, 13.5px); }
 .sp-contact { margin-top: 4px; }
 @media (max-width: 560px) {
