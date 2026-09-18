@@ -1,4 +1,5 @@
 import type { GameState } from '../types'
+import { mateLine } from './chatter'
 
 /**
  * A line from the manager's desk, which a player's week has no use for.
@@ -56,6 +57,9 @@ export function weekReport(state: GameState): string[] {
   // mine first
   const MINE = new Set(['match', 'cup', 'deal', 'team', 'good', 'bad', 'season'])
   for (const l of me.log.filter((l) => inWeek(l.day) && MINE.has(l.kind)).slice(-4)) out.push(l.text)
+  // and one of the five saying something about it, when something happened (me/chatter.ts)
+  const said = mateLine(state)
+  if (said) out.push(said)
 
   // roster moves: who left, who was signed — my club's first, then the big ones
   const myTeam = me.phase === 'pro' ? state.teams[state.myTeam] : null

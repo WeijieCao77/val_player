@@ -44,6 +44,9 @@
  *    or PlayerGame.tsx) shows the result beside it — a 拿下 / 丢了 tag, or the round's own line that says it. A match
  *    played out keeps the result on every call that has a line, and no call's line in the engine's highlights, which
  *    are shown with no result beside them
+ * 十一 a team-mate's line in the weekly report (me/chatter.ts): one to twelve characters, at most one a week, only at a
+ *    club and only when something that week set it off — said by a real name off my roster, the same line for the same
+ *    save and day, and never in the list 托管 hands back after a run
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
@@ -68,6 +71,10 @@ import type { Invite } from '../src/engine/me/types'
 import { Rng, hashStr } from '../src/engine/rng'
 import { NODE_HL, nodeLine } from '../src/engine/me/nodes'
 import { MeMatch } from '../src/engine/me/matchplay'
+import { CHATTER_LINES, CHATTER_MAX, mateLine } from '../src/engine/me/chatter'
+import { advanceUntil, autoWeek } from '../src/engine/me/auto'
+import type { MeMatchRecord } from '../src/engine/me/types'
+import { dateOfDay, dayNo } from '../src/engine/me/life'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -854,5 +861,87 @@ console.log('\n十 关键回合的句子：句尾不再报这回合拿下 / 丢�
   else pass(`打了 4 场 BO3：${c.calls} 次关键回合都记着这回合的结果，引擎高光 ${c.engine} 句里没有一句是关键回合的句子`)
 }
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标；关键回合的句子不在句尾报结果，结果在旁边。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+/* ---- 十一 a team-mate's line in the weekly report ---- */
+console.log('\n十一 周报里队友的一句：1–12 个字，一周最多一句，只在有俱乐部、这周真有事的时候说')
+{
+  const long = Object.entries(CHATTER_LINES).flatMap(([k, xs]) => xs.filter((x) => [...x.t].length < 1 || [...x.t].length > CHATTER_MAX).map((x) => `${k}「${x.t}」`))
+  if (long.length) fail(`队友的话超过 ${CHATTER_MAX} 个字：${long.join('、')}`)
+  else pass(`${Object.values(CHATTER_LINES).flat().length} 句队友的话都在 1–${CHATTER_MAX} 个字`)
+  const SAID = /^💬 (.+)：「(.+)」$/
+  const pool = (k: keyof typeof CHATTER_LINES): string[] => CHATTER_LINES[k].map((x) => x.t)
+
+  // a week set up by hand: no birthday in it, then one thing at a time
+  const s = createCareer({ name: 'Chat', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 12, year: 2026 })
+  const me = s.me!
+  const roster = s.teams[s.myTeam].roster.filter((id) => id !== me.id).map((id) => s.players[id])
+  const births = roster.map((p) => p.birth)
+  for (const p of roster) p.birth = undefined
+  const game = (o: { won: boolean; score: string; started?: boolean; mvp?: boolean }): MeMatchRecord => ({
+    fixtureId: `check:chat:${me.matches.length}`, day: s.day, year: s.year, comp: 'check', label: 'check', opp: 'X', oppTag: 'X',
+    started: o.started ?? true, won: o.won, score: o.score, maps: 2, rounds: 40, kills: 30, deaths: 30, assists: 10, firstKills: 3,
+    clutches: 0, acs: 200, rating: 1, mvp: !!o.mvp, carried: false, nodes: [], rank: 3,
+  }) as MeMatchRecord
+  const bad: string[] = []
+  const expect = (what: string, want: string[] | null): void => {
+    const line = mateLine(s)
+    const again = mateLine(s)
+    const paper = weekReport(s).filter((l) => l.startsWith('💬'))
+    if (want === null) { if (line !== null || paper.length) bad.push(`${what}：不该说话，说了「${line}」`); return }
+    const m = line ? SAID.exec(line) : null
+    if (!m) { bad.push(`${what}：没说话，或格式不对（${line}）`); return }
+    if (!want.includes(m[2])) bad.push(`${what}：「${m[2]}」不是为这件事写的`)
+    if (!roster.some((p) => p.ign === m[1])) bad.push(`${what}：说话的 ${m[1]} 不是队友`)
+    if (again !== line) bad.push(`${what}：同一个存档同一天，两次说的不一样`)
+    if (paper.length !== 1 || paper[0] !== line) bad.push(`${what}：周报里有 ${paper.length} 句队友的话`)
+  }
+  me.matches = []
+  me.seasonStart.starts = 5
+  expect('这周什么都没发生', null)
+  me.matches = [game({ won: true, score: '2-1' })]
+  expect('赢了一场 2:1、不是连胜', null)
+  me.matches = [game({ won: true, score: '2-0' })]
+  expect('2:0 赢下', pool('bigWin'))
+  me.matches = [game({ won: false, score: '0-2' })]
+  expect('0:2 输掉', pool('bigLoss'))
+  me.matches = [game({ won: false, score: '1-2' }), game({ won: false, score: '1-2' }), game({ won: false, score: '1-2' })]
+  expect('三连败', pool('lossRun'))
+  me.seasonStart.starts = 1
+  me.matches = [game({ won: true, score: '2-1' })]
+  expect('生涯第一次首发', pool('first'))
+  me.seasonStart.starts = 5
+  const today = dateOfDay(dayNo(s.year, s.day))
+  roster[0].birth = `${today.y - 24}-${String(today.m).padStart(2, '0')}-${String(today.d).padStart(2, '0')}`
+  me.matches = []
+  expect('队友这周生日', pool('birthday'))
+  roster.forEach((p, i) => { p.birth = births[i] })
+  // not at a club: nothing, whatever the week
+  const pre = createCareer({ name: 'Chat', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 12, year: 2026 })
+  pre.me!.matches = [game({ won: true, score: '2-0' })]
+  if (mateLine(pre) !== null) bad.push('还没有俱乐部，也说了话')
+  if (bad.length) fail(`队友的话不对：${bad.slice(0, 5).join('；')}`)
+  else pass('手搭的几周：没事不说；2:0、0:2、三连败、第一次首发、队友生日各说一句为它写的话，说话的是名单上的队友，同一天读两次一样，周报里只有这一句；没俱乐部不说')
+
+  // weeks played out: never two in a week, every line short and a team-mate's; and 托管 hands none of it back
+  const run = createCareer({ name: 'Chat', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 31, year: 2026 })
+  const c = { weeks: 0, said: 0, twice: 0, wrong: [] as string[] }
+  for (let i = 0; i < 30; i++) {
+    if (autoWeek(run).kind === 'game-over') break
+    c.weeks++
+    const lines = run.me!.weekNotes.filter((l) => l.startsWith('💬'))
+    if (lines.length) c.said++
+    if (lines.length > 1) c.twice++
+    const names = new Set(run.teams[run.myTeam].roster.filter((id) => id !== run.me!.id).map((id) => run.players[id]?.ign))
+    for (const l of lines) {
+      const m = SAID.exec(l)
+      if (!m || [...m[2]].length > CHATTER_MAX || !names.has(m[1])) c.wrong.push(l)
+    }
+  }
+  const left = advanceUntil(run, 'stage')
+  const leaked = left.notes.filter((l) => l.includes('💬'))
+  if (c.twice || c.wrong.length || leaked.length) fail(`打了 ${c.weeks} 周：${c.twice} 周说了不止一句，${c.wrong.length} 句不对（${c.wrong.slice(0, 3).join('、')}），托管交回来的 ${leaked.length} 句里有队友的话`)
+  else if (!c.said) fail(`打了 ${c.weeks} 周，一句队友的话也没有`)
+  else pass(`一线队打了 ${c.weeks} 周：${c.said} 周有一句队友的话，没有一周超过一句，都在 ${CHATTER_MAX} 个字以内、是名单上的人说的；托管跑完一个赛段交回来的 ${left.notes.length} 句里没有`)
+}
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标；关键回合的句子不在句尾报结果，结果在旁边；周报里队友一周最多一句短话。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)
