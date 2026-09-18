@@ -10,7 +10,7 @@ import Moment, { type MomentChip } from './Moment'
 import { Modal } from './common'
 import Face, { FaceRow } from './Face'
 import { Medal, PromoBadge, TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
-import { RankEmblem } from './art/emblem'
+import { RankBadge } from './art/emblem'
 import { Scene } from './art/scenes'
 
 /**
@@ -171,7 +171,8 @@ function cardOf(g: GameState, m: MomentItem): Card {
       return {
         // the red band would swallow 神话's red: the emblem stands on the card instead
         band: false,
-        art: <RankEmblem tier={tier} div={m.div} />,
+        // the tier's own badge, the one the overview and the 天梯 panel show (art/emblem.tsx)
+        art: <RankBadge tier={tier} div={m.div} size={108} />,
         eyebrow: '天梯 · 第一次到达',
         title: m.rank ?? tier,
         body: `${place}${up}`,

@@ -26,6 +26,7 @@ import { INVITE_FANS, INVITE_LADDER, INVITE_LADDER_T1, skillToLadder } from '../
 import { RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, riseOf, rulesAt, standingOf } from '../../engine/me/rank'
 import { CUPS, CUP_ROUND_GAP, cupRoundToday, cupStatus, cupView } from '../../engine/me/cups'
 import CupDetail from './CupDetail'
+import { RankBadge } from './art/emblem'
 import { focusEvent } from './eventFocus'
 import { FRIENDLY_MAP_FATIGUE } from '../../engine/me/matchplay'
 import { fansCn } from '../../engine/me/fans'
@@ -87,7 +88,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   const stand = standingOf(game)
   const rise = riseOf(me.pre)
   // the board has climbed past me far enough to cost a place: today's place against the one my RR holds on the board as it stands
-  const slid = (rankAt(game).pos ?? 0) > (rankAt(game, me.pre.ladder).pos ?? 0)
+  const ladderNow = rankAt(game)
+  const slid = (ladderNow.pos ?? 0) > (rankAt(game, me.pre.ladder).pos ?? 0)
   const climb = aim > stand + 3 ? (slid ? '实力比现在的名次高，打回去能追上' : '还在往上爬') : aim < stand - 3 ? '打得比实力高，接着打会往回掉' : '和实力相当'
   const week = Math.floor(game.day / 7)
   // 策划稿 §3.5 A: nothing of mine for four weeks — the clock can run a month at a time
@@ -474,7 +476,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             <Panel title="天梯" className="own">
               {/* as the client shows it (engine/me/rank.ts): division, RR with 数值, and from 神话 up the place on my
                   server's board — the board as it has climbed past me in the weeks I did not play (rankAt with no score) */}
-              <p style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>{nums ? rankFull(rankAt(game)) : rankText(rankAt(game))}</p>
+              {/* the tier's badge beside it (2026-09-18, art/emblem.tsx): the words stay as they were */}
+              <div className="ladder-now">
+                <RankBadge tier={ladderNow.tier} div={ladderNow.div} size={44} />
+                <p style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{nums ? rankFull(ladderNow) : rankText(ladderNow)}</p>
+              </div>
               <p className="small" style={{ margin: '0 0 6px' }}>
                 {climb} · 最高 {rankText(rankAt(game, me.pre.ladderPeak))}{nums ? `（实力对应 ${rankAt(game, aim).name}）` : ''}
               </p>

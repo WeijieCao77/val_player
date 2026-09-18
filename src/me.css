@@ -31,45 +31,65 @@
 }
 .act-card.on { border-color: var(--accent-line); background: var(--accent-wash); }
 /* ---- the top of a career: two lines and the pinned one under them ----
-   2026-09-18, a tester on a 1920×1000 screen: 「上面这个信息栏太大了，弄得操作空间特别局促」 — about 460 of its 1000 pixels
-   were above the working area, and 段位 wrapped to a second line. Measured here at 1280×667 (that screen at 150%): the
-   wordmark bar, the overview card and the line under it were 302px of 667; at 1366×768 and 1920×1000, 279px.
-   Now, 破晓's way once a career is open (its title folds to a strip, its HUD is who / now / the numbers):
-   - one line for the wordmark, who I am, the club or 自由身, the stage and the day, and 回到首页 at its end;
-   - one line of the five numbers as label and value, each kept on one line;
-   - the pinned line (.pinbar) leads with the week's action points and 体力.
-   About 120px on a monitor. Nothing went: 体力 moved down a line, beside the action points. */
+   2026-09-18, twice. In the morning a tester on a 1920×1000 screen: 「上面这个信息栏太大了，弄得操作空间特别局促」 — the
+   wordmark bar, the overview card and the line under it were 279px (302 of 667 at 150%). They went to two thin lines of
+   small print, 117px. In the evening the author: 「顶部栏目改的太极端了，太小了，连段位图标都不显示。虽然不能像原来那么大，
+   但是目前太小了。」 So, between the two, about 180px on a monitor:
+   - one line for the wordmark, who I am — the name large, a red slash before it the way a broadcast marks a player's
+     name — the club or 自由身, the stage and the day, and 回到首页 at its end;
+   - one line of the five numbers as blocks, a small label over a figure you read at a glance; 段位 has its tier's
+     badge beside it (ui/me/art/emblem.tsx);
+   - the pinned line (.pinbar) leads with the week's action points and 体力, as before. */
 .hero { flex-shrink: 0; background: var(--bg-rail); border-bottom: 1px solid var(--line); }
-.hero-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; padding: 5px 16px; min-height: 44px; border-bottom: 1px solid var(--line-soft); }
+.hero-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 20px; padding: 8px 16px; min-height: 62px; border-bottom: 1px solid var(--line-soft); }
 .hero-row .brand { flex: none; }
 /* who, where, when: one sentence with a hairline between its parts, wrapping as a sentence does when the window is
-   narrow. No hairline opens a line: each part carries its own 14px to its left and is pulled back over the 29px gap,
+   narrow. No hairline opens a line: each part carries its own 18px to its left and is pulled back over the 37px gap,
    so a part that starts a line has its hairline past the clipped edge (the same for the numbers below). */
-.hero-id { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 29px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
-.hero-id > * { margin-left: -15px; padding-left: 14px; border-left: 1px solid var(--line); }
-.hero-who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.hero-name { font-size: 17px; font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
-.hero-club, .hero-stage { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hero-id { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 37px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.hero-id > * { margin-left: -19px; padding-left: 18px; border-left: 1px solid var(--line); }
+.hero-who { display: flex; align-items: baseline; gap: 10px; min-width: 0; font-size: var(--t-small); }
+.hero-who::before {
+  content: ""; flex: none; align-self: center; width: 5px; height: 22px; margin-right: 2px;
+  background: var(--accent); transform: skewX(-18deg);
+}
+.hero-name { font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; overflow-wrap: anywhere; }
+.hero-club, .hero-stage { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 15px; }
 .hero-club { flex-wrap: wrap; }
 .hero-club b { overflow-wrap: anywhere; }
-.hero-stage { align-items: baseline; gap: 8px; }
+.hero-stage { align-items: baseline; }
 .hero-stage b { font-weight: 700; }
+.hero-stage .muted { font-size: var(--t-small); font-variant-numeric: tabular-nums; }
 /* first in the page's order so a phone can keep it beside the wordmark; a monitor puts it at the end of the line */
 .hero-home { order: 1; flex: none; margin-left: auto; }
 /* the week's button mirrored into the overview: a phone only (below) */
 .hero-go { display: none; }
-/* the five numbers: label and value side by side, and a value never broken over two lines. The side's room is a
-   transparent border rather than padding, so the clipped edge the hairlines go past is where the text starts. */
+/* the five numbers as blocks: a label over its figure, a hairline between blocks, and a figure never broken over two
+   lines. The side's room is a transparent border rather than padding, so the clipped edge the hairlines go past is
+   where the text starts: each block is pulled 24px back over the 48px gap and puts its hairline there. */
 .tiles {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 29px; overflow: hidden;
-  padding: 5px 16px 5px 1px; border-left: 15px solid transparent; background: var(--panel);
+  display: flex; flex-wrap: wrap; align-items: stretch; column-gap: 48px; overflow: hidden;
+  padding: 0 16px 0 0; border-left: 16px solid transparent; background: var(--panel);
 }
-.tile { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; margin-left: -15px; padding-left: 14px; border-left: 1px solid var(--line); }
-.tile small { color: var(--muted); font-size: var(--t-small); white-space: nowrap; }
-.tile b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.4; white-space: nowrap; }
-.tile b em { font-style: normal; font-weight: 400; font-size: var(--t-small); color: var(--muted); margin-left: 6px; }
+.tile {
+  display: grid; align-content: center; row-gap: 1px; min-width: 0;
+  margin-left: -24px; padding: 12px 0 12px 23px; border-left: 1px solid var(--line);
+}
+.tile small { color: var(--muted); font-size: var(--t-label); letter-spacing: .1em; line-height: 1.4; white-space: nowrap; }
+.tile b { font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; }
+.tile b em { font-style: normal; font-weight: 500; font-size: var(--t-small); color: var(--muted); margin-left: 8px; }
 .tile.up b { color: var(--win); }
 .tile.dn b { color: var(--loss); }
+/* 段位: the tier's badge stands at the left of its label and figure */
+.tile.rank { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
+.tile.rank > .rank-badge { grid-row: 1 / span 2; align-self: center; }
+.tile.rank > small, .tile.rank > b { grid-column: 2; }
+/* a tier's badge (ui/me/art/emblem.tsx): its colours are its own on every ground; 辐能战魂 alone gives off light */
+.rank-badge { display: inline-block; flex: none; vertical-align: middle; overflow: visible; }
+.rank-badge.radiant { filter: drop-shadow(0 0 3px rgba(255, 201, 60, .55)); }
+/* the 天梯 panel on 本周: the badge at the left of the big rank line */
+.ladder-now { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
+.ladder-now > p { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
 
 /* the whiteboard in a live match */
 .map-board { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: center; margin: 6px 0 10px; }
@@ -734,13 +754,20 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career .hero-home { order: 0; }
   .app.career .hero-id { order: 2; flex: 1 1 100%; row-gap: 2px; }
   .app.career .hero-who { flex-wrap: wrap; gap: 2px 8px; }
-  .app.career .hero-name { font-size: 19px; }
-  .app.career .hero-club, .app.career .hero-stage { flex-wrap: wrap; row-gap: 2px; }
-  .app.career .tiles { row-gap: 3px; padding: 6px 10px 6px 1px; border-left-width: 9px; }
-  .app.career .tile { gap: 6px; }
+  .app.career .hero-name { font-size: 20px; }
+  .app.career .hero-who::before { height: 18px; width: 4px; }
+  .app.career .hero-club, .app.career .hero-stage { flex-wrap: wrap; row-gap: 2px; font-size: var(--t-small); }
+  /* the five blocks, tighter than a monitor's: a 14px pull over a 28px gap, and the badge at 30px, so two rows hold
+     them at 375 (2026-09-18, the whole top of a ladder start: 264px as label-and-value pairs, 341 with the monitor's
+     blocks, 301 with these; a club start 288 → 325; 412 before the pairs) */
+  .app.career .tiles { column-gap: 28px; padding: 2px 10px 2px 0; border-left-width: 10px; }
+  .app.career .tile { margin-left: -14px; padding: 5px 0 5px 13px; row-gap: 0; }
+  .app.career .tile small { font-size: var(--t-tiny); letter-spacing: .06em; }
+  .app.career .tile.rank { column-gap: 8px; }
+  .app.career .tile.rank > .rank-badge { width: 30px; height: 30px; }
   /* one line where it fits (「神话 · 亚服第 1,750 名」 does at 375); on the narrowest phone a figure breaks rather than being cut off */
-  .app.career .tile b { font-size: 16px; white-space: normal; overflow-wrap: anywhere; }
-  .app.career .tile b em { white-space: nowrap; }
+  .app.career .tile b { font-size: 17px; white-space: normal; overflow-wrap: anywhere; }
+  .app.career .tile b em { white-space: nowrap; margin-left: 6px; }
   /* the changelog card: its kind badges were 10.5px, and a line of code in it one unbreakable word */
   .app.career .log-kind { font-size: var(--t-tiny); }
   .app.career .log-list li { min-width: 0; overflow-wrap: anywhere; }

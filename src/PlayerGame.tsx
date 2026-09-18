@@ -19,6 +19,7 @@ import { ladderLabel } from './engine/me/prepro'
 import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
 import { Crest, Modal, money } from './ui/me/common'
+import { RankBadge } from './ui/me/art/emblem'
 import NewCareer from './ui/me/NewCareer'
 import Week, { advanceOf } from './ui/me/Week'
 import MatchPlay from './ui/me/MatchPlay'
@@ -377,6 +378,8 @@ function Career() {
   // 体力 now, and what this week's plan leaves of it (engine/me/week.ts staminaLeft, the 本周行动 panel's bar)
   const stamina = Math.round(100 - p.fatigue)
   const planned = staminaLeft(game)
+  // where I stand on the ladder today, for the overview's badge; a retired man's reads 「—」
+  const rank = me.phase === 'retired' ? null : rankAt(game)
   // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
   // under a card's scrim could not be pressed (z45 against z50), and the tour's veil covered it too
   // the big moments first (me/moments.ts), then the achievements they unlocked, then the cards the clock stopped on
@@ -405,7 +408,9 @@ function Career() {
             1280×667 the wordmark bar, this card and the line under it took 302px of 667). The wordmark and 回到首页 ride
             the first line with who I am, where, and the day, the way 破晓 folds its title into a strip once a career is
             open; the five numbers are label and value on the second. 体力 went down a line, beside the week's action
-            points, where the two budgets of a week stay on screen together (me.css .pinbar). */}
+            points, where the two budgets of a week stay on screen together (me.css .pinbar). The same evening the author
+            found it gone too far (「太小了，连段位图标都不显示」): the name is large again, the numbers are blocks with the
+            label over the figure, and 段位 has its tier's badge — about 180px on a monitor where it had been 279 and 117. */}
         <header className="hero" aria-label="总览">
           <div className="hero-row">
             <button className="brand as-link" onClick={() => goScreen('week')}>
@@ -422,7 +427,7 @@ function Career() {
               <div className="hero-club">
                 {team ? (
                   <>
-                    <Crest id={game.myTeam} size={18} />
+                    <Crest id={game.myTeam} size={22} />
                     <b>{team.name}</b>
                     <span className={`tag ${team.tier === 1 ? 't1' : 't2'}`}>{formatOf(game.year) === 'open' ? (team.tier === 1 ? '一线' : '二线') : team.tier === 1 ? 'VCT' : '挑战者联赛'}</span>
                     <span className="muted">·</span>
@@ -446,7 +451,12 @@ function Career() {
           })()}
           <div className="tiles">
             <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
-            <div className="tile"><small>段位</small><b>{me.phase === 'retired' ? '—' : ladderLabel(game)}{nums && me.phase !== 'retired' && <em>{rankAt(game).rr} RR</em>}</b></div>
+            {/* the tier's badge beside the words (asked 2026-09-18: 「连段位图标都不显示」); the words are as they were */}
+            <div className={`tile${rank ? ' rank' : ''}`}>
+              {rank && <RankBadge tier={rank.tier} div={rank.div} size={40} />}
+              <small>段位</small>
+              <b>{rank ? ladderLabel(game) : '—'}{nums && rank && <em>{rank.rr} RR</em>}</b>
+            </div>
             <div className="tile" title={`${fanTier(me.fans).name} · ${fansCn(me.fans)}`}><small>粉丝</small><b>{fanTier(me.fans).name}<em>{fansCn(me.fans)}</em></b></div>
             <div className="tile"><small>资金</small><b>{money(me.money)}</b></div>
             {/* 气压 has no tile of its own: past 55 it is the only state worth saying */}
