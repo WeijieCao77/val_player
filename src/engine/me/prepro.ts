@@ -12,6 +12,7 @@ import { clubOpen, inviteBlock } from './window'
 import { noteRankPeak } from './moments'
 import { callerRead } from './igl'
 import { countOffer } from './telemetry'
+import { firstPlayBy } from './nextup'
 
 export const AP_PRE = 12
 /** the earliest a club will pick up the phone, in weeks of the first year */
@@ -375,11 +376,34 @@ const waiting = (state: GameState): boolean => state.me!.pre.invites.some((i) =>
  */
 export const ABROAD_CAP = 0.5
 
-/** A club's pull in a call's draw before any 赛区 rule: how far I clear its bar, and the tier the channel asks first. */
+/**
+ * A club with a match of its own within SOON_DAYS, were I on it, pulls SOON_PULL times as hard in a call's draw
+ * (me/nextup.ts firstPlayBy: 「下一场」's own reading of the club — a seat or a decider it can enter). A lean, not a
+ * gate: a club with nothing soon still calls, and every other part of a club's pull, and every 赛区 rule over it, is
+ * as it was.
+ *
+ * The author approved it 2026-09-18, on scripts/probe_first_match_wait.ts: a call never read when a club next plays,
+ * and at the call that brought a ladder start's first contract a quarter of 2026's home clubs in reach played within
+ * eight weeks, the club that called in 41 of 120 careers; 42 of the 120 then waited for November's open qualifier.
+ * Twice as hard, the same careers (托管, 30 seeds × China, Europe, North America, Korea; the two before this already
+ * in): the club that called played within eight weeks in 41 → 55 of 120, the median wait from the contract to the
+ * first match 11.2 → 9.1 weeks, 14 → 9 waits over half a year, 42 → 35 to November; 2021, where few clubs play within
+ * weeks of a spring call, 9.1 → 9.2. Two contracts of 240 came on another week (another club called first and its
+ * tryout ended without a deal). Three times as hard went to 8.3 weeks and 8 over half a year, and moved one contract
+ * 26 weeks the same way: the lean is kept mild.
+ */
+export const SOON_DAYS = 70
+export const SOON_PULL = 2
+
+/**
+ * A club's pull in a call's draw before any 赛区 rule: how far I clear its bar, the tier the channel asks first, and
+ * whether it plays soon (SOON_PULL).
+ */
 export function inviteWeight(state: GameState, t: Team, prefer: 1 | 2 | 0): number {
   let v = 10 + Math.max(0, tryoutSkill(state) - expectOf(t)) * 2
   if (prefer && t.tier === prefer) v *= 4
   if (!prefer && t.tier === 1) v *= 0.5
+  if (firstPlayBy(state, t, state.day + SOON_DAYS) != null) v *= SOON_PULL
   return v
 }
 

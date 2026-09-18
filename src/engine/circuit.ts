@@ -1801,15 +1801,51 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
   if (c.seeds.includes(teamId) || Object.values(c.fill ?? {}).includes(teamId) || (c.mode && comp.teams.includes(teamId))) return { standing: 'seated' }
   // drawn and under way without it
   if (c.start <= state.day) return comp.teams.includes(teamId) ? { standing: 'seated' } : null
+  return outlookIn(state, comp, ev, team, drawNow(state, ev), depth, false)
+}
+
+/** An event's draw as it stands today, as begin would make it (seedsFor, 方案 C's seat, leagueOut): read once, however many clubs are asked. */
+interface DrawNow { seats: (string | null)[]; moved: boolean }
+function drawNow(state: GameState, ev: CEvent): DrawNow {
   const drawn = seedsFor(state, ev)
-  const seats = leagueOut(state, ev, takeSeat(state, ev, drawn.seeds))
+  return { seats: leagueOut(state, ev, takeSeat(state, ev, drawn.seeds)), moved: drawn.swaps.length > 0 }
+}
+
+/**
+ * For a call's draw (engine/me/nextup.ts firstPlayBy): an event not drawn yet, read for any club as if it were the
+ * player's — drawOutlook, the reading the week's 「下一场」 gives the player's own club, on one read of the event's draw
+ * for however many clubs are asked. Only what is a match: a seat the draw as it stands gives the club, with its first
+ * tie's day (`seated`), or a decider it can enter (`entry`). Null for an event drawn or under way.
+ */
+export function outlookAsMine(state: GameState, comp: Competition): ((team: Team) => { standing: 'seated' | 'entry'; day?: number } | null) | null {
+  const c = comp.circuit
+  const ev = c && eventOf(c.id)
+  if (!c || !ev || comp.champion || c.done || c.mode || c.start <= state.day) return null
+  const draw = drawNow(state, ev)
+  return (team) => {
+    const o = outlookIn(state, comp, ev, team, draw, 0, true)
+    return o?.standing === 'seated' || o?.standing === 'entry' ? { standing: o.standing, day: o.day } : null
+  }
+}
+
+/**
+ * drawOutlook for an event not drawn yet, on its draw as it stands (drawNow). `asMine`: the club read as if it were
+ * the player's, as far as a match goes (outlookAsMine, couldStillTake).
+ */
+function outlookIn(
+  state: GameState, comp: Competition, ev: CEvent, team: Team, draw: DrawNow, depth: number, asMine: boolean,
+): { standing: DrawStanding; day?: number; from?: number } | null {
+  const c = comp.circuit!
+  const teamId = team.id
+  const seats = draw.seats
   const at = seats.indexOf(teamId)
   if (at >= 0) {
     // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play
     // there — except the player's club, which plays the decider a club not on the list gets (offerPlayIn, 2026-09-18)
     const through = openOutputs(ev).filter(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
     if (!mainSeedsOf(ev).has(at) && !through.length) {
-      return teamId === playerClub(state) && !ev.plan && listedOnly(state, ev, seats, teamId) && deciderDoor(state, ev, team) ? { standing: 'entry' } : { standing: 'booked' }
+      const own = asMine || teamId === playerClub(state)
+      return own && !ev.plan && listedOnly(state, ev, seats, teamId) && deciderDoor(state, ev, team) ? { standing: 'entry' } : { standing: 'booked' }
     }
     // in by its qualifier's road, the seed is the next side's (begin)
     const mine = (s: Slot): boolean =>
@@ -1823,7 +1859,7 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
       : seat.get(at) ?? c.start
     return { standing: 'seated', day, from }
   }
-  const more = couldStillTake(state, comp, ev, team, depth, { seats, moved: drawn.swaps.length > 0 })
+  const more = couldStillTake(state, comp, ev, team, depth, draw, asMine)
   return more ? { standing: more } : comp.teams.includes(teamId) ? { standing: 'booked' } : null
 }
 
@@ -1988,10 +2024,12 @@ function mainSeedsOf(ev: CEvent): Set<number> {
   return hit
 }
 
-/** An event not drawn yet whose draw as it stands leaves the club out: could anything still put it in? See drawStanding. */
-function couldStillTake(
-  state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number, draw: { seats: (string | null)[]; moved: boolean },
-): 'entry' | 'maybe' | null {
+/**
+ * An event not drawn yet whose draw as it stands leaves the club out: could anything still put it in? See drawStanding.
+ * `asMine`: the club read as if it were the player's, for a call's draw (outlookAsMine) — and only a decider it can
+ * enter counts there: a place its results may still earn, or one the draw may yet stand it in for, is no match of its own.
+ */
+function couldStillTake(state: GameState, comp: Competition, ev: CEvent, team: Team, depth: number, draw: DrawNow, asMine = false): 'entry' | 'maybe' | null {
   const teamId = team.id
   const deeper = (id: string): boolean => {
     const f = state.comps[`ev:${id}`]
@@ -1999,13 +2037,16 @@ function couldStillTake(
   }
   if (ev.plan) {
     if (ev.plan.seats.some((s) => s.from === 'pool') && planEligible(state, ev, team, null)) return 'entry'
-    return ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event)) ? 'maybe' : null
+    return !asMine && ev.plan.seats.some((s) => s.from === 'place' && deeper(s.event)) ? 'maybe' : null
   }
   // a place the draw fills from the player's own scene (fillGaps, offerPlayIn): open to it only where a
   // qualifier's last place, or a closed league's promotion place, is there to play a decider for. Read without keeping
   // the scene it works out: this is a read — the week screen's 「下一场」 (me/nextup.ts), quietAhead, a break's lock
   // (me/outlets.ts) — and a club with no scene the roster book names had one written into the save by being looked at
-  if (teamId === playerClub(state) && isHome(state, ev, team, teamId, false)) return deciderDoor(state, ev, team) ? 'entry' : 'maybe'
+  if ((asMine || teamId === playerClub(state)) && isHome(state, ev, team, teamId, false)) {
+    return deciderDoor(state, ev, team) ? 'entry' : asMine ? null : 'maybe'
+  }
+  if (asMine) return null
   // a side's place the draw as it stands would stand the player's club in for (fillGaps), wherever its home is
   if (teamId === playerClub(state) && standsIn(state, comp, ev, team, draw)) return 'maybe'
   const book = rulesOf(ev.id)?.routes

@@ -1,9 +1,9 @@
-import { drawOutlook, eventOf, roundAheadOf } from '../circuit'
+import { drawOutlook, eventOf, outlookAsMine, roundAheadOf } from '../circuit'
 import type { DrawStanding, RoundAhead } from '../circuit'
 import { formatOf, onTimeline, stagesOf } from '../era'
 import { nextInEvent, upcomingInternational } from '../qualify'
 import { nextRealFixtureFor } from '../season'
-import type { Competition, Fixture, GameState } from '../types'
+import type { Competition, Fixture, GameState, Team } from '../types'
 
 /** The latest day an event not drawn yet can play a club's decider: its open qualifiers' last day, or its draw's (circuit.ts offerPlayIn, planPlayIn). */
 const deciderBy = (c: Competition): number =>
@@ -189,6 +189,68 @@ export function nextUp(state: GameState): NextUp {
   }
   const first = eventsAhead(state, club, state.day + EVENT_DAYS).first
   return first ? { ...eventUp(first), out } : { kind: 'none', out }
+}
+
+/** A call's reading of a club, once a day: each event's draw read once for every club asked (circuit.ts outlookAsMine). */
+const PLAYS = new WeakMap<GameState, { at: string; readers: Map<string, ReturnType<typeof outlookAsMine>>; of: Map<string, number | null> }>()
+
+/** What a club's next match can turn on within a day: the day, the draws made, the events over, the ties written and played. */
+function worldAt(state: GameState): string {
+  let drawn = 0
+  let over = 0
+  for (const c of Object.values(state.comps)) {
+    if (c.circuit?.mode) drawn++
+    if (c.champion || c.circuit?.done) over++
+  }
+  let played = 0
+  for (const f of state.fixtures) if (f.played) played++
+  return `${state.year}:${state.day}:${drawn}:${over}:${state.fixtures.length}:${played}`
+}
+
+/**
+ * The first day a club I am not at would play by `until` if I were on it, or null: 「下一场」's own reading (nextUp) of
+ * a club — a tie of its own already written, a round of its own with no tie yet in an event this world plays, or an
+ * event not drawn yet whose draw as it stands seats it (its first tie there) or that is open for it to enter (the
+ * day its decider is surely played, deciderBy). An event this world replays as history takes nobody new, and a
+ * place results may still earn is no match yet. For a call's draw (me/prepro.ts inviteWeight). A read: nothing is
+ * kept on the club or the save.
+ */
+export function firstPlayBy(state: GameState, team: Team, until: number): number | null {
+  const at = `${worldAt(state)}:${until}`
+  let memo = PLAYS.get(state)
+  if (memo?.at !== at) {
+    memo = { at, readers: new Map(), of: new Map() }
+    PLAYS.set(state, memo)
+  }
+  const hit = memo.of.get(team.id)
+  if (hit !== undefined) return hit
+  let best: number | null = null
+  const keep = (day: number): void => { if (day <= until && (best == null || day < best)) best = day }
+  const tie = nextRealFixtureFor(state, team.id)
+  if (tie) keep(tie.day)
+  for (const comp of Object.values(state.comps)) {
+    const c = comp.circuit
+    if (!c || comp.champion || c.done) continue
+    if (c.mode) {
+      // under way here: a round of its own with no tie yet (roundsAhead); one replayed as history has nothing for me
+      if (c.mode === 'sim' && holds(comp, team.id)) {
+        const r = roundAheadOf(state, comp, team.id)
+        if (r) keep(r.day)
+      }
+      continue
+    }
+    // not drawn yet: its first tie can come on its eve (eventsAhead)
+    if (c.start <= state.day || c.start - 1 > until || (best != null && c.start - 1 >= best)) continue
+    let read = memo.readers.get(comp.key)
+    if (read === undefined) {
+      read = outlookAsMine(state, comp)
+      memo.readers.set(comp.key, read)
+    }
+    const o = read?.(team)
+    if (o) keep(o.standing === 'seated' ? Math.max(o.day ?? c.start, state.day + 1) : deciderBy(comp))
+  }
+  memo.of.set(team.id, best)
+  return best
 }
 
 /**
