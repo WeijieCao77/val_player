@@ -233,6 +233,9 @@ export interface MeMatchRecord {
   box?: BoxRow[]
   /** how the direct matchup with a name went, if there was one */
   starBeat?: string
+  /** that matchup lost and the series with it — the line is drawn as a bad night. The screen used to find
+      this by reading 「上了一课」 in the line, which no longer says it (2026-09-18) */
+  starBeatBad?: boolean
   /** per map: what the win estimate was when it began, and how it went */
   mapLog?: { map: string; before: number; won: boolean }[]
   /** a cup or exhibition rather than a league fixture */

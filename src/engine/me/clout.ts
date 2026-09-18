@@ -315,8 +315,8 @@ export function doSign(state: GameState, targetId: string): string {
       return `没谈成，价太高。经理没怪你。`
     }
     me.gmTrust = clamp(me.gmTrust - 12, 0, 100)
-    pushLog(state, 'bad', `你向经理提出签下 ${target.ign}，对方要价太高，谈崩了。<b>经理觉得你不太懂行情。</b>`)
-    return `谈崩了。经理觉得你不太懂行情。`
+    pushLog(state, 'bad', `你想签 ${target.ign}，对方要价太高，谈崩了。<b>经理：「下回先问问行情。」</b>`)
+    return `谈崩了。经理让你下回先问问行情。`
   }
 
   const fee = feeOf(target)
@@ -350,7 +350,7 @@ export function doSign(state: GameState, targetId: string): string {
     text: `${myTeam.name} 以 ${worldMoney(fee, leagueCurOf(myTeam.region), state.year)} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
   })
   me.gmTrust = clamp(me.gmTrust - 3, 0, 100)
-  pushLog(state, 'team', `俱乐部按你的要求把 <b>${target.ign}</b> 签了下来。<b>这是你的话语权换来的——现在成绩得对得起它。</b>`)
+  pushLog(state, 'team', `俱乐部按你说的，把 <b>${target.ign}</b> 签来了。<b>人是你要的。</b>`)
   return `${target.ign} 来了。`
 }
 

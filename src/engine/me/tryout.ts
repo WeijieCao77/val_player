@@ -38,7 +38,7 @@ export const TRYOUT_DAYS: TryoutDay[] = [
     desc: '教练组在你身后架了台机器录屏。他们不看你杀了几个，看你每一发开枪前的那半秒。',
     opts: [
       { t: '打自己的节奏，不急', dim: 'aim', risk: 0.6, why: '数据不会难看，也不会让人记住。' },
-      { t: '全程拉到最快，秀一把', dim: 'reaction', risk: 1.3, why: '打出来就是“这手得留下”，拉垮了就是“心太浮”。' },
+      { t: '全程拉到最快，秀一把', dim: 'reaction', risk: 1.3, why: '赌手速。打出来会被记住，拉垮了也会。' },
       { t: '只当热身，别把手腕累坏', dim: 'aim', risk: 0.4, why: '保住体力，代价是这一天几乎不加分。' },
     ],
   },
@@ -48,7 +48,7 @@ export const TRYOUT_DAYS: TryoutDay[] = [
     opts: [
       { t: '完全按他们的体系打', dim: 'teamwork', risk: 0.7, why: '融入得快，但录像里看不出哪一个是你。' },
       { t: '多丢道具，让队友打得舒服', dim: 'utility', risk: 0.8, why: '教练看得见，数据面板上看不见。' },
-      { t: '先手冲，让他们看到枪', dim: 'reaction', risk: 1.3, why: '打成了就是核心，打崩了就是不合群。' },
+      { t: '先手冲，让他们看到枪', dim: 'reaction', risk: 1.3, why: '枪打出来，你就是核心；打崩了，会被说不合群。' },
     ],
   },
   {
@@ -56,7 +56,7 @@ export const TRYOUT_DAYS: TryoutDay[] = [
     desc: '教练把昨天那个输掉的回合倒了七遍，然后问你：这一回合，问题出在谁身上。',
     opts: [
       { t: '承认是自己的错，并给出改法', dim: 'awareness', risk: 0.7, why: '教练最想听到的答案。' },
-      { t: '指出这支队伍体系上的问题', dim: 'igl', risk: 1.2, why: '说服了是有主见，没说服就是听不进话。' },
+      { t: '指出这支队伍体系上的问题', dim: 'igl', risk: 1.2, why: '教练可能点头，也可能觉得你听不进话。' },
       { t: '少说话，多听', dim: 'communication', risk: 0.4, why: '稳妥，但显得你没有自己的想法。' },
     ],
   },
@@ -64,7 +64,7 @@ export const TRYOUT_DAYS: TryoutDay[] = [
     name: '第四天 · 经理面谈', rec: 2,
     desc: '合同就摆在桌上，他没推过来。先问你一句：你觉得自己值多少。',
     opts: [
-      { t: '报一个高数字', dim: 'mental', risk: 1.3, why: '有底气是加分项，没底气就是不自量力。谈成了筹码也高。' },
+      { t: '报一个高数字', dim: 'mental', risk: 1.3, why: '底气撑得住就加分，撑不住显得不自量力。谈成了筹码也高。' },
       { t: '先谈上场时间，钱往后放', dim: 'communication', risk: 0.9, why: '他会记住你想打比赛，不是想拿钱。' },
       { t: '都听俱乐部安排', dim: 'mental', risk: 0.5, why: '不会出错，也不会给你加什么。' },
     ],

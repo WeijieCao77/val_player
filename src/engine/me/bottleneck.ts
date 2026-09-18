@@ -353,19 +353,19 @@ const playedIntl = (state: GameState) => tallyOf(state.me!).intl > 0
 export const BREAK_PATHS: Record<K, BreakPath> = {
   aim: {
     how: '每周至少练 2 次枪法训练，连续 3 周', value: BREAK_VALUE.grind,
-    reason: '连着三周把时间砸在练枪软件和死斗里，手上的东西磨出来了。',
+    reason: '连着三周，泡在练枪软件和死斗里。',
     prog: (s) => `本周练了 ${s.me!.plan.aim ?? 0} 次（要 2 次）· 已连续 ${upTo(s.me!.bottleneck?.aimStreak ?? 0, 3)} 周`,
     done: (s) => (s.me!.bottleneck?.aimStreak ?? 0) >= 3,
   },
   reaction: {
     how: `卡在瓶颈上以后，打满 ${NEED.reaction} 次排位`, value: BREAK_VALUE.grind,
-    reason: '一把接一把的对枪，把你的反应逼快了。',
+    reason: '又是一晚上的对枪。',
     prog: (s) => tally(s, 'reaction', '已打', '次', '本周还安排了 # 次排位'),
     done: (s) => counted(s, 'reaction') >= NEED.reaction!,
   },
   awareness: {
     how: `卡在瓶颈上以后，复盘满 ${NEED.awareness} 次`, value: BREAK_VALUE.grind,
-    reason: '泡在录像里的这些天，你看比赛的方式变了。',
+    reason: '录像看到第几遍，已经数不清了。',
     prog: (s) => tally(s, 'awareness', '已复盘', '次', '本周还安排了 # 次复盘'),
     done: (s) => counted(s, 'awareness') >= NEED.awareness!,
   },
@@ -377,19 +377,19 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
   },
   clutch: {
     how: `卡在瓶颈上以后，在正赛里赢下 ${NEED.clutch} 个残局；或者拿一次冠军`, value: BREAK_VALUE.path, key: 'clutch',
-    reason: '最后一个人交到你手上的时候，你已经不慌了。',
+    reason: '残局又一次落到你手上。手没抖。',
     prog: (s) => tally(s, 'clutch', '残局', '个', '这周比赛里又赢了 # 个'),
     done: (s) => counted(s, 'clutch') >= NEED.clutch! || s.me!.titles.some((t) => t.started),
   },
   teamwork: {
     how: `卡在瓶颈上以后，打满 ${NEED.teamwork} 次跟队训练赛`, value: BREAK_VALUE.grind, pro: true,
-    reason: '一起打了这么多训练赛，你知道队友下一步会站在哪。',
+    reason: '训练赛打到后来，报点只要报一半。',
     prog: (s) => tally(s, 'teamwork', '已打', '次', '本周还安排了 # 次训练赛'),
     done: (s) => counted(s, 'teamwork') >= NEED.teamwork!,
   },
   communication: {
     how: `和 ${VET_AGE} 岁以上的老将同队、待在强队，或者打过国际赛`, value: BREAK_VALUE.path, pro: true, key: 'commenv',
-    reason: '这一年你身边的人和场面，把你说话的方式改了。',
+    reason: '这一年，语音里你开口的次数多了。',
     prog: (s) => {
       const v = veteranOf(s)
       return v ? `队里有 ${v.ign}` : strongClub(s) ? '待在强队' : playedIntl(s) ? '打过国际赛' : '还没有'
@@ -398,7 +398,7 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
   },
   igl: {
     how: `卡在瓶颈上以后，以队里指挥的身份打满 ${NEED.igl} 张图`, value: BREAK_VALUE.grind, pro: true,
-    reason: '喊了这么多回合，你知道什么时候该开口、说到哪一句就够了。',
+    reason: '喊了这么多回合，一句话说到哪就停，你心里有数了。',
     prog: (s) => (s.players[s.me!.id]?.isIgl ? tally(s, 'igl', '已打', '张图', '这周又打了 # 张图') : '你现在不是队里的指挥'),
     done: (s) => counted(s, 'igl') >= NEED.igl!,
   },

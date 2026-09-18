@@ -512,6 +512,7 @@ export class MeMatch {
     const beat = starBeat(state, rec, this.me.role)
     if (beat) {
       rec.starBeat = starBeatLine(beat, won)
+      if (!beat.won && !won) rec.starBeatBad = true
       if (beat.won && started) {
         me.heat += 6
         me.fans += 40

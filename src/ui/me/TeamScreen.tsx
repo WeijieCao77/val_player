@@ -273,7 +273,7 @@ function CloutPanel() {
       {open === 'sign' && (
         <div className="clout-list">
           <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
-            你能开口要的人就这几个——档次跟着你的威望和经理对你的信任走。<b>谈崩了，经理会觉得你不懂行情。</b>
+            你能开口要的人就这几个——档次跟着你的威望和经理对你的信任走。<b>谈崩了，经理对你的信任会掉一截。</b>
           </p>
           {targets.length ? targets.map((t) => (
             <div key={t.id} className="clout-row">

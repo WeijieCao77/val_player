@@ -402,5 +402,5 @@ export function leaveClub(state: GameState, why: string): void {
   me.trial = undefined
   me.benchLock = undefined
   me.proven = false
-  pushLog(state, 'bad', `${from?.name ?? '俱乐部'}${why}。你成了自由人——在别的队来电话之前，天梯和训练赛是你唯一的舞台。`)
+  pushLog(state, 'bad', `${from?.name ?? '俱乐部'}${why}。你成了自由人。天梯照打，等电话。`)
 }

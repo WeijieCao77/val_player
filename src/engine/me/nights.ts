@@ -456,7 +456,7 @@ export const NIGHTS: Record<NightKind, CerDef> = {
     blurb: {
       gold: '热手打得漂亮，教练在本子上记了一笔。评估分 +1.5。',
       silver: '正常热手。评估分不变。',
-      bronze: '手一直没热起来，教练看在眼里。评估分 −1。',
+      bronze: '手一直没热起来。评估分 −1。',
     },
   },
   retire: {

@@ -73,7 +73,7 @@ export function noteScoutInterest(state: GameState, rng: Rng): void {
   if (seen) seen.day = state.day
   else me.intents.push({ teamId: t.id, day: state.day })
   pushLog(state, 'info', windowAt(state, t.id, false).open
-    ? (seen ? `${t.name} 的教练又来看了你的比赛，你的名字早就在他们的名单上。` : `${t.name} 的教练来看了你的比赛，记下了你的名字。`)
+    ? (seen ? `${t.name} 的教练又来看了你的比赛，你的名字早就在他们的名单上。` : `${t.name} 的教练来看过你的比赛。你的名字进了他的本子。`)
     : `${t.name} 的教练${seen ? '又' : ''}来看了你的比赛。转会窗口开了再说。`)
 }
 

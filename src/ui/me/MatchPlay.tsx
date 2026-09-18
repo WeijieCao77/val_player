@@ -311,7 +311,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             </div>
           </div>
         )}
-        {rec.starBeat && <div className={`node-line ${rec.starBeat.includes('上了一课') ? 'bad' : 'ok'}`}>{rec.starBeat}</div>}
+        {rec.starBeat && <div className={`node-line ${rec.starBeatBad ? 'bad' : 'ok'}`}>{rec.starBeat}</div>}
         <RivalPost rec={rec} />
         {/* why it went that way — every row is a term the engine actually used */}
         {rec.verdict && (

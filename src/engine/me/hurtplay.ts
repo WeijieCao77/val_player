@@ -200,14 +200,14 @@ function coverNight(state: GameState, rec: MeMatchRecord): void {
   me.edge += rec.won && rec.rank === 1 ? 1.5 : 1
   me.coachTrust = clamp(me.coachTrust + 1.5, 0, 100)
   if (me.edge < EDGE_NEED) {
-    pushLog(state, 'team', '顶上首发的这场打出来了，教练记下了。')
+    pushLog(state, 'team', '顶上首发的这场，打出来了。对位挑战的资本记了一笔。')
     return
   }
   const him = out.find((q) => (q.roles ?? [q.role]).includes(mine.role)) ?? out[0]
   me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
   me.edge = 0
   team.starters = coachStarters(state)
-  pushLog(state, 'good', `顶上的几场都打出来了。教练说：接下来 ${TRIAL_MATCHES} 场你先打，赢下来，${him.ign} 回来也不一定拿得回位置。`)
+  pushLog(state, 'good', `顶上的几场都打出来了。教练：「下 ${TRIAL_MATCHES} 场你先打。」打出来，${him.ign} 回来也不一定拿得回位置。`)
 }
 
 /**

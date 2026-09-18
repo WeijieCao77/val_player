@@ -136,7 +136,7 @@ function endDuel(state: GameState): void {
     const gain = 1 + live.flash * 0.5
     me.edge = Math.min(EDGE_NEED + 2, me.edge + gain)
     me.coachTrust = clamp(me.coachTrust + 1.5, 0, 100)
-    live.verdict = `你 ${live.sc[0]}:${live.sc[1]} 赢下对位。${live.flash ? `有 ${live.flash} 波打得很亮，教练组记下了。` : ''}资本 +${gain} → ${me.edge.toFixed(1)}/${EDGE_NEED}`
+    live.verdict = `你 ${live.sc[0]}:${live.sc[1]} 赢下对位。${live.flash ? `有 ${live.flash} 波打得很亮。` : ''}资本 +${gain} → ${me.edge.toFixed(1)}/${EDGE_NEED}`
   } else {
     me.edge = Math.max(0, me.edge - 0.5)
     me.coachTrust = clamp(me.coachTrust + 0.3, 0, 100)
@@ -154,8 +154,8 @@ function endDuel(state: GameState): void {
     me.edge = 0
     team.starters = coachStarters(state)
     live.trial = true
-    live.verdict += `教练找你谈了：下一场正赛，名单上是你。赢了位置就是你的；输了回替补席。`
-    pushLog(state, 'good', `训练赛里你连着压过 ${him.ign}，教练点头了：接下来 ${TRIAL_MATCHES} 场正赛你先打。赢下来就是你的。`)
+    live.verdict += `。教练叫住你：「下 ${TRIAL_MATCHES} 场正赛，你上。」打出来，位置就是你的；打不出来，回替补席。`
+    pushLog(state, 'good', `训练赛里连着压过 ${him.ign}。教练：「下 ${TRIAL_MATCHES} 场你上。」打出来，位置就是你的。`)
   } else {
     const held = won && promiseSeat(state) === 'bench'
     if (held) live.verdict += `。${PROMISE_HELD}`

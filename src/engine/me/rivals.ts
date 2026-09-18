@@ -267,11 +267,11 @@ export function rivalAfterMatch(state: GameState, rec: MeMatchRecord, info: Riva
           : { t: `又输给宿敌 ${rival.ign}${nums}。`, ok: false }
     if (wasOn.has(rival.id)) me.tilt = clamp(me.tilt + (rec.won ? -4 : rec.drawn ? 0 : 3), 0, 100)
     // one line about him, not two
-    if (row && rec.starBeat?.includes(row.ign)) delete rec.starBeat
+    if (row && rec.starBeat?.includes(row.ign)) { delete rec.starBeat; delete rec.starBeatBad }
   } else if (cp && !rec.starBeat) {
     const d = mine.rating - cp.rating
     if (d >= 0.25) rec.rivalNote = { t: `对位 ${cp.ign}：你 ${mine.rating.toFixed(2)}，他 ${cp.rating.toFixed(2)}。`, ok: true }
-    else if (d <= -0.25) rec.rivalNote = { t: `对位 ${cp.ign} 压了你一头：${cp.rating.toFixed(2)} 对 ${mine.rating.toFixed(2)}。`, ok: false }
+    else if (d <= -0.25) rec.rivalNote = { t: `对位 ${cp.ign} ${cp.rating.toFixed(2)}，你 ${mine.rating.toFixed(2)}。他今晚手很顺。`, ok: false }
   }
 }
 

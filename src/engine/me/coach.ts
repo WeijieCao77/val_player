@@ -46,7 +46,7 @@ export const PROMISE_FLOOR = 3
  * five — a won duel starting a trial — and nothing else: practice is his to play. Without the
  * sentence, a won duel that moves nothing reads as a bug.
  */
-export const PROMISE_HELD = `教练看在眼里——不过合同说好的 ${PROMISE_FLOOR} 场替补还没打完，这几场名单不会动。`
+export const PROMISE_HELD = `赢了也先不动：合同说好的 ${PROMISE_FLOOR} 场替补还没打完，这几场名单不会变。`
 
 /**
  * How hard a week pulls the coach's regard back toward 60 (me/week.ts
@@ -250,8 +250,8 @@ export function roomCall(state: GameState): string | null {
   const otherId = inNow ? plain.find((id) => !withRoom.includes(id)) : withRoom.find((id) => !plain.includes(id))
   const who = (otherId && state.players[otherId]?.ign) || '另一个人'
   return inNow
-    ? `教练的说法：你和 ${who} 能力差不多，他用了和队伍更合得来的你——协同、沟通、和队友处得怎么样，他都看在眼里。`
-    : `教练的说法：你和 ${who} 能力差不多，他用了和队伍更合得来的 ${who}——协同、沟通、和队友处得怎么样，他都看在眼里。`
+    ? `你和 ${who} 能力差不多，教练用了跟队伍更合得来的你。协同、沟通、跟队友处得怎么样，都算数。`
+    : `你和 ${who} 能力差不多，教练用了跟队伍更合得来的 ${who}。协同、沟通、跟队友处得怎么样，都算数。`
 }
 
 /** The starter I am competing with: same role, lowest in the coach's eyes. */
@@ -363,7 +363,7 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
     me.edge = 0
     team.starters = coachStarters(state)
     trial = true
-    pushLog(state, 'good', `训练赛里你连着压过 ${him.ign}，教练点头了：接下来 ${TRIAL_MATCHES} 场正赛你先打。赢下来就是你的。`)
+    pushLog(state, 'good', `训练赛里连着压过 ${him.ign}。教练：「下 ${TRIAL_MATCHES} 场你上。」打出来，位置就是你的。`)
   } else {
     const held = won && promiseSeat(state) === 'bench'
     pushLog(state, won ? 'team' : 'info',
@@ -399,8 +399,8 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     if (spent < PROMISE_FLOOR && spent + 1 >= PROMISE_FLOOR) {
       const role = state.players[me.id]?.contract?.promisedRole
       pushLog(state, 'info', role === 'starter' || role === 'star'
-        ? `合同里保底的 ${PROMISE_FLOOR} 场首发打完了。往后名单是教练自己排的——位置得自己守住。`
-        : `合同里保底的 ${PROMISE_FLOOR} 场替补坐完了。往后教练按状态排人——训练赛、对位，从现在起都算数。`)
+        ? `保底的 ${PROMISE_FLOOR} 场首发打完了。往后名单归教练排。`
+        : `保底的 ${PROMISE_FLOOR} 场替补坐完了。往后按状态排人，训练赛、对位都算数了。`)
     }
   }
 
@@ -428,7 +428,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
         me.flags.trialPassed = 1
         if (me.flags.benchedOnce) me.flags.cameBack = 1
         me.coachTrust = clamp(me.coachTrust + 6, 0, 100)
-        pushLog(state, 'good', '试用期打完了，教练拍板：首发是你的。')
+        pushLog(state, 'good', '试用期打完。首发是你的了。')
       } else {
         pushLog(state, 'info', `试用期还剩 ${me.trial.left} 场。`)
       }
@@ -466,7 +466,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
       me.benchLock = state.day + 14
       me.flags.benchedOnce = 1
       team.starters = coachStarters(state)
-      pushLog(state, 'bad', '连着三场你是全队最差，教练把你换下来了：两周之内不会再考虑你。')
+      pushLog(state, 'bad', '连着三场全队最差。你被换了下来，两周之内不会再考虑你。')
       fireEvent(state, 'after_bench')
       return
     }
@@ -483,7 +483,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
         me.rotateHeat = 0
         me.benchLock = state.day + 7
         team.starters = coachStarters(state)
-        pushLog(state, 'bad', '连着输了几场，教练要试新阵容：这一周先换人打，看看到底是谁在拖累。')
+        pushLog(state, 'bad', '连着输了几场。教练要试新阵容，这一周先换人打。')
       }
     }
   }
@@ -503,7 +503,7 @@ function earnProven(state: GameState): void {
   if (!me || me.proven || me.trial) return
   if ((me.startsHere ?? 0) < PROVEN_STARTS || me.coachTrust < PROVEN_TRUST) return
   me.proven = true
-  pushLog(state, 'good', `以首发打了 ${me.startsHere} 场，教练拍板：你是他认定的首发。`)
+  pushLog(state, 'good', `首发打满 ${me.startsHere} 场。你成了教练认定的首发。`)
 }
 
 /**

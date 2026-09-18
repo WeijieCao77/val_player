@@ -83,9 +83,9 @@ export interface CerDef {
  */
 const FAREWELL_STARTS = 40
 export const FAREWELL_BLURB: Record<CerTier, string> = {
-  gold: '客场的看台上也开始有人举你的名字。没有人问你还能打多久——他们只想再看你赢一次。',
+  gold: '客场的看台上也开始有人举你的名字。没人问你还能打多久。',
   silver: '没有人替你宣布什么。照常训练，照常上场，只是你自己心里开始数了。',
-  bronze: '没有人给你办告别。名单还是每周贴出来，位置还是得自己去争——最后这一年也一样。',
+  bronze: '没有人给你办告别。名单照常每周一贴。',
 }
 
 /** What this last season is, read off the career itself. */
@@ -147,7 +147,7 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
   },
   farewell: {
     kind: 'farewell', name: '最后一个赛季', game: 'none',
-    story: (_s, about) => `${about}。这是你职业生涯的最后一年——从这个赛段起，剩下的每一场都是数得清的。`,
+    story: (_s, about) => `${about}。这是你职业生涯的最后一年。剩下的每一场，都数得清。`,
     blurb: FAREWELL_BLURB,
     // no game to grade, so the career is the grade (farewellTier); the screen reads this at the story, the log says the same
     after: (s) => FAREWELL_BLURB[farewellTier(s)],

@@ -223,7 +223,7 @@ export const MORE_EVENTS: EventDef[] = [
       { t: '找经理聊聊你的打算', g: 'warm', e: { gmTrust: 4 }, ch: { weeks: 3 } },
       { t: '让经纪人放风，说有队在问', g: 'show', e: { heat: 15, gmTrust: -5, coachTrust: -2 }, ch: { weeks: 3 } }] },
   { id: 'ch_show_ok', w: 0, max: 4, rec: 1, chain: 'showcase', when: (s) => s.me!.chain?.id === 'showcase',
-    q: '经理把你叫进办公室：「续约的事，冬天谈。」', ctx: '这几周他都看在眼里。',
+    q: '经理把你叫进办公室：「续约的事，冬天谈。」', ctx: '桌上摊着你这几周的训练赛数据。',
     a: [{ t: '趁热打铁，现在就谈条件', g: 'hard', e: { gmTrust: 4, heat: 10, coachTrust: 2 }, ch: { end: 'ok' } },
       { t: '谢谢，先把赛季打完', g: 'grind', e: { coachTrust: 6, gmTrust: 4, mental: 1 }, ch: { end: 'ok' } }] },
   { id: 'ch_show_miss', w: 0, max: 4, rec: 1, chain: 'showcase', when: (s) => s.me!.chain?.id === 'showcase',

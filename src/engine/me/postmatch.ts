@@ -123,15 +123,15 @@ export function ledgerNotes(nodes: MeMatchRecord['nodes'], nums = false, mapName
     const at = `${mapName(n.map)} 第 ${n.round} 回合「${n.pick}」`
     if (!n.won && n.qok >= 70) {
       const odds = nums ? `成了有 ${n.qok}%` : '成了多半是我们的'
-      if (!n.ok) luck.push(`${at}：这回合${odds}，是你自己没打成——账本上面记着。`)
-      else if (n.mate) luck.push(`${at}做成了，这回合还是丢了：回放里 ${n.mate} 慢了半拍（${nums ? `状态 ${n.mateForm}，` : ''}全队最差）——不过${nums ? ` ${n.qok}% ` : '高赢面'}本来也保不了底。`)
-      else luck.push(`${at}做成了，这回合还是丢了。没什么可甩的——${nums ? `${n.qok}% 就是十次里还要丢 ${Math.max(1, Math.round((100 - n.qok) / 10))} 次` : '高赢面也保不了底'}，这次骰子背。`)
+      if (!n.ok) luck.push(`${at}：这回合${odds}，这一下没成。`)
+      else if (n.mate) luck.push(`${at}做成了，回合还是丢了。回放里 ${n.mate} 慢了半拍（${nums ? `状态 ${n.mateForm}，` : ''}全队最差）。${nums ? `${n.qok}% ` : '高赢面'}也保不了底。`)
+      else luck.push(`${at}做成了，回合还是丢了。${nums ? `${n.qok}% 就是十次里还要丢 ${Math.max(1, Math.round((100 - n.qok) / 10))} 次` : '高赢面也保不了底'}。骰子背。`)
     } else if (n.won && !n.ok && n.qfail <= 30) {
-      luck.push(`${at}没成，这回合${nums ? `只剩 ${n.qfail}%` : '基本要丢'}，却拿下了——运气也是实力的一部分，但别指望它常来。`)
+      luck.push(`${at}没成，本来${nums ? `只剩 ${n.qfail}%` : '基本要丢'}，结果拿下了。捡的。`)
     }
   }
   out.push(...luck.slice(0, 3))
-  if (told.some((n) => n.decided)) out.push('残局里你是最后一个人：那个决定就是那一回合，成了就是拿下，没成就是丢了。')
+  if (told.some((n) => n.decided)) out.push('残局只剩你。那一下，就是那一回合。')
   return out
 }
 
@@ -150,21 +150,21 @@ export function verdict(rec: MeMatchRecord, rows: EdgeRow[]): string {
 
   // the size of the gap is in the rows under this line (and behind the 「数值」 switch); the sentence only says which way
   if (ahead && !rec.won) {
-    return '账面上你们占优，还是输了。账面只决定每回合的胜率，不保证结果——这一场就是没走出来，不用找别的理由。'
+    return '账面占优，输了。账面只管每回合的胜率，不包结果。'
   }
   if (behind && rec.won) {
-    return `账面上你们处下风，赢下来了。${n.made > n.missed ? '你的临场决定是原因之一。' : '这一场赢在运气和队友。'}`
+    return `账面处下风，赢了。${n.made > n.missed ? '关键回合你做成的多。' : '赢在运气和队友。'}`
   }
   if (ahead && rec.won) {
-    return `账面占优，赢下来了。${n.missed > n.made ? '你的几次决定没打成，但队伍兜住了。' : ''}`
+    return `账面占优，赢了。${n.missed > n.made ? '你的几次决定没打成，队伍兜住了。' : ''}`
   }
   if (behind && !rec.won) {
-    return `账面处下风，输得不冤。差得最多的是${worst}。`
+    return `账面处下风，输了。差得最多的是${worst}。`
   }
   // within a point of each other — the match was decided on the night
   return rec.won
-    ? `两边账面基本持平，你们拿下了。${n.made > n.missed ? '关键回合是你选对的。' : '这种局赢在临场。'}`
-    : `两边账面基本持平，输在临场。${n.missed > n.made ? '你有几次决定没打成。' : '不是账面的问题。'}`
+    ? `两边账面差不多，赢了。${n.made > n.missed ? '关键回合你做成的多。' : '赢在临场。'}`
+    : `两边账面差不多，输在临场。${n.missed > n.made ? '你有几次决定没打成。' : ''}`
 }
 
 /**
@@ -218,13 +218,13 @@ export function blameLine(rows: BoxRow[], rec: MeMatchRecord): string | null {
   const sank = mates.filter((r) => r.rating < 0.85)
   const n = nodeNet(rec)
   if (!rec.won && me.rating >= 1.05 && sank.length >= 2) {
-    return `你打出了 ${me.rating.toFixed(2)}，队内还有 ${sank.length} 个人在 0.85 以下（${sank.map((r) => r.ign).join('、')}）。这场不是你的问题。`
+    return `你 ${me.rating.toFixed(2)}。${sank.map((r) => r.ign).join('、')} 都在 0.85 以下。`
   }
   if (!rec.won && me.rating < 0.85 && mateAvg >= 1.0) {
-    return `队友均分 ${mateAvg.toFixed(2)}，你 ${me.rating.toFixed(2)}。这场是你没打出来。`
+    return `你 ${me.rating.toFixed(2)}，队友均分 ${mateAvg.toFixed(2)}。今晚枪没开张。`
   }
   if (rec.won && me.rating < 0.85) {
-    return `你 ${me.rating.toFixed(2)}，是被队友抬赢的（均分 ${mateAvg.toFixed(2)}）。`
+    return `你 ${me.rating.toFixed(2)}，队友均分 ${mateAvg.toFixed(2)}。赢了。`
   }
   if (!rec.won && n.made > n.missed && me.rating >= mateAvg) {
     return `你的 ${n.made + n.missed} 次决定成了 ${n.made} 次，个人数据也在队伍均线之上，还是输了。`

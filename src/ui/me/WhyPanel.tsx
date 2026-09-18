@@ -55,15 +55,15 @@ export default function WhyPanel({ map, mineIsA }: { map: MapScore; mineIsA: boo
   const won = myScore > foeScore
   const verdict = Math.abs(total) < 1.5
     ? (won
-      ? '两队几乎势均力敌，这张图能拿下靠的是临场发挥'
-      : '两队几乎势均力敌，这张图的胜负主要靠临场发挥和运气')
+      ? '两边账面差不多，这张图赢在临场'
+      : '两边账面差不多，输在临场和运气')
     : total >= 0
       ? (won
-        ? '账面上我们更强，这张图也照着实力拿下了'
-        : '账面上我们更强——这张图却输了，说明临场没打出来')
+        ? '账面上我们更强，赢了'
+        : '账面上我们更强，这张图却输了')
       : (won
-        ? '账面上处于下风，这张图是硬啃下来的'
-        : '账面上确实处于下风')
+        ? '账面上处于下风，硬啃下来了'
+        : '账面上处于下风')
 
   return (
     <div>
