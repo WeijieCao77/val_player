@@ -1108,8 +1108,13 @@ const server = http.createServer((req, res) => {
   }
   // Railway 拿它探活（railway.json 的 healthcheckPath）：页面都没构建出来的部署不算上线，
   // 回 503 让它别把流量切过来——原来这里永远是 200（外部审查 2026-09-18）
+  // x-build names the commit this process was deployed from (Railway sets RAILWAY_GIT_COMMIT_SHA), so a
+  // deploy that changed only this file can be told apart from the one before it from outside
   if (p === '/healthz') {
-    return fs.existsSync(path.join(DIST, 'index.html')) ? send(res, 200, 'ok') : send(res, 503, 'dist/ 还没构建')
+    const build = { 'x-build': (process.env.RAILWAY_GIT_COMMIT_SHA || 'local').slice(0, 7) }
+    return fs.existsSync(path.join(DIST, 'index.html'))
+      ? send(res, 200, 'ok', undefined, build)
+      : send(res, 503, 'dist/ 还没构建', undefined, build)
   }
   if (/^\/(manager|cards)(\/|$)/.test(p)) {
     res.writeHead(302, { location: '/', 'cache-control': 'no-store' })
