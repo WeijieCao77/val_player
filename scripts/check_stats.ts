@@ -10,6 +10,8 @@
  *    TELEMETRY_EVENTS 完全相等（多一个少一个都挂）。名字对不上的事件会被静悄悄丢掉，
  *    看板那一节就永远空着，而空图表看着和「还没人玩」一模一样——这种错要让核查红，
  *    不能让它自己躺着。（原来服务端收的是 career_end，客户端发的是 ending。）
+ *    属性值的规则也一样：服务端 PROP_RULES 和客户端 TELEMETRY_VALUES 逐条相等
+ *    （枚举一个字都不许差：服务端的词表少一个字，那个值就被当成不合规矩丢掉）。
  *  - 每日新设备 / 活跃设备 / 会话数 / 浏览量
  *  - 在线时长：会话取该会话见过的最大 active_s（心跳是累计量、会重发、还会迟到）
  *  - 留存：按首见日分群的次日 / 第 3 日 / 第 7 日回访率，对着手算的群
@@ -30,7 +32,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EVENTS, EVENT_PROPS, PROP_KEYS, ROLLUPS } from '../stats-contract.js'
+import { EVENTS, EVENT_PROPS, PROP_KEYS, PROP_RULES, ROLLUPS, cleanValue } from '../stats-contract.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SERVER = path.join(ROOT, 'server.js')
@@ -150,6 +152,17 @@ function writeFixture(dir: string): void {
   row('f5', 50, 'errors', { n: 2, at: 'PlayerGame-abc.js:10:5' })
   row('f5', 51, 'errors', { n: 3, at: 'PlayerGame-abc.js:10:5' })
   row('f6', 50, 'errors', { n: 1, at: 'world-xyz.js:2:1' })
+}
+
+/** 值规则收得下的一个值：整数取下限，真假取真，词表取第一个，正则从几个像样的候选里挑 */
+function sampleOf(event: string, key: string): string | number | boolean {
+  const r = (PROP_RULES as Record<string, Record<string, { t: string; min?: number; of?: string[] }>>)[event][key]
+  if (r.t === 'int') return r.min ?? 0
+  if (r.t === 'bool') return true
+  if (r.t === 'enum') return r.of![0]
+  const pick = ['example.com', 'week', 'app-abc.js:1:1'].find((v) => cleanValue(r, v) !== undefined)
+  if (pick === undefined) throw new Error(`${event}.${key} 的规则一个候选都收不下，给它加一个`)
+  return pick
 }
 
 /* ---------- 起一个真的 server.js ---------- */
@@ -277,6 +290,31 @@ try {
       const missing = [r.key, ...r.nums].filter((k) => k && !ks.includes(k))
       check(missing.length === 0, `${g} 的行键和累计字段都在契约里${missing.length ? `（缺 ${missing.join('、')}）` : ''}`)
     }
+
+    // ---- 属性值的规则：逐个事件、逐个属性、逐条规则。
+    //      原来只核名字，值什么都收（外部审查 2026-09-18）：region / 结局 key 能是随便什么字，
+    //      active_s 能报 1e308。现在两边各有一张值规则表，这里要它们一字不差——服务端的词表
+    //      少一个字，客户端真发出来的那个值就会被当成不合规矩静悄悄丢掉。
+    if (!mod.TELEMETRY_VALUES) {
+      check(false, '客户端没有导出 TELEMETRY_VALUES——值规则没法比对')
+    } else {
+      const cv = mod.TELEMETRY_VALUES as Record<string, Record<string, unknown>>
+      const sv = PROP_RULES as Record<string, Record<string, unknown>>
+      const diffs: string[] = []
+      for (const name of [...new Set([...Object.keys(cv), ...Object.keys(sv)])].sort()) {
+        const a = cv[name] ?? {}
+        const b = sv[name] ?? {}
+        for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
+          const x = JSON.stringify(a[k] ?? null)
+          const y = JSON.stringify(b[k] ?? null)
+          if (x !== y) diffs.push(`${name}.${k}：客户端 ${x}，服务端 ${y}`)
+        }
+      }
+      check(diffs.length === 0,
+        `每个属性的值规则两边一字不差${diffs.length ? `：\n      ${diffs.slice(0, 8).join('\n      ')}` : `（${Object.values(sv).reduce((t, r) => t + Object.keys(r).length, 0)} 条）`}`)
+      const noRule = Object.entries(c).flatMap(([name, ks]) => ks.filter((k) => !(sv[name] && k in sv[name])).map((k) => `${name}.${k}`))
+      check(noRule.length === 0, `契约里的每个属性都有一条值规则${noRule.length ? `（没有的：${noRule.join('、')}）` : ''}`)
+    }
   }
 
   // ---------- 〇之二、契约里的每个名字都真的收得下 ----------
@@ -290,12 +328,13 @@ try {
     dirs.push(pdir)
     const sp = await start({ STATS_KEY: KEY }, pdir)
     servers.push(sp)
-    // 载荷直接照契约造：每个事件带上它声明的每一个属性（值给 1，这一节只问收不收）
+    // 载荷直接照契约造：每个事件带上它声明的每一个属性，值取那条规则收得下的一个
+    // （这一节只问收不收；值规则自己的对错在事件契约那一节和 check_stats_edges.ts）
     const names = [...EVENTS]
     const all: Ev[] = names.map((name, i) => ({
       name,
       n: i + 1,
-      props: Object.fromEntries((EVENT_PROPS as Record<string, string[]>)[name].map((k) => [k, 1])) as Props,
+      props: Object.fromEntries((EVENT_PROPS as Record<string, string[]>)[name].map((k) => [k, sampleOf(name, k)])) as Props,
     }))
     eq(await post(sp, batch('allnames', 's-allnames', all)), 204, `一批 ${all.length} 条，契约里的名字一个不落`)
     await sleep(250)

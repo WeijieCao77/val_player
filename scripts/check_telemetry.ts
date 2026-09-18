@@ -22,6 +22,11 @@
  *    prose
  *  - half an hour away starts a NEW session instead of inflating the old one's
  *    playtime: the minutes counted are the ones confirmed, not the wall clock
+ *  - the value rules (TELEMETRY_VALUES, mirrored by the server's stats-contract.js)
+ *    name the engine's own words: the endings, origins, grounds, regions, roles,
+ *    starts and ceremonies are the engine's lists to the letter — and every value
+ *    the careers played here actually send passes the server's rule, so the server
+ *    never drops something the game really says
  *
  *   npx tsx scripts/check_telemetry.ts
  */
@@ -32,8 +37,14 @@ import { retire } from '../src/engine/me/endings'
 import {
   _rollupNow, _rollupState, _stopTelemetry,
   countCeremony, countCup, countMatch, countOffer, countPitchWhy, countScreen, countTurn,
-  startTelemetry, track, TELEMETRY_EVENTS,
+  startTelemetry, track, TELEMETRY_EVENTS, TELEMETRY_VALUES,
 } from '../src/engine/me/telemetry'
+import { ENDINGS_ME } from '../src/engine/me/endings'
+import { ORIGINS } from '../src/engine/me/origins'
+import { START_CN } from '../src/engine/me/career'
+import { CEREMONIES } from '../src/engine/me/ceremony'
+import { REGION_CN, ROLES } from '../src/engine/types'
+import { PROP_RULES, cleanValue } from '../stats-contract.js'
 
 /* ------------------------------------------------------------------ */
 /*  a browser, as far as the module can tell                           */
@@ -118,6 +129,8 @@ async function drain(): Promise<Batch[]> {
   return out
 }
 const events = (bs: Batch[]) => bs.flatMap((b) => b.events ?? [])
+/** everything the played careers below sent, held for the value rules at the end */
+const sentByCareers: { name: string; props?: Record<string, unknown> }[] = []
 const named = (bs: Batch[], name: string) => events(bs).filter((e) => e.name === name)
 const rows = (bs: Batch[], name: string) => named(bs, name).map((e) => e.props ?? {})
 
@@ -306,6 +319,7 @@ console.log('\n隐私：上报里不许有名字')
 
   fire('pagehide')
   const bs = await drain()
+  sentByCareers.push(...events(bs))
   const text = bs.map((b) => JSON.stringify(b)).join('\n')
 
   check(!text.includes(NEEDLE), `玩家自己起的 ID（${NEEDLE}）一次都没出现在上报里`)
@@ -395,7 +409,9 @@ console.log('\n事件契约')
   for (let i = 0; i < 70; i++) if (autoWeek(s).kind === 'game-over') break
   fire('pagehide')
 
-  for (const e of events(await drain())) {
+  const sent = events(await drain())
+  sentByCareers.push(...sent)
+  for (const e of sent) {
     seen.add(e.name)
     const allowed = declared[e.name]
     if (!allowed) { stray.push(`事件 ${e.name}`); continue }
@@ -407,6 +423,62 @@ console.log('\n事件契约')
     `发出去的 ${seen.size} 种事件、每一个字段名都在 TELEMETRY_EVENTS 里声明过${stray.length ? `（没声明的：${[...new Set(stray)].slice(0, 5).join('，')}）` : ''}`)
   console.log(`  · 这一轮见到的事件：${[...seen].sort().join('、')}`)
   console.log(`  · 契约里一共 ${Object.keys(declared).length} 种：${Object.keys(declared).join('、')}`)
+}
+
+/* ------------------------------------------------------------------ */
+/*  8. 值规则：词表就是引擎的词表，真发出去的值服务端都收               */
+/* ------------------------------------------------------------------ */
+
+console.log('\n值规则')
+{
+  // The server used to take any short string and any finite number (external
+  // audit, 2026-09-18). It now holds every value to a rule, and a word list that
+  // misses one of the game's own words would drop that value in silence — the
+  // same empty-chart failure the event names had. So the lists are held to the
+  // engine's, and every value the careers above really sent is put through the
+  // server's own rule.
+  const V = TELEMETRY_VALUES as unknown as Record<string, Record<string, { of?: readonly string[] }>>
+  const sorted = (xs: readonly string[]) => JSON.stringify([...xs].sort())
+  // read after the stand-in browser is up: the module reads the stored ground when it loads
+  const { THEMES } = await import('../src/ui/me/theme')
+  const lists: [string, string, string, readonly string[]][] = [
+    ['ending', 'key', '结局（engine/me/endings.ts ENDINGS_ME）', ENDINGS_ME.map((x) => x.key)],
+    ['career_start', 'origin', '出身卡（engine/me/origins.ts ORIGINS）', ORIGINS.map((o) => o.key)],
+    ['session_start', 'theme', '底色（ui/me/theme.ts THEMES）', THEMES.map((t) => t.key)],
+    ['career_start', 'region', '赛区（engine/types.ts REGION_CN）', Object.keys(REGION_CN)],
+    ['career_start', 'role', '位置（engine/types.ts ROLES）', ROLES],
+    ['career_start', 'start', '起点（engine/me/career.ts START_CN）', Object.keys(START_CN)],
+    ['ceremonies', 'kind', '仪式（engine/me/ceremony.ts CEREMONIES）', Object.keys(CEREMONIES)],
+  ]
+  for (const [e, k, label, engine] of lists) {
+    const mine = V[e]?.[k]?.of ?? []
+    const ok = sorted(mine) === sorted(engine)
+    check(ok, `${e}.${k} 的词表就是${label}${ok ? `（${engine.length} 个）` : `：契约 ${sorted(mine)}，引擎 ${sorted(engine)}`}`)
+  }
+
+  // an uncaught error from a real build's chunk — vite names them with _ and - in the hash
+  fresh()
+  for (const f of listeners.error ?? []) f({ filename: 'https://valplayer.example.com/assets/PlayerGame-D_9aB3x-.js?v=2', lineno: 12, colno: 345 })
+  for (const f of listeners.unhandledrejection ?? []) f()
+  hide()
+  sentByCareers.push(...events(await drain()))
+
+  const rules = PROP_RULES as Record<string, Record<string, unknown>>
+  const refused: string[] = []
+  let values = 0
+  for (const ev of sentByCareers) {
+    for (const [k, v] of Object.entries(ev.props ?? {})) {
+      // a null is the client saying nothing (no referrer); the server skips it the same way
+      if (v === null || v === undefined) continue
+      values++
+      if (cleanValue(rules[ev.name]?.[k], v) === undefined) refused.push(`${ev.name}.${k}=${JSON.stringify(v)}`)
+    }
+  }
+  check(values > 0 && refused.length === 0,
+    `上面几局真发出去的 ${sentByCareers.length} 条事件、${values} 个值，服务端的值规则一个不落都收${refused.length ? `（不收的：${[...new Set(refused)].slice(0, 5).join('，')}）` : ''}`)
+  const kinds = new Set(sentByCareers.map((e) => e.name))
+  check(['ending', 'career_start', 'season_done', 'turns', 'matches', 'ceremonies', 'errors'].every((k) => kinds.has(k)),
+    `这些值里有结局、建档、赛季、回合、比赛、仪式和前端报错（${[...kinds].sort().join('、')}）`)
 }
 
 def('setTimeout', realSetTimeout)

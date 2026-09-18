@@ -18,17 +18,18 @@
 
    · IP 地址只在内存里做限流，一秒都不落盘——不进 JSONL、不进 stats.json、不进日志。
      JSONL 的每一行都是先过一遍白名单再写的，写进去的字段就是 stats-contract.js
-     列着的那些，IP 不在里面，也没有任何地方把它传进 record()。错误日志还多过一道
+     列着的那些，IP 不在里面，也没有任何地方把它传进 enqueue()。错误日志还多过一道
      scrubIp：socket 出错时 Node 会把对端地址写进 message，那一行也不许带出来。
    · 不记 User-Agent，不记精确位置（只有浏览器自报的时区偏移和窗口宽高档位）。
    · 不记玩家打进去的任何文字。选手的 IGN 是全游戏唯一一个玩家自己打的字段，客户端
-     那边就不让它出门；这里是第二道闸：属性名走白名单，表外的键直接丢掉。
+     那边就不让它出门；这里是第二道闸：属性名走白名单，表外的键直接丢掉；值也按规则收，
+     有词表的只认词表里的字。
      报错只报出错的文件和行号，不报报错信息本身——引擎的信息会把拿到的东西原样插进去。
    · 身份是浏览器第一次打开时自己生成的随机 id（vid）。清了站点数据就是新的人，
      一台手机两个人用就是一个人。要回答「有没有人第二天又来了」，这比 IP 准得多：
      国内运营商几百个用户共用一个出口地址，一个用户一晚上还会换好几个。
 
-   统计绝不能拖垮游戏：入口先回 204 再算，写盘全是异步的，任何一处抛错都只记一行日志，
+   统计绝不能拖垮游戏：入口先回 204 再算，JSONL 和缓存都是异步写的，任何一处抛错都只记一行日志，
    进程继续服务 dist/。看板算错了是看板的事，游戏该怎么跑还怎么跑。 */
 import http from 'node:http'
 import fs from 'node:fs'
@@ -37,7 +38,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 // 事件词表和客户端共用一份，见 stats-contract.js
-import { EVENTS, EVENT_PROPS, ROLLUPS } from './stats-contract.js'
+import { EVENTS, PROP_RULES, ROLLUPS, cleanValue } from './stats-contract.js'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(ROOT, 'dist')
@@ -93,13 +94,16 @@ function resolve(pathname) {
 
    设计取舍（和 破晓 一致）：
    · 事实源是按北京时间分天追加的 JSONL（追加写天然崩溃安全）；stats.json 只是它的缓存，
-     每 30 秒原子落盘（临时文件 + rename，留 .bak）。进程被杀重启后，当天从 JSONL 重放，
+     每 30 秒原子落盘（临时文件 + rename，留 .bak）。缓存里记着每天算到了 JSONL 的第几个字节，
+     启动时字节数对不上的那天（缓存落下之后又进了事件、进程被杀）一律从 JSONL 重放，
      不丢不重；stats.json 整个丢了也能从 JSONL 把 90 天全部重算回来。
+   · 先落盘、再记账：一条事件写进 JSONL 之后才进看板、才算「收过」。写盘出错记日志、
+     按退避重试，SIGTERM 时把收下的写完再走——看板上的数永远是盘上那份的数。
    · 持久化在 Railway Volume（DATA_DIR / RAILWAY_VOLUME_MOUNT_PATH）；没挂卷时照常工作，
      但看板顶部亮红条警告「重启即丢」。
    · 看板 /dash 零 JS、纯服务端渲染、手写 SVG——没有脚本就没有 XSS 面。
-   · 信标数据一律不可信：事件名走白名单，属性名走白名单，条数、长度、体积全封顶，
-     限流按 IP 每分钟计数且只在内存里。                                        */
+   · 信标数据一律不可信：事件名、属性名、属性值都走 stats-contract.js 的规则，
+     条数、长度、体积全封顶，限流按 IP 每分钟计数且只在内存里。                */
 
 /* 兜底目录在仓库外（主目录下的 .val_player-stats）。本来放在仓库里的 .data/，
    但开发机上仓库有几十个 worktree，一次 git clean 就能把收上来的数据连锅端掉——
@@ -108,7 +112,7 @@ const DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH |
 const VOLATILE = !process.env.DATA_DIR && !process.env.RAILWAY_VOLUME_MOUNT_PATH
 const STATS_KEY = process.env.STATS_KEY || ''
 const RETAIN_DAYS = 90
-try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch { /* 卷还没挂上；record() 每次写都自己兜着 */ }
+try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch { /* 卷还没挂上；写盘的队每次写都自己兜着、失败了重试 */ }
 
 const STATS_FILE = path.join(DATA_DIR, 'stats.json')
 const DEV_FILE = path.join(DATA_DIR, 'devices.log')
@@ -130,9 +134,9 @@ function logErr(where, e) {
   if (errCount <= 50) console.error(`[stats] ${lastErr}`)
 }
 
-/* 收得下的事件名和属性名都在 stats-contract.js 里，是客户端 TELEMETRY_EVENTS 的镜像。
-   名字对不上的事件会被静悄悄丢掉、对应的那一节永远空着，而空图表看着和「没人玩」
-   一模一样——所以 scripts/check_stats.ts 会把两边逐项对一遍，哪边改了名字都让核查挂掉。 */
+/* 收得下的事件名、属性名和属性值的规则都在 stats-contract.js 里，是客户端 TELEMETRY_EVENTS /
+   TELEMETRY_VALUES 的镜像。名字对不上的事件会被静悄悄丢掉、对应的那一节永远空着，而空图表看着
+   和「没人玩」一模一样——所以 scripts/check_stats.ts 会把两边逐项对一遍，哪边改了都让核查挂掉。 */
 
 /* 体积与条数的封顶。公网是敌意的：一个批次最多这么大、这么多条、每条这么多属性。 */
 const MAX_BODY = 32 * 1024
@@ -142,10 +146,6 @@ const MAX_KEY = 24
 const MAX_STR = 48
 const MAX_ID = 64
 
-/** 每个事件各自允许的属性名（= 客户端 TELEMETRY_EVENTS 的那一行）。
-    按事件收窄，不是一张大表：ending 的 key 不该能出现在 session_start 上。 */
-const ALLOWED = new Map(Object.entries(EVENT_PROPS).map(([e, ks]) => [e, new Set(ks)]))
-
 /* ---------- 归日：北京时间 ----------
    玩家几乎全在国内，看板上的「一天」要和他们的一天对齐。 */
 const dayStr = (t) => new Date((t || Date.now()) + 8 * 3600e3).toISOString().slice(0, 10)
@@ -154,24 +154,63 @@ const shiftDay = (day, n) => dayStr(Date.parse(`${day}T00:00:00Z`) - 8 * 3600e3 
 /* ---------- 设备登记簿 ----------
    devices.log 每行「YYYY-MM-DD <vid>」，就是首见日。行号即设备号：聚合表里存的是号，
    不是 36 个字符的 vid——90 天的日活集合因此小得能整个放进 stats.json。 */
-const REG = { idx: new Map(), firstDay: [], vids: [] }
-function deviceIdx(vid, day) {
-  let i = REG.idx.get(vid)
-  if (i !== undefined) return i
-  i = REG.vids.length
+const REG = { idx: new Map(), firstDay: [], vids: [], torn: false }
+
+/** 按盘上的样子数一遍登记簿（启动时，和登记簿写坏了之后）。数法只有这一份：内存里的号和重启后的号必须是同一套。
+    最后一行没有换行（上一个进程写到一半被杀、或者从写到一半的拷贝里恢复）：下一行先垫一个换行，别粘上去。 */
+function syncRegistry() {
+  let txt = ''
+  try { txt = fs.readFileSync(DEV_FILE, 'utf8') } catch { return }   // 第一次跑，还没有登记簿
+  REG.torn = txt.length > 0 && !txt.endsWith('\n')
+  for (const ln of txt.split('\n')) {
+    if (ln.length < 12) continue
+    const day = ln.slice(0, 10)
+    const vid = ln.slice(11).trim()
+    if (!vid || REG.idx.has(vid)) continue
+    REG.idx.set(vid, REG.vids.length); REG.vids.push(vid); REG.firstDay.push(day)
+  }
+}
+
+/**
+ * 登记一台新设备，返回设备号；这一行没落盘就返回 -1，这台设备这一回不登记（事件在写盘的队里等着重试）。
+ *
+ * 这一笔必须是同步写，而且必须按顺序落。聚合表里存的是设备号（行号），不是 36 个字符的 vid——
+ * 重启之后设备号要能对得上，就得靠 devices.log 的行序和当初登记的顺序一模一样。异步 appendFile
+ * 并发起来会乱序（核查脚本抓到过：同一份 JSONL 重放两次，第一行一会儿是 a1 一会儿是 a3），
+ * 乱序就意味着重启后旧日子的 act 数组指到别的设备身上，留存和漏斗会静悄悄地错。
+ * 另外同步写还保证了「登记先于引用」：这行落盘之后，30 秒后的 flush 才会把这个号写进
+ * stats.json，崩在中间也只会少一台设备，不会让号错位。只有新设备走这里，一天几百笔。
+ *
+ * 写失败不能当没事（外部审查 2026-09-18）：原来只记一行日志、号照发，这行没落盘，下一台设备的
+ * 那一行就顶到它的位置上，重启以后从这里往后全错一位；写了半行更糟，下一行直接粘在半行后面。
+ * 所以失败就把文件截回写之前的长度、不发号；截不掉（盘真坏了）就按盘上的样子重新数一遍，
+ * 再在下一行前面垫一个换行——半行自成一行，内存里和重启后数出来的号还是同一套。
+ */
+function register(vid, day) {
+  let size = 0
+  try { size = fs.statSync(DEV_FILE).size } catch { size = 0 }
+  try {
+    fs.appendFileSync(DEV_FILE, `${REG.torn ? '\n' : ''}${day} ${vid}\n`)
+  } catch (e) {
+    logErr('devlog', e)
+    try {
+      if (fs.existsSync(DEV_FILE)) fs.truncateSync(DEV_FILE, size)
+    } catch (e2) {
+      logErr('devlog-cut', e2)
+      syncRegistry()
+    }
+    return -1
+  }
+  REG.torn = false
+  const i = REG.vids.length
   REG.idx.set(vid, i)
   REG.vids.push(vid)
   REG.firstDay.push(day)
-  /* 这一笔必须是同步写，而且必须按顺序落。
-     聚合表里存的是设备号（行号），不是 36 个字符的 vid——重启之后设备号要能对得上，
-     就得靠 devices.log 的行序和当初登记的顺序一模一样。异步 appendFile 并发起来会乱序
-     （核查脚本抓到过：同一份 JSONL 重放两次，第一行一会儿是 a1 一会儿是 a3），
-     乱序就意味着重启后旧日子的 act 数组指到别的设备身上，留存和漏斗会静悄悄地错。
-     另外同步写还保证了「登记先于引用」：这行落盘之后，30 秒后的 flush 才会把这个号写进
-     stats.json，崩在中间也只会少一台设备，不会让号错位。
-     只有新设备走这里，一天几百笔，开销可以忽略。 */
-  try { fs.appendFileSync(DEV_FILE, `${day} ${vid}\n`) } catch (e) { logErr('devlog', e) }
   return i
+}
+function deviceIdx(vid, day) {
+  const i = REG.idx.get(vid)
+  return i === undefined ? register(vid, day) : i
 }
 
 /* ---------- 一天的聚合 ---------- */
@@ -179,8 +218,8 @@ function blankDay() {
   return {
     nu: 0,            // 新设备
     uv: 0,            // 活跃设备
-    sess: 0,          // 会话数
-    pv: 0,            // 浏览量（screens 的累计量按会话取最大再求和）
+    sess: 0,          // 会话数（这天有事件的会话）
+    pv: 0,            // 浏览量（screens 的累计量按会话取最大、只记涨出来的那一截，再求和）
     act: [],          // 活跃设备号
     sec: [],          // 与 act 对齐：这台设备这天的在线秒数
     f: { profile: [], week1: [], season1: [], ending: [] },   // 漏斗四级（打开 = act）
@@ -196,14 +235,11 @@ function blankDay() {
   }
 }
 
-/* 当天在内存里用 Map/Set 攒，落盘时再摊平成上面的样子。
-   sess: sid -> {vi, sec}；
-   roll: (会话, 组, 行键, 字段) -> 见过的最大值（累计量事件全走这张表）；
-   seen: sid -> 已收过的事件号（(sid, n) 认一条事件，重发的信标因此是空操作）。 */
+/* 当天在内存里用 Map/Set 攒，落盘时再摊平成上面的样子。会话的水位线不在这里，在下面的账本里。 */
 function newLive(day) {
   return {
     day,
-    seen: new Map(), sess: new Map(), roll: new Map(),
+    sids: new Set(),                                 // 这天有事件的会话
     act: new Map(),                                  // vi -> 在线秒数
     f: { profile: new Set(), week1: new Set(), season1: new Set(), ending: new Set() },
     dv: new Map(), wd: new Map(),                    // vi -> 档位（按设备去重，最后一次为准）
@@ -212,20 +248,63 @@ function newLive(day) {
   }
 }
 
-const ST = { days: {}, live: newLive(dayStr()), dirty: false, flushedAt: 0, gen: 0, flushedGen: 0, flushing: false }
+/* 缓存 stats.json 的样子：days 是每天摊平的聚合，logs 是「这天的聚合算到了 JSONL 的第几个字节」。
+   启动时字节数和盘上对得上的那天直接用缓存，对不上的从 JSONL 重算（见 loadStats）。 */
+const ST = { days: {}, logs: {}, live: newLive(dayStr()), dirty: false, flushedAt: 0, gen: 0, flushedGen: 0, flushing: false }
 
-/** (sid, n)：收过的不再收第二遍。n 在会话里单调递增，重发的批次整批都是收过的号。 */
-function fresh(sid, n) {
+/* 聚合口径的版本。stats.json 里的字节数只在口径没变的时候作数：口径一变，缓存里还有 JSONL 的
+   每一天都在启动时按新口径从 JSONL 重算一遍（自动的，JSONL 本身一个字节不动；90 天之前、
+   JSONL 已经清掉的那些天没法重算，照旧用缓存）。
+   1 = 2026-09-18 之前（stats.json 里没有 agg 这个字段）；
+   2 = 会话账本跨零点、先落盘再记账、属性值按规则收。 */
+const AGG = 2
+
+/* ---------- 会话账本：跨天活着 ----------
+   客户端报的累计量是「这个会话到目前为止」，而会话不管北京时间几点：23:50 报过 600 秒 /
+   10 次浏览 / 2 场比赛，00:10 报 660 / 11 / 3，今天只该记 60 / 1 / 1。原来这张水位表和
+   「收过哪些事件号」挂在当天的聚合上，零点一过跟着清空，今天就把 660 / 11 / 3 整个又记一遍，
+   昨天的信标重发一次，建档也再记一次（外部审查 2026-09-18 复现）。所以它单独一张，按会话记：
+     sid -> { first: 首见日, sec: 见过的最大 active_s,
+              roll: (组, 行键, 字段) -> 见过的最大值, seen: 收过的事件号 }
+   一个会话在账本里活到首见日之后第 CARRY_DAYS 天为止（按首见日剪，不按最后一次见）：这样启动时
+   从「要算的最早那天」往前多重放 CARRY_DAYS + 1 天，重放出来的聚合和一直开着的进程攒的一模一样。
+   跨过第三个零点还在报的会话会被当成新会话、把总数再记一遍（重放和活的进程在它身上也可能差一点）——
+   这是给内存划的线：半小时不看就是新会话，一坐三天三夜的会话在这个游戏里没有。 */
+const CARRY_DAYS = 2
+/** 一个会话最多记这么多行累计量：这个游戏真实的最多一百来行（十来个页面、6 类比赛、11 种仪式……） */
+const MAX_ROWS = 256
+/** 账本里最多这么多会话：三天加起来到这个数，只可能是有人在造会话 */
+const MAX_SESSIONS = 200000
+const LEDGER = new Map()
+
+/** (sid, n) 收过没有——只看，不记 */
+function unseen(sid, n) {
   if (!Number.isInteger(n) || n < 0) return false
-  let s = ST.live.seen.get(sid)
-  if (!s) { s = { set: new Set(), max: -1, over: false }; ST.live.seen.set(sid, s) }
-  if (s.over) { if (n <= s.max) return false; s.max = n; return true }
-  if (s.set.has(n)) return false
-  s.set.add(n)
-  if (n > s.max) s.max = n
-  // 一个会话攒到这么多号就只认水位线，省得内存被一个长会话拖大
-  if (s.set.size > 2048) { s.over = true; s.set = new Set() }
-  return true
+  const s = LEDGER.get(sid)
+  if (!s) return true
+  return s.seen.over ? n > s.seen.max : !s.seen.set.has(n)
+}
+/** 认下 (sid, n)，返回这个会话的账；收过的返回 null。n 在会话里单调递增，重发的批次整批都是收过的号。 */
+function admit(sid, n, day) {
+  if (!unseen(sid, n)) return null
+  let s = LEDGER.get(sid)
+  if (!s) {
+    s = { first: day, sec: 0, roll: new Map(), seen: { set: new Set(), max: -1, over: false } }
+    LEDGER.set(sid, s)
+  }
+  const z = s.seen
+  if (!z.over) {
+    z.set.add(n)
+    // 一个会话攒到这么多号就只认水位线，省得内存被一个长会话拖大
+    if (z.set.size > 2048) { z.over = true; z.set = new Set() }
+  }
+  if (n > z.max) z.max = n
+  return s
+}
+/** 进了新的一天：首见日在 CARRY_DAYS 天之前的会话拿掉。活的进程换天时剪，重放每天开头剪，剪法一样。 */
+function pruneLedger(day) {
+  const keep = shiftDay(day, -CARRY_DAYS)
+  for (const [sid, s] of LEDGER) if (s.first < keep) LEDGER.delete(sid)
 }
 
 const bump = (o, k) => { if (k) o[k] = (o[k] || 0) + 1 }
@@ -242,16 +321,24 @@ const widthBucket = (w) => {
   if (n < 1600) return '1280–1599'
   return '≥1600'
 }
+/** 出错位置是半开放的（文件名:行:列）：一天最多列这么多个，再多的并成一行——一个造出来的批次撑不大看板和 stats.json */
+const MAX_ERR_SITES = 100
 
 /**
- * 把一条（已经过白名单的）事件记进当天的聚合。
- * 增量记账和重放走的是同一个函数——不然「重启后重放出来的那天」和「一直开着攒出来的那天」
- * 会是两个数，而这种错只有在出事之后才看得见。
+ * 把一条（已经过 cleanEvent 的）事件记进这一天：先认 (会话, 事件号)，认下了再记账。
+ * 活的进程（写盘成功之后）和重放走的是同一个函数——不然「重启后重放出来的那天」和
+ * 「一直开着攒出来的那天」会是两个数，而这种错只有在出事之后才看得见。
  */
-function applyEvent(L, o) {
+function take(L, o) {
+  const s = admit(o.sid, o.n, L.day)
+  if (s) applyEvent(L, o, s)
+}
+
+function applyEvent(L, o, s) {
   const vi = deviceIdx(o.vid, L.day)
+  if (vi < 0) return
   if (!L.act.has(vi)) L.act.set(vi, 0)
-  if (o.sid) L.sess.set(o.sid, L.sess.get(o.sid) || { vi, sec: 0 })
+  L.sids.add(o.sid)
   const p = o.p || {}
   const e = o.e
 
@@ -260,18 +347,19 @@ function applyEvent(L, o) {
   /* 累计量的那几组（stats-contract.js 的 ROLLUPS）：客户端每次报的是「这个会话到
      目前为止的总数」，不是增量。按 (会话, 组, 行键, 字段) 记住见过的最大值，只把
      涨出来的那一截计进当天——同一个总数再来一遍加的是 0，所以重发的信标无害，
-     迟到的那份（比已见过的还小）也一秒都不加。 */
+     迟到的那份（比已见过的还小）也一秒都不加；过了零点接着报的，也只有涨出来的那截算今天的。 */
   const R = ROLLUPS[e]
   if (R) {
     const rowKey = R.key ? String(p[R.key] ?? '') : ''
     for (const f of R.nums) {
-      const v = Number(p[f])
-      if (!Number.isFinite(v) || v < 0) continue
-      const k = JSON.stringify([o.sid, e, rowKey, f])
-      const prev = L.roll.get(k) || 0
-      if (v <= prev) continue
-      const add = v - prev
-      L.roll.set(k, v)
+      const v = p[f]
+      if (typeof v !== 'number' || !(v >= 0)) continue
+      const k = JSON.stringify([e, rowKey, f])
+      const prev = s.roll.get(k)
+      if (prev === undefined && s.roll.size >= MAX_ROWS) continue
+      if (v <= (prev ?? 0)) continue
+      const add = v - (prev ?? 0)
+      s.roll.set(k, v)
       if (e === 'screens' && f === 'hits') L.pv += add
       else if (e === 'turns' && f === 'turns') L.f.week1.add(vi)   // 推完过第一周
       else if (e === 'matches') {
@@ -280,7 +368,9 @@ function applyEvent(L, o) {
         else if (f === 'started') L.m.started += add
       } else if (e === 'errors' && f === 'n') {
         // 只有出错的文件和行号，永远没有报错信息本身
-        bumpBy(L.er, typeof p.at === 'string' && p.at ? p.at : '（未报位置）', add)
+        let at = typeof p.at === 'string' && p.at ? p.at : '（未报位置）'
+        if (!Object.hasOwn(L.er, at) && Object.keys(L.er).length >= MAX_ERR_SITES) at = '（其他位置）'
+        bumpBy(L.er, at, add)
       }
     }
     return
@@ -291,9 +381,8 @@ function applyEvent(L, o) {
     if (b) L.wd.set(vi, b)
   } else if (e === 'session_ping' || e === 'session_end') {
     // 心跳同样是累计量而且会重发：一个会话只认它见过的最大 active_s，按差值加进设备的在线秒数
-    const s = L.sess.get(o.sid)
-    const v = Number(p.active_s)
-    if (s && Number.isFinite(v) && v > s.sec) {
+    const v = p.active_s
+    if (typeof v === 'number' && v > s.sec) {
       L.act.set(vi, (L.act.get(vi) || 0) + (v - s.sec))
       s.sec = v
     }
@@ -325,7 +414,7 @@ function serialise(L) {
   d.act = act
   d.sec = act.map((vi) => Math.round(L.act.get(vi) || 0))
   d.uv = act.length
-  d.sess = L.sess.size
+  d.sess = L.sids.size
   d.pv = Math.round(L.pv)
   d.nu = act.filter((vi) => REG.firstDay[vi] === L.day).length
   d.f = {
@@ -351,7 +440,7 @@ function flush(sync) {
   const gen = ST.gen
   liveDay()
   let body
-  try { body = JSON.stringify({ v: 1, days: ST.days, savedAt: Date.now() }) } catch (e) { return logErr('flush-json', e) }
+  try { body = JSON.stringify({ v: 1, agg: AGG, days: ST.days, logs: ST.logs, savedAt: Date.now() }) } catch (e) { return logErr('flush-json', e) }
   try {
     if (sync) {
       const tmp = `${STATS_FILE}.tmp-sync`
@@ -385,43 +474,151 @@ function pruneEvents() {
     const cut = dayStr(Date.now() - RETAIN_DAYS * 86400e3)
     for (const f of fs.readdirSync(DATA_DIR)) {
       const m = /^ev-(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(f)
-      if (m && m[1] < cut) { try { fs.unlinkSync(path.join(DATA_DIR, f)) } catch (e) { logErr('prune', e) } }
+      if (m && m[1] < cut) {
+        try { fs.unlinkSync(path.join(DATA_DIR, f)); delete ST.logs[m[1]] } catch (e) { logErr('prune', e) }
+      }
     }
   } catch (e) { logErr('prune-dir', e) }
 }
 
-/** 记一条：先落 JSONL（异步，游戏不等），再更新内存里的当天聚合 */
-function record(o) {
+/** 换天：昨天摊平进 days、落一次缓存；今天从空的开始，账本按新的一天剪。
+    只在没有待写的一截时调（见 headChunk）：那一截算哪天的，就得记进哪天。钟往回拨不换。 */
+function rollDay() {
   const day = dayStr()
-  if (day !== ST.live.day) {
-    liveDay()
-    flush(true)
-    ST.live = newLive(day)
-    pruneEvents()
-  }
-  if (!fresh(o.sid, o.n)) return    // 重发的信标：一条都不记
-  try { fs.appendFile(evFile(day), `${JSON.stringify(o)}\n`, () => {}) } catch (e) { logErr('append', e) }
-  applyEvent(ST.live, o)
+  if (day <= ST.live.day) return
+  liveDay()
   ST.dirty = true; ST.gen++
+  flush(true)
+  ST.live = newLive(day)
+  pruneLedger(day)
+  pruneEvents()
+}
+
+/* ---------- 写盘：一条队列、一个写手 ----------
+   原来是 fs.appendFile(…, () => {})：盘满、没权限，错误全被吞掉；事件已经先记进了内存、
+   又标成了收过，重发也补不回来，重启以后看板上那个数就没了（外部审查 2026-09-18 复现：
+   注入 ENOSPC，活的看板 1 台、重启后 0 台、记下的错误 0 次）。现在：
+   · 收下的事件先排队，(会话, 事件号) 同时记进 W.keys：排着的时候重发的信标也认得出来；
+   · 一个写手按顺序一截一截追加，写成了才认下这些事件号、记进当天的聚合——看板上的数就是
+     盘上那份的数，重放出来的和活的进程攒的也就是同一份；
+   · 写失败记日志，同一截按退避重试（0.5 秒起，翻倍到 30 秒），后来的排在后面等；
+     重试时整截重写、前面垫一个换行，把写了一半的那半行隔开——重放遇到半行跳过，遇到重复的行
+     按 (会话, 事件号) 只认第一次；
+   · 这一截写成之前不换天：它写进哪天的文件，就记进哪天的聚合（一条事件算哪天，看它落在哪天的
+     JSONL 里），重放和活的对得上；
+   · 队有上限：盘一直满着，再来的就不收了（也不标成收过），数一数丢了多少；
+   · SIGTERM：把排着的同步写完、记完，落了缓存再退。 */
+const W = { q: [], keys: new Set(), head: null, busy: false, timer: null, backoff: 0, torn: new Set(), dropped: 0, closed: false }
+const MAX_QUEUE = 20000
+const MAX_CHUNK = 500
+const qkey = (o) => `${o.sid} ${o.n}`
+
+/** 收下一条（已经过 cleanEvent 的）事件，排进写盘的队。重发的、排着的、队满了的返回 false。 */
+function enqueue(o) {
+  if (W.closed) return false
+  const k = qkey(o)
+  if (W.keys.has(k) || !unseen(o.sid, o.n)) return false        // 重发的信标：一条都不记
+  if (W.q.length >= MAX_QUEUE || (!LEDGER.has(o.sid) && LEDGER.size >= MAX_SESSIONS)) {
+    if (W.dropped++ % 1000 === 0) logErr('queue', new Error(`写盘的队满了，已经丢了 ${W.dropped} 条`))
+    return false
+  }
+  W.keys.add(k)
+  W.q.push(o)
+  pump()
+  return true
+}
+
+/** 队头那一截：写进哪天的文件、多少条。定下来就不变，直到写成。 */
+function headChunk() {
+  if (!W.head) {
+    rollDay()                                        // 前面的都记完了，这时候换天是安全的
+    W.head = { day: ST.live.day, n: Math.min(W.q.length, MAX_CHUNK) }
+  }
+  return W.head
+}
+/** 这一截里的新设备先登记（同步、按顺序）；有一台登记不上，整截等着重试 */
+function registerChunk(h) {
+  for (let i = 0; i < h.n; i++) if (deviceIdx(W.q[i].vid, h.day) < 0) return false
+  return true
+}
+function chunkText(h, file) {
+  let t = W.torn.has(file) ? '\n' : ''
+  for (let i = 0; i < h.n; i++) t += `${JSON.stringify(W.q[i])}\n`
+  return t
+}
+function pump() {
+  if (W.closed || W.busy || W.timer || !W.q.length) return
+  const h = headChunk()
+  if (!registerChunk(h)) return retry()
+  const file = evFile(h.day)
+  const text = chunkText(h, file)
+  W.busy = true
+  try {
+    fs.appendFile(file, text, (err) => {
+      if (W.closed) return
+      W.busy = false
+      if (err) { W.torn.add(file); logErr('append', err); return retry() }
+      W.torn.delete(file)
+      W.backoff = 0
+      commitHead(Buffer.byteLength(text))
+      pump()
+    })
+  } catch (e) { W.busy = false; W.torn.add(file); logErr('append', e); retry() }
+}
+function retry() {
+  W.backoff = Math.min(30e3, W.backoff ? W.backoff * 2 : 500)
+  W.timer = setTimeout(() => { W.timer = null; pump() }, W.backoff)
+}
+/** 队头那一截落盘了：这才认下它们的事件号、记进当天的聚合 */
+function commitHead(bytes) {
+  const h = W.head
+  W.head = null
+  ST.logs[h.day] = (ST.logs[h.day] || 0) + bytes
+  for (const o of W.q.splice(0, h.n)) {
+    W.keys.delete(qkey(o))
+    try { take(ST.live, o) } catch (e) { logErr('apply', e) }
+  }
+  ST.dirty = true; ST.gen++
+}
+/** 退出前把排着的同步写完。正在写的那一截可能已经落了、也可能没有：整截再写一遍、前面垫换行，重放只认一次。 */
+function drainSync() {
+  if (W.timer) { clearTimeout(W.timer); W.timer = null }
+  if (W.busy && W.head) W.torn.add(evFile(W.head.day))
+  W.busy = false
+  W.closed = true
+  while (W.q.length) {
+    const h = headChunk()
+    if (!registerChunk(h)) { logErr('drain', new Error(`退出前还有 ${W.q.length} 条没落盘：设备登记簿写不进去`)); return }
+    const file = evFile(h.day)
+    const text = chunkText(h, file)
+    try { fs.appendFileSync(file, text) } catch (e) {
+      logErr('drain', new Error(`退出前还有 ${W.q.length} 条没落盘：${e && e.message ? e.message : e}`))
+      return
+    }
+    W.torn.delete(file)
+    commitHead(Buffer.byteLength(text))
+  }
 }
 
 /* ---------- 重放 ----------
-   一天的聚合永远是那天 JSONL 的纯函数。stats.json 只是缓存：当天每次启动都重放，
-   而 stats.json 里缺的那些天（整个文件丢了、或者换了卷）也照样从 JSONL 重算回来。 */
-function replay(day) {
+   一天的聚合是那天 JSONL 的纯函数——外加前几天攒下的会话账本（跨零点的会话要知道昨天报到了多少）。
+   启动时按日期从早到晚一天一天放，见 loadStats。 */
+function replayDay(day) {
+  pruneLedger(day)
   const L = newLive(day)
-  let txt = ''
-  try { txt = fs.readFileSync(evFile(day), 'utf8') } catch { return L }
-  for (const ln of txt.split('\n')) {
+  let buf = null
+  try { buf = fs.readFileSync(evFile(day)) } catch { return { L, size: 0 } }
+  // 最后一行没有换行：上一个进程写到一半被杀了。下一次往这个文件追加先垫一个换行，不然新的一行粘在半行后面，一起作废
+  if (buf.length && buf[buf.length - 1] !== 0x0a) W.torn.add(evFile(day))
+  for (const ln of buf.toString('utf8').split('\n')) {
     if (!ln) continue
     let o
-    try { o = JSON.parse(ln) } catch { continue }
-    if (!o || typeof o.vid !== 'string' || !EVENTS.has(o.e)) continue
-    const save = ST.live
-    ST.live = L
-    try { if (fresh(o.sid, o.n)) applyEvent(L, o) } catch (e) { logErr('replay-ev', e) } finally { ST.live = save }
+    try { o = JSON.parse(ln) } catch { continue }       // 写到一半的半行：跳过
+    const c = cleanEvent(o)
+    if (!c) continue
+    try { take(L, c) } catch (e) { logErr('replay-ev', e) }
   }
-  return L
+  return { L, size: buf.length }
 }
 
 function diskDays() {
@@ -436,39 +633,54 @@ function diskDays() {
 }
 
 function loadStats() {
+  // stats.json 坏了（写到一半、盘出错）就退回 .bak；两份都不行，就全部从 JSONL 重算
   for (const f of [STATS_FILE, `${STATS_FILE}.bak`]) {
     try {
       const j = JSON.parse(fs.readFileSync(f, 'utf8'))
-      if (j && j.days) { ST.days = j.days; break }
+      if (j && j.days && typeof j.days === 'object') {
+        ST.days = j.days
+        ST.logs = j.agg === AGG && j.logs && typeof j.logs === 'object' ? { ...j.logs } : {}
+        break
+      }
     } catch { /* 没有缓存就从 JSONL 重算 */ }
   }
-  try {
-    for (const ln of fs.readFileSync(DEV_FILE, 'utf8').split('\n')) {
-      if (ln.length < 12) continue
-      const day = ln.slice(0, 10)
-      const vid = ln.slice(11).trim()
-      if (!vid || REG.idx.has(vid)) continue
-      REG.idx.set(vid, REG.vids.length); REG.vids.push(vid); REG.firstDay.push(day)
-    }
-  } catch { /* 第一次跑，还没有登记簿 */ }
+  syncRegistry()
 
   const today = dayStr()
   const cut = dayStr(Date.now() - RETAIN_DAYS * 86400e3)
-  // 先把 stats.json 里缺的历史天从 JSONL 补回来（按日期从早到晚，首见日才是对的）
-  for (const day of diskDays()) {
-    if (day < cut || day >= today) continue
-    if (ST.days[day]) continue
-    ST.days[day] = serialise(replay(day))
+  const disk = diskDays().filter((d) => d >= cut && d <= today)
+  for (const d of Object.keys(ST.logs)) if (!disk.includes(d)) delete ST.logs[d]
+  /* 缓存封好了的那天（口径没变、记下的字节数和盘上的 JSONL 一样长）直接用；别的都从 JSONL 重算。
+     原来只重算缓存里缺的那几天：昨天最后一次落缓存之后又进了事件、进程被杀、今天才起来，
+     昨天那份旧缓存就一直被当真（外部审查 2026-09-18 复现：缓存 0 台、JSONL 1 台，重启还是 0）。 */
+  const size = (d) => { try { return fs.statSync(evFile(d)).size } catch { return -1 } }
+  const need = new Set(disk.filter((d) => d < today && !(ST.days[d] && ST.logs[d] === size(d))))
+  // 会话账本从「要算的最早那天」往前多放 CARRY_DAYS + 1 天，算出来的才和一直开着的进程一样
+  const from = shiftDay([...need, today].sort()[0], -(CARRY_DAYS + 1))
+  for (const d of disk) {
+    if (d < from || d >= today) continue
+    const r = replayDay(d)
+    if (need.has(d)) { ST.days[d] = serialise(r.L); ST.logs[d] = r.size }
   }
-  ST.live = replay(today)
+  const r = replayDay(today)
+  ST.live = r.L
+  ST.logs[today] = r.size
   liveDay()
   ST.dirty = true; ST.gen++
 }
 
-const flushTimer = setInterval(() => flush(false), 30e3)
+function shutdown(why) {
+  try { drainSync() } catch (e) { logErr(`${why}-drain`, e) }
+  try { flush(true) } catch (e) { logErr(why, e) }
+  process.exit(0)
+}
+const flushTimer = setInterval(() => {
+  try { if (!W.head) rollDay() } catch (e) { logErr('roll', e) }
+  flush(false)
+}, 30e3)
 flushTimer.unref()
-process.on('SIGTERM', () => { try { flush(true) } catch (e) { logErr('sigterm', e) } process.exit(0) })
-process.on('SIGINT', () => { try { flush(true) } catch (e) { logErr('sigint', e) } process.exit(0) })
+process.on('SIGTERM', () => shutdown('sigterm'))
+process.on('SIGINT', () => shutdown('sigint'))
 /* 统计出了任何没接住的错，记一行，进程继续服务 dist/。
    （破晓 没有这一层——它的 server.js 只挂了 SIGTERM/SIGINT。） */
 process.on('uncaughtException', (e) => logErr('uncaught', e))
@@ -521,32 +733,50 @@ function plain(v) {
   return s
 }
 
-/** 属性：这个事件自己声明过的键、只认标量、字符串掐到 48 字并去掉控制字符、数字必须有限 */
-function cleanProps(raw, allowed) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  if (!allowed) return undefined
+/**
+ * 属性：这个事件自己声明过的键；值过 stats-contract.js 的那条规则（字符串先去掉控制字符、掐到 48 字）。
+ * 不合规矩的值只丢这一个属性，事件本身照收：一条结局的 key 不认，它还是一条结局，漏斗照算，
+ * 只是结局分布里记成「未报结局」。对象、数组、函数一条规则都过不了——嵌套就是在这里被挡住的。
+ */
+function cleanProps(raw, e) {
+  const rules = PROP_RULES[e]
+  if (!rules || !raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const out = {}
   let n = 0
   for (const k of Object.keys(raw)) {
     if (n >= MAX_PROPS) break
-    if (k.length > MAX_KEY || !allowed.has(k)) continue
-    const v = raw[k]
-    if (v === null || v === undefined) continue
-    if (typeof v === 'string') {
-      const s = plain(v)
-      if (!s) continue
-      out[k] = s
-    } else if (typeof v === 'number') {
-      if (!Number.isFinite(v)) continue
-      out[k] = v
-    } else if (typeof v === 'boolean') {
-      out[k] = v
-    } else {
-      continue                      // 对象、数组、函数：整个丢掉（嵌套就是在这里被挡住的）
-    }
+    if (k.length > MAX_KEY || !Object.hasOwn(rules, k)) continue
+    let v = raw[k]
+    if (typeof v === 'string') v = plain(v)
+    v = cleanValue(rules[k], v)
+    if (v === undefined) continue
+    out[k] = v
     n++
   }
   return n ? out : undefined
+}
+
+/**
+ * 一条事件收不收、收成什么样。收的时候（ingest）和重放 JSONL 的时候（replayDay）过的是同一道：
+ * 洗过的再洗一遍还是它自己，所以新写进去的行重放出来和当初记的一模一样；规则收紧之前写进
+ * 旧 JSONL 的怪值（2026-09-18 之前只核属性名），重放时也按现在的规则挡掉。
+ * 有行键的累计量组（screens 的 to、matches 的 cls……），行键不认的整条不收：它会落进一个
+ * 没有名字的行，和这个会话别的行攒在一起。
+ */
+function cleanEvent(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null
+  if (typeof o.e !== 'string' || !EVENTS.has(o.e)) return null
+  if (!idOk(o.vid) || !idOk(o.sid)) return null
+  if (!Number.isInteger(o.n) || o.n < 0 || o.n > 1e7) return null
+  const c = { t: Number.isFinite(o.t) ? o.t : 0, e: o.e, vid: o.vid, sid: o.sid, n: o.n }
+  if (DEVS.has(o.dev)) c.dev = o.dev
+  const tz = Number.isFinite(o.tz) ? Math.max(-900, Math.min(900, Math.round(o.tz))) : 0
+  if (tz) c.tz = tz
+  const p = cleanProps(o.p, o.e)
+  if (p) c.p = p
+  const R = ROLLUPS[o.e]
+  if (R && R.key && (!p || p[R.key] === undefined)) return null
+  return c
 }
 
 /** 一整批。任何一处不对就丢掉那一条（或整批），绝不抛。 */
@@ -557,21 +787,13 @@ function ingest(text) {
   if (b.v !== 1) return 0
   if (!idOk(b.vid) || !idOk(b.sid)) return 0
   if (!Array.isArray(b.events) || !b.events.length || b.events.length > MAX_EVENTS) return 0
-  const dev = DEVS.has(b.dev) ? b.dev : ''
-  const tz = Number.isFinite(b.tz) ? Math.max(-900, Math.min(900, Math.round(b.tz))) : 0
   let took = 0
   for (const ev of b.events) {
     if (!ev || typeof ev !== 'object' || Array.isArray(ev)) continue
-    if (typeof ev.name !== 'string' || !EVENTS.has(ev.name)) continue
-    if (!Number.isInteger(ev.n) || ev.n < 0 || ev.n > 1e7) continue
     // t 用服务器时间：客户端的钟可能是错的，而「这条算哪一天」不能由客户端说了算
-    const o = { t: Date.now(), e: ev.name, vid: b.vid, sid: b.sid, n: ev.n }
-    if (dev) o.dev = dev
-    if (tz) o.tz = tz
-    const p = cleanProps(ev.props, ALLOWED.get(ev.name))
-    if (p) o.p = p
-    record(o)
-    took++
+    // （算哪一天，最后看它落进了哪一天的 JSONL，见写盘的队）
+    const o = cleanEvent({ t: Date.now(), e: ev.name, vid: b.vid, sid: b.sid, n: ev.n, dev: b.dev, tz: b.tz, p: ev.props })
+    if (o && enqueue(o)) took++
   }
   return took
 }
@@ -708,7 +930,9 @@ function countTable(obj, label, cn, total) {
 }
 
 function dashHtml() {
-  const today = liveDay()
+  // 「今日」按现在的钟取：零点刚过、队头那一截还没写成的时候，当天的聚合还挂在昨天身上
+  liveDay()
+  const today = ST.days[dayStr()] || blankDay()
   const D = Number(process.env.STATS_WINDOW) || 30
   const d30 = lastDays(D)
   const win = lastDays(D).map((r) => r.a)
@@ -867,7 +1091,7 @@ ${countTable(errs, '出错位置', null)}
 <div>${countTable(perDev((a) => a.dv), '设备类型', DEV_CN)}</div>
 <div>${countTable(perDev((a) => a.wd), '屏幕宽度', null)}</div>
 </div>
-<div class="foot">数据目录 ${esc(DATA_DIR)} · 设备总数 ${REG.vids.length} · 上次落盘 ${ST.flushedAt ? new Date(ST.flushedAt + 8 * 3600e3).toISOString().slice(11, 19) : '尚未'} (UTC+8)${errCount ? ` · 统计内部错误 ${errCount} 次（最近：${esc(lastErr)}）` : ''}<br>不记 IP、不记 User-Agent、不记玩家打进去的任何文字。</div>
+<div class="foot">数据目录 ${esc(DATA_DIR)} · 设备总数 ${REG.vids.length} · 上次落盘 ${ST.flushedAt ? new Date(ST.flushedAt + 8 * 3600e3).toISOString().slice(11, 19) : '尚未'} (UTC+8)${errCount ? ` · 统计内部错误 ${errCount} 次（最近：${esc(lastErr)}）` : ''}${W.q.length ? ` · ${W.q.length} 条事件排着还没落盘` : ''}${W.dropped ? ` · 写盘的队满过，丢了 ${W.dropped} 条` : ''}<br>不记 IP、不记 User-Agent、不记玩家打进去的任何文字。</div>
 </body></html>`
 }
 
@@ -896,6 +1120,7 @@ const server = http.createServer((req, res) => {
           { 'www-authenticate': 'Basic realm="val_player dash", charset="UTF-8"' })
       }
       if (a !== 'ok') return send(res, 404, 'not found')
+      if (!W.head) rollDay()
       flush(false)
       return send(res, 200, dashHtml(), 'text/html; charset=utf-8', { 'content-security-policy': DASH_CSP })
     } catch (e) {

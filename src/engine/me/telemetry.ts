@@ -48,6 +48,13 @@
  * events are dropped.
  */
 
+// types only, erased at build: the save and the endings report through this module, so a value import would close a cycle
+import type { Region, Role } from '../types'
+import type { CerKind, Phase, PitchWhy } from './types'
+import type { CompClass } from './compclass'
+import type { RetireWhy } from './endings'
+import type { StartPoint } from './career'
+
 const ENDPOINT = '/api/e'
 const ID_KEY = 'val_player:vid'
 const SEQ_KEY = 'val_player:vseq'
@@ -112,6 +119,115 @@ export const TELEMETRY_EVENTS = {
 
 /** One of the names above. */
 export type TelemetryEvent = keyof typeof TELEMETRY_EVENTS
+
+/**
+ * What each prop's VALUE may be: the other half of the contract.
+ *
+ * The ingest used to check the names alone, so any string of up to 48
+ * characters and any finite number went in (external audit, 2026-09-18): a
+ * forged beacon made `region`, `role`, `start` and the ending `key` into
+ * whatever aggregation keys it liked, and an `active_s` of 1e308 turned the
+ * dashboard's playtime into 1.4e304 hours. stats-contract.js now carries a rule
+ * for every prop and drops a value that breaks it; this is the same table on
+ * this side, and scripts/check_stats.ts fails if the two differ by one rule or
+ * one word.
+ *
+ * The word lists are spelled out from the engine's own unions through `every`,
+ * so a union that gains a member stops this file compiling until the list
+ * here — and then the server's — says it too. The ending keys, the origins and
+ * the grounds are plain data rather than unions; scripts/check_telemetry.ts
+ * holds those lists against ENDINGS_ME, ORIGINS and THEMES, and checks that
+ * every value a whole played career sends passes the server's rules.
+ *
+ * Numbers are integers in a range. A running total's ceiling is what one
+ * sitting could never honestly reach, not what is usual.
+ */
+type ValueRule =
+  | { readonly t: 'int'; readonly min: number; readonly max: number }
+  | { readonly t: 'bool' }
+  | { readonly t: 'enum'; readonly of: readonly string[] }
+  | { readonly t: 'str'; readonly re: string }
+
+const int = (min: number, max: number) => ({ t: 'int', min, max }) as const
+const BOOL = { t: 'bool' } as const
+const oneOf = <const L extends readonly string[]>(of: L) => ({ t: 'enum', of }) as const
+const str = (re: string) => ({ t: 'str', re }) as const
+/** Every member of a union, each spelled out: leave one out, or name one it does not have, and this does not compile. */
+const every = <U extends string>() =>
+  <const L extends readonly U[]>(list: L & ([U] extends [L[number]] ? unknown : never)): L => list
+
+const YEAR = int(2000, 2100)
+/** the day of the season (engine/season.ts counts each season from 0) */
+const DAY = int(0, 1000)
+const AGE = int(0, 99)
+/** 1 是 VCT，2 是 Challengers，0 是没有俱乐部 */
+const TIER = int(0, 2)
+/** what a career counts: seasons, matches, titles */
+const CAREER = int(0, 10000)
+/** one row of one sitting's running total */
+const SITTING = int(0, 100000)
+/** one sitting's confirmed seconds: two days and nights is beyond any real sitting */
+const SECS = int(0, 172800)
+const PX = int(0, 20000)
+
+const PHASE = oneOf(every<Phase>()(['pre', 'pro', 'free', 'retired']))
+/** a hostname, as URL gives it (ASCII); an underscore breaks the rules for one, and some are named with it anyway */
+const HOST = str('^[A-Za-z0-9_.-]{1,48}$')
+/** a screen's key (PlayerGame's SCREENS and the few pages reached directly) */
+const SCREEN = str('^[a-z][a-z0-9_]{0,23}$')
+/** the build file and line an error came from (errorSite below), or promise / unknown; vite's hashes carry _ and - */
+const ERROR_AT = str('^(?:[A-Za-z0-9_.~%@+-]{1,40}:[0-9]{1,9}:[0-9]{1,9}|promise|unknown)$')
+
+export const TELEMETRY_VALUES = {
+  session_start: { ref: HOST, host: HOST, w: PX, h: PX, new_id: BOOL, had_save: BOOL, theme: oneOf(['dark', 'light', 'cream']) },
+  session_ping: { active_s: SECS },
+  session_end: { active_s: SECS, reason: oneOf(['pagehide', 'gap']) },
+  career_start: {
+    year: YEAR,
+    region: oneOf(every<Region>()([
+      'Americas', 'EMEA', 'Pacific', 'China',
+      'North America', 'Europe', 'Turkey', 'CIS', 'Brazil', 'LATAM',
+      'Korea', 'Japan', 'SEA', 'Malaysia & Singapore', 'Indonesia',
+      'Thailand', 'Philippines', 'Vietnam', 'Hong Kong & Taiwan',
+      'MENA', 'South Asia', 'Oceania',
+    ])),
+    role: oneOf(every<Role>()(['决斗者', '先锋', '控场', '哨卫', '自由人'])),
+    start: oneOf(every<StartPoint>()(['pre', 'chal', 't1'])),
+    // the cards the new-career page offers (me/origins.ts ORIGINS); the two the hall used to unlock are not offered any more
+    origin: oneOf([
+      'netcafe', 'cs', 'streamer', 'radiant', 'rich', 'academy', 'campus',
+      'town', 'korea', 'late', 'exchild', 'grinder',
+    ]),
+    talent_max: int(0, 100), talent_spread: int(0, 100), talent_points: int(0, 100),
+  },
+  career_resume: { day: DAY, year: YEAR, phase: PHASE, tier: TIER, pro_seasons: CAREER, age: AGE },
+  season_done: { n: CAREER, year: YEAR, tier: TIER, matches: CAREER, starts: CAREER, titles: CAREER },
+  ending: {
+    key: oneOf([
+      'breaker', 'dynasty', 'world', 'master', 'uncrowned', 'regional', 'ring',
+      'oneclub', 'evergreen', 'abroad', 'titled', 'journeyman', 'flash', 'shore',
+    ]),
+    why: oneOf(every<RetireWhy>()(['world_end', 'pre_unsigned', 'free_uncalled', 'age_cap', 'age_decline', 'chose', 'other'])),
+    age: AGE, pro_seasons: CAREER, titles: CAREER, titles_started: CAREER,
+    peak_tier: TIER, year: YEAR, entry_year: int(0, 2100),
+  },
+  save_fail: { what: oneOf(['pack', 'write']), kb: int(0, 1000000), packed: BOOL, year: YEAR, day: DAY },
+  screens: { to: SCREEN, hits: SITTING },
+  turns: { turns: SITTING, many: SITTING, day: DAY, year: YEAR, phase: PHASE, tier: TIER },
+  matches: { cls: oneOf(every<CompClass>()(['champions', 'masters', 'lockin', 'qual', 'chal', 'league'])), played: SITTING, skip: SITTING, started: SITTING },
+  ceremonies: {
+    kind: oneOf(every<CerKind>()(['draw', 'depart', 'final', 'media', 'rehab', 'farewell', 'awards', 'retire', 'patch', 'showmatch', 'tryout'])),
+    played: SITTING, skip: SITTING, gold: SITTING, bronze: SITTING,
+  },
+  cups: { enter: SITTING, skip: SITTING, round: SITTING, forfeit: SITTING },
+  offers: {
+    deal_in: SITTING, invite_in: SITTING, accept: SITTING, decline: SITTING, aside: SITTING,
+    expire: SITTING, pitch: SITTING, contact: SITTING, pitch_ok: SITTING, pitch_no: SITTING,
+  },
+  pitch_why: { why: oneOf(every<PitchWhy>()(['full', 'import', 'nevpro', 'buyout', 'gap', 'starter', 'luck'])), n: SITTING },
+  // a render that throws throws on every frame: two hundred thousand an hour
+  errors: { n: int(0, 10000000), at: ERROR_AT },
+} as const satisfies { [E in TelemetryEvent]: { [K in (typeof TELEMETRY_EVENTS)[E][number]]: ValueRule } }
 
 type Props = Record<string, string | number | boolean | null | undefined>
 
