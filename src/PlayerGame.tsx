@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, autosaveInfo, claimAutosave, flushAutosave, flushAutosaveNow, loadAutosave } from './engine/me/save'
+import { autosave, autosaveInfo, checkSaveHeld, claimAutosave, flushAutosave, flushAutosaveNow, loadAutosave, onSaveStorage } from './engine/me/save'
 import { dateLabel, resumeTimeline } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
 import { ATTR_CN, ATTR_KEYS } from './engine/types'
@@ -14,7 +14,7 @@ import { noteHall } from './engine/me/hall'
 import { unseenAch } from './engine/me/achievements'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
-import SaveNotice, { useSaveTrouble } from './ui/me/SaveNotice'
+import SaveNotice, { SaveTakenNotice, useSaveLost, useSaveTrouble } from './ui/me/SaveNotice'
 import { ladderLabel } from './engine/me/prepro'
 import { rankAt } from './engine/me/rank'
 import { fanTier, fansCn } from './engine/me/fans'
@@ -107,6 +107,8 @@ function Career() {
   const [more, setMore] = useState(false)
   // the latest progress not in this browser (engine/me/save.ts): a bar says so until a save lands (ui/me/SaveNotice.tsx)
   const trouble = useSaveTrouble()
+  // another page took the save (engine/me/save.ts holds): this one writes nothing more and says so (SaveTakenNotice)
+  const lost = useSaveLost()
   // 回到首页 waits for the save to land
   const [leaving, setLeaving] = useState(false)
   const liveRef = useRef<MeMatch | null>(null)
@@ -114,15 +116,31 @@ function Career() {
 
   useEffect(() => { setBooted(true) }, [])
   // a page going out of sight or away can be frozen before a background write lands: the newest career goes in at once where it fits
+  // ...and one coming back asks whether another page took the save meanwhile: a page frozen in the background, or
+  // kept whole by the back button, may not have heard it happen (engine/me/save.ts checkSaveHeld)
   useEffect(() => {
     const away = () => flushAutosaveNow()
-    const hidden = () => { if (document.visibilityState === 'hidden') flushAutosaveNow() }
+    const hidden = () => { if (document.visibilityState === 'hidden') flushAutosaveNow(); else checkSaveHeld() }
+    const back = () => { checkSaveHeld() }
     window.addEventListener('pagehide', away)
+    window.addEventListener('pageshow', back)
     document.addEventListener('visibilitychange', hidden)
     return () => {
       window.removeEventListener('pagehide', away)
+      window.removeEventListener('pageshow', back)
       document.removeEventListener('visibilitychange', hidden)
     }
+  }, [])
+  // Another page of the game wrote the save or took it (reported 2026-09-18, an outside audit): this page hears it at
+  // once, and stops writing if it held the save. On the home page the card is drawn again, so it shows what is there now.
+  useEffect(() => {
+    const heard = (e: StorageEvent) => {
+      if (e.storageArea && e.storageArea !== window.localStorage) return
+      onSaveStorage(e.key)
+      if (!gameRef.current) bump()
+    }
+    window.addEventListener('storage', heard)
+    return () => window.removeEventListener('storage', heard)
   }, [])
   useEffect(() => {
     mainRef.current?.scrollTo(0, 0)
@@ -171,6 +189,36 @@ function Career() {
     setScreen('week')
     commit()
   }, [commit])
+
+  /**
+   * The save as it is now, opened: 继续 on the home page, and 「载入最新存档」 on a page another one took the save from.
+   * false when there is none, or it cannot be read.
+   */
+  const openSave = useCallback(async (): Promise<boolean> => {
+    const g = await loadAutosave()
+    if (!g?.me) return false
+    // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
+    // a save from before the eight ceilings gets them now, not at the end of its first week
+    resumeTimeline(g)
+    ensureCeilings(g)
+    // a career came back, and how far in it already is — the other half of
+    // 「有没有人第二天又回来了」
+    track('career_resume', {
+      ...turnShape(g),
+      pro_seasons: g.me!.seasons.filter((s) => s.tier > 0).length,
+      age: g.players[g.me!.id]?.age ?? 0,
+    })
+    // whatever was up over the career it replaces goes with it: a match in progress, a card, a run's summary
+    holdCard(null)
+    setLive(null)
+    setFixture(null)
+    setPlayerId(null)
+    setSummary(null)
+    setMore(false)
+    // and its first autosave writes the summary a save from before it lacks
+    start(g)
+    return true
+  }, [start])
 
   /** Whatever the dials cover is answered, and said so, before the clock moves. */
   const answerDials = useCallback((g: GameState) => {
@@ -314,24 +362,7 @@ function Career() {
         onStart={start}
         // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
         save={autosaveInfo()}
-        onContinue={async () => {
-          const g = await loadAutosave()
-          if (!g?.me) return false
-          // a save that stopped at the edge of the timeline carries on from the same day once this build can play the year
-          // a save from before the eight ceilings gets them now, not at the end of its first week
-          resumeTimeline(g)
-          ensureCeilings(g)
-          // a career came back, and how far in it already is — the other half of
-          // 「有没有人第二天又回来了」
-          track('career_resume', {
-            ...turnShape(g),
-            pro_seasons: g.me!.seasons.filter((s) => s.tier > 0).length,
-            age: g.players[g.me!.id]?.age ?? 0,
-          })
-          // and its first autosave writes the summary a save from before it lacks
-          start(g)
-          return true
-        }}
+        onContinue={openSave}
       />
       </>
     )
@@ -574,10 +605,13 @@ function Career() {
         {/* what just unlocked waits for the match, the run's summary and those cards, and goes before any card (unlocks above) */}
         {!live && !summary && !moments && <AchPop />}
         {/* the latest progress did not go into this browser: said until a save lands, with 再试一次 (ui/me/SaveNotice.tsx) */}
-        {trouble && <SaveNotice trouble={trouble} onRetry={saveNow} />}
+        {trouble && !lost && <SaveNotice trouble={trouble} onRetry={saveNow} />}
+        {/* another page took the save: nothing more is written from here, said until a career is opened here again (ui/me/SaveNotice.tsx) */}
+        {lost && <SaveTakenNotice onLoad={openSave} />}
         {/* a build that went live under this tab: 刷新 saves and waits for the write. A match being played lives only in memory,
-            so the bar waits for it; and while a save is not going in, the save notice has the corner (a reload would lose that stretch) */}
-        <UpdateNudge busy={!!live || !!trouble} onBeforeReload={saveNow} />
+            so the bar waits for it; and while a save is not going in, the save notice has the corner (a reload would lose that stretch),
+            as the notice that another page took the save does */}
+        <UpdateNudge busy={!!live || !!trouble || lost} onBeforeReload={saveNow} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>

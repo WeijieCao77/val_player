@@ -667,6 +667,13 @@ export interface MomentItem {
 }
 
 export interface MeState {
+  /**
+   * This career's own id in the save (me/save.ts claimAutosave): made the first time the career is opened into the
+   * save, so two careers are never taken for one — the record beside the save names it, and a page holding another
+   * career stops writing. Not the hall's id (me/hall.ts careerIdOf), which is worked out from how the career began.
+   * A save from before it gets one when it is next opened.
+   */
+  saveId?: string
   /** the year this save began on the one timeline; older saves read it off their first season (stars.ts savedFrom) */
   entryYear?: number
   /** my player id in state.players */

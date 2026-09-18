@@ -46,6 +46,9 @@ import { track } from './telemetry'
  * Gzip is asynchronous, so a commit takes the career as JSON at once and the
  * write happens after it (autosave). A write that does not go in is said on
  * screen until one does (ui/me/SaveNotice.tsx).
+ *
+ * One save, and only the page that last opened a career into it writes it
+ * (claimAutosave, holds): see "Which page holds the save" below.
  */
 
 const AUTOSAVE = 'val_player:save:autosave'
@@ -53,7 +56,7 @@ const OWNER = `${AUTOSAVE}:owner`
 /** where a career used to be kept, in the manager game's namespace; left in place as a backup */
 const OLD_AUTOSAVE = 'valmanager:player:save:autosave'
 const OLD_OWNER = `${OLD_AUTOSAVE}:owner`
-/** the keys, for scripts/check_save_size.ts */
+/** the keys, for scripts/check_save_size.ts and scripts/check_save_tabs.ts */
 export const SAVE_KEYS = { autosave: AUTOSAVE, owner: OWNER, oldAutosave: OLD_AUTOSAVE, oldOwner: OLD_OWNER } as const
 
 /** Once: a career saved before the player game had its own keys is copied across. The old copy stays. */
@@ -134,34 +137,130 @@ export function migratePlayerSave(state: GameState): GameState {
 }
 
 /**
- * Which tab wrote the autosave last, and how far along it was — the manager
- * game's guard, the same rule: an autosave is refused only when ANOTHER tab has
- * written a career that is further along than the one being saved.
+ * Which page holds the save. There is one save and a career can be open in
+ * several tabs of one browser, so exactly one of them may write it: the one
+ * that last opened a career into it (开始生涯, 继续, 载入最新存档).
+ *
+ * Reported 2026-09-18 (an outside audit of 6d128ed, finding 01): the guard
+ * used to be the manager game's, which refused a save only when another tab's
+ * career was further along by date. It could not tell two careers apart, nor
+ * two moves on one day. A tab left open on a 2027 career, after another tab
+ * had started a new career in 2026 over it, counted as further along, and its
+ * next press put the old career back — the new one, confirmed on 开新生涯 and
+ * saved, was gone, with nothing on screen. Two tabs on one save playing the
+ * same day took turns overwriting each other the same way.
+ *
+ * So the small record beside the save says which career is in it (`career`,
+ * the career's own id, me.saveId), which page holds it (`by`), and how many
+ * times the save has been taken or written (`rev`, only ever counting up).
+ * Opening a career writes the record in this page's name; every write first
+ * checks that the record is still exactly what this page last wrote, the
+ * moment before it goes in — after the gzip, which takes a while. A page that
+ * finds the record changed has lost the save to another: it writes nothing
+ * from then on and says so (ui/me/SaveNotice.tsx SaveTakenNotice), with
+ * 「载入最新存档」 to open what the other page saved. The other pages hear of it
+ * at once through the browser's storage event (PlayerGame), not only at their
+ * next write.
+ *
+ * A page on a build from before this still writes the old record, with no
+ * career and no count: to a page on this build that is a page that took the
+ * save, and it stops. The old page cannot be made to stop by this one; the
+ * update bar (ui/me/UpdateNudge.tsx) is what brings it onto this build.
  */
 const SESSION = Math.random().toString(36).slice(2, 10)
 
-interface Owner { by: string; year: number; day: number }
+interface Owner {
+  by: string
+  year: number
+  day: number
+  /** the career in the save (me.saveId); none on a record from before 2026-09-18 */
+  career?: string
+  /** how many times the save has been taken or written; none on a record from before 2026-09-18 */
+  rev?: number
+}
 
 const readOwner = (): Owner | null => {
   try {
     const raw = localStorage.getItem(OWNER)
-    return raw ? (JSON.parse(raw) as Owner) : null
+    const o = raw ? JSON.parse(raw) as Owner : null
+    return o && typeof o === 'object' ? o : null
   } catch { return null }
 }
 
-const writeOwner = (year: number, day: number): void => {
+/** the record exactly as stored: what a read compares before and after, to know nothing was written meanwhile */
+const ownerMark = (): string => {
+  try { return localStorage.getItem(OWNER) ?? '' } catch { return '' }
+}
+
+const writeOwner = (o: Owner): boolean => {
   try {
-    localStorage.setItem(OWNER, JSON.stringify({ by: SESSION, year, day } satisfies Owner))
-  } catch { /* the save itself matters more than the marker */ }
+    localStorage.setItem(OWNER, JSON.stringify(o))
+    return true
+  } catch { return false /* the save itself matters more than the marker */ }
 }
 
-const progress = (year: number, day: number) => year * 400 + day
+const revOf = (o: Owner | null): number => (o && typeof o.rev === 'number' && Number.isFinite(o.rev) ? o.rev : 0)
 
-/** Another tab has written a career further along than this one at this point. */
-const behind = (year: number, day: number): boolean => {
+/** A career's own id: made the first time it is opened into the save, and kept in it. */
+function newSaveId(): string {
+  try {
+    const b = new Uint8Array(8)
+    crypto.getRandomValues(b)
+    return 'k' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  } catch {
+    return 'k' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  }
+}
+
+/** The save this page holds: its career, and the count the record had when this page last wrote it. null until a career is opened. */
+let held: { career: string; rev: number } | null = null
+/** Another page has taken the save from this one: nothing is written from here until a career is opened again. */
+let lost = false
+
+/**
+ * May a save of this career be written now? 'ok'; 'old' when it is not the
+ * career this page holds any more (a write of the career before, still on its
+ * way after this page opened another); 'taken' when another page holds the save.
+ *
+ * A page that never opened a career (the checks, which save a state
+ * directly) may write an empty slot, or one it wrote itself.
+ */
+function holds(career: string): 'ok' | 'old' | 'taken' {
+  if (lost) return 'taken'
   const o = readOwner()
-  return !!o && o.by !== SESSION && progress(o.year, o.day) > progress(year, day)
+  if (!held) return !o || o.by === SESSION ? 'ok' : 'taken'
+  if (career !== held.career) return 'old'
+  // no record at all: the site's storage was cleared under the page, and nobody holds the save
+  if (!o) return 'ok'
+  return o.by === SESSION && o.career === held.career && revOf(o) === held.rev ? 'ok' : 'taken'
 }
+
+/**
+ * Does this page still hold the save? Asked when another page writes the
+ * record (the storage event, PlayerGame) and when this page comes back into
+ * view, so the notice is up at once rather than at the next write.
+ */
+export function checkSaveHeld(): boolean {
+  if (held && !lost && holds(held.career) === 'taken') setLost()
+  return !lost
+}
+
+/** The browser's storage event: a key another page wrote. Only the holder's record (or storage cleared) can take the save away. */
+export function onSaveStorage(key: string | null): void {
+  if (key === null || key === OWNER) checkSaveHeld()
+}
+
+/** This page no longer writes the save: anything waiting goes, and a save that failed here no longer matters. */
+function setLost(): void {
+  if (lost) return
+  lost = true
+  waiting = null
+  trouble = null
+  heard.forEach((f) => f())
+}
+
+/** Another page has taken the save: said on screen until a career is opened here again (ui/me/SaveNotice.tsx). */
+export const saveLost = (): boolean => lost
 
 /** Is there a career to continue? */
 export function hasAutosave(): boolean {
@@ -220,26 +319,58 @@ export async function readStored(raw: string): Promise<string> {
   return new Response(new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
 }
 
-/** The career to continue, read and brought forward; null when there is none, or it cannot be read. */
+/**
+ * The career to continue, read and brought forward; null when there is none, or it cannot be read.
+ *
+ * Reading a packed save takes a moment (the gunzip). Another page that still
+ * holds the save can write it meanwhile; then what was read is already old,
+ * and opening it would take the save from that page one move behind it. So
+ * the record beside the save is compared before and after, and the save is
+ * read again when it moved.
+ */
 export async function loadAutosave(): Promise<GameState | null> {
   // a write still on its way lands first, so what is read is the last career taken
   await flushAutosave()
   adoptOldSave()
-  let raw: string | null = null
-  try {
-    raw = localStorage.getItem(AUTOSAVE) ?? localStorage.getItem(OLD_AUTOSAVE)
-  } catch { return null }
-  if (!raw) return null
-  try {
-    return migratePlayerSave(unpackState(await readStored(raw)))
-  } catch {
-    return null
+  for (let tries = 0; ; tries++) {
+    let raw: string | null = null
+    let mark: string
+    try {
+      mark = ownerMark()
+      raw = localStorage.getItem(AUTOSAVE) ?? localStorage.getItem(OLD_AUTOSAVE)
+    } catch { return null }
+    if (!raw) return null
+    let state: GameState
+    try {
+      state = migratePlayerSave(unpackState(await readStored(raw)))
+    } catch {
+      return null
+    }
+    if (ownerMark() === mark || tries >= 3) return state
   }
 }
 
-/** Say that this tab's career is the one that counts — called whenever a career is opened or started. */
+/**
+ * This page's career is the one in the save from now on — called whenever a
+ * career is opened here: a new one (开始生涯), or the save read back (继续,
+ * 载入最新存档). A career gets its own id the first time (a save from before
+ * the id gets one here, and carries it from its next write); the record is
+ * written in this page's name with the count one on, which is what tells any
+ * other page holding the save that it no longer does.
+ */
 export function claimAutosave(state: GameState): void {
-  writeOwner(state.year, state.day)
+  const career = state.me ? (state.me.saveId ||= newSaveId()) : newSaveId()
+  const rev = revOf(readOwner()) + 1
+  held = { career, rev }
+  if (!writeOwner({ by: SESSION, year: state.year, day: state.day, career, rev })) {
+    // not even this small record goes in (storage full): an empty record is one no page is kept from writing,
+    // rather than one still naming the page the save was just taken from
+    try { localStorage.removeItem(OWNER) } catch { /* storage blocked: no save goes in either */ }
+  }
+  if (lost) {
+    lost = false
+    heard.forEach((f) => f())
+  }
 }
 
 /**
@@ -257,6 +388,7 @@ export interface SaveTrouble {
 let trouble: SaveTrouble | null = null
 const heard = new Set<() => void>()
 export const saveTrouble = (): SaveTrouble | null => trouble
+/** told when the trouble changes, and when another page takes the save (saveLost) */
 export function onSaveTrouble(f: () => void): () => void {
   heard.add(f)
   return () => { heard.delete(f) }
@@ -282,14 +414,14 @@ function noteSaveFail(what: 'pack' | 'write', year: number, day: number, kb: num
 }
 
 /**
- * 'saved' went in; 'behind' was refused because another tab's career is
- * further along; 'failed' did not go in; 'stale' was dropped because a newer
- * snapshot is already on disk.
+ * 'saved' went in; 'taken' was refused because another page holds the save;
+ * 'failed' did not go in; 'stale' was dropped because a newer snapshot is
+ * already on disk, or it is of a career this page has since closed.
  */
-export type AutosaveResult = 'saved' | 'behind' | 'failed' | 'stale'
+export type AutosaveResult = 'saved' | 'taken' | 'failed' | 'stale'
 
-/** A career as it stood at one commit: its JSON, where it was, and the home page's card for it. */
-interface Snapshot { seq: number; json: string; year: number; day: number; meta: SaveMeta | null }
+/** A career as it stood at one commit: which career, its JSON, where it was, and the home page's card for it. */
+interface Snapshot { seq: number; career: string; json: string; year: number; day: number; meta: SaveMeta | null }
 
 let taken = 0
 /** the newest snapshot on disk */
@@ -306,11 +438,15 @@ let queue: Promise<void> | null = null
  * does after this call can leak into this write; the gzip and the write happen
  * after it. Writes land in order. While one is being written only the newest
  * waiting snapshot is kept. flushAutosave waits for them all.
+ *
+ * Nothing at all once another page has taken the save: this page's career goes
+ * on in memory, and the notice says so.
  */
 export function autosave(state: GameState): void {
+  if (lost) return
   let snap: Snapshot
   try {
-    snap = { seq: ++taken, json: packState(state), year: state.year, day: state.day, meta: buildSaveMeta(state) }
+    snap = { seq: ++taken, career: state.me?.saveId ?? '', json: packState(state), year: state.year, day: state.day, meta: buildSaveMeta(state) }
   } catch {
     noteSaveFail('pack', state.year, state.day, 0)
     setTrouble({ year: state.year, day: state.day, kept: keptDate })
@@ -337,15 +473,18 @@ async function drain(): Promise<void> {
 
 async function writeSnapshot(snap: Snapshot): Promise<AutosaveResult> {
   try {
-    if (behind(snap.year, snap.day)) return settle(snap, 'behind')
+    const before = holds(snap.career)
+    if (before !== 'ok') return settle(snap, before === 'old' ? 'stale' : 'taken')
     let stored = snap.json
     if (canPack()) {
       try { stored = await packStored(snap.json) } catch { /* the gzip failed: written raw, as before */ }
     }
     // the page went out of sight while this was packed and a newer one was written at once (flushAutosaveNow)
     if (snap.seq < landed) return 'stale'
-    // ...or another tab wrote a career further along meanwhile
-    if (behind(snap.year, snap.day)) return settle(snap, 'behind')
+    // ...or the save changed hands while this was packed: another page opened a career into it or wrote it, and a
+    // snapshot taken before that must not land after it. Checked again right here, with nothing in between to wait on.
+    const now = holds(snap.career)
+    if (now !== 'ok') return settle(snap, now === 'old' ? 'stale' : 'taken')
     return settle(snap, put(stored) ? 'saved' : 'failed')
   } catch {
     return settle(snap, 'failed')
@@ -355,14 +494,17 @@ async function writeSnapshot(snap: Snapshot): Promise<AutosaveResult> {
 function settle(snap: Snapshot, result: AutosaveResult): AutosaveResult {
   if (result === 'saved') {
     landed = Math.max(landed, snap.seq)
-    writeOwner(snap.year, snap.day)
+    // the record, one on: any other page that reads it now knows the save moved
+    const rev = (held ? held.rev : revOf(readOwner())) + 1
+    if (writeOwner({ by: SESSION, year: snap.year, day: snap.day, career: held?.career ?? snap.career, rev }) && held) held.rev = rev
     // the home page's card, so it never has to read the save to say whose career this is — only once the save is really there
     writeSaveMeta(snap.meta)
     keptDate = snap.meta?.date ?? keptDate
     setTrouble(null)
-  } else if (result === 'behind') {
-    // the guard doing its job, not a save that failed: what is on disk is further along, and 再试一次 could not change that
+  } else if (result === 'taken') {
+    // not a save that failed: another page holds the save, and 再试一次 could not change that. Said once, and this page stops.
     setTrouble(null)
+    if (held) setLost()
   } else if (result === 'failed' && snap.seq > landed) {
     noteSaveFail('write', snap.year, snap.day, Math.round(snap.json.length / 1024))
     setTrouble({ year: snap.year, day: snap.day, kept: keptDate })
@@ -415,8 +557,8 @@ function put(stored: string): boolean {
 /**
  * Wait until every snapshot taken so far has been written or has failed to be:
  * before a reload (ui/me/UpdateNudge.tsx), before the career closes for the home
- * page, before a save is read. true when the latest progress is on disk (or a
- * further-along career from another tab is).
+ * page, before a save is read. true when the latest progress is on disk, or
+ * when another page holds the save and this one no longer writes it.
  */
 export async function flushAutosave(): Promise<boolean> {
   while (queue) await queue
@@ -434,7 +576,10 @@ export async function flushAutosave(): Promise<boolean> {
  */
 export function flushAutosaveNow(): void {
   const snap = waiting ?? writing
-  if (!snap || snap.seq <= landed || behind(snap.year, snap.day)) return
+  if (!snap || snap.seq <= landed) return
+  // only while this page still holds the save (holds): a page going out of sight writes nothing over another's
+  const may = holds(snap.career)
+  if (may !== 'ok') { if (may === 'taken') settle(snap, 'taken'); return }
   try {
     localStorage.setItem(AUTOSAVE, snap.json)
   } catch { return }

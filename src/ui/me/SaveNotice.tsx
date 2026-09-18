@@ -9,11 +9,59 @@
  * 收起 folds it into a small chip that stays on screen (base.css .save-chip).
  */
 import { useState, useSyncExternalStore } from 'react'
-import { onSaveTrouble, saveTrouble } from '../../engine/me/save'
+import { onSaveTrouble, saveLost, saveTrouble } from '../../engine/me/save'
 import type { SaveTrouble } from '../../engine/me/save'
 
 /** The save's trouble, or null while the latest progress is on disk. */
 export const useSaveTrouble = (): SaveTrouble | null => useSyncExternalStore(onSaveTrouble, saveTrouble, saveTrouble)
+
+/** Another page holds the save now, and this one no longer writes it (engine/me/save.ts holds). */
+export const useSaveLost = (): boolean => useSyncExternalStore(onSaveTrouble, saveLost, saveLost)
+
+/**
+ * 「这个存档已在另一个页面更新」 (reported 2026-09-18, an outside audit): another
+ * tab opened a career into the save, a new one or this one, or saved over it,
+ * and this page stopped writing so as not to put an older career back over it.
+ * Up until a career is opened here again; 「载入最新存档」 opens the save as it
+ * is now, the way 继续 does. Same corner and colour as the notice below, and the
+ * same 收起 into a chip.
+ */
+export function SaveTakenNotice({ onLoad }: {
+  /** read the save and open it here: false when it could not be read */
+  onLoad: () => Promise<boolean>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [folded, setFolded] = useState(false)
+
+  const load = async () => {
+    setBusy(true)
+    let ok = false
+    try { ok = await onLoad() } catch { /* not read */ }
+    // opened: this notice goes with the page's loss of the save
+    if (!ok) { setBusy(false); setFailed(true) }
+  }
+
+  if (folded) {
+    return (
+      <button className="save-chip" onClick={() => setFolded(false)} title="这个存档已在另一个页面更新，点开看怎么办">
+        这里不再自动保存
+      </button>
+    )
+  }
+  return (
+    <div className="update-nudge save-nudge" role="alert">
+      <div className="update-body">
+        <b>这个存档已在另一个页面更新</b>
+        <span>{failed ? '最新存档读不出来。可以回首页看看，或者刷新这个页面。' : '这里不再自动保存，在这个页面接着玩，进度存不下来。要接着玩，点「载入最新存档」。'}</span>
+      </div>
+      <div className="update-acts">
+        <button className="primary sm" onClick={load} disabled={busy}>{busy ? '读取中…' : '载入最新存档'}</button>
+        <button className="sm ghost" onClick={() => setFolded(true)}>收起</button>
+      </div>
+    </div>
+  )
+}
 
 export default function SaveNotice({ trouble, onRetry }: {
   trouble: SaveTrouble
