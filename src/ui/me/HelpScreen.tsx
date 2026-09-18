@@ -1,6 +1,6 @@
 import { useGame } from './ctx'
 import { Panel } from './common'
-import { openTour, setToursOff, useToursOff, weekTourOf } from './guide'
+import { nextCardWindow, openTour, setNextHidden, setToursOff, useNextHidden, useToursOff, weekTourOf } from './guide'
 import { TIER_LADDER } from './words'
 import { AP_HURT, AP_SEASON } from '../../engine/me/actions'
 import { ABROAD_CAP, AP_PRE, LANG_EXTRA, MATE_SHARE } from '../../engine/me/prepro'
@@ -132,11 +132,14 @@ const SECTIONS: { title: string; lines: string[] }[] = [
 ]
 
 export default function HelpScreen() {
-  const { game } = useGame()
+  const { game, go } = useGame()
   const off = useToursOff()
   const me = game.me!
   const retired = me.phase === 'retired'
   const pro = me.phase === 'pro'
+  // the 下一步 card put away for this phase (ui/me/NextStep.tsx): brought back here, and the week page shows it
+  const goal = nextCardWindow(game)
+  const hidden = useNextHidden(goal?.phase ?? 'pre')
   // a greyed tour says why, and what opens it
   const why = retired ? '生涯已经结束，没有本周页可讲。'
     : !pro ? '签约后的导览讲首发名单、对位挑战、比赛里的决定和转会窗，签下一支队以后才能看。' : ''
@@ -147,10 +150,12 @@ export default function HelpScreen() {
           <button className="sm primary" disabled={retired} onClick={() => openTour(weekTourOf(game))}>重看本周页导览</button>
           <button className="sm" disabled={!pro} onClick={() => openTour('season')}>重看签约后的导览</button>
           {off && <button className="sm ghost" onClick={() => setToursOff(false)}>恢复自动弹出</button>}
+          {goal && hidden && <button className="sm ghost" onClick={() => { setNextHidden(goal.phase, false); go('week') }}>恢复「下一步」卡片</button>}
         </div>
-        {(why || off) && (
+        {(why || off || (goal && hidden)) && (
           <p className="tiny faint" style={{ margin: '8px 0 0' }}>
             {why}{off ? '你选过「不再显示」：新生涯和第一次签约时不会自动弹出。' : ''}
+            {goal && hidden ? `「下一步」卡片收起了；恢复以后，本周页最上面会写着「${goal.title}」和这周最值得做的一件事。` : ''}
           </p>
         )}
       </Panel>

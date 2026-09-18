@@ -19,6 +19,7 @@
  * What has been seen belongs to the browser, as the numbers switch does
  * (words.ts). A tour finished or skipped does not come back by itself;
  * 「不再显示」 stops every tour coming back by itself. 帮助 reopens any of them.
+ * The 下一步 card put away (「收起」) is the browser's as well, one flag a phase.
  */
 import { useSyncExternalStore } from 'react'
 import type { GameState } from '../../engine/types'
@@ -28,6 +29,8 @@ import { TRIAL_MATCHES } from '../../engine/me/coach'
 import { WEEK_END_FATIGUE } from '../../engine/me/auto'
 import { windowLine } from '../../engine/me/window'
 import { weekInDays } from '../../engine/me/week'
+import { goalOf } from '../../engine/me/goal'
+import type { GoalPhase } from '../../engine/me/goal'
 
 /** The week screen without a club, the week screen with one, and what signing adds. */
 export type TourKind = 'pre' | 'club' | 'season'
@@ -82,6 +85,35 @@ export const useOpenTour = (): { kind: TourKind | null; seq: number } => useSync
 
 /** The week screen's tour for where the career is now: the screen differs with a club and without. */
 export const weekTourOf = (g: GameState | null | undefined): TourKind => (g?.me?.phase === 'pro' ? 'club' : 'pre')
+
+/**
+ * The 下一步 card (ui/me/NextStep.tsx) put away, a phase at a time: put away without a club, it is up
+ * again the week a contract is signed, when the goal changes; 帮助 brings either back.
+ */
+const NEXT = 'val_player.next.hide.'
+export const nextHidden = (phase: GoalPhase): boolean => flag(NEXT + phase)
+export const setNextHidden = (phase: GoalPhase, v: boolean): void => setFlag(NEXT + phase, v)
+const readNextPre = () => nextHidden('pre')
+const readNextPro = () => nextHidden('pro')
+export const useNextHidden = (phase: GoalPhase): boolean =>
+  useSyncExternalStore(subscribe, phase === 'pre' ? readNextPre : readNextPro, phase === 'pre' ? readNextPre : readNextPro)
+
+/**
+ * Whether the 下一步 card is on the week page: a goal to name, in the phase's first stretch — the
+ * whole of the time without a club, a professional career's first season — and not put away.
+ */
+export function nextCardDue(g: GameState): boolean {
+  const goal = nextCardWindow(g)
+  return !!goal && !nextHidden(goal.phase)
+}
+
+/** The goal, while the card belongs on the week page whether or not it has been put away. */
+export function nextCardWindow(g: GameState): ReturnType<typeof goalOf> {
+  const goal = goalOf(g)
+  if (!goal) return null
+  if (goal.phase === 'pro' && !g.me!.seasons.every((s) => s.tier === 0)) return null
+  return goal
+}
 
 /**
  * The tour that opens by itself now, if any. The week screen's, in a career's

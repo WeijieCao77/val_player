@@ -1,0 +1,50 @@
+/* ---- 下一步（ui/me/NextStep.tsx）：这一段的目标、这周最值得做的事、每条路还差多远 ---- */
+
+/* the week page's first row, across both columns (Week.tsx's grid) */
+.next-step {
+  grid-column: 1 / -1;
+  border: 1px solid var(--accent-line); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); background: var(--panel);
+  padding: 10px 14px 12px;
+}
+.ns-head { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.ns-eyebrow { font-size: var(--t-tiny); font-weight: 700; letter-spacing: .14em; color: var(--accent); }
+.ns-goal { margin: 0; font-size: var(--t-h2); font-weight: 700; line-height: 1.35; }
+.ns-hide { margin-left: auto; align-self: center; color: var(--muted); }
+.ns-week { margin: 6px 0 0; display: flex; gap: 8px; font-size: var(--t-small); line-height: 1.6; }
+.ns-far { margin: 4px 0 0; font-size: var(--t-small); line-height: 1.6; color: var(--muted); }
+.ns-k { flex: none; min-width: 2.4em; padding-top: 1px; font-size: var(--t-tiny); color: var(--faint); letter-spacing: .06em; white-space: nowrap; }
+
+/* the four roads: a row on a wide screen, two by two on a laptop, stacked on a phone — never three and one */
+.ns-roads {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 10px;
+}
+@media (max-width: 1600px) { .ns-roads { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ns-roads { grid-template-columns: minmax(0, 1fr); } }
+.ns-roads li {
+  display: flex; gap: 8px; padding: 6px 9px; min-width: 0;
+  background: var(--panel-2); border-radius: var(--radius);
+  font-size: var(--t-small); line-height: 1.55; overflow-wrap: anywhere;
+}
+/* how near, as a dot beside the road's name: grey far, amber some way, green close or there */
+.ns-roads .ns-k i { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; vertical-align: middle; background: var(--line-hi); }
+.ns-roads .near-1 .ns-k i { background: var(--warn); }
+.ns-roads .near-2 .ns-k i, .ns-roads .near-3 .ns-k i { background: var(--win); }
+/* on the roads' grey, --faint falls under 4.5:1 on 深: the labels and figures there take --muted */
+.ns-roads .ns-k, .ns-num { color: var(--muted); }
+.ns-num { font-variant-numeric: tabular-nums; }
+.ns-go {
+  background: none; border: 0; border-radius: 2px; padding: 0 0 0 6px; min-height: 0;
+  color: var(--accent-hot); font: inherit; white-space: nowrap; cursor: pointer;
+}
+.ns-go:hover:not(:disabled) { background: none; text-decoration: underline; }
+
+/* ---- the week board's weights (engine/me/goal.ts weightsOf): 重点 serves the goal, 调剂 is the hours outside the game ---- */
+/* --accent-hot: the red that reads at small size on every ground (4.5:1 on 深, 浅 and 米's card grey) */
+.act-card .t .tag.focus { border-color: var(--accent-line); color: var(--accent-hot); }
+.act-card .t .tag.filler { color: var(--muted); }
+/* the first tag takes the row's slack; the cost sits right after it */
+.act-card .t .tag + .tag { margin-left: 0; }
+.act-group-note { margin-left: 8px; font-size: var(--t-tiny); color: var(--faint); letter-spacing: 0; }
+@media (max-width: 560px) { .act-group-note { display: block; margin: 2px 0 0; } }

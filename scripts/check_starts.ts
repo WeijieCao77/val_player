@@ -10,6 +10,10 @@
  * - a ladder start is never greyed in a region the year lists
  * - a league's name, and 2021's SEA, open in a region under it that the year lists
  * - a ladder start at no club; a club start at a club with somewhere to play that year
+ * - each door opens on the goal the week page's 下一步 names (engine/me/goal.ts; reported 2026-09-18
+ *   「不知道下一步要点哪」): the ladder on 拿到第一份合同 with its four roads, the second tier's starter on
+ *   being seen by the first, the first tier's sixth man on 抢到首发 — with a line for the week, and cards
+ *   marked 重点 among the ones it can take
  *
  *   npx tsx scripts/check_starts.ts
  */
@@ -17,6 +21,8 @@ import { careerRegions, createCareer, emptyTalents, startBlocked, startCnOf } fr
 import type { StartPoint } from '../src/engine/me/career'
 import { ENTRY_YEARS, MERGED_INTO } from '../src/engine/era'
 import { hasPlace } from '../src/engine/timeline'
+import { goalOf, roadsOf, weekLine, weightsOf } from '../src/engine/me/goal'
+import type { GoalKind } from '../src/engine/me/goal'
 import { REGION_CN } from '../src/engine/types'
 import type { GameState, Region } from '../src/engine/types'
 
@@ -36,6 +42,8 @@ const fail = (m: string) => { fails++; console.log(`  ✗ ${m}`) }
 const t0 = Date.now()
 const cn = (r: Region) => REGION_CN[r] ?? r
 const DOOR: Record<StartPoint, string> = { pre: '天梯', chal: '二队', t1: '替补' }
+/** the goal each door opens on (engine/me/goal.ts goalOf) */
+const GOAL: Record<StartPoint, GoalKind> = { pre: 'contract', chal: 'rise', t1: 'seat' }
 /** r is `area`, or merges into it some year */
 const within = (r: Region, area: Region): boolean => {
   for (let x: Region | undefined = r, guard = 0; x && guard < 7; x = MERGED_INTO[x]?.into, guard++) if (x === area) return true
@@ -75,6 +83,12 @@ for (const year of ENTRY_YEARS) {
         if (!t) fail(`${label}：分到的俱乐部 ${g.myTeam} 不在这个世界里`)
         else if (!hasPlace(g, t)) fail(`${label}：${t.name} 这一年没有比赛可打`)
       }
+      // the 下一步 card on day one: the door's goal, a line for the week, the roads without a club, 重点 on the board
+      const goal = goalOf(g)
+      if (goal?.kind !== GOAL[start]) fail(`${label}：第一周的目标是「${goal?.title ?? '没有'}」（${goal?.kind ?? '—'}），应该是 ${GOAL[start]}`)
+      if (!weekLine(g)) fail(`${label}：下一步卡片没有「这周」那一句`)
+      if (start === 'pre' && roadsOf(g).length !== 4) fail(`${label}：没有队伍时应该列出四条路，列了 ${roadsOf(g).length} 条`)
+      if (!Object.values(weightsOf(g)).includes('focus')) fail(`${label}：行动卡上一张「重点」都没有`)
     }
   }
   console.log(`${year}：列出 ${listed.length} 个地区 · ${Object.keys(REGION_CN).length} 个地区名 × ${Object.keys(startCnOf(year)).length} 种开局，开得了 ${started}，按钮灰掉、引擎也不开 ${refused.length}（${refused.join('、')}）`)

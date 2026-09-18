@@ -4,8 +4,9 @@ import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
 import { ACTIONS, ACTION_GROUP_CN } from '../../engine/me/actions'
 import { ceilingNote } from '../../engine/me/bottleneck'
-import { hourValues } from '../../engine/me/growth'
-import { ATTR_CN } from '../../engine/types'
+import { fillerNote, goalOf, hourLine, weightsOf } from '../../engine/me/goal'
+import NextStep, { LineText } from './NextStep'
+import { nextCardDue, useNextHidden } from './guide'
 import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
@@ -110,9 +111,24 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   // every action stays on the board; the ones I cannot take yet are greyed
   // with the reason under them, so the board also shows what is ahead
   const acts = ACTIONS.filter((a) => a.key !== 'duel')
+  // 重点 and 调剂 for the goal of the phase (engine/me/goal.ts) — a tag on the card, nothing hidden
+  const weights = weightsOf(game)
+  const goalTitle = goalOf(game)?.title ?? ''
+  const weightTag = (k: typeof ACTIONS[number]['key']) => {
+    const w = weights[k]
+    if (!w) return null
+    return w === 'focus'
+      ? <span className="tag focus" title={`对「${goalTitle}」最有用`}>重点</span>
+      : <span className="tag filler" title={fillerNote(game)}>调剂</span>
+  }
+  // the 下一步 card carries the week's recommendation while it is up; put away, the line comes back here
+  useNextHidden(goalOf(game)?.phase ?? 'pre')
+  const card = nextCardDue(game)
 
   return (
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}>
+      {/* the goal of this stretch and the week's one thing, first on the page (ui/me/NextStep.tsx) */}
+      <NextStep />
       {/* a chain under way: one line across both columns — how long is left, what it wants (me/story.ts) */}
       {(() => {
         const line = chainLine(game)
@@ -133,13 +149,12 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         <Panel
           title={`本周行动 · 剩 ${me.ap} 点`}
         >
-          {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan */}
+          {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan — on the 下一步 card while it is up */}
           {(() => {
-            const best = hourValues(game)[0]
-            const label = best && ACTIONS.find((a) => a.key === best.key)?.label
-            return best && label ? (
+            const line = card ? null : hourLine(game)
+            return line ? (
               <p className="tiny muted" style={{ margin: '0 0 10px' }}>
-                现在练<b>{label}</b>对综合涨得最多（{best.attrs.map((k) => ATTR_CN[k]).join('、')}还有空间）。
+                <LineText line={line} />
               </p>
             ) : null
           })()}
@@ -171,8 +186,12 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           {(['train', 'team', 'life'] as const).map((g) => {
             const rows = acts.filter((a) => a.group === g)
             return (
-              <div key={g} className="act-group">
-                <div className="act-group-head">{ACTION_GROUP_CN[g]}</div>
+              <div key={g} className="act-group" data-group={g}>
+                <div className="act-group-head">
+                  {ACTION_GROUP_CN[g]}
+                  {/* when the hours outside the game are the right call, said once over them */}
+                  {g === 'life' && <span className="act-group-note">{fillerNote(game)}</span>}
+                </div>
                 <div className="act-grid">
                   {rows.map((a) => {
                     const n = me.plan[a.key] ?? 0
@@ -187,7 +206,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                         onClick={() => { if (!why) plan(a.key, 1) }}
                         onKeyDown={(e) => { if (!why && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); plan(a.key, 1) } }}
                       >
-                        <div className="t">{a.label}<span className="tag">{a.cost} 点</span></div>
+                        <div className="t">{a.label}{weightTag(a.key)}<span className="tag">{a.cost} 点</span></div>
                         {/* the body's cost is the bar above and the lock's reason; its figure rides the switch */}
                         <div className="d">{a.desc}{nums && a.fatigue ? `。体力 ${a.fatigue > 0 ? '−' : '+'}${Math.abs(a.fatigue)}` : ''}</div>
                         {why && <div className="why">{why}</div>}
@@ -214,7 +233,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                       className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}${duelWhy ? ' locked' : ''}`}
                       onClick={() => { if (!duelWhy) tryDuel() }}
                     >
-                      <div className="t">对位挑战<span className="tag">2 点</span></div>
+                      <div className="t">对位挑战{weightTag('duel')}<span className="tag">2 点</span></div>
                       <div className="d">
                         {target
                           ? `和 ${target.ign} 打三局两胜的对位，再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场教练给试用期。`
