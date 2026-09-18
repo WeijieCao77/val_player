@@ -9,6 +9,7 @@ import { RELIEF_FLOOR } from '../../engine/me/shop'
 import { windowRuleLines } from '../../engine/me/window'
 import { CONTACT_TRUST, NEVPRO_TOP, PITCH_AP, PITCH_LEAD, PITCH_MAX, REPLY_MAX, REPLY_MIN } from '../../engine/me/selfpitch'
 import { WORLD_END } from '../../engine/era'
+import { PROMISE_FLOOR } from '../../engine/me/coach'
 import './tour.css'
 
 /**
@@ -75,7 +76,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
   {
     title: '合同',
     lines: [
-      '合同写着身份（核心、首发、轮换）、年薪、签字费、年限和违约金。写明首发，教练就让你首发。',
+      `合同写着身份（核心、首发、轮换、替补）、年薪、签字费、年限和违约金。写明核心或首发，俱乐部接下来 ${PROMISE_FLOOR} 场比赛写死是你首发；写明替补，先坐满 ${PROMISE_FLOOR} 场替补。这 ${PROMISE_FLOOR} 场打完，谁上谁不上教练说了算；轮换不设保底，从第一场起就归教练排。`,
       '可以还价，每多问一条成功率更低；问崩一次对方压价，问崩两次就撤回。',
       '底气来自试训评级、粉丝、天梯、履历和经纪人。',
       '合同到期的那个冬天，俱乐部看水平、教练信任和冠军决定续不续；不续，或者你拒绝了续约，当场成为自由人。',
