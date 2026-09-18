@@ -1805,9 +1805,12 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
   const seats = leagueOut(state, ev, takeSeat(state, ev, drawn.seeds))
   const at = seats.indexOf(teamId)
   if (at >= 0) {
-    // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play there
+    // 2021 North America: in Challengers 1's list, out in its open qualifier as history had it, and nothing to play
+    // there — except the player's club, which plays the decider a club not on the list gets (offerPlayIn, 2026-09-18)
     const through = openOutputs(ev).filter(({ ui, rank }) => teamOf(state, ev, ev.units[ui].ranked?.[rank - 1]) === teamId)
-    if (!mainSeedsOf(ev).has(at) && !through.length) return { standing: 'booked' }
+    if (!mainSeedsOf(ev).has(at) && !through.length) {
+      return teamId === playerClub(state) && !ev.plan && listedOnly(state, ev, seats, teamId) && deciderDoor(state, ev, team) ? { standing: 'entry' } : { standing: 'booked' }
+    }
     // in by its qualifier's road, the seed is the next side's (begin)
     const mine = (s: Slot): boolean =>
       (through.length ? s[0] === 'g' && through.some((o) => o.ui === s[1] && o.rank === s[2]) : s[0] === 's' && s[1] === at)
@@ -2002,10 +2005,7 @@ function couldStillTake(
   // qualifier's last place, or a closed league's promotion place, is there to play a decider for. Read without keeping
   // the scene it works out: this is a read — the week screen's 「下一场」 (me/nextup.ts), quietAhead, a break's lock
   // (me/outlets.ts) — and a club with no scene the roster book names had one written into the save by being looked at
-  if (teamId === playerClub(state) && isHome(state, ev, team, teamId, false)) {
-    const decider = openOutputs(ev).length > 0 || (state.year >= 2023 && ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0))
-    return decider ? 'entry' : 'maybe'
-  }
+  if (teamId === playerClub(state) && isHome(state, ev, team, teamId, false)) return deciderDoor(state, ev, team) ? 'entry' : 'maybe'
   // a side's place the draw as it stands would stand the player's club in for (fillGaps), wherever its home is
   if (teamId === playerClub(state) && standsIn(state, comp, ev, team, draw)) return 'maybe'
   const book = rulesOf(ev.id)?.routes
@@ -2155,15 +2155,47 @@ function standsIn(state: GameState, comp: Competition, ev: CEvent, team: Team, d
 }
 
 /**
+ * A club an event's open phases really sent on: into its own matches (openEntrants), or up by a promotion stage's
+ * places. History's list of a qualifier's sides holds these and the ones that went out there alike.
+ */
+function throughOpen(state: GameState, ev: CEvent, club: string): boolean {
+  if (openEntrants(state, ev).has(club)) return true
+  return ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0 && (u.ranked ?? []).slice(0, u.promotes).some((v) => teamOf(state, ev, v) === club))
+}
+
+/** On the event's list only as a side its open phases took and did not send on: no seed its own matches are drawn from. */
+const listedOnly = (state: GameState, ev: CEvent, seeds: readonly (string | null)[], club: string): boolean =>
+  seeds.includes(club) && !seeds.some((t, i) => t === club && mainSeedsOf(ev).has(i)) && !throughOpen(state, ev, club)
+
+/**
+ * The decider an event not drawn yet has for the player's club (offerPlayIn): of its scene, with an open qualifier's
+ * last place, or from 2023 a closed league's promotion place, to play for. Read without keeping the scene it works out.
+ */
+const deciderDoor = (state: GameState, ev: CEvent, team: Team): boolean =>
+  isHome(state, ev, team, team.id, false)
+  && (openOutputs(ev).length > 0 || (state.year >= 2023 && ev.units.some((u) => isOpen(u) && (u.promotes ?? 0) > 0)))
+
+/**
  * 开放海选. 2021 had no franchise and no licence: five people could enter.
  * A club of the player's region that is not already in the draw plays for the
  * last place the qualifier sends through, against the side that really took
  * it, on the day the qualifier really ended. The rounds before that were
  * against teams this world does not hold, and are not pretended.
+ *
+ * A club on history's list for the qualifier, where history had it go out, plays the same one match (the author,
+ * 2026-09-18, on scripts/probe_first_match_wait.ts). It used to count as in the draw and play nothing, while a club
+ * not on the list got this decider: the list gave it one chance fewer. That was most of a scene's second tier —
+ * 2021's roster book has 19 of North America's 23 Challengers-tier clubs and 29 of Europe's 49 on the list for Stage
+ * 3's Challengers, out there every time — and a ladder start one of them signed in April (Evil Geniuses, 2021 North
+ * America, seed index 3) played nothing until 2022; 39 of 2021's 82 waits over eight weeks had a door shut this way.
+ * Only the player's own club gets it, and the world changes only when it wins: the last place is then its and not the
+ * side's that really took it, as it is when a club not on the list wins. Lost, history's result stands.
  */
 function offerPlayIn(state: GameState, comp: Competition, ev: CEvent, club: string | null, notes: string[]): void {
   const c = comp.circuit!
-  if (!club || c.seeds.includes(club) || Object.values(c.fill ?? {}).includes(club) || openEntrants(state, ev).has(club)) return
+  if (!club || Object.values(c.fill ?? {}).includes(club) || throughOpen(state, ev, club)) return
+  // in by a seed its own matches are drawn from; on the list only for the qualifier it went out of, it plays the decider
+  if (c.seeds.includes(club) && !listedOnly(state, ev, c.seeds, club)) return
   if (!isHome(state, ev, state.teams[club], club)) return
   let best: { ui: number; rank: number } | undefined = openOutputs(ev).sort((x, y) => y.rank - x.rank)[0]
   if (!best && state.year >= 2023) {
