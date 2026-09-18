@@ -84,9 +84,8 @@
 .tile.rank { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
 .tile.rank > .rank-badge { grid-row: 1 / span 2; align-self: center; }
 .tile.rank > small, .tile.rank > b { grid-column: 2; }
-/* a tier's badge (ui/me/art/emblem.tsx): its colours are its own on every ground; 辐能战魂 alone gives off light */
-.rank-badge { display: inline-block; flex: none; vertical-align: middle; overflow: visible; }
-.rank-badge.radiant { filter: drop-shadow(0 0 3px rgba(255, 201, 60, .55)); }
+/* a tier's icon, the client's own (ui/me/art/emblem.tsx) */
+.rank-badge { display: inline-block; flex: none; vertical-align: middle; object-fit: contain; user-select: none; }
 /* the 天梯 panel on 本周: the badge at the left of the big rank line */
 .ladder-now { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
 .ladder-now > p { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
