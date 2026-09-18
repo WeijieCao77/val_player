@@ -13,11 +13,14 @@ import './music.css'
  *
  * Background music, and a small window in the corner to run it from.
  *
- * It starts on its own where the browser allows that, and where it does not —
- * every phone, and a desktop that has never heard from this site — it waits
- * for the first tap anywhere on the page and starts then, which is the only
- * way a web page is permitted to make a sound. Until that tap the window says
- * so instead of the artist's name.
+ * It starts off (作者 2026-09-18：「改成默认关点一下才放」): nothing plays and
+ * nothing is fetched until the listener presses play in the window. Choices
+ * kept before that rule (prefs without `v`) read as off too — the few hours the
+ * music started by itself chose nothing for anyone. Once they have pressed
+ * play, it resumes on their next visit where the browser allows that, and where
+ * it does not — every phone — it waits for the first tap anywhere on the page
+ * and starts then, which is the only way a web page is permitted to make a
+ * sound. Until that tap the window says so instead of the artist's name.
  *
  * Everything the listener chooses stays on the device: the volume, whether
  * they turned it off, the loop mode, which track, and whether the window is
@@ -49,8 +52,11 @@ interface Prefs {
   open: boolean
   /** absent until the first drag: the stylesheet's corner until then */
   pos?: Pos
+  /** the prefs' own version: 2 from the day music started off (see the top of this file) */
+  v?: number
 }
-const DEFAULTS: Prefs = { vol: 0.35, muted: false, loop: 'all', track: 0, off: false, open: true }
+const PREFS_V = 2
+const DEFAULTS: Prefs = { vol: 0.35, muted: false, loop: 'all', track: 0, off: true, open: true, v: PREFS_V }
 
 /** The gap the player keeps from the screen's edge. */
 const EDGE = 12
@@ -78,8 +84,10 @@ const readPrefs = (): Prefs => {
       muted: p.muted === true,
       loop: p.loop === 'one' || p.loop === 'off' ? p.loop : 'all',
       track: typeof p.track === 'number' && p.track >= 0 && p.track < TRACKS.length ? Math.floor(p.track) : 0,
-      off: p.off === true,
+      // kept before music started off: off, whatever it says (see the top of this file)
+      off: p.off === true || p.v !== PREFS_V,
       open: p.open !== false,
+      v: PREFS_V,
       pos: p.pos && typeof p.pos.x === 'number' && typeof p.pos.y === 'number'
         && Number.isFinite(p.pos.x) && Number.isFinite(p.pos.y)
         ? { x: p.pos.x, y: p.pos.y } : undefined,
