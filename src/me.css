@@ -345,12 +345,33 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   /* who | the two numbers that matter; the buttons | the rest */
   .save-grid { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); grid-template-areas: 'id key' 'go more'; gap: 12px 20px; align-items: center; }
 }
+/* 导出存档 / 导入存档 (ui/me/Backup.tsx): two small buttons under 继续 / 开新生涯, the export box under the card, and
+   the import page — one column that fits 375px */
+.save-go .save-backup { margin-top: 8px; gap: 6px; }
+.save-go .save-backup > button { min-width: 0; }
+.backup-box {
+  display: grid; gap: 8px; margin: 0 0 10px; padding: 10px 14px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+}
+.backup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.backup-box p, .backup-page p { margin: 0; overflow-wrap: anywhere; }
+.backup-acts { gap: 8px; flex-wrap: wrap; align-items: center; }
+.backup-warn { color: var(--warn); }
+.backup-box textarea, .backup-page textarea {
+  display: block; width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all;
+}
+.backup-page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.backup-top { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.backup-top h2 { margin: 0; font-size: 18px; }
+.backup-page .save-card, .backup-page .nc-again { margin: 0; }
 .nc-tools { gap: 8px; margin: 0 0 12px; }
 .nc-home .nc-intro { margin: 4px 0 0; }
 /* a card that nothing in it asks for the focus takes the focus itself (ui/me/layer.ts): the card is already the thing
    on screen, so no ring round the whole of it — its buttons keep theirs, in every ground */
 .modal[tabindex="-1"]:focus, .support-card[tabindex="-1"]:focus, .share-card[tabindex="-1"]:focus { outline: none; }
-/* 「上一局，你的世界线改写了 N 座奖杯的归属。」 (me/hall.ts lastRewriteLine): one line, the 转播红 bar of ui/me/worldline.css */
+/* 「上一局你从天梯起步，世界线改写了 N 座奖杯的归属。想换个开头……」 (me/hall.ts lastCareerLine): one line, the 转播红 bar of
+   ui/me/worldline.css; the import page says with it that a backup's hall is merged, never replaced */
 .nc-again { width: fit-content; max-width: 100%; margin: -4px 0 12px; padding: 3px 12px 3px 9px;
   border-left: 3px solid var(--accent); background: var(--accent-wash);
   font-size: var(--t-small); color: var(--text); overflow-wrap: anywhere; }

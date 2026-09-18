@@ -130,6 +130,14 @@ const SECTIONS: { title: string; lines: string[] }[] = [
       `这条世界线在 ${WORLD_END - 1} 赛季结束时走到头。结局按你这一路拿到的东西定。`,
     ],
   },
+  {
+    // the save is this browser's alone (engine/me/save.ts); a copy is made and brought back on the home page (ui/me/Backup.tsx)
+    title: '存档',
+    lines: [
+      '每做一件事都会自动存档，但存档只在这个浏览器里：清了网站数据、换了手机或浏览器，存档就不在了。',
+      '回到首页，在「上次的存档」上点「导出存档」，存成一个文件，或者复制存档码（微信里下载不了文件时用它）。到另一台设备的首页点「导入存档」，选这个文件或者粘贴存档码，就能接着玩；成就殿堂也跟着过去，和那边原来的殿堂合在一起。',
+    ],
+  },
 ]
 
 export default function HelpScreen() {

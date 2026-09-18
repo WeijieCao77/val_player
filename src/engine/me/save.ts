@@ -11,6 +11,7 @@ import { migrateToCny } from './cnyMigrate'
 import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
 import { normalizePitch } from './pitchbook'
 import { track } from './telemetry'
+import { PACKED, canPack, packStored, readStored } from './saveCodec'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -251,32 +252,11 @@ function setLost(): void {
 /** Another page has taken the save: said on screen until a career is opened here again (ui/me/SaveNotice.tsx). */
 export const saveLost = (): boolean => lost
 
-/** A stored save that is gzip + base64 starts with this; a raw one is JSON and starts with `{`. */
-export const PACKED = 'vpz1:'
-/** bytes turned into characters at a time: well under any engine's limit on a call's arguments */
-const CHUNK = 0x2000
-
-/** Can this browser gzip by itself? iOS Safari before 16.4 cannot: its saves are written raw, as before. */
-export function canPack(): boolean {
-  return typeof CompressionStream === 'function' && typeof Blob === 'function' && typeof Response === 'function' && typeof btoa === 'function'
-}
-
-/** The packed JSON as it goes into localStorage: `vpz1:` and the gzip as base64, every character ASCII. */
-export async function packStored(json: string): Promise<string> {
-  const zipped = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer())
-  let bin = ''
-  for (let i = 0; i < zipped.length; i += CHUNK) bin += String.fromCharCode(...zipped.subarray(i, i + CHUNK))
-  return PACKED + btoa(bin)
-}
-
-/** ...and back to the packed JSON, whichever way it was written. */
-export async function readStored(raw: string): Promise<string> {
-  if (!raw.startsWith(PACKED)) return raw
-  const bin = atob(raw.slice(PACKED.length))
-  const zipped = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) zipped[i] = bin.charCodeAt(i)
-  return new Response(new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
-}
+/*
+ * The save as text — `vpz1:` and the gzip as base64, or the JSON raw — is written and read by me/saveCodec.ts, which a
+ * backup made on the home page reads too (me/backup.ts) without fetching the world this module reaches. Said here as well.
+ */
+export { PACKED, canPack, packStored, readStored } from './saveCodec'
 
 /**
  * The career to continue, read and brought forward; null when there is none, or it cannot be read.
@@ -330,6 +310,50 @@ export function claimAutosave(state: GameState): void {
     lost = false
     heard.forEach((f) => f())
   }
+}
+
+/**
+ * A backup brought in on the home page (导入存档, me/backup.ts) becomes the
+ * save: its stored text exactly as it was exported, so the career read back is
+ * the one that was exported, byte for byte. The home page then opens it the way
+ * 继续 does (me/opening.ts openSavedCareer).
+ *
+ * The save is taken in this page's name first (claimAutosave, with the career
+ * the backup holds), and only then written: a page that still holds the career
+ * this overwrites hears the record move and stops (the storage event,
+ * PlayerGame), and a write of its that was still being gzipped does not land
+ * over the imported one (writeSnapshot checks the record again right before it
+ * writes). Nothing waits between the two: a raw save is gzipped before the claim.
+ *
+ * false when it does not fit in this browser: then the save on disk is untouched,
+ * and the record goes back to what it was unless another page has written it since.
+ */
+export async function installSave(stored: string, state: GameState): Promise<boolean> {
+  // this page's own write still on its way (a career closed for the home page) lands before the save changes hands
+  await flushAutosave()
+  let text = stored
+  if (!stored.startsWith(PACKED) && canPack()) {
+    try { text = await packStored(stored) } catch { /* the gzip failed: written raw, as a save can be */ }
+  }
+  const before = ownerMark()
+  const had = held
+  const wasLost = lost
+  claimAutosave(state)
+  const mine = ownerMark()
+  if (put(text)) {
+    // the home page's card for it, so it says whose career this is at once
+    writeSaveMeta(buildSaveMeta(state))
+    return true
+  }
+  if (ownerMark() === mine) {
+    try {
+      if (before) localStorage.setItem(OWNER, before)
+      else localStorage.removeItem(OWNER)
+    } catch { /* storage blocked: nothing went in either */ }
+  }
+  held = had
+  lost = wasLost
+  return false
 }
 
 /**

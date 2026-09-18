@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, Region, Role } from '../../engine/types'
 // the screen's own numbers, apart from the world (me/talent.ts); what it reads off the world was worked out as the
@@ -9,21 +9,18 @@ import type { CareerOpts } from '../../engine/me/career'
 import START_SHEET from 'virtual:start-sheet'
 import { ORIGINS, originName, originOf } from '../../engine/me/origins'
 import { serverAt } from '../../engine/me/rank'
-import { hallAchCount, hallTitle, lastRewriteLine, readHall } from '../../engine/me/hall'
-import { ACHIEVEMENTS } from '../../engine/me/achievements'
+import { hallAchCount, hallTitle, lastCareerLine, readHall } from '../../engine/me/hall'
 import type { AutosaveInfo } from '../../engine/me/saveInfo'
-import type { SaveMeta } from '../../engine/me/saveMeta'
-import { fanTier, fansCn } from '../../engine/me/fans'
-import { compCn } from '../../engine/me/compname'
+import type { Backup, BackupPreview } from '../../engine/me/backup'
 import { HallView } from './HallScreen'
+import { ConfirmCard, SaveCard, playedAt } from './SaveCard'
+import { ExportBox, ImportView } from './Backup'
 import ThemeToggle from './ThemeToggle'
-import { ENTRY_CN, ENTRY_YEARS, formatOf, regionIn } from '../../engine/era'
+import { ENTRY_CN, ENTRY_YEARS, regionIn } from '../../engine/era'
 import type { EntryYear } from '../../engine/era'
-import { Crest, Panel, money } from './common'
-import { toCny } from '../../engine/me/currency'
+import { Panel } from './common'
 import { attrWord, useNumbers } from './words'
 import { track } from '../../engine/me/telemetry'
-import { useLayer } from './layer'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
@@ -52,147 +49,8 @@ function dealOrigins(start: StartPoint, table: string[] = []): string[] {
   return shuffled(fresh.length >= DEAL ? fresh : pool).slice(0, DEAL)
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-/** When the save was last written, on this device's clock: how long ago, and the day and time. */
-function playedAt(at: number): { ago: string; when: string } {
-  const d = new Date(at)
-  const now = new Date()
-  const m = Math.max(0, Math.round((now.getTime() - at) / 60000))
-  const ago = m < 1 ? '刚刚' : m < 60 ? `${m} 分钟前` : m < 1440 ? `${Math.round(m / 60)} 小时前` : `${Math.round(m / 1440)} 天前`
-  const day = `${d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}年` : ''}${d.getMonth() + 1}月${d.getDate()}日`
-  return { ago, when: `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}` }
-}
-/** A season day as the game writes the date (engine/season.ts dateLabel), for a save known only by its day. */
-const dayLabel = (year: number, day: number): string => {
-  const d = new Date(Date.UTC(year, 0, 1))
-  d.setUTCDate(d.getUTCDate() + day)
-  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`
-}
-/** the hero's words for a tier (PlayerGame): 一线 / 二线 before the leagues, VCT / 挑战者联赛 after */
-const tierCn = (year: number, tier: 1 | 2): string =>
-  (formatOf(year) === 'open' ? (tier === 1 ? '一线' : '二线') : tier === 1 ? 'VCT' : '挑战者联赛')
-const SEAT_CN = { starter: '首发', bench: '替补', trial: '试用中' } as const
-const RESULT_CN = { W: '胜', L: '负', D: '平' } as const
-/** the summary already names the crest to draw; nothing to look up on a page with no game */
-const NO_HEIRS: Record<string, string> = {}
-
-function SaveWho({ meta }: { meta: SaveMeta }) {
-  const c = meta.club
-  return (
-    <div className="save-id">
-      <div className="save-who"><b>{meta.ign}</b><span className="muted">{meta.role} · {meta.age} 岁</span></div>
-      <div className="save-club">
-        {c ? (
-          <>
-            <Crest id={c.crest} size={20} heirs={NO_HEIRS} />
-            <b>{c.name}</b>
-            <span className={`tag${c.tier === 1 ? ' t1' : ''}`}>{c.league || tierCn(meta.year, c.tier)}</span>
-            <span className="muted">{SEAT_CN[c.seat]}</span>
-          </>
-        ) : (
-          <b>{meta.phase === 'retired' ? `已退役${meta.ending ? ` · ${meta.ending}` : ''}` : meta.phase === 'free' ? '自由人' : `天梯 · ${meta.ladder || '没有队伍'}`}</b>
-        )}
-      </div>
-      <div className="save-when"><b>{meta.stage}</b><span className="muted">{meta.date}</span></div>
-    </div>
-  )
-}
-
-/**
- * The career to continue, laid out like 破晓's cover card (its save.ts continueCard,
- * theme.css .savecont): who and where on the left with the two buttons, the
- * numbers on the right; on a phone the essentials first, the buttons, then the rest.
- */
-function SaveCard({ info, busy, bad, onContinue, onNew, onWarm }: {
-  info: AutosaveInfo; busy: boolean; bad: boolean; onContinue: () => void; onNew: () => void; onWarm?: () => void
-}) {
-  const [nums] = useNumbers()
-  const meta = info.meta
-  const hallNow = useMemo(() => { const h = readHall(); return h ? hallAchCount(h) : null }, [])
-  const at = meta ? playedAt(meta.at) : null
-  const last = meta?.last
-  return (
-    <section className="save-card" aria-label="上次的存档">
-      <div className="save-head">
-        <h2>上次的存档</h2>
-        {at && <span className="save-at">{at.ago} · {at.when}</span>}
-      </div>
-      <div className="save-grid">
-        {meta ? <SaveWho meta={meta} /> : (
-          <div className="save-id">
-            <div className="save-who"><b>上次的生涯</b></div>
-            <div className="save-when">
-              {info.year !== null && info.day !== null && <b>{dayLabel(info.year, info.day)}</b>}
-              <span className="muted">旧版本存下的档，继续一次之后这里会写出详细数据。</span>
-            </div>
-          </div>
-        )}
-        {meta && (
-          <div className="save-key save-tiles">
-            <div className="save-tile"><small>综合</small><b>{nums ? meta.overall : attrWord(meta.overall)}</b></div>
-            <div className="save-tile wide">
-              <small>上一场</small>
-              {last ? (
-                <>
-                  <b><span className={last.result === 'W' ? 'w' : last.result === 'L' ? 'l' : ''}>{RESULT_CN[last.result]} {last.score}</span> vs {last.oppTag || last.opp}</b>
-                  <em>{compCn(last.event)}{last.started ? '' : ' · 没出场'}</em>
-                </>
-              ) : <b className="muted">还没打过比赛</b>}
-            </div>
-          </div>
-        )}
-        <div className="save-go">
-          {bad && <p className="save-bad" role="alert">这个存档读不了：可能是旧版本写的，或者已经损坏。开新生涯不受它影响。</p>}
-          <div className="row">
-            <button className="primary" onClick={onContinue} onPointerEnter={onWarm} onFocus={onWarm} disabled={busy || bad}>{busy ? '读取中…' : '继续'}</button>
-            <button onClick={onNew} disabled={busy}>开新生涯</button>
-          </div>
-          <p className="tiny faint">开新生涯会覆盖这个存档。</p>
-        </div>
-        {meta && (
-          <div className="save-more save-tiles">
-            <div className="save-tile"><small>冠军</small><b>{meta.titles}</b>{meta.intl > 0 && <em>国际赛 {meta.intl}</em>}</div>
-            <div className="save-tile"><small>粉丝</small><b>{fanTier(meta.fans).name}</b><em>{fansCn(meta.fans)}</em></div>
-            <div className="save-tile"><small>资金</small><b>{money(meta.cny ? meta.money : toCny(meta.money, 'USD', meta.year))}</b></div>
-            <div className="save-tile"><small>成就</small><b>本局 {meta.ach}</b><em>殿堂 {hallNow ?? meta.hall}/{ACHIEVEMENTS.length}</em></div>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-/** 破晓 asks before 重新开一局 overwrites the save (its main.ts askConfirm on #savenew); so does this, once. */
-function ConfirmNew({ who, onOk, onCancel }: { who?: string; onOk: () => void; onCancel: () => void }) {
-  // a card in front of the page like the career's own (layer.ts): 取消 has the focus — said to the layer, not only by
-  // autoFocus, which the layer's own mount would otherwise leave behind — and Tab stays on the two buttons
-  const bg = useRef<HTMLDivElement>(null)
-  const no = useRef<HTMLButtonElement>(null)
-  useLayer(bg, { first: () => no.current })
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [onCancel])
-  return (
-    <div className="modal-bg nc-confirm" ref={bg} onClick={onCancel}>
-      <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="nc-confirm-t" aria-describedby="nc-confirm-d" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-body">
-          <div className="nc-confirm-eyebrow">请确认</div>
-          <h3 id="nc-confirm-t">开新生涯</h3>
-          <p id="nc-confirm-d">{who ? `${who} 的存档` : '上次的存档'}会在新生涯开始时被覆盖，回不来了。</p>
-          <div className="row">
-            <button className="primary" onClick={onOk}>开新生涯</button>
-            <button ref={no} autoFocus onClick={onCancel}>取消</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function NewCareer({
-  onStart, save, onContinue, onSeedHall, onWarm,
+  onStart, save, onContinue, onSeedHall, onWarm, onReadBackup,
 }: {
   /**
    * make the career these choices describe and open it (App.tsx: the career and the world come with it); false when
@@ -207,10 +65,18 @@ export default function NewCareer({
   onSeedHall: () => Promise<void>
   /** a press on its way — the pointer on 继续 or 开始生涯: the career can start arriving */
   onWarm?: () => void
+  /**
+   * 导入存档: decode a backup and say what career it holds, with a way to take it in and open it (App.tsx, with the
+   * career's files); null when those files did not arrive, which App says itself
+   */
+  onReadBackup: (b: Backup) => Promise<BackupPreview | null>
 }) {
   // with a save the page opens on its card; without one, straight into making a career
-  const [view, setView] = useState<'home' | 'form' | 'hall'>(save ? 'home' : 'form')
-  const [hallFrom, setHallFrom] = useState<'home' | 'form'>('home')
+  const [view, setView] = useState<'home' | 'form' | 'hall' | 'import'>(save ? 'home' : 'form')
+  // where 成就殿堂 and 导入存档 go back to
+  const [from, setFrom] = useState<'home' | 'form'>('home')
+  // 导出存档 open under the save card (ui/me/Backup.tsx)
+  const [exporting, setExporting] = useState(false)
   const [asking, setAsking] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -228,10 +94,9 @@ export default function NewCareer({
   const [offer, setOffer] = useState<string[]>(() => dealOrigins('pre'))
   // nothing spent: the player spends all twenty (asked 2026-09-14); a build to start from is one press away (TALENT_PRESETS)
   const [talents, setTalents] = useState(zeroTalents())
-  // the 成就殿堂 opens from here, and its newest 称号 rides on the button
-  const [hallName] = useState(() => hallTitle(readHall()))
-  // the last career's world line, where it took trophies from their real owners: a second career can take them again
-  const [again] = useState(() => lastRewriteLine(readHall()))
+  // the 成就殿堂, read once a visit: it opens from here, and its newest 称号 rides on the button
+  const [hall] = useState(() => readHall())
+  const hallName = hallTitle(hall)
   const used = ATTR_KEYS.reduce((s, k) => s + talents[k], 0)
   const left = TALENT_POINTS - used
   // what the year's world says, as the site was built (me/startSheet.ts): the regions it has clubs in, the list
@@ -245,6 +110,10 @@ export default function NewCareer({
   // a place the table has no row for is one the year has no club in (career.ts startBlocked says the same)
   const gate = door ? door.gate || null : `${year} 年开季时${REGION_CN[region] ?? region}没有俱乐部`
   const academies = !!door?.academies
+  // the last career that ended, in one line: how it began, what its world line rewrote, and the other doors to try —
+  // only those that open for the year and place picked here, so it never points at a door the button would refuse
+  // (me/hall.ts lastCareerLine; asked 2026-09-18). Words only: nothing a career counts reads the hall.
+  const again = lastCareerLine(hall, year, (k) => !!sheet.doors[region] && !sheet.doors[region]![k].gate)
   // the talent panel's ceiling and the starters beside it, from the engine and the entry year's data (me/talent.ts ceilingLines)
   const [capNums] = useNumbers()
   const capLine = useMemo(() => ceilingLines(ceilingPreview(role, talents, originKey, sheet.bands), year, capNums ? undefined : attrWord), [role, talents, originKey, sheet, year, capNums])
@@ -255,10 +124,17 @@ export default function NewCareer({
     : [{ league: null, list: regions }]), [regions, year])
   useEffect(() => { window.scrollTo(0, 0) }, [view])
 
-  const openHall = (from: 'home' | 'form') => { setHallFrom(from); setView('hall') }
-  if (view === 'hall') return <div className="newcareer"><HallView onBack={() => setView(hallFrom)} /></div>
-  const hallButton = (from: 'home' | 'form') => (
-    <button className="sm" onClick={() => openHall(from)}>成就殿堂{hallName ? ` · ${hallName}` : ''} →</button>
+  const openFrom = (to: 'hall' | 'import', back: 'home' | 'form') => { setFrom(back); setView(to) }
+  if (view === 'hall') return <div className="newcareer"><HallView onBack={() => setView(from)} /></div>
+  if (view === 'import') {
+    return (
+      <div className="newcareer">
+        <ImportView save={save} onBack={() => setView(from)} onRead={onReadBackup} onSeedHall={onSeedHall} />
+      </div>
+    )
+  }
+  const hallButton = (back: 'home' | 'form') => (
+    <button className="sm" onClick={() => openFrom('hall', back)}>成就殿堂{hallName ? ` · ${hallName}` : ''} →</button>
   )
   const cover = (
     <>
@@ -288,15 +164,45 @@ export default function NewCareer({
   }
 
   if (view === 'home' && save) {
+    const meta = save.meta
     return (
       <div className="newcareer nc-home">
         {cover}
-        <SaveCard info={save} busy={busy} bad={bad} onContinue={cont} onNew={askNew} onWarm={onWarm} />
+        <SaveCard
+          label="上次的存档"
+          at={meta ? playedAt(meta.at) : null}
+          info={save}
+          hallNow={meta ? (hall ? hallAchCount(hall) : meta.hall) : null}
+          go={(
+            <>
+              {bad && <p className="save-bad" role="alert">这个存档读不了：可能是旧版本写的，或者已经损坏。开新生涯不受它影响。</p>}
+              <div className="row">
+                <button className="primary" onClick={cont} onPointerEnter={onWarm} onFocus={onWarm} disabled={busy || bad}>{busy ? '读取中…' : '继续'}</button>
+                <button onClick={askNew} disabled={busy}>开新生涯</button>
+              </div>
+              <p className="tiny faint">开新生涯会覆盖这个存档。</p>
+              {/* the save lives in this browser alone: a copy to keep, and one brought in (ui/me/Backup.tsx) */}
+              <div className="row save-backup">
+                <button className="sm ghost" aria-expanded={exporting} onClick={() => setExporting(!exporting)} disabled={busy}>导出存档</button>
+                <button className="sm ghost" onClick={() => openFrom('import', 'home')} disabled={busy}>导入存档</button>
+              </div>
+            </>
+          )}
+        />
+        {exporting && <ExportBox onClose={() => setExporting(false)} />}
         {/* 配色开关在生涯壳的侧栏底部，而开局页在壳外面：一个觉得黑底看着晕的人，
             本来得先开一局生涯才够得着米色。这里放一颗同样的（安静地靠右） */}
         <div className="row nc-tools">{hallButton('home')}<div className="right row"><ThemeToggle compact /></div></div>
         <p className="muted small nc-intro">{intro}</p>
-        {asking && <ConfirmNew who={save.meta?.ign} onOk={confirmNew} onCancel={() => setAsking(false)} />}
+        {asking && (
+          <ConfirmCard
+            title="开新生涯"
+            body={`${save.meta?.ign ? `${save.meta.ign} 的存档` : '上次的存档'}会在新生涯开始时被覆盖，回不来了。`}
+            ok="开新生涯"
+            onOk={confirmNew}
+            onCancel={() => setAsking(false)}
+          />
+        )}
       </div>
     )
   }
@@ -385,6 +291,8 @@ export default function NewCareer({
       <div className="row wrap nc-tools">
         {save && <button className="sm ghost" onClick={() => setView('home')}>← 回到存档</button>}
         {hallButton('form')}
+        {/* a career brought from another device or browser: with no save here, this is the page it lands on */}
+        {!save && <button className="sm" onClick={() => openFrom('import', 'form')}>导入存档</button>}
         <div className="right row"><ThemeToggle compact /></div>
       </div>
 

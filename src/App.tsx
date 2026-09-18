@@ -99,6 +99,26 @@ export default function App() {
               const m = await fetchGame()
               if (m) await m.seedHallFromSave()
             }}
+            // 导入存档 (ui/me/Backup.tsx): the backup is checked on this page (engine/me/backup.ts parseBackup); decoding
+            // it needs the career's files, which come now. What it holds is shown before anything is written; taken
+            // in, it opens the way 继续 does
+            onReadBackup={async (b) => {
+              const m = await fetchGame()
+              if (!m) return null
+              const r = await m.readBackupCareer(b)
+              if (!r.ok) return r
+              return {
+                ok: true,
+                meta: r.meta,
+                take: async () => {
+                  if (await m.importBackupCareer(b, r.game) !== 'ok') return 'full'
+                  const g = await m.openSavedCareer()
+                  if (!g) return 'unopened'
+                  openCareer(m, g)
+                  return 'ok'
+                },
+              }
+            }}
           />
         </>
       )}

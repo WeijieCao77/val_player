@@ -18,4 +18,4 @@
  */
 export { default as Career } from './PlayerGame'
 export { createCareer } from './engine/me/career'
-export { openSavedCareer, seedHallFromSave } from './engine/me/opening'
+export { importBackupCareer, openSavedCareer, readBackupCareer, seedHallFromSave } from './engine/me/opening'

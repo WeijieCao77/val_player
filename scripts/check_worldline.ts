@@ -44,7 +44,7 @@ import { autoWeek } from '../src/engine/me/auto'
 import { KEEP, SHOWN, clubNameAt, historyLedger, keptOf, placeMoved, rewriteLines, rewriteOf, seasonLedger, titleRealChamp } from '../src/engine/me/worldline'
 import type { Rewrite, SeasonLedger } from '../src/engine/me/worldline'
 import { REWRITE_WEIGHT, becauseOfMe, careerLine, careerRewrites, keptOrder, partLine, retitledLine, shareLine } from '../src/engine/me/rewrites'
-import { cleanHall, careerIdOf, lastRewriteLine, noteHall, readHall } from '../src/engine/me/hall'
+import { cleanHall, careerIdOf, lastCareerLine, lastRewriteLine, noteHall, readHall } from '../src/engine/me/hall'
 import { retire } from '../src/engine/me/endings'
 import { isIntlComp, isQualifier } from '../src/engine/me/compclass'
 import { eventOf, eventsOf, progressCircuit, realPlacesOf, realSideOf, worldIdOf } from '../src/engine/circuit'
@@ -263,6 +263,9 @@ function hallOf(label: string, state: GameState): void {
   check(card?.rw?.top === (c?.top ? careerLine(c.top) : undefined), `${label}：殿堂卡上最重的一笔（${card?.rw?.top}）就是生涯总览那一笔`)
   check(J(cleanHall(JSON.parse(J(h))).cards.find((x) => x.id === card?.id)?.rw) === J(card?.rw), `${label}：殿堂导出再读回，这一项原样`)
   check(lastRewriteLine(readHall()) === (sum ? `上一局，你的世界线改写了 ${sum} 座奖杯的归属。` : ''), `${label}：开新生涯那一行（${lastRewriteLine(readHall())}）`)
+  // the page shows it folded into the line about how the last career began (me/hall.ts lastCareerLine, 2026-09-18)
+  const onPage = lastCareerLine(readHall(), 2026, () => true)
+  check(sum ? onPage.includes(`世界线改写了 ${sum} 座奖杯的归属`) : !onPage.includes('改写'), `${label}：开新生涯页上并成一行的样子（${onPage}）`)
   const all = me.seasons.flatMap((s) => (s.rewrites ?? []).map((r) => ({ ...r, year: s.year })))
   const mine = all.filter((r) => r.there === 'started' || (!!r.ours && !!r.there))
   check(!!c?.share === mine.length > 0, `${label}：有我首发或我的俱乐部夺冠的一条才有生涯名片那一条（${mine.length} 条能写）`)
@@ -277,7 +280,7 @@ function hallOf(label: string, state: GameState): void {
   }
   console.log(`    殿堂卡：${card?.rw ? [retitledLine({ retitled: card.rw.n, from: card.rw.from }), card.rw.top].filter(Boolean).join(' ｜ ') : '（没有这一项）'}`)
   console.log(`    生涯名片：${c?.share ? shareLine(c.share) : '（没有这一条）'}`)
-  console.log(`    开新生涯：${lastRewriteLine(readHall()) || '（没有这一行）'}`)
+  console.log(`    开新生涯：${lastCareerLine(readHall(), 2026, () => true) || '（没有这一行）'}`)
 }
 
 const A = career('一 2021 北美 · Sentinels', { region: 'North America', teamId: 'V21T2', seed: 1 }, 1)
@@ -306,7 +309,7 @@ hallOf('一 韩国', C.state)
   check(!c || (c.from === rows[1].year && c.retitled === later && (!later || retitledLine(c).startsWith(`从 ${rows[1].year} 赛季起，`))),
     `跨过这次更新的存档：只数存下账本的赛季，说「从 ${rows[1].year} 赛季起」（${c ? retitledLine(c) : '无'}）`)
   const old = cleanHall({ v: 1, ach: {}, hx: {}, cards: readHall()!.cards.map((x) => { const y = { ...x }; delete y.rw; return y }) })
-  check(old.cards.every((x) => !x.rw) && lastRewriteLine(old) === '', '老殿堂卡：没有这一项，开新生涯也不写那一行')
+  check(old.cards.every((x) => !x.rw) && lastRewriteLine(old) === '' && !lastCareerLine(old, 2026, () => true).includes('改写'), '老殿堂卡：没有这一项，开新生涯也不写那一行')
   const quoted = ['src/ui/me/Worldline.tsx', 'src/engine/me/rewrites.ts', 'src/ui/me/share.ts', 'src/ui/me/HallScreen.tsx']
     .some((f) => /['"`][^'"`\n]*暂无/.test(readFileSync(f, 'utf8')))
   check(!quoted, '这几页没有一处写「暂无」')

@@ -438,6 +438,14 @@ export function importHall(text: string): 'ok' | 'bad' | 'nostore' {
   let raw: unknown
   try { raw = JSON.parse(text) } catch { return 'bad' }
   if (obj(raw)?.format !== FORMAT) return 'bad'
+  return mergeHallFrom(raw)
+}
+
+/**
+ * A hall record from elsewhere — pasted under 换设备, or carried in a save's backup (me/backup.ts) — folded into this
+ * device's: washed first (cleanHall), then every card, first unlock and 殿堂成就 either side has. Never replaces.
+ */
+export function mergeHallFrom(raw: unknown): 'ok' | 'nostore' {
   const h = readHall()
   if (!h) return 'nostore'
   mergeHall(h, cleanHall(raw))
@@ -482,6 +490,36 @@ export function lastRewriteLine(h: Hall | null): string {
   if (!c?.rw?.n) return ''
   return `上一局${c.rw.from ? `从 ${c.rw.from} 赛季起` : ''}，你的世界线改写了 ${c.rw.n} 座奖杯的归属。`
 }
+
+/** A door in a few words, as the new-career screen names it for that year (me/talent.ts START_CN, START_CN_2021). */
+export function doorName(k: HallStart, year: number): string {
+  if (k === 'pre') return '天梯'
+  if (k === 'chal') return year <= 2021 ? '二线队首发' : 'Challengers 二队'
+  return year <= 2021 ? '强队替补' : 'VCT 替补'
+}
+
+/**
+ * The new-career screen's one line about the last career that ended: how it began, what its world line took from the
+ * real owners (lastRewriteLine, folded in), and the other doors to try.
+ *
+ * Asked 2026-09-18, on a measure: a ladder start took a median 18 weeks to its first contract, and a second career
+ * from the ladder repeats about half of what the first one showed; a 二队 or 替补 start skips that stretch. So a
+ * player who began on the ladder is told the other doors are there — only those that open for the year and place
+ * being set up (`open`: the screen's own table, career.ts startBlocked), never one the page would refuse: 2026's
+ * China has no second teams. The card has said how its career began since the hall was made (2026-09-11), so every
+ * card can say it. The hall gives words here and nothing else: no number in a career reads it.
+ */
+export function lastCareerLine(h: Hall | null, year: number, open: (k: HallStart) => boolean): string {
+  const c = h?.cards[h.cards.length - 1]
+  if (!c) return ''
+  const rw = c.rw?.n ? `，${c.rw.from ? `${c.rw.from} 赛季起，` : ''}世界线改写了 ${c.rw.n} 座奖杯的归属` : ''
+  const other = (['pre', 'chal', 't1'] as HallStart[]).filter((k) => k !== c.start && open(k)).map((k) => doorName(k, year))
+  return spaced(`上一局你从${doorName(c.start, c.entry)}起步${rw}。${other.length ? `想换个开头，可以试试${other.join('或')}。` : ''}`)
+}
+
+/** a space between Chinese and a Latin word, as every line in the game is written: 「从 VCT 替补起步」「试试天梯或 VCT 替补」 */
+const gap = (_: string, a: string, b: string): string => `${a} ${b}`
+const spaced = (s: string): string => s.replace(/([一-鿿])([A-Za-z])/g, gap).replace(/([A-Za-z])([一-鿿])/g, gap)
 
 export type HallRecordKey = 'titles' | 'intl' | 'seasons' | 'peak' | 'acs' | 'mvps'
 export interface HallRecord { key: HallRecordKey; label: string; n: number; card: HallCard; year: number }
