@@ -350,6 +350,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 @media (min-width: 820px) {
   /* who | the two numbers that matter; the buttons | the rest */
   .save-grid { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); grid-template-areas: 'id key' 'go more'; gap: 12px 20px; align-items: center; }
+  /* a save from before the summary has no numbers for the right-hand column: its one line takes the card's width
+     instead of wrapping in 300px beside an empty column (2026-09-19, layout audit) */
+  .save-grid:not(:has(.save-key)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'id' 'go'; }
 }
 /* 导出存档 / 导入存档 (ui/me/Backup.tsx): two small buttons under 继续 / 开新生涯, the export box under the card, and
    the import page — one column that fits 375px */
@@ -473,7 +476,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .app.career .nav .nav-foot .sound-toggle.on { color: var(--accent); border-color: var(--accent-line); }
 
 /* ---- new career: start points and origins ---- */
-.start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+/* three doors to a row; the years say how many there are (--cols, NewCareer.tsx) */
+.start-grid { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 720px) { .start-grid { grid-template-columns: 1fr; } }
 .start-card, .origin-pick { text-align: left; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 10px 12px; white-space: normal; height: auto; }
 .start-card.on, .origin-pick.on { border-color: var(--accent); background: var(--accent-wash); }
@@ -915,10 +919,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career button, .newcareer button, .app.career select, .newcareer select { min-height: 40px; }
   .app.career button.sm, .newcareer button.sm { min-width: 40px; }
   .app.career tr.clickable > td { height: 44px; }
-  /* the home page's hall has summaries too (换设备 was 20px tall, each route 37), and a summary that sets its own
-     padding inline keeps its sides but not a smaller height (比赛记录's 9px made it 38) — 2026-09-19, layout audit */
-  .app.career summary, .newcareer summary { padding: 11px 0; }
-  .app.career summary[style], .newcareer summary[style] { padding-top: 11px !important; padding-bottom: 11px !important; }
+  /* the home page's hall has summaries too (换设备 was 20px tall), and a summary whose own rule or inline style sets a
+     smaller padding (殿堂's routes 7px, 比赛记录's 9px) still takes a thumb: 40px at least (2026-09-19, layout audit) */
+  .app.career summary, .newcareer summary { padding: 11px 0; min-height: 40px; }
   .app.career a.share-dl { display: inline-flex; align-items: center; min-height: 40px; }
   /* the opponent's five as a small stack (media.css) still take a thumb each */
   @container (max-width: 300px) {

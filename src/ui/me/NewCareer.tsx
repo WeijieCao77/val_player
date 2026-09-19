@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, Region, Role } from '../../engine/types'
 // the screen's own numbers, apart from the world (me/talent.ts); what it reads off the world was worked out as the
@@ -297,7 +298,8 @@ export default function NewCareer({
       </div>
 
       <Panel title="从哪一年开始" actions={<span className="tiny faint">同一条时间线，两个入口</span>}>
-        <div className="start-grid">
+        {/* as many columns as there are years: two cards in the doors' three columns left a blank third (me.css --cols) */}
+        <div className="start-grid" style={{ '--cols': ENTRY_YEARS.length } as CSSProperties}>
           {ENTRY_YEARS.map((y) => (
             <button key={y} className={`start-card${year === y ? ' on' : ''}`} onClick={() => pickYear(y)}>
               <b>{ENTRY_CN[y].name}</b>

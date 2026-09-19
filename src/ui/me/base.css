@@ -698,6 +698,10 @@ tr.cut-dash > td { border-bottom: 2px dashed var(--accent); }
   padding: 13px 15px; border-bottom: 1px solid var(--line);
 }
 .modal-head h3 { margin: 0; font-size: var(--t-h2); font-weight: 700; }
+/* A title that has to wrap breaks where it has a space — at 「 · 」 between its parts — not inside a word: a phone
+   showed 「Rare Atom 试训 · 第」 over 「一天 · 枪法考核」 (2026-09-19, layout audit). A part longer than the line still
+   breaks anywhere. The same for a panel's title and a sheet's. */
+.modal-head h3, .panel-head h2, .support-head h3, .mt-card h3 { word-break: keep-all; overflow-wrap: anywhere; }
 .modal-body { padding: 15px; }
 
 /* ---------------------------------------------------------------- new game */
