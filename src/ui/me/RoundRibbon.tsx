@@ -96,8 +96,8 @@ export default function RoundRibbon({
         {!compact && rounds.map((r, i) =>
           r.n % 4 === 0 ? (
             <text
-              key={`n${i}`} x={i * (w + gap) + w / 2} y={laneH * 2 + 12}
-              fill="var(--faint)" fontSize={10} textAnchor="middle"
+              key={`n${i}`} x={i * (w + gap) + w / 2} y={laneH * 2 + 13}
+              fill="var(--faint)" fontSize={12} textAnchor="middle"
               fontFamily="var(--mono)"
             >
               {r.n}

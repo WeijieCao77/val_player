@@ -276,7 +276,8 @@ export function MultiRadar({
 }) {
   const cx = size / 2
   const cy = size / 2
-  const r = size / 2 - 44
+  // 2px more room than it had for the 12px axis words and figures below, so 「56 / 76」 stays inside the picture
+  const r = size / 2 - 46
   const n = axes.length
   const pt = (i: number, mag: number) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2
@@ -307,13 +308,15 @@ export function MultiRadar({
           return <circle key={`${s.label}-${i}`} cx={x} cy={y} r={2.6} fill={s.color} />
         }),
       )}
+      {/* 12px, the type scale's small step: at 11 and 10 the axis names and figures were the smallest words on any
+          screen (2026-09-19, layout audit) */}
       {axes.map((l, i) => {
         const [x, y] = pt(i, 1.2)
         return (
           <g key={l}>
-            <text x={x} y={y - 6} fill="var(--muted)" fontSize={11} fontWeight={600}
+            <text x={x} y={y - 7} fill="var(--muted)" fontSize={12} fontWeight={600}
               textAnchor="middle" dominantBaseline="middle">{l}</text>
-            <text x={x} y={y + 7} fontSize={10} textAnchor="middle" dominantBaseline="middle"
+            <text x={x} y={y + 8} fontSize={12} textAnchor="middle" dominantBaseline="middle"
               fontFamily="var(--mono)" fill={series[0]?.color ?? 'var(--faint)'}>
               {Math.round(series[0]?.values[i] ?? 0)}
               {series[1] ? (
@@ -333,7 +336,8 @@ export function Radar({ values, labels, size = 210 }: {
 }) {
   const cx = size / 2
   const cy = size / 2
-  const r = size / 2 - 26
+  // likewise 2px more for the 12px names: 「沟通」 on the left edge
+  const r = size / 2 - 28
   const n = values.length
   const pt = (i: number, mag: number) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2
@@ -359,11 +363,12 @@ export function Radar({ values, labels, size = 210 }: {
         const [x, y] = pt(i, Math.max(0.05, v / 100))
         return <circle key={i} cx={x} cy={y} r={2.5} fill="var(--accent)" />
       })}
+      {/* 12px, as MultiRadar's axis names */}
       {labels.map((l, i) => {
         const [x, y] = pt(i, 1.2)
         return (
           <text
-            key={l} x={x} y={y} fill="var(--muted)" fontSize={10}
+            key={l} x={x} y={y} fill="var(--muted)" fontSize={12}
             textAnchor="middle" dominantBaseline="middle"
           >
             {l}

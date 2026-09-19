@@ -480,7 +480,8 @@ export default function MusicPlayer() {
       </button>
       <div className="bgm-meta">
         <b className="bgm-title" title={`${track.title} — ${track.artist}`}>{track.title}</b>
-        <span className="bgm-sub">
+        {/* the artist line ends in an ellipsis in the window's 118px (「VALORANT · KISS OF LIFE · 段宜恩」): the whole of it on hover */}
+        <span className="bgm-sub" title={blocked && !prefs.off ? undefined : track.artist}>
           {blocked && !prefs.off ? '点一下页面就开始播' : track.artist}
         </span>
       </div>

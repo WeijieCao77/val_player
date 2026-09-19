@@ -224,7 +224,8 @@ function WorldLines({ me }: { me: MeState }) {
                 </i>
               )}
               <i className={`pm-wl-n${s.retitled ? ' rw' : ''}`} title={s.retitled ? `这一季改写了 ${s.retitled} 座奖杯的归属` : undefined} />
-              <em className="pm-wl-y">{s.year}</em>
+              {/* the century is dropped on a phone (looks.css), so a dozen seasons' years fit at the scale's small step */}
+              <em className="pm-wl-y" title={String(s.year)}><span className="c">{String(s.year).slice(0, 2)}</span>{String(s.year).slice(2)}</em>
             </span>
           )
         })}

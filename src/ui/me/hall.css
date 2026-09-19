@@ -47,7 +47,9 @@
 }
 .hall-page .hall-recs small { font-size: var(--t-tiny, 11px); color: var(--muted); }
 .hall-page .hall-recs b { font-size: 16px; }
-.hall-page .hall-recs .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hall-page .hall-recs .who { display: flex; gap: .3em; min-width: 0; white-space: nowrap; }
+.hall-page .hall-recs .who > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hall-page .hall-recs .who > span + span { flex: none; }
 
 .hall-page .hall-cards { display: flex; flex-direction: column; gap: 8px; }
 .hall-page .hall-card {
@@ -81,6 +83,9 @@
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px;
   padding: 3px 0 3px 4px; color: var(--faint);
 }
+/* a phone: the name on one line and who / what under it, in every row — side by side, a long description dropped
+   under its name in one row and not the next (2026-09-19, layout audit, 360px) */
+@media (max-width: 560px) { .hall-page .hall-ach { flex-direction: column; align-items: flex-start; } }
 .hall-page .hall-ach b::before { content: '☆ '; }
 .hall-page .hall-ach.got { color: inherit; }
 .hall-page .hall-ach.got b::before { content: '★ '; color: var(--gold); }

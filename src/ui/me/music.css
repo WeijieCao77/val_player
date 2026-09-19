@@ -39,6 +39,13 @@ html .bgm { z-index: 52; }
 }
 
 @media (max-width: 720px) {
+  /* The window stands outside the career's box, so it read the page root's phone sizes (base.css: small 12.5, tiny
+     11) where every other word on a phone is on the career's (me.css: 13.5 and 12), and its buttons were base.css's
+     30px where everything else a thumb presses is 40 (2026-09-19, layout audit: 「列表」 and the artist at 11px,
+     上一首 / 播放 / 下一首 / 静音 / 收起 at 30–34px). The career's sizes and 40px here; two rows still fit a 360px phone. */
+  html .bgm { --t-small: 13.5px; --t-tiny: 12px; }
+  html .bgm .bgm-ib, html .bgm .bgm-ib.main { width: 40px; height: 40px; }
+  html .bgm .bgm-loop { min-height: 40px; }
   html .bgm { left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 45; }
   html .bgm.shut { left: auto; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
   /* the tab bar is 48px (me.css --dock-h, which is set on the career's own box and does not reach this one) */

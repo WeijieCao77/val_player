@@ -391,8 +391,10 @@ function Scoreboard({
                     <td>
                       {/* the icon row a vlr sheet prints: one portrait per map
                           the player appeared on, name and job on hover */}
+                      {/* side by side, never stacked: the table scrolls sideways on a phone, and a stacked pair made
+                          that player's row twice as tall as the rest (2026-09-19, layout audit) */}
                       {agentsOf(p.id).length
-                        ? <span className="row wrap" style={{ gap: 3 }}>
+                        ? <span className="row" style={{ gap: 3 }}>
                           {agentsOf(p.id).map((ag) => <AgentIcon key={ag} name={ag} size={24} />)}
                         </span>
                         : <span className="tiny faint">—</span>}

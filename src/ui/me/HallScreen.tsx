@@ -142,7 +142,8 @@ export function HallView({ game, onBack }: { game?: GameState | null; onBack: ()
               <div key={r.key}>
                 <small>{r.label}</small>
                 <b>{recValue(r, nums)}</b>
-                <span className="tiny faint who">{r.card.name} · {r.year}</span>
+                {/* the name gives way, the year stays: 「TheLongestIGN16c · 2…」 lost the year on a phone (2026-09-19) */}
+                <span className="tiny faint who" title={`${r.card.name} · ${r.year}`}><span>{r.card.name}</span><span>· {r.year}</span></span>
               </div>
             ))}
           </div>

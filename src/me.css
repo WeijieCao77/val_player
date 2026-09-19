@@ -62,6 +62,10 @@
 .hero-stage .muted { font-size: var(--t-small); font-variant-numeric: tabular-nums; }
 /* first in the page's order so a phone can keep it beside the wordmark; a monitor puts it at the end of the line */
 .hero-home { order: 1; flex: none; margin-left: auto; }
+/* a monitor or a tablet: wordmark | who, where, when | 回到首页 on one row, the middle part wrapping inside itself. Left to
+   wrap, the middle part took a whole row at 768 and 1024 and 回到首页 dropped to a row of its own under it
+   (2026-09-19, layout audit). A phone orders the row itself (below). */
+@media (min-width: 721px) { .hero-row { flex-wrap: nowrap; } }
 /* the week's button mirrored into the overview: a phone only (below) */
 .hero-go { display: none; }
 /* the five numbers as blocks: a label over its figure, a hairline between blocks, and a figure never broken over two
@@ -742,6 +746,9 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .career .modal-head h3 .row { flex-wrap: wrap; row-gap: 4px; }
   .career .mapline { flex-wrap: wrap; row-gap: 4px; }
   .career .mapline .mono { white-space: nowrap; width: auto !important; }
+  /* the rounds' strip always on its own line under the map and the score: left to fit, an 18-round map dropped it
+     and a 17-round one kept it beside the score (2026-09-19, layout audit, 390px) */
+  .career .mapline > div { flex: 1 1 100%; }
 }
 /* 平板宽度（768 左右）「我的」还是两栏，一栏只剩两百五十像素：八项的条被挤成 0，文字压在条上。条留 60px 底，文字按自己的宽度，进度说明让位（它有省略号和 title） */
 /* 数值那一栏定宽（三个字「世界级」或「83/88」）：按自己的宽度时，每一行的条长短跟着字走，「一流」那行的条比「职业级」那行长一截，
@@ -908,7 +915,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .app.career button, .newcareer button, .app.career select, .newcareer select { min-height: 40px; }
   .app.career button.sm, .newcareer button.sm { min-width: 40px; }
   .app.career tr.clickable > td { height: 44px; }
-  .app.career summary { padding: 11px 0; }
+  /* the home page's hall has summaries too (换设备 was 20px tall, each route 37), and a summary that sets its own
+     padding inline keeps its sides but not a smaller height (比赛记录's 9px made it 38) — 2026-09-19, layout audit */
+  .app.career summary, .newcareer summary { padding: 11px 0; }
+  .app.career summary[style], .newcareer summary[style] { padding-top: 11px !important; padding-bottom: 11px !important; }
   .app.career a.share-dl { display: inline-flex; align-items: center; min-height: 40px; }
   /* the opponent's five as a small stack (media.css) still take a thumb each */
   @container (max-width: 300px) {
