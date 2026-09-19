@@ -162,9 +162,16 @@ async function fromNetwork(i: number): Promise<string> {
     try {
       const c = await caches.open(SONGS)
       await c.put(keyOf(i), new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mp4' } }))
-      // a recording whose ?v= has moved on will never be asked for again
+      // A recording whose ?v= has moved on will never be asked for again. ONLY that: an older ?v= of a song on
+      // this list. At vctgames.com/player/ this game shares the origin — and this cache, on purpose: same
+      // songs, same keys, so a song either game fetched is there for the other — with Val Manager, and
+      // sweeping everything that is not on THIS list would throw out the other game's songs the day the two
+      // lists stop being the same, and each game would download them again every time the player came back
+      // from the other (the 80 GB a day of 2026-09-10, by another road).
+      const paths = new Set(TRACKS.map((t) => `${location.origin}/${t.file.split('?')[0]}`))
       for (const old of await c.keys()) {
-        if (!TRACKS.some((t) => old.url === `${location.origin}/${t.file}`)) void c.delete(old)
+        const mine = paths.has(old.url.split('?')[0])
+        if (mine && !TRACKS.some((t) => old.url === `${location.origin}/${t.file}`)) void c.delete(old)
       }
     } catch { /* full, or refused: it still plays this visit */ }
     return URL.createObjectURL(blob)
