@@ -33,6 +33,8 @@
  *   font<scale     at a computer's width, text under the type scale's smallest step (base.css --t-label / --t-tiny)
  *   svg-font       words drawn in a picture (a radar's numbers, a map's letters) under that step at the size drawn
  *   ellipsis-bare  an ellipsis with no title to read the rest from
+ *   music-over     the music scene only (musicOver): the music's record over a control of the page or the 下一步
+ *                  card, or its open card past the window or over the tab bar, 更新日志 or 推进一周
  *
  * and, across every screen at one width, the same role (a panel's title, a table's header, a card's title,
  * a small button, a tag) in more than one size: the report's 字号 section.
@@ -616,6 +618,8 @@ async function measureAll(page, scenario, state, opts = {}) {
     for (const theme of opts.sweep ? ['dark'] : themesAt(w)) {
       if (theme !== was || themesAt(w).length > 1) await paintTheme(page, theme)
       const { offenders, roles } = await page.evaluate(measure, { phone: w <= 430, ...where, mark: EVIDENCE })
+      // a scene's own check at each width, beside the common ones (the music scene: what the record and its card cover)
+      if (opts.also) offenders.push(...await page.evaluate(opts.also.fn, opts.also.arg))
       results.push({ scenario, state, width: w, theme, offenders, roles, sweep: !!opts.sweep })
       if (EVIDENCE && theme === 'dark') await evidence(page, scenario, state, w, offenders)
     }
@@ -828,7 +832,8 @@ async function clearLayers(page, scenario, { keep = [], measureLayers = true } =
 /**
  * opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than
  * continue; opts.tour: the tour comes up as it does for a new player; opts.hall: a hall with the long career's card
- * and every 卡面 open (saves/hall.json, scripts/mobile_saves.ts); opts.music: the music window opened, still silent
+ * and every 卡面 open (saves/hall.json, scripts/mobile_saves.ts). The music is always seeded off, silent and folded to
+ * its record; the music scene opens its card with a press, as a player does.
  */
 async function withSave(name, fn, opts = {}) {
   if (ONLY && !name?.includes(ONLY) && !(name === null && 'newcareer'.includes(ONLY))) return
@@ -838,7 +843,7 @@ async function withSave(name, fn, opts = {}) {
   const hallFile = `${ROOT}/saves/hall.json`
   if (opts.hall && !existsSync(hallFile)) errors.push(`${name}: no hall file ${hallFile} (npx tsx scripts/mobile_saves.ts)`)
   const hall = opts.hall && existsSync(hallFile) ? readFileSync(hallFile, 'utf8') : null
-  const music = opts.music ? JSON.stringify({ ...JSON.parse(MUSIC_OFF), open: true }) : MUSIC_OFF
+  const music = MUSIC_OFF
   const ctx = await browser.newContext({ viewport: { width: REST_W, height: heightOf(REST_W) }, deviceScaleFactor: 1 })
   await ctx.addInitScript(([key, text, musicKey, musicOff, tour, hall]) => {
     try {
@@ -1180,7 +1185,7 @@ await withSave('retired', async (page) => {
 })
 
 // ---- what the layout run added (2026-09-18): the hall inside a career and on the home page, the backup box and the
-//      import page, the career-end card in every 卡面, the music window open, the tour card by card
+//      import page, the career-end card in every 卡面, the music record folded and its card open, the tour card by card
 const LOOK_KEYS = ['studio', 'night', 'film', 'paper', 'led', 'vault', 'split', 'redline']
 await withSave('looks', async (page) => {
   const top = await clearLayers(page, 'looks', { keep: ['modal'] })
@@ -1246,15 +1251,75 @@ await withSave('home-hall', async (page) => {
   } else missing('home-hall', 'home:hall')
 }, { save: 'long', stay: true, hall: true })
 
+/**
+ * What the music's record and its card stand over, at one width (2026-09-19, the author: 「网页里的音乐播放器可以做成
+ * 浮窗吗？现在这个太大了，影响游玩」 — the open bar lay over 推进一周 at 1920 and the 下一步 card at 360). Each is
+ * `music-over`, drawn on top of the thing (not under a card that covers both):
+ *   · the record, open or folded, where the page opens: over 推进一周 (the week's button and its copy at the top of a
+ *     phone's page), the 下一步 card, or what stays put over the page — the tab bar, 更新日志, the update and save
+ *     bars, a toast
+ *   · the card, open: past the window's edge, or over those same fixed controls and 推进一周
+ * The rest of the page scrolls under the record as it scrolls under 更新日志 beside it: a floating button stands over
+ * something at some point of every scroll, and the page's end leaves the band they both stand in free (me.css, the
+ * main's bottom padding). What is under a card someone opened is what a card is for.
+ */
+function musicOver({ open }) {
+  const out = []
+  const W = innerWidth
+  const H = innerHeight
+  const name = (el) => `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className.trim() ? `.${el.className.trim().split(/\s+/).join('.')}` : ''}`
+  const words = (el) => (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24)
+  const check = (shape, sel) => {
+    const a = shape.getBoundingClientRect()
+    for (const c of document.querySelectorAll(sel)) {
+      if (c.closest('.bgm') || c.closest('[inert]') || !c.getClientRects().length) continue
+      const b = c.getBoundingClientRect()
+      const ix = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+      const iy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+      if (ix <= 1 || iy <= 1) continue
+      // drawn over it: the point in the middle of the two belongs to the music
+      const hit = document.elementFromPoint((Math.max(a.left, b.left) + Math.min(a.right, b.right)) / 2, (Math.max(a.top, b.top) + Math.min(a.bottom, b.bottom)) / 2)
+      if (!hit?.closest('.bgm')) continue
+      out.push({ kind: 'music-over', sel: `${name(shape)} ⟂ ${name(c)}`, text: words(c), px: Math.round(Math.min(ix, iy)) })
+    }
+  }
+  const fixed = '.app.career > .nav, .log-fab, .update-nudge, .save-chip, .toast, .hero-go, .advance-me button'
+  const disc = document.querySelector('.bgm-fab')
+  if (disc?.getClientRects().length) check(disc, `${fixed}, .advance-me, .next-step`)
+  const card = open && document.querySelector('.bgm-pop')
+  if (card) {
+    const r = card.getBoundingClientRect()
+    if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) {
+      out.push({ kind: 'music-over', sel: `${name(card)} ⟂ the window`, text: `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)}`, px: Math.round(Math.max(-r.left, -r.top, r.right - W, r.bottom - H)) })
+    }
+    check(card, fixed)
+  }
+  return out
+}
+
 await withSave('music', async (page) => {
   await settle(page, 400)
-  if (!(await page.locator('.bgm').count())) { missing('music', 'music window'); return }
-  // the window measured as its own scene; the page under it is measured elsewhere
-  await measureAll(page, 'music', 'music:open', { root: '.bgm' })
+  if (!(await page.locator('.bgm-fab').count())) { missing('music', 'music record'); return }
+  // over the page itself: the save opens on a big moment, put away first the way a player does
+  const top = await clearLayers(page, 'music', { measureLayers: false })
+  if (top) { missing('music', `the week page (in front: ${top.kind}「${top.name}」)`); return }
+  // folded, as every player first sees it: the record alone, measured as its own scene and for what it covers
+  await measureAll(page, 'music', 'music:folded', { root: '.bgm', also: { fn: musicOver, arg: { open: false } } })
+  // pressed, as a finger presses it: the card beside it, at every width (it follows the record through a resize)
+  if (!(await press(page, page.locator('.bgm-fab'), 'the music record', 'music'))) return
+  await settle(page, 300)
+  if (!(await page.locator('.bgm-pop').count())) { missing('music', 'music card'); return }
+  await measureAll(page, 'music', 'music:open', { root: '.bgm', also: { fn: musicOver, arg: { open: true } } })
+  // and its list of songs open too, the card at its tallest
+  const t = page.locator('.bgm-list-t')
+  if (await t.count() && await press(page, t, '曲目', 'music')) {
+    await settle(page, 200)
+    await measureAll(page, 'music', 'music:list', { root: '.bgm', also: { fn: musicOver, arg: { open: true } } })
+  } else missing('music', 'music:list')
   // and silent: nothing playing
   const playing = await page.evaluate(() => [...document.querySelectorAll('audio')].some((a) => !a.paused && !a.muted && a.volume > 0))
   if (playing) errors.push('music: a track is playing with sound')
-}, { save: 'chal-days', music: true })
+}, { save: 'chal-days' })
 
 await withSave('tour', async (page) => {
   for (let i = 0; i < 20; i++) {

@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { TRACKS } from '../../data/music_me'
 import './music.css'
 
 /**
  * The career's own copy of Val Manager's music window (作者 2026-09-18：「我需要仿照
  * val manager加入音乐功能，音乐直接使用他的，音乐功能浮窗也直接照抄」), taken whole
- * from Val_Manager dc8e60c src/ui/MusicPlayer.tsx. Only three things differ: the
- * track list is the career's (data/music_me.ts), the choices are kept under the
- * career's own key, and where it stands on a phone is said in music.css, over
- * Val Manager's rules that base.css carries. It is a control of its own, apart
- * from 音效 (sfx.ts): turning one off leaves the other as it was.
+ * from Val_Manager dc8e60c src/ui/MusicPlayer.tsx. The track list is the career's
+ * (data/music_me.ts), the choices are kept under the career's own key, and where
+ * it stands is said in music.css. It is a control of its own, apart from 音效
+ * (sfx.ts): turning one off leaves the other as it was.
  *
- * Background music, and a small window in the corner to run it from.
+ * Background music, and a record in the corner to run it from. Reported
+ * 2026-09-19 by the author: 「网页里的音乐播放器可以做成浮窗吗？现在这个太大了，
+ * 影响游玩」. Val Manager's window stood open by default, a 529×52 bar at the
+ * bottom of the page (327×98 on a phone), and at 1920×1000 it lay over 推进一周
+ * and 按推荐安排; on a 360px phone over the 下一步 card and its 去挑一家. Now the
+ * record is all there is until it is pressed: 42px (40 on a phone), turning
+ * while a song plays, with a small ▶ or ❚❚ on its edge. Pressed, it opens a
+ * small card beside it — the song, play and pause, the songs either side, the
+ * volume, the loop, the list — which closes on a press anywhere else, on Esc,
+ * or on the record again. The card is not a dialog that holds the page: the
+ * focus goes into it and comes back to the record, Tab walks on out of it, and
+ * layer.ts never makes it inert.
  *
  * It starts off (作者 2026-09-18：「改成默认关点一下才放」): nothing plays and
  * nothing is fetched until the listener presses play in the window. Choices
@@ -20,13 +30,13 @@ import './music.css'
  * play, it resumes on their next visit where the browser allows that, and where
  * it does not — every phone — it waits for the first tap anywhere on the page
  * and starts then, which is the only way a web page is permitted to make a
- * sound. Until that tap the window says so instead of the artist's name.
+ * sound. Until that tap the card says so instead of the artist's name.
  *
  * Everything the listener chooses stays on the device: the volume, whether
- * they turned it off, the loop mode, which track, and whether the window is
- * folded to a disc. Turned off means off — the next visit does not even fetch
- * the file. Like the theme, this is about the room the screen is in, not the
- * account, so it never rides along with a save.
+ * they turned it off, the loop mode, which track, whether the card is open,
+ * and where the record was dragged to. Turned off means off — the next visit
+ * does not even fetch the file. Like the theme, this is about the room the
+ * screen is in, not the account, so it never rides along with a save.
  *
  * The <audio> is made by hand rather than rendered, so a track change is a
  * src-and-play inside the click that asked for it. Safari only trusts a play()
@@ -48,20 +58,32 @@ interface Prefs {
   track: number
   /** the listener pressed pause; nothing plays, nothing loads, until they press play */
   off: boolean
-  /** the window is unfolded (false: just the disc) */
+  /** the card is open beside the record (false: just the record) */
   open: boolean
   /** absent until the first drag: the stylesheet's corner until then */
   pos?: Pos
-  /** the prefs' own version: 2 from the day music started off (see the top of this file) */
+  /**
+   * The prefs' own version: 2 from the day music started off, 3 from the day the
+   * window became a record (see the top of this file). Choices kept with no
+   * version read as off; under 3, as folded — the open bar was everyone's
+   * default, so an `open: true` from then says nothing about this card.
+   */
   v?: number
 }
-const PREFS_V = 2
-const DEFAULTS: Prefs = { vol: 0.35, muted: false, loop: 'all', track: 0, off: true, open: true, v: PREFS_V }
+const PREFS_V = 3
+const DEFAULTS: Prefs = { vol: 0.35, muted: false, loop: 'all', track: 0, off: true, open: false, v: PREFS_V }
 
 /** The gap the player keeps from the screen's edge. */
 const EDGE = 12
 /** A press that travels less than this is a tap, not a drag. */
 const TAP = 6
+/** The record's size before it has been drawn (base.css; 40 on a phone, music.css). */
+const DISC = 42
+/** The card's width, and its gap from the record. */
+const POP_W = 288
+const POP_GAP = 8
+/** The card keeps this far from the screen's edge: a phone's record stands 8px in, and the card lines up with it. */
+const POP_EDGE = 8
 
 const clampPos = (p: Pos, w: number, h: number): Pos => ({
   x: Math.min(Math.max(EDGE, p.x), Math.max(EDGE, window.innerWidth - w - EDGE)),
@@ -79,14 +101,17 @@ const readPrefs = (): Prefs => {
     const raw = localStorage.getItem(KEY)
     if (!raw) return DEFAULTS
     const p = JSON.parse(raw) as Partial<Prefs>
+    const v = typeof p.v === 'number' ? p.v : 0
     return {
       vol: typeof p.vol === 'number' && p.vol >= 0 && p.vol <= 1 ? p.vol : DEFAULTS.vol,
       muted: p.muted === true,
       loop: p.loop === 'one' || p.loop === 'off' ? p.loop : 'all',
       track: typeof p.track === 'number' && p.track >= 0 && p.track < TRACKS.length ? Math.floor(p.track) : 0,
-      // kept before music started off: off, whatever it says (see the top of this file)
-      off: p.off === true || p.v !== PREFS_V,
-      open: p.open !== false,
+      // kept before music started off: off, whatever it says (see the top of this file). Only then: a listener
+      // who pressed play under 2 keeps playing through the move to 3, which changed where the controls are and nothing else
+      off: p.off === true || v < 2,
+      // kept while the bar stood open by default: folded, once (see `v`)
+      open: p.open === true && v >= 3,
       v: PREFS_V,
       pos: p.pos && typeof p.pos.x === 'number' && typeof p.pos.y === 'number'
         && Number.isFinite(p.pos.x) && Number.isFinite(p.pos.y)
@@ -378,14 +403,15 @@ export default function MusicPlayer() {
   const loop = LOOPS[prefs.loop]
   const many = TRACKS.length > 1
   const pct = Math.round(prefs.vol * 100)
+  const waiting = blocked && !prefs.off
 
-  // The player goes where it is put. It sat in the bottom-left corner, over
-  // whatever the page had there — the group asked for the phone's floating
-  // button: drag it anywhere by the record, let go and it settles against
-  // the nearer side. A press that does not travel is still a tap (open,
-  // play, pause); the position is remembered with the other preferences;
-  // opening the panel or turning the phone keeps it on screen.
+  // The record goes where it is put: drag it anywhere, let go and it settles
+  // against the nearer side, like a phone's floating button. A press that does
+  // not travel is a tap, and opens or closes the card; the position is
+  // remembered with the other preferences; turning the phone keeps it on screen.
   const root = useRef<HTMLDivElement | null>(null)
+  const fab = useRef<HTMLButtonElement | null>(null)
+  const pop = useRef<HTMLDivElement | null>(null)
   const [live, setLive] = useState<Pos | undefined>(undefined)
   const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null)
   const dragged = useRef(false)
@@ -393,7 +419,7 @@ export default function MusicPlayer() {
 
   const settle = useCallback((p: Pos) => {
     const r = root.current?.getBoundingClientRect()
-    const s = snapPos(p, r?.width ?? 46, r?.height ?? 46)
+    const s = snapPos(p, r?.width ?? DISC, r?.height ?? DISC)
     setLive(undefined)
     patch({ pos: s })
   }, [patch])
@@ -413,22 +439,21 @@ export default function MusicPlayer() {
     if (!d.moved && Math.hypot(dx, dy) < TAP) return
     d.moved = true
     const r = root.current?.getBoundingClientRect()
-    setLive(clampPos({ x: d.ox + dx, y: d.oy + dy }, r?.width ?? 46, r?.height ?? 46))
+    setLive(clampPos({ x: d.ox + dx, y: d.oy + dy }, r?.width ?? DISC, r?.height ?? DISC))
   }, [])
   const onUp = useCallback((e: React.PointerEvent<HTMLElement>) => {
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
     drag.current = null
     if (!d.moved) return
-    // the click that follows this release must not open or pause anything
+    // the click that follows this release must not open or close anything
     dragged.current = true
     window.setTimeout(() => { dragged.current = false }, 0)
     const r = root.current?.getBoundingClientRect()
     settle({ x: r?.left ?? d.ox, y: r?.top ?? d.oy })
   }, [settle])
-  const tapped = useCallback((fn: () => void) => () => { if (!dragged.current) fn() }, [])
 
-  // a moved player stays on screen when it opens, closes, or the window changes
+  // a moved record stays on screen when the window changes (a record kept from the open bar, 529px wide, settles too)
   useEffect(() => {
     if (!prefs.pos) return
     const fix = () => {
@@ -440,103 +465,197 @@ export default function MusicPlayer() {
     fix()
     window.addEventListener('resize', fix)
     return () => window.removeEventListener('resize', fix)
-  }, [prefs.open, prefs.pos, patch])
+  }, [prefs.pos, patch])
+
+  // ---- the card beside the record
+  const popId = useId()
+  const [list, setList] = useState(false)
+  /** opened by a press just now, so the focus goes in (a card kept open from the last visit takes none) */
+  const opening = useRef(false)
+  const setOpen = useCallback((open: boolean, focusBack = false) => {
+    opening.current = open
+    patch({ open })
+    if (!open && focusBack) fab.current?.focus({ preventScroll: true })
+  }, [patch])
+
+  // Where the card opens: above the record in the screen's lower half, below it in the upper half, along the
+  // record's side and never past the screen's edge; as tall as the room on that side, the rest scrolling inside it.
+  const [place, setPlace] = useState<{ up: boolean; x: number; w: number; max: number }>({ up: true, x: 0, w: POP_W, max: 480 })
+  useLayoutEffect(() => {
+    if (!prefs.open) return
+    const at = () => {
+      const r = root.current?.getBoundingClientRect()
+      if (!r) return
+      const W = window.innerWidth
+      const H = window.innerHeight
+      const up = r.top + r.height / 2 > H / 2
+      const w = Math.min(POP_W, W - 2 * POP_EDGE)
+      const want = r.left + r.width / 2 < W / 2 ? r.left : r.right - w
+      const x = Math.round(Math.min(Math.max(POP_EDGE, want), W - POP_EDGE - w) - r.left)
+      const max = Math.max(120, Math.floor(up ? r.top - POP_GAP - POP_EDGE : H - r.bottom - POP_GAP - POP_EDGE))
+      setPlace((p) => (p.up === up && p.x === x && p.w === w && p.max === max ? p : { up, x, w, max }))
+    }
+    at()
+    window.addEventListener('resize', at)
+    return () => window.removeEventListener('resize', at)
+  }, [prefs.open, pos?.x, pos?.y])
+
+  // opened by a press: the focus goes to play / pause
+  useEffect(() => {
+    if (!prefs.open || !opening.current) return
+    opening.current = false
+    pop.current?.querySelector<HTMLElement>('.bgm-ib.main')?.focus({ preventScroll: true })
+  }, [prefs.open])
+
+  // Closed by a press anywhere else, by Esc, or by the focus moving on to something outside it. A press elsewhere
+  // does what it presses as well; nothing is swallowed. Esc from inside the card stops there — a card behind it
+  // (an event, the changelog) does not close with it — and the focus goes back to the record.
+  useEffect(() => {
+    if (!prefs.open) return
+    const inside = (t: EventTarget | null) => t instanceof Node && !!root.current?.contains(t)
+    const down = (e: PointerEvent) => { if (!inside(e.target)) setOpen(false) }
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const mine = inside(document.activeElement)
+      setOpen(false, mine)
+      if (mine) { e.preventDefault(); e.stopPropagation() }
+    }
+    // Only a focus that lands on something else — Tab walking on past the card, a card of the game taking it. Not
+    // the focus merely leaving: Safari leaves a pressed button unfocused, so a press on the card's own buttons moves
+    // the focus to nothing, and Tab past the page's last control moves it to the browser's own bar.
+    const moved = (e: FocusEvent) => { if (!inside(e.target)) setOpen(false) }
+    document.addEventListener('pointerdown', down, true)
+    window.addEventListener('keydown', key, true)
+    document.addEventListener('focusin', moved, true)
+    return () => {
+      document.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('keydown', key, true)
+      document.removeEventListener('focusin', moved, true)
+    }
+  }, [prefs.open, setOpen])
+
+  const pick = useCallback((i: number) => {
+    if (i === prefsRef.current.track && !el().paused) return
+    patch({ track: i, off: false })
+    load(i, true)
+  }, [el, load, patch])
 
   const placed = pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } as const : undefined
-  const handle = {
-    onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp,
-    style: { touchAction: 'none', cursor: 'grab' } as const,
-  }
-
-  if (!prefs.open) {
-    return (
-      <div className="bgm shut" ref={root} style={placed}>
-        <button
-          type="button"
-          className="bgm-pill"
-          onClick={tapped(() => patch({ open: true }))}
-          {...handle}
-          aria-label={`背景音乐：${track.title}${playing ? '，正在播放' : '，已暂停'}。展开`}
-          title={`${track.title} · ${playing ? '播放中' : '已暂停'} · 按住拖动`}
-        >
-          <i className={`bgm-vinyl${playing ? ' spin' : ''}`} aria-hidden="true" />
-        </button>
-      </div>
-    )
-  }
+  const state = playing ? '正在播放' : waiting ? '等你点一下页面' : '已暂停'
 
   return (
-    <div className="bgm open" role="region" aria-label="背景音乐" ref={root} style={placed}>
-      <div className="bgm-row top">
+    <div className={`bgm${prefs.open ? ' open' : ''}${playing ? ' playing' : ''}`} ref={root} style={placed}>
       <button
+        ref={fab}
         type="button"
-        className="bgm-disc"
-        onClick={tapped(toggle)}
-        {...handle}
-        aria-label={playing ? '暂停' : '播放'}
-        title={playing ? '暂停' : '播放'}
+        className="bgm-fab"
+        onClick={() => { if (!dragged.current) setOpen(!prefs.open, prefs.open) }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        style={{ touchAction: 'none', cursor: 'grab' }}
+        aria-expanded={prefs.open}
+        aria-controls={prefs.open ? popId : undefined}
+        aria-label={`背景音乐：${track.title}，${state}`}
+        title={`${track.title} · ${playing ? '播放中' : '已暂停'} · 点开控制，按住拖动`}
       >
         <i className={`bgm-vinyl${playing ? ' spin' : ''}`} aria-hidden="true" />
-      </button>
-      <div className="bgm-meta">
-        <b className="bgm-title" title={`${track.title} — ${track.artist}`}>{track.title}</b>
-        {/* the artist line ends in an ellipsis in the window's 118px (「VALORANT · KISS OF LIFE · 段宜恩」): the whole of it on hover */}
-        <span className="bgm-sub" title={blocked && !prefs.off ? undefined : track.artist}>
-          {blocked && !prefs.off ? '点一下页面就开始播' : track.artist}
-        </span>
-      </div>
-      <button type="button" className="bgm-ib fold" onClick={() => patch({ open: false })} aria-label="收起播放器" title="收起">
-        <Svg d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" />
-      </button>
-      </div>
-      <div className="bgm-row bot">
-      <div className="bgm-ctl" role="group" aria-label="播放控制">
-        <button type="button" className="bgm-ib" onClick={() => step(-1)} disabled={!many} aria-label="上一首" title={many ? '上一首' : '只有一首歌'}>
-          <Svg d="M6 5h2v14H6zM19 5v14L9 12z" />
-        </button>
-        <button type="button" className="bgm-ib main" onClick={toggle} aria-label={playing ? '暂停' : '播放'} title={playing ? '暂停' : '播放'}>
+        <span className="bgm-badge" aria-hidden="true">
           {playing ? <Svg d="M7 5h4v14H7zM13 5h4v14h-4z" /> : <Svg d="M8 5v14l11-7z" />}
-        </button>
-        <button type="button" className="bgm-ib" onClick={() => step(1)} disabled={!many} aria-label="下一首" title={many ? '下一首' : '只有一首歌'}>
-          <Svg d="M16 5h2v14h-2zM5 5v14l10-7z" />
-        </button>
-        <button
-          type="button"
-          className={`bgm-loop${prefs.loop === 'off' ? '' : ' on'}`}
-          onClick={() => patch({ loop: loop.next })}
-          aria-label={`循环方式：${loop.hint}。点击换成${LOOPS[loop.next].label}`}
-          title={loop.hint}
+        </span>
+      </button>
+      {prefs.open && (
+        <div
+          ref={pop}
+          id={popId}
+          className={`bgm-pop ${place.up ? 'up' : 'down'}`}
+          role="dialog"
+          aria-label="背景音乐"
+          style={{ left: place.x, width: place.w, maxHeight: place.max }}
         >
-          <Svg d="M17 7H7v3L3 6l4-4v3h12v6h-2zM7 17h10v-3l4 4-4 4v-3H5v-6h2z" />
-          {loop.label}
-        </button>
-      </div>
-      <div className="bgm-vol" role="group" aria-label="音量">
-        <button
-          type="button"
-          className="bgm-ib"
-          onClick={() => patch({ muted: !prefs.muted })}
-          aria-label={prefs.muted ? '取消静音' : '静音'}
-          title={prefs.muted ? '取消静音' : '静音'}
-          aria-pressed={prefs.muted}
-        >
-          {prefs.muted || prefs.vol === 0
-            ? <Svg d="M4 9v6h4l5 4V5L8 9zm12.5 3 2.5-2.5-1.4-1.4L15 10.6 12.4 8 11 9.4l2.6 2.6L11 14.6l1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4z" />
-            : <Svg d="M4 9v6h4l5 4V5L8 9zm11.5 3A4.5 4.5 0 0 0 13 8v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z" />}
-        </button>
-        {!IOS && (
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={prefs.muted ? 0 : pct}
-            onChange={(e) => patch({ vol: Number(e.target.value) / 100, muted: false })}
-            aria-label={`音量 ${pct}%`}
-            title={`音量 ${pct}%`}
-          />
-        )}
-      </div>
-      </div>
+          {/* the song on one line, the whole of it on hover; until a phone's first tap, what it is waiting for */}
+          <p className="bgm-now" title={`${track.title} — ${track.artist}`}>
+            <b className="bgm-title">{track.title}</b>
+            <span className="bgm-sub">{waiting ? '点一下页面就开始播' : track.artist}</span>
+          </p>
+          <div className="bgm-row">
+            <div className="bgm-ctl" role="group" aria-label="播放控制">
+              <button type="button" className="bgm-ib" onClick={() => step(-1)} disabled={!many} aria-label="上一首" title={many ? '上一首' : '只有一首歌'}>
+                <Svg d="M6 5h2v14H6zM19 5v14L9 12z" />
+              </button>
+              <button type="button" className="bgm-ib main" onClick={toggle} aria-label={playing ? '暂停' : '播放'} title={playing ? '暂停' : '播放'}>
+                {playing ? <Svg d="M7 5h4v14H7zM13 5h4v14h-4z" /> : <Svg d="M8 5v14l11-7z" />}
+              </button>
+              <button type="button" className="bgm-ib" onClick={() => step(1)} disabled={!many} aria-label="下一首" title={many ? '下一首' : '只有一首歌'}>
+                <Svg d="M16 5h2v14h-2zM5 5v14l10-7z" />
+              </button>
+            </div>
+            <button
+              type="button"
+              className={`bgm-loop${prefs.loop === 'off' ? '' : ' on'}`}
+              onClick={() => patch({ loop: loop.next })}
+              aria-label={`循环方式：${loop.hint}。点击换成${LOOPS[loop.next].label}`}
+              title={loop.hint}
+            >
+              <Svg d="M17 7H7v3L3 6l4-4v3h12v6h-2zM7 17h10v-3l4 4-4 4v-3H5v-6h2z" />
+              {loop.label}
+            </button>
+          </div>
+          <div className="bgm-row bgm-vol" role="group" aria-label="音量">
+            <button
+              type="button"
+              className="bgm-ib"
+              onClick={() => patch({ muted: !prefs.muted })}
+              aria-label={prefs.muted ? '取消静音' : '静音'}
+              title={prefs.muted ? '取消静音' : '静音'}
+              aria-pressed={prefs.muted}
+            >
+              {prefs.muted || prefs.vol === 0
+                ? <Svg d="M4 9v6h4l5 4V5L8 9zm12.5 3 2.5-2.5-1.4-1.4L15 10.6 12.4 8 11 9.4l2.6 2.6L11 14.6l1.4 1.4 2.6-2.6 2.6 2.6 1.4-1.4z" />
+                : <Svg d="M4 9v6h4l5 4V5L8 9zm11.5 3A4.5 4.5 0 0 0 13 8v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z" />}
+            </button>
+            {IOS ? <span className="bgm-hint">音量用设备侧面的按键调</span> : (
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={prefs.muted ? 0 : pct}
+                onChange={(e) => patch({ vol: Number(e.target.value) / 100, muted: false })}
+                aria-label={`音量 ${pct}%`}
+                title={`音量 ${pct}%`}
+              />
+            )}
+          </div>
+          {/* The list opens on the far side of its button from the record, so the button stays under the finger that
+              pressed it: a card above the record grows upwards (base.css draws the list above the button there, the
+              button coming first for Tab all the same), and a press that opened the list cannot land on a song. */}
+          {many && (
+            <>
+              <button type="button" className="bgm-list-t" onClick={() => setList(!list)} aria-expanded={list} aria-controls={`${popId}-list`}>
+                <span>曲目</span>
+                <span className="bgm-count">{prefs.track + 1} / {TRACKS.length}</span>
+                <Svg d={list === place.up ? 'M7.4 8.6 6 10l6 6 6-6-1.4-1.4-4.6 4.6z' : 'M7.4 15.4 6 14l6-6 6 6-1.4 1.4-4.6-4.6z'} />
+              </button>
+              {list && (
+                <ol className="bgm-list" id={`${popId}-list`}>
+                  {TRACKS.map((t, i) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        className={i === prefs.track ? 'on' : undefined}
+                        aria-current={i === prefs.track ? 'true' : undefined}
+                        onClick={() => pick(i)}
+                        title={`${t.title} — ${t.artist}`}
+                      >
+                        <span className="bgm-n">{i + 1}</span>
+                        <span className="bgm-t">{t.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

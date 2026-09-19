@@ -1,64 +1,47 @@
-/* ---- 背景音乐: where Val Manager's window stands in this game's screens (ui/me/MusicPlayer.tsx)
+/* ---- 背景音乐: where the record stands in this game's screens (ui/me/MusicPlayer.tsx)
 
-   The window itself — the record, the buttons, the two rows on a phone, its
-   three grounds — is base.css's 「background music」 block, Val Manager's rules
-   as they are. What is said here is only where it stands and what it stands
-   over, because the two games' corners are not the same:
+   The record and its card are base.css's 「background music」 block. What is said here is where the record stands
+   and what it stands over. It is one round button beside the other one, 更新日志, in the band the page already
+   leaves free under its last line for that one (me.css: the main's bottom padding):
 
-   · a computer: bottom-left, as in Val Manager — on the cover at the screen's
-     edge, in a career just past the rail (base.css, [data-shell], the same
-     164px rail). 更新日志 is the round button in the bottom-right corner and
-     音效 is in the rail's foot, so the window touches neither.
-   · a phone: the career has no rail on the left but a tab bar along the bottom
-     (me.css, 48px and the phone's own strip), and 更新日志 stands on it at the
-     right. The open window stands on the tab bar at the left; folded, the
-     record goes on top of 更新日志, 48px above it, the way Val Manager stacks
-     its folded record on its column of round buttons. On the cover there is
-     no tab bar and 更新日志 is in the very corner, so both come down to it.
-   · a phone's 更多 panel (配色与音效) opens over the tab bar where the window
-     stands: the window steps aside while it is open, as 更新日志 does.
+   · a computer, in a career: bottom-right, just left of 更新日志 and level with it. It stood at the bottom-left,
+     past the rail, and at 1920×1000 that was on the week page's 按推荐安排 and 推进一周, which end the page's
+     left column there (2026-09-19, the author: 「现在这个太大了，影响游玩」). The right-hand corner has only
+     更新日志 in it; the card opens up and to the left from there, over the side column. On the cover 更新日志 is
+     a wider button with its name on it, and the record keeps the bottom-left corner (base.css).
+   · a phone, in a career: standing on the tab bar at the left, 更新日志's mirror at the right. It stood 48px above
+     更新日志, and at 360×740 that was on the 下一步 card; the band over the tab bar is the one place the page
+     keeps clear. On the cover there is no tab bar, and it comes down to the corner (base.css).
+   · a phone's 更多 panel (配色与音效) opens over the tab bar where the record stands: it steps aside while that
+     is open, as 更新日志 does.
 
-   Stacking. Val Manager puts the window above its match cards (so a long
-   series can be turned down without closing the report) and under its
-   tutorial and update notice. Here that is 52 on a computer: above a card
-   (50) — a match being played is one — and under everything that is meant to
-   cover the page: the changelog's veil (54), a big moment's card (60), the
-   poster (70), the update bar (85), the tour (94–97) and the toast (100).
-   A phone's cards fill the screen and end wherever their text ends, so a
-   window above them could sit on the button a card ends with: on a phone it
-   goes under the cards (45, over the tab bar at 40). The song plays on; the
-   lock screen's card still has play and pause (mediaSession). */
+   Dragged, it stays where it was put (MusicPlayer.tsx), against the nearer side.
+
+   Stacking. Above a card on a computer (50) — a match being played is one — so a long series can be turned down
+   without closing the report, and under everything that is meant to cover the page: the changelog's veil (54), a
+   big moment's card (60), the poster (70), the update bar (85), the tour (94–97) and the toast (100). A phone's
+   cards fill the screen: there it goes under them (45, over the tab bar at 40). The song plays on; the lock
+   screen's card still has play and pause (mediaSession). */
 
 html .bgm { z-index: 52; }
 
 @media (min-width: 721px) {
-  /* a card long enough to scroll ends above the open window, not under it (16px + 52px, and a gap) */
-  html:has(.bgm.open) .modal-bg { padding-bottom: 84px; }
-  /* 「新的一周」 and the rest: the toast is centred at the bottom, over the window's right end on a 1366 screen */
-  html:has(.bgm.open) .app.career > .toast { bottom: 80px; }
+  /* 更新日志 is 40px at right 16, bottom 16 (me.css); the record, 42px, one step left of it with their middles level */
+  html[data-shell] .bgm { left: auto; right: 66px; bottom: 15px; }
 }
 
 @media (max-width: 720px) {
-  /* The window's buttons were base.css's 30px where everything else a thumb presses is 40 (2026-09-19, layout audit:
-     上一首 / 播放 / 下一首 / 静音 / 收起 at 30–34px, 「列表」 27px tall). 40px here; two rows still fit a 360px phone. Its
-     words now read the career's phone sizes from the page root (base.css), not 11px. */
+  /* a thumb's 40px, as everything else a thumb presses (2026-09-19, layout audit); the words read the career's phone
+     sizes from the page root (base.css) */
   html .bgm .bgm-ib, html .bgm .bgm-ib.main { width: 40px; height: 40px; }
-  html .bgm .bgm-loop { min-height: 40px; }
+  html .bgm .bgm-loop, html .bgm .bgm-list-t, html .bgm .bgm-list button { min-height: 40px; }
   html .bgm { left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 45; }
-  html .bgm.shut { left: auto; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
-  /* the tab bar is 48px (me.css --dock-h, which is set on the career's own box and does not reach this one) */
+  /* the tab bar is 48px (me.css --dock-h, which is set on the career's own box and does not reach this one); 6px over
+     it, 2px lower than 更新日志's 8, so on a 360×740 phone its top clears the 下一步 card's last pixel (the card ends at
+     645px, the record starts at 646) */
   html[data-shell] .bgm {
     left: calc(8px + env(safe-area-inset-left, 0px));
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-    max-width: calc(100vw - 16px);
+    bottom: calc(54px + env(safe-area-inset-bottom, 0px));
   }
-  html[data-shell] .bgm.shut { left: auto; right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); }
   html:has(.app.career > .nav-scrim) .bgm { display: none; }
-  /* The open window is two rows, 91px, where 更新日志 is one 40px button: the page's last line clears it, the way
-     me.css leaves room under the page for that button (.newcareer, .app.career > .body > .main). Folded, the record
-     stands in the right-hand column and the page keeps its own room. */
-  html:has(.bgm.open) .newcareer { padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
-  html:has(.bgm.open) .app.career > .body > .main { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
-  /* the toast stood above 更新日志 (me.css); the window, open or folded, now reaches higher on each side */
-  html .app.career > .toast { bottom: calc(156px + env(safe-area-inset-bottom, 0px)); }
 }
