@@ -121,7 +121,8 @@
 
 /* the all-ten table */
 table.box { width: 100%; border-collapse: collapse; font-size: var(--t-small); }
-table.box th { text-align: right; color: var(--muted); font-weight: 500; font-size: var(--t-tiny); padding: 2px 4px; }
+/* a header at every table's header size (--t-label): the live all-ten table's was the one at --t-tiny (2026-09-19, layout audit) */
+table.box th { text-align: right; color: var(--muted); font-weight: 500; font-size: var(--t-label); padding: 2px 4px; }
 table.box th:nth-child(1), table.box th:nth-child(2) { text-align: left; }
 table.box td { padding: 3px 4px; border-top: 1px solid var(--line-soft); }
 table.box td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -624,7 +625,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 /* 仪式与小游戏（engine/me/ceremony.ts）：一届生涯里出现四五次的夜晚，
    也是全游戏唯一由你的手而不是角色数值决定的地方。 */
-.cer-story { font-size: 15px; line-height: 1.75; margin: 4px 0 0; }
+/* the body size of every other card (15px was fixed, a half step over the rest at 721–1099) */
+.cer-story { font-size: var(--t-body); line-height: 1.75; margin: 4px 0 0; }
 .cer-game { padding: 4px 0; }
 .cer-hint { font-size: var(--t-small); color: var(--muted); margin: 0 0 10px; text-align: center; }
 .cer-hint b { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -666,7 +668,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
 /* 后加的五个夜晚（engine/me/nights.ts）：颁奖夜的致辞、表演赛的五连靶、发布会和退役的选择 */
 .cer-story { white-space: pre-line; }
-.cer-line { text-align: center; font-size: 15px; line-height: 1.7; margin: 0 0 12px; color: var(--faint); }
+.cer-line { text-align: center; font-size: var(--t-body); line-height: 1.7; margin: 0 0 12px; color: var(--faint); }
 .cer-line span.said { color: var(--text); }
 .cer-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .cer-chip { min-height: 44px; padding: 8px 14px; font-size: 15px; touch-action: manipulation; }
@@ -917,6 +919,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 
   /* -- anything to tap is 40px, the way 破晓 measured it */
   .app.career button, .newcareer button, .app.career select, .newcareer select { min-height: 40px; }
+  /* and a sheet opened from the cover, which stands outside both boxes (更新日志's 关闭 was 38px, 2026-09-19) */
+  .support-card button { min-height: 40px; }
   .app.career button.sm, .newcareer button.sm { min-width: 40px; }
   .app.career tr.clickable > td { height: 44px; }
   /* the home page's hall has summaries too (换设备 was 20px tall), and a summary whose own rule or inline style sets a

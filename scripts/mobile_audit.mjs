@@ -151,6 +151,7 @@ function measure({ phone, root, exclude, mark }) {
     ['面板标题', '.panel-head h2'], ['卡片标题', '.modal-head h3'], ['侧卡标题', '.support-head h3'],
     ['表头', 'thead th'], ['表格正文', 'tbody td:not(.small):not(.tiny)'], ['小按钮', 'button.sm:not(.nav *)'],
     ['标签', '.tag'], ['筹码', '.chip'], ['小字 .small', '.small'], ['注释 .tiny', '.tiny'], ['栏目', '.nav .nav-item'],
+    ['主按钮', 'button.primary:not(.sm):not(.advance-main):not(.hero-go):not(.bgm-ib)'], ['卡片正文', '.modal-body > p:not(.small):not(.tiny)'],
   ]
   const ROLE_ANY = ROLES.map((r) => r[1]).join(',')
   const roles = new Map()
@@ -1010,6 +1011,14 @@ await withSave(null, async (page) => {
   await settle(page, 200)
   if (!/\bon\b/.test((await door.getAttribute('class')) ?? '')) { missing('newcareer', 'new-career:club (the door did not take)'); return }
   await measureAll(page, 'newcareer', 'new-career:club')
+  // the changelog from the cover, which stands outside both the career's box and the cover's (2026-09-19: on a phone it
+  // read the page root's sizes, 12.5 and 11px, where the same sheet inside a career read 13.5 and 12)
+  if (!(await press(page, page.locator('.log-fab'), '更新日志', 'newcareer'))) return
+  await settle(page, 200)
+  if ((await topLayer(page))?.kind === 'sheet' && await page.locator('.log-card').count()) {
+    await measureAll(page, 'newcareer', 'changelog')
+    await clearLayers(page, 'newcareer', { measureLayers: false })
+  } else missing('newcareer', 'changelog')
 })
 
 // ---- the home page with a save on it: a save from before the summary, the confirm on 开新生涯, the card once

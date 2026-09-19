@@ -229,9 +229,12 @@
 @media (min-width: 1100px) {
   :root { --t-body: 15px; --t-small: 14px; --t-tiny: 12.5px; --t-label: 12px; }
 }
-/* a phone does not, and its tables already scroll sideways */
+/* A phone: the career's own sizes (me.css, 「守作者要的 12px」) for the whole page, not only what stands inside the
+   career's box and the cover's. It was 13.5 / 12.5 / 11 / 10 here, and what stands outside both read it: the changelog
+   sheet opened from the cover (12.5 and 11px, where the same sheet in a career is 13.5 and 12), the update bar, the
+   music window (2026-09-19, layout audit). */
 @media (max-width: 720px) {
-  :root { --t-body: 13.5px; --t-small: 12.5px; --t-tiny: 11px; --t-label: 10px; }
+  :root { --t-body: 15px; --t-small: 13.5px; --t-tiny: 12px; --t-label: 12px; }
 }
 /* emphasis inside an explanation is the part that matters — light it up */
 .muted b, .faint b, p.small b, p.tiny b { color: var(--text); font-weight: 650; }

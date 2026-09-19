@@ -212,6 +212,8 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
     if (busy || !ready) return
     let t = 0
     const onResize = () => {
+      // the card at once (a render places it for the new width), the scroll once the window has settled
+      relayout((n) => n + 1)
       window.clearTimeout(t)
       t = window.setTimeout(() => {
         const first = lit.current[0]
