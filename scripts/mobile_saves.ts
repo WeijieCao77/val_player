@@ -11,7 +11,9 @@
  *
  * The numbers pushed in by hand (money, fans, titles, a tryout instead of a
  * direct offer) are test data for the layout, not something the engine would
- * have written.
+ * have written. Fans stay on the game's own scale all the same (me/fans.ts: the
+ * top tier, 这个项目的门面, starts at 3,500): until 2026-09-18 they were set in
+ * the millions, and the pages said 「172390582 万」, a number no career reaches.
  *
  *   npx tsx scripts/mobile_saves.ts [outDir=.cache/mobile-audit/saves] [pre,chal,t1,long]
  */
@@ -177,7 +179,7 @@ if (groups.has('pre')) {
   clearPending(s, hook)
   // big figures on the ladder page
   s.me!.money = 1_234_567
-  s.me!.fans = 2_345_678
+  s.me!.fans = 900 // 全网知名 (me/fans.ts FAN_TIERS): far up for a ladder player
   save('pre-w20', s)
   if (!got.has('tryout')) console.log('  (pre: no tryout found)')
 }
@@ -203,7 +205,7 @@ if (groups.has('chal')) {
   }
   if (s) {
     s.me!.money = 45_678_901
-    s.me!.fans = 1_234_567
+    s.me!.fans = 2_000 // 出圈了
     save('chal-days', s)
 
     // the cards the clock stops on in a pro week
@@ -290,7 +292,7 @@ if (groups.has('long')) {
   const titles = ['VALORANT Champions 2026 · 首尔', 'VCT Masters Toronto 2025', 'VCT 2027: Pacific League Stage 2', 'VCT Masters Santiago 2026']
   me.seasons.forEach((x, i) => { if (x.tier) x.titles.push(titles[i % titles.length]) })
   me.money = 98_765_432
-  me.fans = 12_345_678
+  me.fans = 3_600 // past 3,500, the top tier: the widest the line gets (hundreds of 万)
   if (me.phase === 'pro') startInjury(s, 'wrist', new Rng(9))
   save('long', s)
   {
