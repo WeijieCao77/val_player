@@ -7,8 +7,14 @@ import type { RoundLog } from '../../engine/types'
  * The map this round is being played on.
  *
  * Static on purpose. The official top-down minimap is the floor, and the only
- * things drawn on it are the ones we actually know: the sites and both spawns,
- * placed from the game's own coordinates (data/minimaps.ts).
+ * things drawn on it are the ones we actually know: the sites and both spawns
+ * (data/minimaps.ts). Each site circle sits on the centre of the plant zone
+ * the image tints — reported 2026-09-19, 「AB的位置标的是歪的，不在下包区的中心」:
+ * they had stood where the API prints the words 「A Site」, on Sunset a whole
+ * zone off — and each spawn on the game's callout, kept on the floor.
+ *
+ * The image sets the box and the markers' layer covers exactly that box, so a
+ * percent of the one is a percent of the other at any width.
  *
  * There is deliberately no movement here. The round engine does not track
  * positions, so any arrow would be invented — an earlier version picked a site
@@ -35,7 +41,8 @@ export default function MapSchematic({
   return (
     <div className="map-board">
       <div className="map-real">
-        <img src={minimapImg(map)} alt={`${map} 平面图`} draggable={false} />
+        {/* every minimap is 1024 square: the box keeps its shape before the picture arrives */}
+        <img src={minimapImg(map)} alt={`${map} 平面图`} width={1024} height={1024} draggable={false} />
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {siteKeys.map((k) => {
             const p = sites[k]

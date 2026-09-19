@@ -101,8 +101,10 @@
 
 /* the whiteboard in a live match */
 .map-board { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: center; margin: 6px 0 10px; }
-.map-real { position: relative; width: 300px; height: 300px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.map-real img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+/* the picture sets the box and the markers' layer covers exactly that box (2026-09-19): the circles are percent
+   of the image, so they must never be spread over a box the image is letterboxed inside */
+.map-real { position: relative; width: 300px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.map-real img { display: block; width: 100%; height: auto; }
 .map-real svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .map-spawn-atk { fill: var(--warn); stroke: #000; stroke-width: .5; }
 .map-spawn-def { fill: var(--def); stroke: #000; stroke-width: .5; }
@@ -113,7 +115,7 @@
 .map-site-label { font-size: 6.5px; font-weight: 800; text-anchor: middle; fill: #fff; paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 1.1px; }
 .map-read { font-size: var(--t-small); line-height: 1.6; }
 .map-read .win { color: var(--win); } .map-read .loss { color: var(--loss); }
-@media (max-width: 720px) { .map-board { grid-template-columns: 1fr; } .map-real { width: 100%; height: auto; aspect-ratio: 1; } }
+@media (max-width: 720px) { .map-board { grid-template-columns: 1fr; } .map-real { width: 100%; } }
 
 /* post-match attribution: the terms the engine actually added up */
 .edge-list { display: grid; gap: 2px; }
