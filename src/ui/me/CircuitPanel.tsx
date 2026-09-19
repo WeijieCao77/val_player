@@ -127,7 +127,8 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
       )}
       {fixtures.length > 0 && (
         <details style={{ borderTop: '1px solid var(--line)' }}>
-          <summary className="small muted" style={{ cursor: 'pointer', padding: '9px 13px' }}>比赛记录（{fixtures.length} 场）</summary>
+          {/* 11px above and below, as every summary in the career has on a phone (me.css): its own 9px made it 38px tall, under a thumb's 40 */}
+          <summary className="small muted" style={{ cursor: 'pointer', padding: '11px 13px' }}>比赛记录（{fixtures.length} 场）</summary>
           <div className="table-wrap">
             <table>
               <tbody>

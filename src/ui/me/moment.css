@@ -82,8 +82,9 @@
 .mo-list li svg { width: 24px; height: 24px; color: var(--tone); }
 .mo-list li b { display: block; }
 .mo-list li small { display: block; color: var(--muted); font-size: var(--t-small, 13.5px); line-height: 1.5; }
-/* the scale's small step (12.5 on a monitor, 12 on a phone), not a fixed 12.5 that sat between a phone's steps */
-.mo-list li em { font-style: normal; font-size: var(--t-tiny, 12px); color: var(--pos-ink); text-align: right; }
+/* a reward in the small size, as the line above it: at 12.5px it sat between the game's two small steps (12 and
+   13.5), under what a phone reads (the phone audit, 2026-09-18, on the 「还有 N 项」 card) */
+.mo-list li em { font-style: normal; font-size: var(--t-small, 13.5px); color: var(--pos-ink); text-align: right; }
 /* an awards night's names: the winner edged in gold, my own row warmed */
 .mo-list li.win { border-color: var(--gold); }
 .mo-list li.win em { color: var(--gold); font-weight: 700; }
