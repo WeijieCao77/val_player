@@ -456,13 +456,14 @@ export class MeMatch {
     const drawn = result.mapsWonA === result.mapsWonB
 
     const sum: MapLine = { kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0, clutches: 0, rounds: 0, acs: 0 }
-    const acsBy: Record<string, { d: number; r: number }> = {}
+    const acsBy: Record<string, { d: number; r: number; k: number; x: number; a: number }> = {}
     for (const ms of result.maps) {
       for (const [pid, l] of Object.entries(ms.lines)) {
         if (!mineIds.includes(pid)) continue
-        const t = (acsBy[pid] ??= { d: 0, r: 0 })
+        const t = (acsBy[pid] ??= { d: 0, r: 0, k: 0, x: 0, a: 0 })
         t.d += l.damage
         t.r += l.rounds
+        t.k += l.kills; t.x += l.deaths; t.a += l.assists
         if (pid === me.id) {
           sum.kills += l.kills; sum.deaths += l.deaths; sum.assists += l.assists
           sum.damage += l.damage; sum.firstKills += l.firstKills; sum.firstDeaths += l.firstDeaths
@@ -470,9 +471,16 @@ export class MeMatch {
         }
       }
     }
+    // my place on my own side is read the way the box score reads it: by 评分, as that table sorts and prints it
+    // (me/postmatch.ts, rounded to two places), ACS only between equal ratings. It used to be ACS alone, and the line
+    // under the score said 「评分 0.86 · 队内第 3」 over a table where 0.86 was second (reported 2026-09-19)
     const order = Object.entries(acsBy)
-      .map(([pid, t]) => ({ pid, acs: t.r ? (t.d / t.r) * 1.45 : 0 }))
-      .sort((a, b) => b.acs - a.acs)
+      .map(([pid, t]) => ({
+        pid,
+        acs: t.r ? (t.d / t.r) * 1.45 : 0,
+        rating: t.r ? Math.round(ratingOf({ kills: t.k, deaths: t.x, assists: t.a, rounds: t.r }) * 100) / 100 : 0,
+      }))
+      .sort((a, b) => b.rating - a.rating || b.acs - a.acs)
     const rank = started ? order.findIndex((x) => x.pid === me.id) + 1 : 0
     const acs = sum.rounds ? (sum.damage / sum.rounds) * 1.45 : 0
     const rating = started ? ratingOf(sum) : 0

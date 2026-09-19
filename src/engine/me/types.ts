@@ -217,7 +217,7 @@ export interface MeMatchRecord {
   /** lost, but posted the best line on my side — the scouts read that */
   carried: boolean
   nodes: NodeLogEntry[]
-  /** where I ranked by ACS on my own side, 1 = best; 0 when I did not play */
+  /** where I ranked on my own side by 评分 (ACS between equal ratings), as the box score sorts it; 1 = best, 0 when I did not play */
   rank: number
   /** the rounds that were about me — engine highlights with my name on them.
       Until 2026-09-18 it also held what my own calls did, as text; those are
