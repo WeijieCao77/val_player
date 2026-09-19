@@ -90,6 +90,11 @@
 .tile.rank > small, .tile.rank > b { grid-column: 2; }
 /* a tier's icon, the client's own (ui/me/art/emblem.tsx) */
 .rank-badge { display: inline-block; flex: none; vertical-align: middle; object-fit: contain; user-select: none; }
+/* 辐能战魂's icon is pale gold on a pale glow: on the light and cream grounds it all but vanished (the layout sweep,
+   2026-09-19). A thin dark edge there; the dark ground needs none */
+[data-theme="light"] .rank-badge[src*="radiant"], [data-theme="cream"] .rank-badge[src*="radiant"] {
+  filter: drop-shadow(0 0 1px rgba(60, 40, 0, .7)) drop-shadow(0 1px 2px rgba(60, 40, 0, .35));
+}
 /* the 天梯 panel on 本周: the badge at the left of the big rank line */
 .ladder-now { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
 .ladder-now > p { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
