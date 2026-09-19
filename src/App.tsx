@@ -7,6 +7,7 @@ import NewCareer from './ui/me/NewCareer'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
 import MusicPlayer from './ui/me/MusicPlayer'
+import Support from './ui/Support'
 
 /**
  * The site is the player career and nothing else. The manager game and the
@@ -123,6 +124,8 @@ export default function App() {
         </>
       )}
       <MusicPlayer />
+      {/* 支持作者: the same corner button Val Manager has, beside 更新日志 on both pages (me.css .me-support) */}
+      <Support career={!!open} />
     </>
   )
 }

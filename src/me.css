@@ -159,6 +159,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
    corner button sits under it; the page leaves room under its last line. A phone's corner is further up (below). */
 .app.career > .log-fab { right: 16px; bottom: 16px; width: 40px; height: 40px; padding: 0; justify-content: center; }
 .app.career > .log-fab .lbl { display: none; }
+/* 支持作者 (ui/Support.tsx, mounted beside the game in App.tsx): on the cover page it is base.css's pill under 更新日志;
+   inside a career 更新日志 is the round button in the corner, so this is a round button to its left */
+.me-support.in-career { right: 64px; bottom: 16px; width: 40px; height: 40px; padding: 0; justify-content: center; }
+.me-support.in-career .lbl { display: none; }
 .app.career > .body > .main { padding-bottom: 72px; }
 
 /* the week board: the card is the button */
@@ -962,6 +966,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 @media (max-width: 720px) {
   .app.career > .log-fab { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(var(--dock-h) + var(--safe-b) + 8px); }
   .app.career:has(> .nav-scrim) > .log-fab { display: none; }
+  .me-support.in-career { right: calc(58px + env(safe-area-inset-right, 0px)); bottom: calc(var(--dock-h, 48px) + var(--safe-b, env(safe-area-inset-bottom, 0px)) + 8px); }
+  body:has(.app.career > .nav-scrim) .me-support { display: none; }
 }
 
 /* 开局页（建档页）也有这颗「更新日志」，和生涯里是同一个组件、同一套样式（PlayerGame.tsx）：
@@ -972,6 +978,8 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
    上面（base.css 里「a button floating 68px up from nothing just looks lost」说的就是这个）。 */
 @media (max-width: 720px) {
   body:has(.newcareer) .log-fab { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  /* …and 支持作者 sits to its left rather than under it */
+  body:has(.newcareer) .me-support { right: 70px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* a club background on a ladder start: visible, greyed, with the reason */

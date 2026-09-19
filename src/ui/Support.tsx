@@ -31,7 +31,8 @@ function Qr() {
   )
 }
 
-export default function Support({ raised = false }: { raised?: boolean }) {
+/** `career`: inside a career the corner already holds the round 更新日志 button, so this one is a round button beside it (me.css) */
+export default function Support({ raised = false, career = false }: { raised?: boolean; career?: boolean }) {
   const [open, setOpen] = useState(false)
   const [hidden, setHidden] = useState(() => {
     try { return localStorage.getItem(DISMISSED) === '1' } catch { return false }
@@ -55,10 +56,10 @@ export default function Support({ raised = false }: { raised?: boolean }) {
     <>
       {!hidden && (
         <button
-          className={`support-fab${open ? ' on' : ''}${raised ? ' raised' : ''}`}
+          className={`support-fab me-support${career ? ' in-career' : ''}${open ? ' on' : ''}${raised ? ' raised' : ''}`}
           onClick={() => setOpen((x) => !x)}
           aria-expanded={open}
-          title="游戏永久免费——如果你愿意支持一下"
+          title="喜欢的话，可以支持一下作者"
         >
           <span className="ico" aria-hidden="true">⚡</span>
           <span className="lbl">支持作者</span>
@@ -70,13 +71,12 @@ export default function Support({ raised = false }: { raised?: boolean }) {
           <div className="support-veil" onClick={() => setOpen(false)} />
           <div className="support-card" role="dialog" aria-label="支持作者">
             <div className="support-head">
-              <h3>游戏是免费的，以后也是</h3>
+              <h3>支持作者</h3>
               <button className="sm ghost" onClick={() => setOpen(false)}>关闭 ✕</button>
             </div>
             <p className="small muted">
-              这个游戏我做着玩，也做给群里的各位玩，<b>所有内容永久免费，不卖数值、不卖抽卡</b>。
-              如果它让你开心过，欢迎请我喝杯咖啡——不请也完全没关系，
-              继续在群里提 bug 和建议就是最大的支持。
+              选手生涯还是测试版，做给群里的各位玩。喜欢的话可以支持一下；
+              不支持也没关系，在群里提 bug 和建议就是支持。
             </p>
             <div className="support-body">
               <Qr />
@@ -85,14 +85,17 @@ export default function Support({ raised = false }: { raised?: boolean }) {
                   打开爱发电 ↗
                 </a>
                 <p className="tiny faint" style={{ margin: 0 }}>
-                  手机扫码，或直接点上面的按钮。<br />
-                  ¥10/月 可以提前玩到新版本、进专属群；也可以自选金额，一次就好。
+                  手机扫码，或点上面的按钮。<br />
+                  ¥10/月 可进专属群，抢先体验正在做的新内容。也可以自选金额，一次即可。
                 </p>
               </div>
             </div>
             <div className="support-foot">
               <button className="sm ghost" onClick={hide}>不用了，别再提示</button>
-              <span className="tiny faint">数据来自 vlr.gg / Liquipedia，游戏内容为程序模拟，与现实无关</span>
+              <span className="tiny faint">
+                作者：猪之家 · 小红书/抖音 @点点点点点点点点 · @Greenle4f<br />
+                数据来自 vlr.gg / Liquipedia，游戏内容为程序模拟，与现实无关
+              </span>
             </div>
           </div>
         </>
