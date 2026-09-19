@@ -3,6 +3,7 @@ import type { GameState, Player, Team } from '../types'
 import { importBlock } from '../imports'
 import { hasPlace } from '../timeline'
 import { formatOf, regionIn } from '../era'
+import { readDraws } from '../circuit'
 import type { Invite, PitchOut, PitchReply, PitchWhy } from './types'
 import { pushLog } from './log'
 import { pop, push } from './pending'
@@ -341,11 +342,16 @@ export function pitchTargets(state: GameState): { rows: PitchRow[]; abroadShut: 
   const ctx = ctxOf(state)
   const rows: PitchRow[] = []
   let abroadShut = 0
-  for (const t of pitchPool(state)) {
-    const abroad = abroadClub(state, t)
-    if (abroad && !me.flags.lang) { abroadShut++; continue }
-    rows.push({ team: t, group: groupOf(state, t), odds: pitchOdds(state, t, ctx), why: pitchClubBlock(state, t), abroad })
-  }
+  // every club's window reads the draws of the events ahead of it, and those draws are the same for every club: one
+  // read of them for the whole list (circuit.ts readDraws; reported 2026-09-18, the transfer page's first opening
+  // froze a 2029 career for nine seconds)
+  readDraws(state, () => {
+    for (const t of pitchPool(state)) {
+      const abroad = abroadClub(state, t)
+      if (abroad && !me.flags.lang) { abroadShut++; continue }
+      rows.push({ team: t, group: groupOf(state, t), odds: pitchOdds(state, t, ctx), why: pitchClubBlock(state, t), abroad })
+    }
+  })
   rows.sort((a, b) => Number(a.abroad) - Number(b.abroad) || GROUP_ORDER[a.group] - GROUP_ORDER[b.group]
     || Number(!!a.why) - Number(!!b.why) || b.odds.pct - a.odds.pct || a.team.name.localeCompare(b.team.name))
   return { rows, abroadShut }

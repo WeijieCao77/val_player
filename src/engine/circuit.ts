@@ -1569,9 +1569,24 @@ function planSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; sw
     else if (seat.from === 'qualified') take(i, s?.qualified?.[L]?.[seat.k])
     else if (seat.from === 'place') take(i, state.comps[`ev:${seat.event}`]?.finished[seat.k])
   })
-  const who = (seat: Seat | null): Team[] => Object.values(state.teams)
-    .filter((t) => !used.has(t.id) && planEligible(state, ev, t, seat))
-    .sort((a, b) => a.tier - b.tier || b.rating - a.rating || a.id.localeCompare(b.id))
+  // Who may take a place, best first, over every club in the world: read once for each thing planEligible reads off
+  // the place (whether it is a placing, and its league) rather than once for every place left empty. Reported
+  // 2026-09-18: a 2029 Champions or Masters drawn ahead has most of its places empty, each one a pass over some nine
+  // hundred clubs, and the transfer page reads such a draw for every club it lists — its first opening froze the page
+  // for nine seconds. The order is whole (the id settles a tie), so the first not yet taken is who the filtered list
+  // would have put first.
+  const rank = (a: Team, b: Team): number => a.tier - b.tier || b.rating - a.rating || a.id.localeCompare(b.id)
+  const ranked = new Map<string, Team[]>()
+  const who = (seat: Seat | null): Team[] => {
+    if (LONG_WAY) return Object.values(state.teams).filter((t) => !used.has(t.id) && planEligible(state, ev, t, seat)).sort(rank)
+    const key = seat?.from === 'place' ? `place:${seat.league ?? ''}` : '-'
+    let hit = ranked.get(key)
+    if (!hit) {
+      hit = Object.values(state.teams).filter((t) => planEligible(state, ev, t, seat)).sort(rank)
+      ranked.set(key, hit)
+    }
+    return hit.filter((t) => !used.has(t.id))
+  }
   const open = plan.seats.map((seat, i) => ({ seat, i })).filter((x) => x.seat.from === 'pool').sort((a, b) => a.seat.k - b.seat.k)
   if (open.length) {
     const entered = who(null)
@@ -1830,7 +1845,60 @@ export function drawStanding(state: GameState, comp: Competition, teamId: string
  * the qualifier for a month as the club's next event, and then its group round
  * over Stage 3's (engine/me/nextup.ts, scripts/check_nextup.ts seed 11).
  */
-export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): { standing: DrawStanding; day?: number; from?: number; via?: 'fill' | 'route' } | null {
+export function drawOutlook(state: GameState, comp: Competition, teamId: string, depth = 0): Outlook | null {
+  const read = READ?.state === state ? READ : null
+  if (!read) return outlookOf(state, comp, teamId, depth)
+  const key = `${comp.key}:${teamId}:${depth}`
+  if (!read.outlook.has(key)) read.outlook.set(key, outlookOf(state, comp, teamId, depth))
+  return read.outlook.get(key)!
+}
+
+type Outlook = { standing: DrawStanding; day?: number; from?: number; via?: 'fill' | 'route' }
+
+/**
+ * One read of many draws (readDraws): the state it is of, each event's draw as it stands today by event, and each
+ * club's outlook by event, club and depth.
+ */
+interface DrawRead {
+  state: GameState
+  seats: Map<string, DrawNow>
+  outlook: Map<string, Outlook | null>
+}
+let READ: DrawRead | null = null
+
+/**
+ * Many clubs asked about many events at once: inside `read`, each event's draw as it stands today (drawNow) is worked
+ * out once, and each club's outlook for an event once at each depth, however often they are asked. The transfer page
+ * asks every club it lists about every event of the season ahead (me/window.ts busyFrom, me/selfpitch.ts
+ * pitchTargets), and an outlook reads the draws of the events that feed the event (couldStillTake) — the same draws
+ * for every club. Reported 2026-09-18: on a 2029 career the page's first opening froze it for nine seconds, the same
+ * draws worked out again for each of some eighty clubs.
+ *
+ * Nothing in the state changes during a read, so each answer is the one the reads one by one would give; nothing is
+ * kept past it. A read inside a read of the same state is the same read.
+ */
+export function readDraws<T>(state: GameState, read: () => T): T {
+  if (LONG_WAY || READ?.state === state) return read()
+  const was = READ
+  READ = { state, seats: new Map(), outlook: new Map() }
+  try {
+    return read()
+  } finally {
+    READ = was
+  }
+}
+
+let LONG_WAY = false
+/**
+ * For scripts/check_drawread.ts: every draw worked out the long way, as before 2026-09-18 — no read kept from one
+ * club's question to the next (readDraws), and every empty place of a draw of the new format asking every club in
+ * the world again (planSeeds) — to hold the quick way to exactly the same answers.
+ */
+export function drawTheLongWay(on: boolean): void {
+  LONG_WAY = on
+}
+
+function outlookOf(state: GameState, comp: Competition, teamId: string, depth: number): Outlook | null {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
   const team = state.teams[teamId]
@@ -1845,8 +1913,14 @@ export function drawOutlook(state: GameState, comp: Competition, teamId: string,
 /** An event's draw as it stands today, as begin would make it (seedsFor, 方案 C's seat, leagueOut): read once, however many clubs are asked. */
 interface DrawNow { seats: (string | null)[]; moved: boolean }
 function drawNow(state: GameState, ev: CEvent): DrawNow {
+  // inside a read of many (readDraws), each event's once
+  const read = READ?.state === state ? READ : null
+  const hit = read?.seats.get(ev.id)
+  if (hit) return hit
   const drawn = seedsFor(state, ev)
-  return { seats: leagueOut(state, ev, takeSeat(state, ev, drawn.seeds)), moved: drawn.swaps.length > 0 }
+  const out = { seats: leagueOut(state, ev, takeSeat(state, ev, drawn.seeds)), moved: drawn.swaps.length > 0 }
+  read?.seats.set(ev.id, out)
+  return out
 }
 
 /**

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useGame } from './ctx'
 import { Crest, Panel, fmtDay, moneyIn } from './common'
 import Rich from './rich'
@@ -408,6 +409,9 @@ function ContactBlock() {
   const pay = payOf(game)
   const book = pitchBook(game)
   const block = pitchBlock(game)
+  // the list is built when it is opened, not with the page: it reads every club's window, and every club's window the
+  // draws of the season ahead (reported 2026-09-18: shut, it still froze a 2029 career's first opening of this page)
+  const [picking, setPicking] = useState(false)
   return (
     <div className="sp-contact">
       <p className="small" style={{ margin: '12px 0 4px' }}>
@@ -418,9 +422,9 @@ function ContactBlock() {
       </p>
       <PitchSent />
       {block && !book.out && <p className="tiny warn" style={{ margin: '4px 0' }}>{block}。</p>}
-      <details className="sp-group">
+      <details className="sp-group" onToggle={(e) => setPicking(e.currentTarget.open)}>
         <summary>挑一家接触</summary>
-        <PitchList contract />
+        {picking && <PitchList contract />}
       </details>
     </div>
   )
