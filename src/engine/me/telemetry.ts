@@ -55,7 +55,10 @@ import type { CompClass } from './compclass'
 import type { RetireWhy } from './endings'
 import type { StartPoint } from './career'
 
-const ENDPOINT = '/api/e'
+// Relative to the page, not to the domain: the game is also served at vctgames.com/player/ (passed through by
+// Val Manager's server), where '/api/e' would be the OTHER game's ingest. './api/e' is this server's at both
+// addresses — /api/e at the root, /player/api/e there. The page never changes its own path, so it stays so.
+const ENDPOINT = './api/e'
 const ID_KEY = 'val_player:vid'
 const SEQ_KEY = 'val_player:vseq'
 

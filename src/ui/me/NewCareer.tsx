@@ -140,7 +140,7 @@ export default function NewCareer({
   const cover = (
     <>
       {/* the cover carries the title; the heading stays for screen readers */}
-      <img className="nc-cover" src="/cover.svg" alt="" width={1200} height={630} />
+      <img className="nc-cover" src={`${import.meta.env.BASE_URL}cover.svg`} alt="" width={1200} height={630} />
       <h1 className="sr-only">无畏契约 · 选手生涯 demo</h1>
     </>
   )
