@@ -91,6 +91,21 @@ function place(hole: Box | null, ch: number): { left: number; top: number; width
   return { left: (vw - width) / 2, top: low ? EDGE : vh - ch - EDGE, width }
 }
 
+/**
+ * The card never leaves the screen, wherever the lit part has gone. Reported 2026-09-19 by the layout audit
+ * (scripts/mobile_audit.mjs, off-screen): a window turned from 1024 to 390 wide with 「推进」 lit put the card at
+ * 1705px on an 844px screen, following a ring the page had scrolled away, and its 下一步 could not be reached.
+ */
+function onScreen(p: { left: number; top: number; width: number }, ch: number): { left: number; top: number; width: number } {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  return {
+    left: clamp(p.left, EDGE, Math.max(EDGE, vw - p.width - EDGE)),
+    top: clamp(p.top, EDGE, Math.max(EDGE, vh - ch - EDGE)),
+    width: p.width,
+  }
+}
+
 export default function Tour({ screen, go, blocked }: { screen: string; go: (s: string) => void; blocked: boolean }) {
   const { game } = useGame()
   const { kind, seq } = useOpenTour()
@@ -190,6 +205,27 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, ready, i])
 
+  // a window that changes size under the tour (a phone turned, a window dragged narrower): the lit part brought back
+  // into view as a step does, and the card placed again for the new width (onScreen above)
+  const [, relayout] = useState(0)
+  useEffect(() => {
+    if (busy || !ready) return
+    let t = 0
+    const onResize = () => {
+      window.clearTimeout(t)
+      t = window.setTimeout(() => {
+        const first = lit.current[0]
+        if (first?.isConnected) {
+          const tall = first.getBoundingClientRect().height > window.innerHeight * 0.5
+          first.scrollIntoView({ block: tall ? 'start' : 'center', inline: 'nearest' })
+        }
+        relayout((n) => n + 1)
+      }, 120)
+    }
+    window.addEventListener('resize', onResize)
+    return () => { window.removeEventListener('resize', onResize); window.clearTimeout(t) }
+  }, [busy, ready, i])
+
   // Esc skips, the arrows walk; Enter is the focused 下一步 itself
   useEffect(() => {
     if (busy) return
@@ -223,7 +259,7 @@ function Run({ kind, screen, go, busy }: { kind: TourKind; screen: string; go: (
 
   if (busy || !step) return null
   const spot = !!step.at?.length && !!hole
-  const pos = place(spot ? hole : null, ch)
+  const pos = onScreen(place(spot ? hole : null, ch), ch)
   return (
     <>
       <div className={`mt-veil${spot ? '' : ' dim'}`} aria-hidden="true" />

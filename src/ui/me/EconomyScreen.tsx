@@ -63,16 +63,22 @@ export default function EconomyScreen() {
       </div>
       <div>
         <Panel title="外设">
-          {GEAR_SLOTS.map((s) => {
-            const t = me.gear[s.key] ?? 0
-            return (
-              <div key={s.key} className="shop-row">
-                <span className="nm">{s.name}</span>
-                <span className="tag">{GEAR_TIER_CN[t]}</span><span className="small md">{gearModel(s.key, t)}</span>
-                {t < 2 && <button className="sm" onClick={() => act(buyGear(game, s.key))}>换成 {gearModel(s.key, t + 1)} {money(GEAR_PRICE[t + 1])}</button>}
-              </div>
-            )
-          })}
+          {/* five rows in one set of columns, one line each where the panel has the room and two lines each where it
+              has not (me.css .shop-list) — never one row broken alone */}
+          <div className="shop-list">
+            {GEAR_SLOTS.map((s) => {
+              const t = me.gear[s.key] ?? 0
+              const now = gearModel(s.key, t)
+              return (
+                <div key={s.key} className="shop-row">
+                  <span className="nm">{s.name}</span>
+                  <span className="tag">{GEAR_TIER_CN[t]}</span>
+                  <span className="small md" title={now}>{now}</span>
+                  {t < 2 && <button className="sm" onClick={() => act(buyGear(game, s.key))}>换成 {gearModel(s.key, t + 1)} {money(GEAR_PRICE[t + 1])}</button>}
+                </div>
+              )
+            })}
+          </div>
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>{GEAR_EFFECT}</p>
         </Panel>
         <Panel title="课程">

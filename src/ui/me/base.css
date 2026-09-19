@@ -2167,6 +2167,8 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
   border-bottom: 1px solid var(--line-soft); padding-bottom: 5px;
 }
 .log-list header b { font-size: var(--t-body); }
+/* the date keeps its line: beside a two-line title it broke into 「2026-」 over 「09-18」 (2026-09-19, layout audit) */
+.log-list header > span { flex: none; white-space: nowrap; }
 .log-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .log-list li {
   display: flex; gap: 8px; align-items: flex-start;

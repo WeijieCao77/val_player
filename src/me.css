@@ -182,8 +182,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .node-line.ok { border-left-color: var(--win); }
 .node-line.bad { border-left-color: var(--loss); }
 
-.attr-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) 64px 112px; gap: 8px; align-items: center; padding: 4px 0; }
-.attr-row .k { color: var(--muted); font-size: var(--t-small); }
+/* the label column holds four characters at the label's own size: 「战术素养」 broke into 「战术素 / 养」 in the 48px and 44px columns
+   a tablet and a phone gave it (2026-09-19, layout audit); the two-character attributes leave the rest of it empty */
+.attr-row { display: grid; grid-template-columns: calc(var(--t-small) * 4 + 2px) minmax(0, 1fr) 64px 112px; gap: 8px; align-items: center; padding: 4px 0; }
+.attr-row .k { color: var(--muted); font-size: var(--t-small); white-space: nowrap; }
 .attr-row .v { font-variant-numeric: tabular-nums; font-weight: 650; text-align: right; white-space: nowrap; }
 .attr-row .v em { font-style: normal; font-weight: 400; color: var(--faint); }
 .attr-row .xp { font-size: var(--t-tiny); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -199,7 +201,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .attr-next { height: 2px; background: var(--well); border-radius: 1px; overflow: hidden; }
 .attr-next > i { display: block; height: 100%; background: var(--muted); opacity: .75; }
 .attr-row.capped .attr-next > i { background: var(--gold); }
-@media (max-width: 560px) { .attr-row { grid-template-columns: 44px minmax(0, 1fr) 56px 92px; gap: 6px; } }
+@media (max-width: 560px) { .attr-row { grid-template-columns: calc(var(--t-small) * 4 + 2px) minmax(0, 1fr) 56px 92px; gap: 6px; } }
 
 /* 怎么破: the attributes at their ceiling, each with its own way through */
 .breaks { margin: 10px 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-left: 2px solid var(--gold); border-radius: var(--radius); }
@@ -699,11 +701,28 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 @media (max-width: 900px) {
   .app.career .main .grid[style] { grid-template-columns: minmax(0, 1fr) !important; }
 }
-/* 商店一行：名字、档位、型号，按钮放不下就折到下一行，不出屏幕 */
-.shop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 0; }
-.shop-row .nm { min-width: 56px; }
-.shop-row .md { flex: 1 1 8em; min-width: 0; }
-.shop-row button.sm { white-space: normal; text-align: left; margin-left: auto; }
+/* 经济 · 外设：名字 | 档位 | 型号 | 按钮，五行同一套栏。
+   reported 2026-09-18 by the author (1280 wide, the page in two columns): the row was a wrapping flex line, and
+   鼠标's button 「换成 罗技 G PRO X SUPERLIGHT 2 ¥2,000」, the longest of the five, dropped alone onto a second line,
+   right-aligned under its row, while 键盘 … 椅子 stayed on one. Now the columns are fixed: the name and the tier take
+   the same width in every row, the model gives way (an ellipsis, the whole name in its title), the button keeps its
+   words. Where the panel is too narrow for the longest button beside a readable model — a laptop's two columns, a
+   tablet, a phone; the panel's own width, not the window's — every row goes to two lines together, the button under
+   the model. */
+.shop-list { container-type: inline-size; }
+.shop-row { display: grid; grid-template-columns: 3.6em 3.8em minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; padding: 5px 0; }
+.shop-row .tag { justify-self: start; }
+.shop-row .md { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shop-row > button.sm { grid-column: 4; justify-self: end; }
+@container (max-width: 38em) {
+  .shop-row { grid-template-columns: 3.6em 3.8em minmax(0, 1fr); }
+  .shop-row .md { white-space: normal; overflow-wrap: anywhere; }
+  .shop-row > button.sm { grid-column: 2 / -1; justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+}
+/* a phone: the button takes the row's whole width, so 「换成 罗技 G PRO X SUPERLIGHT 2 ¥2,000」 stays on one line */
+@container (max-width: 24em) {
+  .shop-row > button.sm { grid-column: 1 / -1; }
+}
 .clout-row > span:first-child { min-width: 0; }
 .clout-row button.sm { flex: none; }
 /* 对位挑战的八项对照，比赛里两边的五个人：手机上改成两列 / 一列 */
@@ -725,8 +744,10 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
   .career .mapline .mono { white-space: nowrap; width: auto !important; }
 }
 /* 平板宽度（768 左右）「我的」还是两栏，一栏只剩两百五十像素：八项的条被挤成 0，文字压在条上。条留 60px 底，文字按自己的宽度，进度说明让位（它有省略号和 title） */
+/* 数值那一栏定宽（三个字「世界级」或「83/88」）：按自己的宽度时，每一行的条长短跟着字走，「一流」那行的条比「职业级」那行长一截，
+   同一把尺子上的八项就比不了了（2026-09-19，排版筛查，1024 宽） */
 @media (min-width: 561px) and (max-width: 1100px) {
-  .career .attr-row { grid-template-columns: 48px minmax(60px, 1fr) auto minmax(0, 104px); gap: 6px; }
+  .career .attr-row { grid-template-columns: calc(var(--t-small) * 4 + 2px) minmax(60px, 1fr) calc(var(--t-body) * 3 + 4px) minmax(0, 104px); gap: 6px; }
 }
 
 /* ================================================================ 手机

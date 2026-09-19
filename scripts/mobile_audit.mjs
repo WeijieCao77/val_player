@@ -17,6 +17,31 @@
  *   tap<40         on a phone, a button, select, link or clickable row under 40px either way
  *   squashed       at any width, a button, select or link under 8px either way
  *
+ * and the typesetting (added 2026-09-18, the author with a screenshot of 经济 · 外设 at 1280:
+ * 「筛查所有的布局文字大小等视觉排版问题，图中的第一行就明显出现了文字放不下被挤去第二行的情况」 — the
+ * 鼠标 row's 「换成 罗技 G PRO X SUPERLIGHT 2 ¥2,000」 dropped under its row while the other four stayed on one line):
+ *
+ *   row-mismatch   rows of one list or table (same element, same children) that take a different number of
+ *                  lines: one row breaks where its siblings do not
+ *   wrap-split     a flex row whose last control (a button, a tag) fell onto a line of its own
+ *   label-wrap     a button, chip, tag or header whose own words run onto a second line
+ *   num-wrap       a figure (¥2,000 · 1.2万 · 13–9) broken over two lines
+ *   overlap        two boxes side by side in one parent drawn over each other
+ *   off-screen     text past the window's left or right edge, not in anything that scrolls
+ *   scroll-x       something that scrolls down (the page, a card) scrolling sideways too, or a sideways
+ *                  scroller that is not a table
+ *   font<scale     at a computer's width, text under the type scale's smallest step (base.css --t-label / --t-tiny)
+ *   svg-font       words drawn in a picture (a radar's numbers, a map's letters) under that step at the size drawn
+ *   ellipsis-bare  an ellipsis with no title to read the rest from
+ *
+ * and, across every screen at one width, the same role (a panel's title, a table's header, a card's title,
+ * a small button, a tag) in more than one size: the report's 字号 section.
+ *
+ *   --layout         the layout run: 1920×1000 … 360×740, every scene, the checks above
+ *   --themes         also measure 浅 and 米 at 1366 and 390 (theme-free layout, but a sheet can hide a rule)
+ *   --evidence       a picture of each new flag, the first time it shows (report's 明细 links it)
+ *   --widths=WxH,…   any other set of sizes
+ *
  * and, from a keyboard, each card in front of the page (the list of 键盘 at the
  * end of the report): a dialog with a name, the focus inside it — on its first
  * answer when it asks something — Tab and Shift+Tab going round inside it, the
@@ -62,19 +87,44 @@ const BASE = process.env.AUDIT_URL ?? 'http://localhost:5190/'
 const ROOT = '.cache/mobile-audit'
 const OUT = `${ROOT}/${label}`
 mkdirSync(`${OUT}/shots`, { recursive: true })
+if (args.includes('--evidence')) mkdirSync(`${OUT}/ev`, { recursive: true })
 
-const WIDTHS = [320, 360, 375, 390, 414, 430, 768, 820, 1024, 1280, 1440]
+const LAYOUT = args.includes('--layout')
+const THEMES_RUN = args.includes('--themes')
+const EVIDENCE = args.includes('--evidence')
+const SIZES_ARG = args.find((a) => a.startsWith('--widths='))?.slice(9)
+// the layout run's sizes (2026-09-18): the common monitors and laptops, a tablet upright, four phones
+const LAYOUT_SIZES = ['1920x1000', '1600x900', '1366x768', '1280x720', '1024x768', '768x1024', '414x896', '390x844', '375x812', '360x740']
+const SIZES = SIZES_ARG ? SIZES_ARG.split(',') : LAYOUT ? LAYOUT_SIZES : null
+const HEIGHT = new Map((SIZES ?? []).map((s) => s.split('x').map(Number)))
+const WIDTHS = SIZES ? [...HEIGHT.keys()] : [320, 360, 375, 390, 414, 430, 768, 820, 1024, 1280, 1440]
 // every 16px across the range, for the states a sweep covers: the in-between widths no preset names
 const SWEEP_WIDTHS = Array.from({ length: 71 }, (_, i) => 320 + i * 16)
-const heightOf = (w) => (w <= 430 ? 812 : w <= 820 ? 1024 : 900)
+const heightOf = (w) => HEIGHT.get(w) ?? (w <= 430 ? 812 : w <= 820 ? 1024 : 900)
+/** the grounds measured at a width: the dark one everywhere, 浅 and 米 as well at 1366 and 390 with --themes */
+const THEME_WIDTHS = new Set([1366, 390])
+const themesAt = (w) => (THEMES_RUN && THEME_WIDTHS.has(w) ? ['dark', 'light', 'cream'] : ['dark'])
+/** the width a phone is measured at when the page stays on one after a scene */
+const REST_W = WIDTHS.includes(375) ? 375 : WIDTHS[WIDTHS.length - 1]
 // the player game's own key (src/engine/me/save.ts); a career under the old manager-namespace key is copied across on first load
 const SAVE_KEY = 'val_player:save:autosave'
 
 /* ------------------------------------------------------------------ in the page */
 
-function measure({ phone, root, exclude }) {
+function measure({ phone, root, exclude, mark }) {
   const W = window.innerWidth
   const out = []
+  // --evidence: each flag's element carries data-aud="<n>" so the run can take its picture
+  let audN = 0
+  if (mark) for (const x of document.querySelectorAll('[data-aud]')) x.removeAttribute('data-aud')
+  const audOf = (el) => {
+    if (!mark || !el) return undefined
+    const had = el.getAttribute('data-aud')
+    if (had) return had
+    const id = String(++audN)
+    el.setAttribute('data-aud', id)
+    return id
+  }
   const csCache = new Map()
   const cs = (el) => { let c = csCache.get(el); if (!c) { c = getComputedStyle(el); csCache.set(el, c) } return c }
   const pathOf = (el) => {
@@ -94,12 +144,22 @@ function measure({ phone, root, exclude }) {
   }
   const add = (kind, el, px, extra) => out.push({ kind, sel: pathOf(el), text: textOf(el), px: Math.round(px * 10) / 10, ...(extra ?? {}) })
   const scrolls = (el) => /(auto|scroll)/.test(cs(el).overflowX) || /(auto|scroll)/.test(cs(el).overflowY)
+  // the parts a screen's type plays, each expected at one size wherever it appears (the report's 字号)
+  // (a cell that asks to be .small or .tiny is its own part, and so is anything in the side rail, whose buttons
+  // all take the rail's size)
+  const ROLES = [
+    ['面板标题', '.panel-head h2'], ['卡片标题', '.modal-head h3'], ['侧卡标题', '.support-head h3'],
+    ['表头', 'thead th'], ['表格正文', 'tbody td:not(.small):not(.tiny)'], ['小按钮', 'button.sm:not(.nav *)'],
+    ['标签', '.tag'], ['筹码', '.chip'], ['小字 .small', '.small'], ['注释 .tiny', '.tiny'], ['栏目', '.nav .nav-item'],
+  ]
+  const ROLE_ANY = ROLES.map((r) => r[1]).join(',')
+  const roles = new Map()
 
   const docW = document.documentElement.scrollWidth
   if (docW > W + 1) out.push({ kind: 'page-overflow', sel: 'html', text: '', px: docW - W })
 
   const rootEl = root ? document.querySelector(root) : document.body
-  if (!rootEl) return [{ kind: 'no-root', sel: String(root), text: '', px: 0 }]
+  if (!rootEl) return { offenders: [{ kind: 'no-root', sel: String(root), text: '', px: 0 }], roles: [] }
   const CONT = [
     '.panel', '.tile', '.act-card', 'button', '[role=button]', '.modal', '.node-box', '.week-day', '.hero', '.chip', '.tag',
     '.start-card', '.origin-pick', '.poster-me', '.mt-card', '.support-card', '.toast', '.pinbar', '.topbar', '.light', '.edge-row',
@@ -132,8 +192,10 @@ function measure({ phone, root, exclude }) {
     // 1. content wider or taller than its box
     if (!inline && el.clientWidth > 0) {
       if (!/(auto|scroll)/.test(s.overflowX) && el.scrollWidth > el.clientWidth + 1) {
-        const kind = s.textOverflow === 'ellipsis' ? 'ellipsis' : /(hidden|clip)/.test(s.overflowX) ? 'clipped-x' : 'overflow-x'
-        add(kind, el, el.scrollWidth - el.clientWidth)
+        let kind = s.textOverflow === 'ellipsis' ? 'ellipsis' : /(hidden|clip)/.test(s.overflowX) ? 'clipped-x' : 'overflow-x'
+        // an ellipsis is fine when the rest is a hover away; a club's name cut to 「Nightbl…」 with nothing to read it from is not
+        if (kind === 'ellipsis' && !el.closest('[title]') && !el.getAttribute('aria-label')) kind = 'ellipsis-bare'
+        add(kind, el, el.scrollWidth - el.clientWidth, kind === 'ellipsis-bare' ? { aud: audOf(el) } : undefined)
       }
       if (!/(auto|scroll)/.test(s.overflowY) && /(hidden|clip)/.test(s.overflowY) && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + 1) {
         add('clipped-y', el, el.scrollHeight - el.clientHeight)
@@ -160,6 +222,9 @@ function measure({ phone, root, exclude }) {
               left: Math.min(...rects.map((x) => x.left)), right: Math.max(...rects.map((x) => x.right)),
               top: Math.min(...rects.map((x) => x.top)), bottom: Math.max(...rects.map((x) => x.bottom)),
             }
+            // words cut by the box they are in (an ellipsis, overflow hidden) end where the box does: the range still
+            // measures the whole run, the part past the cut is not drawn (that is `ellipsis` / `clipped-x` above)
+            if (/(hidden|clip)/.test(s.overflowX)) rr = { ...rr, left: Math.max(rr.left, r.left), right: Math.min(rr.right, r.right) }
           }
         }
         const b = box.getBoundingClientRect()
@@ -175,6 +240,22 @@ function measure({ phone, root, exclude }) {
       const fs = parseFloat(s.fontSize)
       if (fs < 11.99) add('font<12', el, fs)
       else if (fs > 12.01 && fs < 12.99) add('font<13', el, fs)
+    }
+    // 3b. and on a computer, under the scale's smallest step where it stands (base.css: 11.5 at 721–1099, 12 from 1100)
+    if (!phone && hasText) {
+      const fs = parseFloat(s.fontSize)
+      const floor = Math.min(parseFloat(s.getPropertyValue('--t-label')) || 12, parseFloat(s.getPropertyValue('--t-tiny')) || 12)
+      if (fs < floor - 0.01) add('font<scale', el, fs, { aud: audOf(el) })
+    }
+    // 3c. who plays which part, and at what size: collected here, compared across every screen in the report
+    if (hasText || el.matches(ROLE_ANY)) {
+      for (const [role, sel] of ROLES) {
+        if (!el.matches(sel)) continue
+        const k = `${role}|${s.fontSize}`
+        const r = roles.get(k)
+        if (r) r.n++
+        else roles.set(k, { role, size: s.fontSize, n: 1, sel: pathOf(el), text: textOf(el) })
+      }
     }
 
     // 4a. something to tap squeezed to a sliver on one side while what it holds still shows, at any width (reported
@@ -197,6 +278,15 @@ function measure({ phone, root, exclude }) {
     const tr = t.getBoundingClientRect()
     if (!tr.width && !tr.height) continue
     const sr = svg.getBoundingClientRect()
+    // the words' drawn size: the font size times how far the picture is scaled from its viewBox (a radar's axis
+    // numbers, a map's site letters) — held to the same floor as the page's type
+    {
+      const vb = svg.viewBox?.baseVal
+      const scale = vb && vb.width ? sr.width / vb.width : 1
+      const fs = parseFloat(cs(t).fontSize) * scale
+      const floor = phone ? 12 : Math.min(parseFloat(cs(svg).getPropertyValue('--t-label')) || 12, parseFloat(cs(svg).getPropertyValue('--t-tiny')) || 12)
+      if (fs < floor - 0.25) add('svg-font', t, Math.round(fs * 10) / 10, { box: pathOf(svg), aud: audOf(svg) })
+    }
     if (/(hidden|clip)/.test(cs(svg).overflow)) {
       const d = Math.max(tr.right - sr.right, sr.left - tr.left, tr.bottom - sr.bottom, sr.top - tr.top)
       if (d > 1) add('svg-clip', t, d, { box: pathOf(svg) })
@@ -212,6 +302,206 @@ function measure({ phone, root, exclude }) {
     const d = Math.max(tr.right - b.right, b.left - tr.left)
     if (d > 1) add('poke-x', t, d, { box: pathOf(box) })
   }
+
+  // 6. the typesetting (2026-09-18): lines a row, a label or a figure breaks onto; boxes over each other; text past
+  //    the window; a page scrolling sideways
+  const STATE_CLS = /^(on|active|sel|up|dn|ok|bad|win|loss|mine|me|past|next|match|locked|capped|near|off|over|now|done|good|warn|hot|open|lost|dead|fresh|own|alert|opposite|clickable|primary|ghost|w|l|d|faint|muted)$/
+  const sig = (el) => el.tagName + '.' + [...el.classList].filter((c) => !STATE_CLS.test(c)).sort().join('.')
+  const shown = (el) => { const x = cs(el); return x.display !== 'none' && x.visibility === 'visible' && el.getClientRects().length > 0 }
+  const skipped = (el) => (exclude && el.closest(exclude)) || el.closest('svg, .sr-only, .cer-barrage, [aria-hidden="true"]')
+  const positioned = (el) => { const p = cs(el).position; return p === 'absolute' || p === 'fixed' }
+  const INLINE = /^inline/
+  /** visual lines of a set of [top, bottom] spans: a span joins the line its middle falls inside */
+  const cluster = (spans) => {
+    spans.sort((a, b) => a[0] - b[0])
+    let n = 0
+    let hi = -1e9
+    for (const [t, b] of spans) {
+      if ((t + b) / 2 > hi) { n++; hi = b } else hi = Math.max(hi, b)
+    }
+    return n
+  }
+  /** the lines one run of words takes: el's own text and its inline children, not the blocks stacked inside it */
+  const ownLines = (el) => {
+    const spans = []
+    for (const n of el.childNodes) {
+      if (n.nodeType === 3) {
+        if (!n.textContent.trim()) continue
+        const r = document.createRange()
+        r.selectNodeContents(n)
+        for (const x of r.getClientRects()) if (x.width > 0.5 && x.height > 0.5) spans.push([x.top, x.bottom])
+      } else if (n.nodeType === 1 && INLINE.test(cs(n).display) && !positioned(n) && shown(n)) {
+        for (const x of n.getClientRects()) if (x.width > 0.5 && x.height > 0.5) spans.push([x.top, x.bottom])
+      }
+    }
+    return cluster(spans)
+  }
+  const hasOwnText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+  /** the rows a flex container's items sit on */
+  const flowLines = (el) => {
+    const spans = []
+    for (const k of el.children) {
+      if (positioned(k) || !shown(k)) continue
+      const r = k.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) spans.push([r.top, r.bottom])
+    }
+    return cluster(spans)
+  }
+  const isRowFlex = (x) => /flex/.test(x.display) && !/column/.test(x.flexDirection)
+  /**
+   * every break inside el that a row should not have: a short run of words (a name, a label, a figure — up to
+   * 24 characters) onto a further line, or a wrapping flex row's items onto a further row. A sentence wrapping is
+   * what a sentence does, and a diary line or a course's blurb is left to it.
+   */
+  const SHORT = 20
+  const PROSE = /[。，；！？,;!?]/
+  const shortText = (t) => t.length <= SHORT && !PROSE.test(t)
+  /** where the breaks are, for the report: the first part that broke */
+  let breakAt = null
+  const breaksIn = (el) => {
+    let n = 0
+    breakAt = null
+    for (const e of [el, ...el.querySelectorAll('*')]) {
+      if (e !== el && (skipped(e) || !shown(e))) continue
+      const x = cs(e)
+      if (x.display === 'none') continue
+      let b = 0
+      if (hasOwnText(e) && !INLINE.test(x.display) && shortText(e.textContent.trim())) b += Math.max(0, ownLines(e) - 1)
+      // a run of like things (chips, tags, region buttons) wraps as a paragraph does; a row of unlike parts should not
+      if (isRowFlex(x) && x.flexWrap !== 'nowrap' && new Set([...e.children].filter(shown).map(sig)).size > 1) b += Math.max(0, flowLines(e) - 1)
+      if (b && !breakAt) breakAt = e
+      n += b
+    }
+    return n
+  }
+  const FIGURE = /^[\s¥$€£₩+\-−–~·:：%.,，\d万亿KkMm×x/()（）]+$/
+
+  const all = [...rootEl.querySelectorAll('*')].filter((el) => !skipped(el) && shown(el))
+  const seenGroup = new Set()
+  for (const el of all) {
+    const x = cs(el)
+    // 6a. rows of one list or table that break differently: siblings with the same element and the same children
+    const p = el.parentElement
+    if (p && !seenGroup.has(p)) {
+      seenGroup.add(p)
+      const groups = new Map()
+      for (const k of p.children) {
+        if (!shown(k) || skipped(k) || positioned(k)) continue
+        const kx = cs(k)
+        const rowish = k.tagName === 'TR' || k.tagName === 'LI' || ((isRowFlex(kx) || /grid/.test(kx.display)) && k.children.length >= 2)
+        if (!rowish) continue
+        const key = sig(k) + '>' + [...k.children].filter(shown).map(sig).join(',')
+        const g = groups.get(key) ?? []
+        g.push(k)
+        groups.set(key, g)
+      }
+      for (const g of groups.values()) {
+        if (g.length < 2) continue
+        const br = g.map(breaksIn)
+        const min = Math.min(...br)
+        const max = Math.max(...br)
+        if (max === min) continue
+        // the odd ones out: the rows that break where most do not (or, where most break, the ones that do not)
+        const count = new Map()
+        for (const b of br) count.set(b, (count.get(b) ?? 0) + 1)
+        const mode = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]
+        const odd = g.filter((_, i) => br[i] !== mode)
+        // the part that broke: in the odd row when it has more breaks, else in a row of the majority
+        const broke = br[g.indexOf(odd[0])] > mode ? odd[0] : g[br.indexOf(mode)]
+        breaksIn(broke)
+        add('row-mismatch', odd[0], max - min, { rows: `${odd.length}/${g.length}`, box: breakAt ? `${pathOf(breakAt)} 「${textOf(breakAt)}」` : undefined, aud: audOf(odd[0]) })
+      }
+    }
+    // 6b. a row whose last control fell onto a line of its own: the author's 鼠标 row. A heading or a toolbar that
+    //     puts its button under its title on a narrow screen does it on purpose
+    const HEADS = '.panel-head, .hero-row, .modal-head, .support-head, .advance-me, .topbar, .pinbar, .save-head, .backup-top, .home-head, .mt-head, .mt-foot, label'
+    if (isRowFlex(x) && x.flexWrap !== 'nowrap' && el.children.length >= 3 && !el.matches(HEADS)) {
+      const kids = [...el.children].filter((k) => shown(k) && !positioned(k))
+      if (kids.length >= 3 && new Set(kids.map(sig)).size > 1) {
+        const top0 = kids[0].getBoundingClientRect()
+        const later = kids.filter((k) => k.getBoundingClientRect().top >= top0.bottom - 1)
+        const tail = later.length && later.length <= 2 && later.every((k) => kids.indexOf(k) >= kids.length - later.length)
+        if (tail && later.some((k) => k.matches('button, .tag, .chip, select, a'))) add('wrap-split', later[0], later.length, { aud: audOf(el) })
+      }
+    }
+    // 6c. a label's own words on two lines: a button, a chip, a tag, a header, a tab (not a card that is a button, with
+    //     its title over its lines)
+    if (el.matches('button, .chip, .tag, .bond-tag, [role=button], th, summary, .nav-item, a.share-dl')) {
+      // a card or a list row that is a button (a title over its lines, a row of parts) is judged as a card or a row
+      const flexKids = /flex/.test(x.display) && [...el.children].filter(shown).length >= 2
+      const card = /column/.test(x.flexDirection) || /grid/.test(x.display) || flexKids ||
+        [...el.children].some((k) => !INLINE.test(cs(k).display) && !/flex/.test(x.display)) || (el.textContent ?? '').trim().length > 40
+      if (!card && breaksIn(el) > 0) add('label-wrap', el, breaksIn(el), { aud: audOf(el) })
+    }
+    // 6d. a figure broken over two lines
+    if (hasOwnText(el) && !INLINE.test(x.display)) {
+      const t = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()
+      if (t.length >= 2 && t.length <= 18 && /\d/.test(t) && FIGURE.test(t) && ownLines(el) > 1) add('num-wrap', el, ownLines(el), { aud: audOf(el) })
+    } else if (INLINE.test(x.display) && el.children.length === 0 && hasOwnText(el)) {
+      const t = el.textContent.trim()
+      if (t.length >= 2 && t.length <= 18 && /\d/.test(t) && FIGURE.test(t)) {
+        const spans = [...el.getClientRects()].filter((r) => r.width > 0.5).map((r) => [r.top, r.bottom])
+        if (cluster(spans) > 1) add('num-wrap', el, cluster(spans), { aud: audOf(el) })
+      }
+    }
+    // 6e. boxes side by side in one parent drawn over each other (a stack of faces is drawn that way on purpose)
+    if (el.children.length >= 2 && !/^inline$/.test(x.display)) {
+      // a sticky head over the rows scrolling under it is the design, not a collision, and so is anything fixed to the
+      // window (the tab bar, the corner buttons), which the page leaves room for under its last line
+      const kids = [...el.children].filter((k) => shown(k) && !skipped(k) && cs(k).display !== 'inline' && !/sticky|fixed/.test(cs(k).position) && !k.matches('.face-btn')
+        && (k.textContent.trim() || k.matches('img, svg, input, select, textarea, button, canvas') || k.querySelector('img, svg, input, select, button')))
+      if (kids.length >= 2 && kids.length <= 80) {
+        // content boxes: a negative margin pulled into a neighbour's padding (the match sheet's 「胜利。」 under the score)
+        // draws nothing over it
+        const rs = kids.map((k) => {
+          const b = k.getBoundingClientRect()
+          const q = cs(k)
+          const n = (v) => parseFloat(v) || 0
+          return {
+            left: b.left + n(q.paddingLeft) + n(q.borderLeftWidth), right: b.right - n(q.paddingRight) - n(q.borderRightWidth),
+            top: b.top + n(q.paddingTop) + n(q.borderTopWidth), bottom: b.bottom - n(q.paddingBottom) - n(q.borderBottomWidth),
+          }
+        })
+        let hit = 0
+        for (let i = 0; i < kids.length && hit < 3; i++) {
+          for (let j = i + 1; j < kids.length && hit < 3; j++) {
+            // a positioned mark only counts when both carry words
+            if ((positioned(kids[i]) || positioned(kids[j])) && !(kids[i].textContent.trim() && kids[j].textContent.trim())) continue
+            const a = rs[i]; const b = rs[j]
+            const w = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+            const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+            if (w > 2 && h > 2) { add('overlap', kids[j], Math.min(w, h), { box: pathOf(kids[i]), aud: audOf(el) }); hit++ }
+          }
+        }
+      }
+    }
+    // 6f. text past the window's side, with nothing that scrolls or clips between it and the page
+    if (hasOwnText(el)) {
+      const r = document.createRange()
+      r.selectNodeContents(el)
+      const rects = [...r.getClientRects()].filter((q) => q.width > 0.5)
+      if (rects.length) {
+        const right = Math.max(...rects.map((q) => q.right))
+        const left = Math.min(...rects.map((q) => q.left))
+        const d = Math.max(right - W, -left)
+        if (d > 1) {
+          let held = false
+          for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+            if (scrolls(a) || /(hidden|clip)/.test(cs(a).overflowX)) { held = true; break }
+          }
+          if (!held) add('off-screen', el, d, { aud: audOf(el) })
+        }
+      }
+    }
+    // 6g. a scroller wider than itself: the page or a card scrolling sideways, or a sideways scroller that is not a table
+    if (/(auto|scroll)/.test(x.overflowX) && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) {
+      const page = el.matches('.main, .modal, .modal-body, .support-card, .support-body, .share-body, .nav, .mt-card, .log-card, .newcareer')
+      // a table, or one picture (the round ribbon's 24 rounds), scrolling sideways in its own box is the design
+      // (and the share sheet's 卡面 on a phone: one row of chips that scrolls sideways, the one in use brought into it — ui/me/looks.tsx)
+      const picture = (el.children.length === 1 && el.children[0].matches('svg, img, canvas')) || el.matches('.look-pick.compact .lp-grid')
+      if (page || (!el.querySelector('table') && !picture)) add('scroll-x', el, el.scrollWidth - el.clientWidth, { page, aud: audOf(el) })
+    }
+  }
   // one line per thing, however many text nodes it has
   const seen = new Map()
   for (const o of out) {
@@ -220,7 +510,7 @@ function measure({ phone, root, exclude }) {
     if (!had) seen.set(k, { ...o, n: 1 })
     else { had.n++; had.px = Math.max(had.px, o.px) }
   }
-  return [...seen.values()]
+  return { offenders: [...seen.values()], roles: [...roles.values()] }
 }
 
 /* ------------------------------------------------------------------ the run */
@@ -306,18 +596,73 @@ async function rootOf(page) {
   }))
 }
 
+/** the kinds a picture is taken of with --evidence, and the pictures taken: state|kind|sel|phone → file */
+const EV_KINDS = new Set(['svg-font', 'row-mismatch', 'wrap-split', 'label-wrap', 'num-wrap', 'overlap', 'off-screen', 'scroll-x', 'font<scale', 'ellipsis-bare'])
+const evShots = new Map()
+let evN = 0
+const paintTheme = (page, t) => page.evaluate((t) => {
+  if (t === 'dark') delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = t
+}, t)
+
 async function measureAll(page, scenario, state, opts = {}) {
   const widths = opts.widths ?? WIDTHS
+  const was = await page.evaluate(() => document.documentElement.dataset.theme ?? 'dark')
   for (const w of widths) {
     await page.setViewportSize({ width: w, height: heightOf(w) })
     await settle(page, opts.wait ?? 60)
-    const where = await rootOf(page)
-    const offenders = await page.evaluate(measure, { phone: w <= 430, ...where })
-    results.push({ scenario, state, width: w, offenders, sweep: !!opts.sweep })
+    const where = opts.root ? { root: opts.root, exclude: null } : await rootOf(page)
+    for (const theme of opts.sweep ? ['dark'] : themesAt(w)) {
+      if (theme !== was || themesAt(w).length > 1) await paintTheme(page, theme)
+      const { offenders, roles } = await page.evaluate(measure, { phone: w <= 430, ...where, mark: EVIDENCE })
+      results.push({ scenario, state, width: w, theme, offenders, roles, sweep: !!opts.sweep })
+      if (EVIDENCE && theme === 'dark') await evidence(page, scenario, state, w, offenders)
+    }
+    if (themesAt(w).length > 1) await paintTheme(page, was)
     if (SHOTS && w === 375 && opts.shot) await page.screenshot({ path: `${OUT}/shots/${opts.shot}.png` })
   }
-  await page.setViewportSize({ width: 375, height: 812 })
+  await page.setViewportSize({ width: REST_W, height: heightOf(REST_W) })
   await settle(page)
+}
+
+/** a picture of each new kind of flag the first time it shows in a scene, once for a phone and once for a computer */
+async function evidence(page, scenario, state, w, offenders) {
+  for (const o of offenders) {
+    if (!EV_KINDS.has(o.kind) || !o.aud || evN >= 900) continue
+    const key = `${scenario} · ${state}|${o.kind}|${o.sel}|${w <= 430 ? 'phone' : 'desk'}`
+    if (evShots.has(key)) { o.shot = evShots.get(key); continue }
+    const file = `ev/${String(++evN).padStart(4, '0')}-${w}-${o.kind.replace(/[<>]/g, '')}.png`
+    try {
+      // the flagged box in its setting: the list round a row, the row round a button — the nearest box at least 320px
+      // wide (or the window's width), brought into view, and a little round it; a box taller than the window, its top
+      const at = () => page.evaluate(({ id, want }) => {
+        let el = document.querySelector(`[data-aud="${id}"]`)
+        if (!el) return null
+        const flagged = el
+        while (el.parentElement && el.parentElement !== document.body && el.getBoundingClientRect().width < want) el = el.parentElement
+        const r0 = flagged.getBoundingClientRect()
+        if (r0.top < 0 || r0.bottom > innerHeight) flagged.scrollIntoView({ block: 'center' })
+        const r = el.getBoundingClientRect()
+        const f = flagged.getBoundingClientRect()
+        // the flagged box with up to 160px of its setting above and below
+        const top = Math.max(0, Math.max(r.top, f.top - 160) - 8)
+        const bottom = Math.min(innerHeight, Math.min(r.bottom, f.bottom + 160) + 8, top + 640)
+        const left = Math.max(0, r.left - 8)
+        const right = Math.min(innerWidth, r.right + 8)
+        return { x: left, y: top, width: right - left, height: bottom - top }
+      }, { id: o.aud, want: Math.min(320, w - 16) })
+      const clip = await at()
+      if (!clip || clip.width < 4 || clip.height < 4) continue
+      await page.screenshot({ path: `${OUT}/${file}`, clip })
+      evShots.set(key, file)
+      o.shot = file
+    } catch { /* gone, or a live match moved on: no picture */ }
+  }
+  // back to the top of whatever a picture scrolled, so the next width is measured from where a player lands
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll('.main, .modal, .support-card, .support-body, .mt-card')) el.scrollTop = 0
+    window.scrollTo(0, 0)
+  }).catch(() => {})
 }
 
 const CARDS = '.modal-bg, .moment-bg, .support-card, .share-overlay'
@@ -444,7 +789,7 @@ const WAY_OUT = {
   'nav-more': ['.nav-more .nav-item'],
   poster: ['[data-audit-layer] button.primary'],
 }
-const LAYER_WIDTHS = [320, 375, 430, 768]
+const LAYER_WIDTHS = SIZES ? WIDTHS : [320, 375, 430, 768]
 
 /**
  * Put away what is in front until the page shows, or a kind in `keep` is on top.
@@ -479,14 +824,22 @@ async function clearLayers(page, scenario, { keep = [], measureLayers = true } =
   return topLayer(page)
 }
 
-/** opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than continue */
+/**
+ * opts.save: the save file when it is not named after the scenario; opts.stay: stay on the home page rather than
+ * continue; opts.tour: the tour comes up as it does for a new player; opts.hall: a hall with the long career's card
+ * and every 卡面 open (saves/hall.json, scripts/mobile_saves.ts); opts.music: the music window opened, still silent
+ */
 async function withSave(name, fn, opts = {}) {
   if (ONLY && !name?.includes(ONLY) && !(name === null && 'newcareer'.includes(ONLY))) return
   const file = name ? `${ROOT}/saves/${opts.save ?? name}.txt` : null
   if (file && !existsSync(file)) { errors.push(`${name}: no save file ${file}`); return }
   const text = file ? readFileSync(file, 'utf8') : null
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 1 })
-  await ctx.addInitScript(([key, text, musicKey, musicOff]) => {
+  const hallFile = `${ROOT}/saves/hall.json`
+  if (opts.hall && !existsSync(hallFile)) errors.push(`${name}: no hall file ${hallFile} (npx tsx scripts/mobile_saves.ts)`)
+  const hall = opts.hall && existsSync(hallFile) ? readFileSync(hallFile, 'utf8') : null
+  const music = opts.music ? JSON.stringify({ ...JSON.parse(MUSIC_OFF), open: true }) : MUSIC_OFF
+  const ctx = await browser.newContext({ viewport: { width: REST_W, height: heightOf(REST_W) }, deviceScaleFactor: 1 })
+  await ctx.addInitScript(([key, text, musicKey, musicOff, tour, hall]) => {
     try {
       // every load, a reload too: the music stays off whatever the page wrote since
       localStorage.setItem(musicKey, musicOff)
@@ -494,11 +847,14 @@ async function withSave(name, fn, opts = {}) {
       localStorage.clear()
       localStorage.setItem(musicKey, musicOff)
       if (text) localStorage.setItem(key, text)
-      localStorage.setItem('val_player.tour.off', '1')
-      for (const k of ['pre', 'club', 'season']) localStorage.setItem(`val_player.tour.${k}`, '1')
+      if (hall) localStorage.setItem('val_player.hall', hall)
+      if (!tour) {
+        localStorage.setItem('val_player.tour.off', '1')
+        for (const k of ['pre', 'club', 'season']) localStorage.setItem(`val_player.tour.${k}`, '1')
+      }
       sessionStorage.setItem('audit-seeded', '1')
     } catch (e) { console.error('seed failed: ' + e) }
-  }, [SAVE_KEY, text, MUSIC_KEY, MUSIC_OFF])
+  }, [SAVE_KEY, text, MUSIC_KEY, music, !!opts.tour, hall])
   const page = await ctx.newPage()
   page.setDefaultTimeout(20000)
   const who = name ?? 'newcareer'
@@ -760,7 +1116,7 @@ await withSave('chal-days', async (page) => {
   if (SWEEP) await measureAll(page, 'chal-days', 'match:pre', { widths: SWEEP_WIDTHS, sweep: true, wait: 30 })
   if (!(await clickText(page, '逐回合观战', 'chal-days'))) { missing('chal-days', 'match:live'); return }
   await page.waitForTimeout(1500)
-  await measureAll(page, 'chal-days', 'match:live', { widths: [320, 375, 430, 768, 1280] })
+  await measureAll(page, 'chal-days', 'match:live', { widths: SIZES ? WIDTHS : [320, 375, 430, 768, 1280] })
   let at = await waitFor(page, ['node', 'break', 'done'], 120000)
   let sawNode = false
   let sawBreak = false
@@ -813,6 +1169,94 @@ await withSave('retired-ending', async (page) => {
 await withSave('retired', async (page) => {
   await screens(page, 'retired', ['本周', '我的', '成就', '日志', '帮助'], { 本周: 'retired' })
 })
+
+// ---- what the layout run added (2026-09-18): the hall inside a career and on the home page, the backup box and the
+//      import page, the career-end card in every 卡面, the music window open, the tour card by card
+const LOOK_KEYS = ['studio', 'night', 'film', 'paper', 'led', 'vault', 'split', 'redline']
+await withSave('looks', async (page) => {
+  const top = await clearLayers(page, 'looks', { keep: ['modal'] })
+  if (top?.kind !== 'modal') { missing('looks', 'modal:ending'); return }
+  for (const k of LOOK_KEYS) {
+    const ok = await page.evaluate((k) => {
+      const h = JSON.parse(localStorage.getItem('val_player.hall') ?? 'null')
+      if (!h) return false
+      if (k === 'studio') delete h.look
+      else h.look = k
+      localStorage.setItem('val_player.hall', JSON.stringify(h))
+      window.dispatchEvent(new Event('valplayer:look'))
+      return true
+    }, k)
+    if (!ok) { missing('looks', `look:${k} (no hall)`); break }
+    await settle(page, 300)
+    await measureAll(page, 'looks', `look:${k}`)
+  }
+}, { save: 'retired-ending', hall: true })
+
+await withSave('hall', async (page) => {
+  if (!(await go(page, 'hall', '成就'))) return
+  const b = page.locator('#main button').filter({ hasText: /^\s*成就殿堂/ }).first()
+  if (!(await b.count()) || !(await press(page, b, '成就殿堂', 'hall'))) { missing('hall', 'screen:殿堂'); return }
+  await settle(page, 400)
+  await measureAll(page, 'hall', 'screen:殿堂')
+}, { save: 'long', hall: true })
+
+await withSave('home-hall', async (page) => {
+  await page.waitForSelector('.save-card', { timeout: 60000 })
+  await measureAll(page, 'home-hall', 'home:save+hall')
+  // 导出存档: the box under the card
+  if (await press(page, page.getByRole('button', { name: '导出存档', exact: true }), '导出存档', 'home-hall')) {
+    await settle(page, 600)
+    if (await page.locator('.backup-box').count()) {
+      await measureAll(page, 'home-hall', 'home:backup-box')
+      // the code, as a browser that will not copy shows it: in a box to select by hand
+      await press(page, page.locator('.backup-box').getByRole('button', { name: '复制存档码', exact: true }), '复制存档码', 'home-hall')
+      await settle(page, 300)
+      await measureAll(page, 'home-hall', 'home:backup-box+note')
+    } else missing('home-hall', 'home:backup-box')
+  }
+  const code = await page.evaluate(() => document.querySelector('.backup-box textarea')?.value ?? null)
+  // 导入存档: its page, empty and with the backup read back
+  if (await press(page, page.getByRole('button', { name: '导入存档', exact: true }).first(), '导入存档', 'home-hall')) {
+    await settle(page, 400)
+    await measureAll(page, 'home-hall', 'home:import')
+    if (code) {
+      await page.locator('.backup-paste').fill(code)
+      await press(page, page.getByRole('button', { name: '读取存档码', exact: true }), '读取存档码', 'home-hall')
+      await settle(page, 1200)
+      if (await page.locator('.backup-page .save-card').count()) await measureAll(page, 'home-hall', 'home:import-read')
+      else missing('home-hall', 'home:import-read')
+    } else missing('home-hall', 'home:import-read (no code to paste)')
+    await press(page, page.locator('.backup-top button').first(), '← 返回', 'home-hall')
+    await settle(page, 300)
+  }
+  // 成就殿堂 from the home page
+  const hb = page.locator('.newcareer button').filter({ hasText: /^\s*成就殿堂/ }).first()
+  if (await hb.count() && await press(page, hb, '成就殿堂', 'home-hall')) {
+    await settle(page, 400)
+    await measureAll(page, 'home-hall', 'home:hall')
+  } else missing('home-hall', 'home:hall')
+}, { save: 'long', stay: true, hall: true })
+
+await withSave('music', async (page) => {
+  await settle(page, 400)
+  if (!(await page.locator('.bgm').count())) { missing('music', 'music window'); return }
+  // the window measured as its own scene; the page under it is measured elsewhere
+  await measureAll(page, 'music', 'music:open', { root: '.bgm' })
+  // and silent: nothing playing
+  const playing = await page.evaluate(() => [...document.querySelectorAll('audio')].some((a) => !a.paused && !a.muted && a.volume > 0))
+  if (playing) errors.push('music: a track is playing with sound')
+}, { save: 'chal-days', music: true })
+
+await withSave('tour', async (page) => {
+  for (let i = 0; i < 20; i++) {
+    const top = await topLayer(page)
+    if (top?.kind !== 'tour') { if (i === 0) missing('tour', 'tour card'); break }
+    await measureAll(page, 'tour', `tour:${i + 1}`)
+    const next = page.locator('.mt-card .mt-foot button.primary')
+    if (!(await next.count()) || !(await press(page, next, 'the tour\'s next', 'tour'))) break
+    await settle(page, 400)
+  }
+}, { save: 'pre-w0', tour: true })
 
 // ---- one save per card the clock stops on, and a title's full-screen card
 for (const m of ['cup', 'invite', 'tryout', 'deal', 'event', 'ceremony', 'hurt', 'trait', 'season', 'title']) {
@@ -881,7 +1325,9 @@ await browser.close()
 
 /* ------------------------------------------------------------------ the report */
 
-const named = results.filter((r) => !r.sweep)
+// the dark ground is the run; 浅 and 米 (--themes) are counted in their own table
+const named = results.filter((r) => !r.sweep && (r.theme ?? 'dark') === 'dark')
+const themed = results.filter((r) => !r.sweep && r.theme && r.theme !== 'dark')
 const swept = results.filter((r) => r.sweep)
 const total = (rs) => rs.reduce((s, r) => s + r.offenders.length, 0)
 const states = [...new Set(named.map((r) => `${r.scenario} · ${r.state}`))]
@@ -908,15 +1354,66 @@ lines.push(`| **合计** | ${byWidth.join(' | ')} | ${total(named)} |`, '')
 const kinds = {}
 for (const r of named) for (const o of r.offenders) kinds[o.kind] = (kinds[o.kind] ?? 0) + 1
 lines.push('## 按类型', '', ...Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, n]) => `- ${k}: ${n}`), '')
+// each kind at each width: the before/after table of a layout run
+const kindList = Object.keys(kinds).sort((a, b) => kinds[b] - kinds[a])
+lines.push('## 类型 × 宽度', '')
+lines.push(`| 类型 | ${WIDTHS.join(' | ')} | 合计 |`)
+lines.push(`|---|${WIDTHS.map(() => '---:').join('|')}|---:|`)
+for (const k of kindList) {
+  const n = WIDTHS.map((w) => named.filter((r) => r.width === w).reduce((s, r) => s + r.offenders.filter((o) => o.kind === k).length, 0))
+  lines.push(`| ${k} | ${n.join(' | ')} | ${kinds[k]} |`)
+}
+lines.push('')
+if (themed.length) {
+  lines.push('## 三种配色（同一宽度下，深 / 浅 / 米 各自的问题数）', '')
+  for (const w of [...THEME_WIDTHS].filter((w) => WIDTHS.includes(w))) {
+    const n = ['dark', 'light', 'cream'].map((t) => total(results.filter((r) => !r.sweep && r.width === w && (r.theme ?? 'dark') === t)))
+    lines.push(`- ${w}：深 ${n[0]} · 浅 ${n[1]} · 米 ${n[2]}`)
+  }
+  lines.push('')
+}
+// the same part in more than one size across the screens, at one width (the most common size first)
+const roleAt = new Map()
+for (const r of named) {
+  for (const x of r.roles ?? []) {
+    const k = `${x.role}|${r.width}`
+    const m = roleAt.get(k) ?? new Map()
+    const e = m.get(x.size) ?? { n: 0, where: new Set(), sel: x.sel, text: x.text }
+    e.n += x.n
+    e.where.add(`${r.scenario} · ${r.state}`)
+    m.set(x.size, e)
+    roleAt.set(k, m)
+  }
+}
+// one line per role and set of odd ones out, with the widths it holds at (the sizes step with the scale, the odd ones stay odd)
+const roleLines = new Map()
+for (const [k, m] of roleAt) {
+  if (m.size < 2) continue
+  const [role, w] = k.split('|')
+  const sizes = [...m.entries()].sort((a, b) => b[1].n - a[1].n)
+  const odd = sizes.slice(1).map(([, e]) => `\`${e.sel}\` 「${e.text}」`).join('；')
+  const key = `${role}|${odd}`
+  const g = roleLines.get(key) ?? { role, widths: [], sizes, odd: sizes.slice(1) }
+  g.widths.push(w)
+  roleLines.set(key, g)
+}
+lines.push('## 字号：同一角色在不同画面上的大小', '', `${roleLines.size} 处不止一种大小（按角色和出格的那几个合并）。`, '')
+for (const g of roleLines.values()) {
+  const [main, e0] = g.sizes[0]
+  lines.push(`- **${g.role}** @ ${g.widths.join(',')}：多数 ${main} ×${e0.n}；${g.odd.map(([s, e]) => `${s} ×${e.n} \`${e.sel}\` 「${e.text}」 在 ${[...e.where].slice(0, 3).join('、')}${e.where.size > 3 ? ' 等' : ''}`).join('；')}`)
+}
+lines.push('')
 
 lines.push('## 明细（同一处在几个宽度上合并）', '')
 const groups = new Map()
 for (const r of results) {
+  if (r.theme && r.theme !== 'dark') continue
   for (const o of r.offenders) {
     const k = `${r.scenario} · ${r.state}|${o.kind}|${o.sel}`
-    const g = groups.get(k) ?? { st: `${r.scenario} · ${r.state}`, kind: o.kind, sel: o.sel, widths: new Set(), px: 0, text: o.text, box: o.box, size: o.size }
+    const g = groups.get(k) ?? { st: `${r.scenario} · ${r.state}`, kind: o.kind, sel: o.sel, widths: new Set(), px: 0, text: o.text, box: o.box, size: o.size, rows: o.rows, shots: new Set() }
     g.widths.add(r.width)
     g.px = Math.max(g.px, o.px)
+    if (o.shot) g.shots.add(o.shot)
     groups.set(k, g)
   }
 }
@@ -924,7 +1421,8 @@ let last = ''
 for (const g of [...groups.values()].sort((a, b) => a.st.localeCompare(b.st) || a.kind.localeCompare(b.kind))) {
   if (g.st !== last) { lines.push('', `### ${g.st}`, ''); last = g.st }
   const ws = [...g.widths].sort((a, b) => a - b)
-  lines.push(`- \`${g.kind}\` \`${g.sel}\` ${g.px}px${g.size ? ` (${g.size})` : ''}${g.box ? ` in \`${g.box}\`` : ''} — 「${g.text}」 @ ${ws.length > 6 ? `${ws[0]}…${ws[ws.length - 1]} (${ws.length})` : ws.join(',')}`)
+  const pics = [...g.shots].map((f) => `[图](${f})`).join(' ')
+  lines.push(`- \`${g.kind}\` \`${g.sel}\` ${g.px}px${g.size ? ` (${g.size})` : ''}${g.rows ? ` [${g.rows} 行]` : ''}${g.box ? ` in \`${g.box}\`` : ''} — 「${g.text}」 @ ${ws.length > 6 ? `${ws[0]}…${ws[ws.length - 1]} (${ws.length})` : ws.join(',')}${pics ? ` ${pics}` : ''}`)
 }
 const keyBad = keys.filter((k) => k.found.length)
 lines.push('', '## 键盘（卡片在前时）', '', `${keys.length} 张卡，${keyBad.length} 张有问题。`, '')
@@ -933,7 +1431,7 @@ for (const k of keys) {
 }
 if (errors.length) lines.push('', '## 运行中的错误', '', ...errors.map((e) => `- ${e}`))
 writeFileSync(`${OUT}/report.md`, lines.join('\n'))
-writeFileSync(`${OUT}/report.json`, JSON.stringify({ widths: WIDTHS, results, keys, errors, reached, unreached, layers: layersSeen, slow }, null, 1))
+writeFileSync(`${OUT}/report.json`, JSON.stringify({ widths: WIDTHS, results: results.map(({ roles, ...r }) => r), roles: [...roleAt.entries()].map(([k, m]) => [k, [...m.entries()].map(([s, e]) => [s, e.n, [...e.where]])]), keys, errors, reached, unreached, layers: layersSeen, slow }, null, 1))
 console.log(`${total(named)} offenders across ${states.length} states (${byWidth.join(' / ')})${SWEEP ? `; sweep ${total(swept)}` : ''}; keyboard ${keyBad.length}/${keys.length} cards with findings`)
 console.log(`pages reached ${reached.length}, not reached ${unreached.length}; cards put away on the way ${layersSeen.length}; errors ${errors.length}`)
 for (const x of slow) console.log(`  ⚠ slow: ${x.scenario} · ${x.what} took ${(x.ms / 1000).toFixed(1)}s to answer`)

@@ -33,6 +33,7 @@ import { pop, push } from '../src/engine/me/pending'
 import { declineInvite, startTryout } from '../src/engine/me/tryout'
 import { declineDeal } from '../src/engine/me/contract'
 import { retire } from '../src/engine/me/endings'
+import { HALL_KEY, LOOKS, noteHall } from '../src/engine/me/hall'
 import { TRAITS } from '../src/engine/me/traits'
 import { fixturesFor, nextRealFixtureFor } from '../src/engine/season'
 import { regionsOf } from '../src/engine/era'
@@ -307,5 +308,15 @@ if (groups.has('long')) {
   save('retired-ending', s)
   me.pending = []
   save('retired', s)
+  // the hall this career leaves, with every 卡面 open (the layout run dresses the career-end card in each, and fills
+  // the hall's pages and the home page's 成就殿堂 with a real card; test data, like the figures above)
+  noteHall(s, true)
+  const h = JSON.parse(mem[HALL_KEY] ?? 'null') as { cards: { id: string; name: string; to: number }[]; looks: Record<string, unknown> } | null
+  const card = h?.cards[h.cards.length - 1]
+  if (h && card) {
+    for (const l of LOOKS) if (l.open) h.looks[l.key] = { id: card.id, who: card.name, year: card.to, at: '2026-09-18' }
+    writeFileSync(`${out}/hall.json`, JSON.stringify(h))
+    console.log(`[${clock()}] hall.json        ${h.cards.length} card, ${Object.keys(h.looks).length} looks open`)
+  }
 }
 console.log(`done in ${clock()}`)
