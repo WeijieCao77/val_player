@@ -10,6 +10,7 @@ import type { Attrs, Fixture, GameState } from '../types'
 import { ACTIONS, ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
 import { primaryFocus, runAction, settleBody } from './growth'
+import { markWeekStart, replayable, restoreWeekStart, sealWeek } from './undo'
 import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek, finalMvp, startedIn } from './bottleneck'
 import { deskLine, weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
@@ -105,23 +106,116 @@ export function noteAction(state: GameState, line: string): void {
  * startDuel). me.plan stays: it is the week's tally now, and the injuries, the
  * ceilings, the ladder and the coach go on reading it as the week's work.
  *
- * There is no taking one back — a stream already paid and six ranked games
- * already played cannot be unplayed — so the guard is in front of the click
- * (actionBlock), which is what the card is greyed by. Returns a reason when
- * it cannot be done.
+ * It can be taken back until the week is advanced (me/undo.ts, 2026-09-20):
+ * what the state was is kept before the click, so 撤回 puts it back whole
+ * rather than subtracting what the action added, which is not invertible.
+ * The guard in front of the click (actionBlock) is unchanged — it is still
+ * what the card is greyed by. Returns a reason when it cannot be done.
  */
 export function doAction(state: GameState, action: MeAction): string | null {
   const me = state.me!
   if (action === 'duel') return '对位挑战是当场打的，用下面的按钮。'
   const why = actionBlock(state, action)
   if (why) return why
+  // the week keeps what it started from, so this session can be taken off again (me/undo.ts)
+  markWeekStart(state)
+  ;(me.weekDone ??= []).push(action)
+  applyAction(state, action)
+  return null
+}
+
+/** One session, done: the points, the tally, the work and the line it leaves. */
+function applyAction(state: GameState, action: MeAction): void {
+  const me = state.me!
   me.ap -= ACTION_BY_KEY[action].cost
   me.plan[action] = (me.plan[action] ?? 0) + 1
   noteAction(state, runAction(state, action))
   // the club's programme follows the hours as they go in: in a week of days
   // that can happen after the first morning (see weekInDays)
   if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, state.players[me.id])
+}
+
+/**
+ * Take this card's last session of the week back off (me/undo.ts).
+ *
+ * The week goes back to what it started from and is played again without that
+ * one. A session's draw is seeded on how many times that card has been used
+ * this week, so every other card keeps the draw it always had, and putting
+ * this one back gives it the one it had before. What the later sessions meet
+ * can change — they are played on the body as it really would have been — and
+ * that is the week as it now stands, not a new roll.
+ *
+ * Returns a reason when there is nothing of that card to take off.
+ */
+export function undoAction(state: GameState, action: MeAction): string | null {
+  const me = state.me!
+  const snap = me.weekStart
+  if (!snap || snap.week !== me.week) return '这周已经定下来了，退不回去。'
+  const from = me.undoFrom ?? 0
+  const list = (me.weekDone ??= [])
+  const at = list.lastIndexOf(action)
+  if (at < from) return action === 'duel' ? '对位挑战打过就算数了。' : '这周还没做过这件事。'
+  const kept = [...list.slice(from, at), ...list.slice(at + 1)]
+  restoreWeekStart(state, snap)
+  list.length = from
+  for (const k of kept) {
+    // nothing that fitted before can fail to fit with one fewer session in front of it
+    if (actionBlock(state, k)) continue
+    list.push(k)
+    applyAction(state, k)
+  }
+  tidyWeekDone(me)
   return null
+}
+
+/** a week rewound to nothing keeps no empty list of what it did: the save reads as it did before the click */
+function tidyWeekDone(me: { weekDone?: MeAction[]; undoFrom?: number }): void {
+  if (me.weekDone?.length === 0 && !me.undoFrom) delete me.weekDone
+}
+
+/** Take the whole week off: back to the morning it started. Returns what came off. */
+export function undoWeek(state: GameState): MeAction[] {
+  const me = state.me!
+  const snap = me.weekStart
+  if (!snap || snap.week !== me.week) return []
+  const from = me.undoFrom ?? 0
+  const off = replayable(me)
+  restoreWeekStart(state, snap)
+  ;(me.weekDone ??= []).length = from
+  tidyWeekDone(me)
+  return off
+}
+
+/**
+ * 重复上一周: last week's actions again, in the order they were clicked.
+ *
+ * The author, 2026-09-20: 「加一个重复上一回合加点方式的按钮，玩家反映推荐的加点
+ * 他们不喜欢，有时候就想重复自己上回合的加点方式。」 So it is his own week, not
+ * the steady plan's: the list is kept as it happened (me.lastWeekDone) rather
+ * than worked out again, and it goes through the same doAction every click
+ * goes through — the points, the body and the greyed reasons all apply, and
+ * whatever this week has no room for is named instead of forced.
+ *
+ * 对位挑战 is not in it: it is played at its own card, three scenes at a time,
+ * and nobody can be handed one he did not sit through.
+ */
+export function repeatLastWeek(state: GameState): string {
+  const me = state.me!
+  const last = me.lastWeekDone ?? []
+  if (!last.length) return '上一周没做什么可以照搬的。'
+  const did: Partial<Record<MeAction, number>> = {}
+  const missed: Partial<Record<MeAction, number>> = {}
+  for (const k of last) {
+    if (k === 'duel') { missed[k] = (missed[k] ?? 0) + 1; continue }
+    if (doAction(state, k)) missed[k] = (missed[k] ?? 0) + 1
+    else did[k] = (did[k] ?? 0) + 1
+  }
+  const say = (t: Partial<Record<MeAction, number>>): string => ACTIONS
+    .filter((a) => (t[a.key] ?? 0) > 0).map((a) => `${a.label} ×${t[a.key]}`).join('、')
+  const done = say(did)
+  const left = say(missed)
+  if (!done) return `上一周那些这周做不了：${left}。`
+  return `照上一周做了：${done}。${left ? `这周排不下的：${left}。` : ''}`
 }
 
 /**
@@ -178,7 +272,13 @@ export function refundStalePlan(state: GameState): void {
   pushLog(state, 'info', line)
 }
 
-/** A practice duel happens now, not at the settlement. */
+/**
+ * A practice duel happens now, not at the settlement — and it closes the
+ * week's 撤回 behind it (me/undo.ts). A duel is three scenes the player sits
+ * through and answers; taking the week back past one would hand him the same
+ * duel to answer differently, which is a re-roll of a game he has already
+ * seen. What was done before it stays done.
+ */
 export function doDuel(state: GameState): DuelResult | string {
   const me = state.me!
   const def = ACTION_BY_KEY.duel
@@ -194,6 +294,8 @@ export function doDuel(state: GameState): DuelResult | string {
   if (!r) return '现在没有可以挑战的首发。'
   me.ap -= def.cost
   me.plan.duel = (me.plan.duel ?? 0) + 1
+  ;(me.weekDone ??= []).push('duel')
+  sealWeek(state)
   return r
 }
 
@@ -360,6 +462,8 @@ export function advanceTurn(state: GameState): WeekStop {
 function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   const me = state.me!
   const p = state.players[me.id]
+  // the clock moving settles what the week has done: a card's 「−」 reaches back no further (me/undo.ts)
+  sealWeek(state)
   // a cup of mine: its round's card on its day, and a run from a save before the rounds had days carried on (me/cups.ts)
   resumeCup(state)
   if (me.pending.length) return { kind: 'pending', item: me.pending[0] }
@@ -664,6 +768,11 @@ export function settleWeek(state: GameState): void {
   me.weekDay = 0
   me.plan = {}
   // the week's own books: what was done, what it was worth, what the platform already settled
+  // — and the order it was done in, which 重复上一周 replays next week (repeatLastWeek)
+  me.lastWeekDone = [...(me.weekDone ?? [])]
+  me.weekDone = []
+  me.weekStart = undefined
+  me.undoFrom = 0
   me.weekLog = []
   me.trainWeek = undefined
   me.mediaWeek = 0

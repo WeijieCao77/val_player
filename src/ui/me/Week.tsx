@@ -7,7 +7,8 @@ import { ceilingNote } from '../../engine/me/bottleneck'
 import { fillerNote, goalOf, hourLine, weightsOf } from '../../engine/me/goal'
 import NextStep, { LineText } from './NextStep'
 import { nextCardDue, useNextHidden } from './guide'
-import { actionBlock, doAction, matchAhead, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
+import { actionBlock, doAction, matchAhead, repeatLastWeek, staminaLeft, undoAction, undoWeek, weekCalendar, weekInDays } from '../../engine/me/week'
+import { REPLAY_CN, UNDO_EDGE_CN, canUndo, undoDepth } from '../../engine/me/undo'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
@@ -298,6 +299,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               <div className="week-did" role="status" aria-label="本周流水">
                 {log.slice(-3).map((l, i) => <p key={i}>{l}</p>)}
                 {tally.length > 0 && <p className="sum">这周：{tally.join(' · ')}</p>}
+                {/* the boundary, said where the cards are and never as a dialog (engine/me/undo.ts) */}
+                {undoDepth(game) > 0 && <p className="sum">{UNDO_EDGE_CN}{log.length > 1 ? REPLAY_CN : ''}</p>}
               </div>
             )
           })()}
@@ -332,15 +335,34 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                         {why && <div className="why">{why}</div>}
                         {/* at the ceiling: what more hours do, and what opens it — never a bare 1/2 (me/bottleneck.ts) */}
                         {!why && ceilingNote(game, a.key) && <div className="tiny muted" style={{ marginTop: 4 }}>{ceilingNote(game, a.key)}</div>}
-                        {/* who the 双排 goes to is picked before the click, not after it: there is no changing
-                            your mind once the evening has been played (2026-09-19) */}
-                        {a.key === 'duo' && mates.length > 0 && (
+                        {/* Who the 双排 goes to. The picker is live while the next evening is still
+                            unspent; once one has been played the card says who it was with instead, because
+                            a control that looks re-settable and only moves the *next* evening is a lie
+                            (reported 2026-09-20). The 「−」 takes that evening back, picker and all. */}
+                        {a.key === 'duo' && mates.length > 0 && (n === 0 || !canUndo(game, 'duo') ? (
                           <select value={me.duoWith ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
                             <option value="">谁都行（挑关系最远的）</option>
                             {mates.map((m) => <option key={m.id} value={m.id}>{m.ign}</option>)}
                           </select>
+                        ) : (
+                          <div className="tiny muted">和 {game.players[me.duoWith ?? '']?.ign ?? '队友'} 打的；要换人先按「−」退回去</div>
+                        ))}
+                        {n > 0 && (
+                          <div className="c">
+                            <b>这周做了 {n} 次</b>
+                            {/* 「−」 takes this card's last session of the week off: the week is played
+                                again from its start without it (engine/me/undo.ts). Asked for 2026-09-20:
+                                「每个选项后面都可以加减，加了数值就会变化，减了就变回去」 */}
+                            {canUndo(game, a.key) && (
+                              <button
+                                className="sm" aria-label={`${a.label} 退回一次`} title={`退回一次${a.label}`}
+                                onClick={(e) => { e.stopPropagation(); const why = undoAction(game, a.key); if (why) toast(why); commit() }}
+                              >
+                                −
+                              </button>
+                            )}
+                          </div>
                         )}
-                        {n > 0 && <div className="c"><b>这周做了 {n} 次</b></div>}
                       </div>
                     )
                   })}
@@ -394,8 +416,26 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
             </>
           )}
           <div className="advance-me">
+            {/* his own week again, in the order he clicked it (engine/me/week.ts repeatLastWeek) — asked for
+                2026-09-20: 「玩家反映推荐的加点他们不喜欢，有时候就想重复自己上回合的加点方式」 */}
+            <button
+              onClick={() => { toast(repeatLastWeek(game)); commit() }}
+              disabled={!(me.lastWeekDone ?? []).length || me.ap === 0}
+              title={(me.lastWeekDone ?? []).length ? '照上一周做过的再做一遍，做不下的会告诉你' : '上一周没有可以照搬的'}
+            >
+              重复上一周
+            </button>
             {/* one press, the whole rest of the week, through the same clicks a player makes — and one line for what it did */}
-            <button onClick={() => { const line = autoPlan(game); toast(line); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐一次做完；做了就算数">按推荐做完</button>
+            <button onClick={() => { const line = autoPlan(game); toast(line); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐一次做完">按推荐做完</button>
+            {/* the whole week off in one press: the same machinery as a card's 「−」, run to the bottom */}
+            {undoDepth(game) > 1 && (
+              <button
+                className="ghost" title="把这周做过的都退回去，回到这周刚开始的样子"
+                onClick={() => { const off = undoWeek(game); toast(off.length ? `这周的 ${off.length} 次都退回去了。` : '没有可以退的。'); commit() }}
+              >
+                全部撤回 · {undoDepth(game)} 次
+              </button>
+            )}
             {/* one way forward on the button; the longer runs share one control (asked 2026-09-11: four advance buttons read as clutter) */}
             {/* here, at the end of the week's panel, on a phone too: 破晓 keeps its 进入下一周 in the row under the actions, not pinned over the tab bar */}
             {(() => {

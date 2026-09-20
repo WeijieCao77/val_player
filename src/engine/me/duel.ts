@@ -5,6 +5,7 @@ import { ACTION_BY_KEY, DUELS_PER_WEEK } from './actions'
 import { EDGE_NEED, PROMISE_HELD, TRIAL_MATCHES, coachStarters, duelTarget, promiseSeat } from './coach'
 import { addXp } from './growth'
 import { pushLog } from './log'
+import { sealWeek } from './undo'
 import type { DuelSceneLog } from './types'
 
 /**
@@ -85,6 +86,9 @@ export function startDuel(state: GameState): string | null {
   for (let i = idx.length - 1; i > 0; i--) { const j = rng.int(0, i); [idx[i], idx[j]] = [idx[j], idx[i]] }
   me.ap -= ACTION_BY_KEY.duel.cost
   me.plan.duel = (me.plan.duel ?? 0) + 1
+  ;(me.weekDone ??= []).push('duel')
+  // a duel is sat through, not clicked: nothing before it can be replayed any more (me/undo.ts)
+  sealWeek(state)
   me.duelsThisWeek++
   state.players[me.id].fatigue = clamp(state.players[me.id].fatigue + 7, 0, 100)
   me.duelLive = { himId: him.id, sc: [0, 0], round: 1, pool: idx.slice(0, 5), rounds: [], flash: 0, done: false }

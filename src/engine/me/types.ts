@@ -696,6 +696,25 @@ export interface MomentItem {
   pos?: number | null
 }
 
+/**
+ * What a week started from, kept so any one of its sessions can be taken off
+ * again (me/undo.ts). Narrow on purpose: the fields an action can move, plus
+ * the lengths of the lists it only ever appends to.
+ */
+export interface WeekStart {
+  week: number
+  me: Record<string, unknown>
+  /** list name → how long it was, cut back to that on a rewind */
+  cut: Record<string, number>
+  player: Record<string, unknown>
+  /** only the bonds I am in — the only ones a session can move */
+  bonds: Record<string, number>
+  /** the club's programme for me that morning */
+  training?: string
+  /** the career kept no book of who it gets on with: a rewind takes the book away again */
+  noBonds?: true
+}
+
 export interface MeState {
   /**
    * This career's own id in the save (me/save.ts claimAutosave): made the first time the career is opened into the
@@ -725,6 +744,14 @@ export interface MeState {
   plan: Partial<Record<MeAction, number>>
   /** the result lines this week's clicks left, for the week board's 本周流水; cleared at the settlement */
   weekLog?: string[]
+  /** this week's actions in the order they were clicked; cleared at the settlement, which copies it to lastWeekDone */
+  weekDone?: MeAction[]
+  /** last week's, as it happened — what 重复上一周 replays (me/week.ts repeatLastWeek); absent in older saves */
+  lastWeekDone?: MeAction[]
+  /** what this week started from, so a card's 「−」 can play it again without it (me/undo.ts); gone once the week settles */
+  weekStart?: WeekStart
+  /** where in weekDone the replay starts: everything before it cannot be replayed (a duel that was sat through) */
+  undoFrom?: number
   /** this week's training base, rolled once and kept so every session of the week is worth the same (me/growth.ts weekGain) */
   trainWeek?: { week: number; g: number }
   /** stream and content money earned this week, against the platform's weekly cap (me/stream.ts payMedia); cleared at the settlement */
