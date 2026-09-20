@@ -1,5 +1,5 @@
 /** Offline, training-only paired diagnostic. Other candidate mechanisms are
- * frozen identically; baseline replaces only auto.ts/growth.ts with HEAD.
+ * frozen identically; baseline replaces only auto.ts/growth.ts with release 57a4e6b.
  * node --expose-gc scripts/probe_role_training.mjs [years=2] [role]
  * Prints JSONL, never writes source or saves. Not a final release attestation. */
 import assert from 'node:assert/strict'
@@ -10,12 +10,13 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const baselineRef = '57a4e6b34be4c3cfc2fbcf000b59d07ef5be27bf'
 const years = Number(process.argv[2] ?? 2)
 assert.ok(Number.isInteger(years) && years >= 1 && years <= 4)
 const sha = x => createHash('sha256').update(x).digest('hex')
 const frozen = new Map()
 const overrides = new Map(['src/engine/me/auto.ts', 'src/engine/me/growth.ts'].map(p =>
-  [resolve(root, p), execFileSync('git', ['show', `HEAD:${p}`], { cwd: root, encoding: 'utf8' })]))
+  [resolve(root, p), execFileSync('git', ['show', `${baselineRef}:${p}`], { cwd: root, encoding: 'utf8' })]))
 const offline = () => {
   const mem = new Map()
   globalThis.localStorage = { getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: k => mem.delete(k), clear: () => mem.clear() }
@@ -38,7 +39,7 @@ for (const variant of ['candidate', 'baseline']) {
 }
 const selectedRoles = process.argv[3] ? [process.argv[3]] : Object.keys(engines.candidate.api.ROLE_TALENT_PRESETS)
 assert.ok(selectedRoles.every(role => role in engines.candidate.api.ROLE_TALENT_PRESETS), 'Unknown role filter')
-console.log(JSON.stringify({ type: 'metadata', years, baselineHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+console.log(JSON.stringify({ type: 'metadata', years, baselineHead: baselineRef, candidateHead: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   bundles: Object.fromEntries(Object.entries(engines).map(([k, v]) => [k, v.sha])), frozenSourceSha: sha(JSON.stringify([...frozen].sort())),
   selectedRoles, note: 'Selected roles x 1 seed, matched role presets, EMEA/chal/netcafe, only auto+growth differ; work-in-progress diagnostic, not population estimate.' }))
 const rows = []

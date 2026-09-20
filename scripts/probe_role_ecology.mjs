@@ -86,12 +86,16 @@ try {
     }
   } else {
     let n = 0
+    const baselineInitials = new Map()
     for (const role of roles) for (const seed of [9417, 9563]) for (const start of ['pre', 't1']) for (const variant of ['baseline', 'candidate']) {
       globalThis.gc?.(); offline(); const api = engines[variant]
       const s = api.createCareer({ name: 'RoleCareer', role, region: 'EMEA', year: 2026, start, originKey: 'rich', talents: api.emptyTalents(), seed })
       const p = s.players[s.me.id]
       const row = { type: 'career', variant, role, seed, start, initial: { attrs: { ...p.attrs }, caps: { ...p.caps }, overall: p.overall },
         weeks: 0, preWeeks: 0, tier2Weeks: 0, tier1Weeks: 0, benchWeeks: 0, starts: 0, mvps: 0, ratingSum: 0, firstTier1: null, yearly: [] }
+      const pairKey = `${role}:${seed}:${start}`
+      if (variant === 'baseline') baselineInitials.set(pairKey, row.initial)
+      else assert.deepEqual(row.initial, baselineInitials.get(pairKey), 'Paired starts must match exactly')
       const seen = new Set()
       while (s.year < 2030 && !s.gameOver && s.me.phase !== 'retired') {
         assert.ok(row.weeks < 230, 'weekly guard')
