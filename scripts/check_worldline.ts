@@ -41,6 +41,8 @@ import { readFileSync } from 'node:fs'
 import { createCareer, emptyTalents, startPool } from '../src/engine/me/career'
 import type { CareerOpts } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
+import { MeMatch } from '../src/engine/me/matchplay'
+import { simulateMatch } from '../src/engine/match'
 import { KEEP, SHOWN, clubNameAt, historyLedger, keptOf, placeMoved, rewriteLines, rewriteOf, seasonLedger, titleRealChamp } from '../src/engine/me/worldline'
 import type { Rewrite, SeasonLedger } from '../src/engine/me/worldline'
 import { REWRITE_WEIGHT, becauseOfMe, careerLine, careerRewrites, keptOrder, partLine, retitledLine, shareLine } from '../src/engine/me/rewrites'
@@ -48,7 +50,7 @@ import { cleanHall, careerIdOf, lastCareerLine, lastRewriteLine, noteHall, readH
 import { retire } from '../src/engine/me/endings'
 import { isIntlComp, isQualifier } from '../src/engine/me/compclass'
 import { eventOf, eventsOf, progressCircuit, realPlacesOf, realSideOf, worldIdOf } from '../src/engine/circuit'
-import { SEASON_DAYS, advanceDay } from '../src/engine/season'
+import { SEASON_DAYS, advanceDay, commitFixture, fixtureRng } from '../src/engine/season'
 import type { MeSeason, MomentItem } from '../src/engine/me/types'
 import type { Competition, GameState } from '../src/engine/types'
 
@@ -287,23 +289,88 @@ const A = career('一 2021 北美 · Sentinels', { region: 'North America', team
 const B = career('一 2021 欧洲 · 强队替补', { region: 'Europe', seed: 1 }, 2)
 check([...A.seen.values(), ...B.seen.values()].some((e) => e.kind === 'intl'), '两局里至少有一项国际赛换了冠军（否则这一步什么也没验）')
 check([...A.seen.values(), ...B.seen.values()].some((e) => !!e.mine?.there), '两局里至少有一条写了我在不在场（否则这一步什么也没验）')
-// a Challengers start in Korea whose club takes one of 2021's stages with me starting: 「因为你」.
-// The seed has to be re-picked whenever the world's dice move, and this is the third time. Seed 7 until
-// 2026-09-18, when a club on history's open-qualifier list began to play the decider a club off it gets
-// (engine/circuit.ts offerPlayIn): seed 7's TUBEPLE Gaming then finished fifth in that stage. Seed 2 until
-// 2026-09-19, when the week's actions moved from the settlement to the click (me/week.ts doAction) and the
-// weekly rng stream shifted with them: seed 2's club then took no stage of its own. Seed 10 is the same
-// case in the world as it plays now — its TUBEPLE Gaming takes 第一赛段 挑战者赛 1 from DAMWON Gaming with
-// me starting (of seeds 1–20, 10, 14, 15 and 20 keep one).
+// Keep this random career, including its seed, as coverage of the facts that actually happened.
+// It used to supply the only positive 「因为你」 case, by repeatedly re-picking a seed whose club won.
+// A historically correct map pool can change those results without breaking ledger persistence.
+// The controlled tournament below guarantees the positive through the real match/season writers instead.
 const C = career('一 2021 韩国 · 二线', { region: 'Korea', start: 'chal', seed: 10 }, 1)
 check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some((r) => !!r.there))), '存下的赛季记录里至少有一条写了我在场（否则这一步什么也没验）')
-check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some(becauseOfMe))), '存下的赛季记录里至少有一条「因为你」（否则这一步什么也没验）')
+
+/**
+ * A controlled result, not a lucky seed: Fnatic starts its player and wins Reykjavík's real bracket.
+ * Only the player's round outcomes are controlled, through MapSim's public forced-round API. The engine
+ * still produces scores, lineups, match records, placings and trophies; no champion/attendance/rewrite is
+ * assigned by this test. The real weekly year-end writer must then preserve the pre-winter ledger.
+ */
+function controlledTitleSeason(): GameState {
+  const state = createCareer({ name: 'Worldline controlled', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', year: 2021, seed: 3, teamId: 'V21T2593' } as CareerOpts)
+  const me = state.me!
+  const comp = state.comps['ev:353']
+  const year = state.year
+  // Isolate the real event, not a made-up final. Its production draw/progression determines every tie.
+  state.comps = { [comp.key]: comp }
+  state.fixtures = []
+  state.day = comp.circuit!.end
+  progressCircuit(state, comp, [])
+  check(comp.circuit!.mode === 'sim' && comp.teams.includes(state.myTeam), '定向正例：生产抽签把 Fnatic 放进 Reykjavík 的模拟赛制')
+  let games = 0
+  while (!comp.champion && games++ < 100) {
+    const f = state.fixtures.find((x) => x.comp === comp.key && !x.played)
+    if (!check(!!f, '定向正例：真实比赛树仍有下一场可结算')) break
+    state.day = Math.max(state.day, f!.day)
+    if (f!.teamA === state.myTeam || f!.teamB === state.myTeam) {
+      // A healthy named starter is a fixture input, not a hand-written started flag in the record.
+      const club = state.teams[state.myTeam]
+      club.starters = [me.id, ...club.roster.filter((id) => id !== me.id).slice(0, 4)]
+      state.players[me.id].injuredUntil = 0
+      const match = new MeMatch(state, f!)
+      let beats = 0
+      while (!match.done && beats++ < 30) {
+        const beat = match.step() // opens maps, closes them, and commits the completed fixture/record
+        if (beat === 'map-start') {
+          const map = match.map!
+          while (!map.over) map.playRound(match.side!)
+        }
+      }
+      check(match.done && !!match.record?.started && !!match.record.won, '定向正例：MeMatch 实际结算首发胜场')
+    } else {
+      commitFixture(state, f!, simulateMatch(state, f!.teamA, f!.teamB, f!.bo, fixtureRng(state, f!)))
+    }
+  }
+  check(comp.champion === state.myTeam && comp.finished[0] === state.myTeam && comp.awarded === true,
+    '定向正例：比赛结算产生玩家队冠军、最终名次和奖杯，而非测试直接赋值')
+  const beforeRead = J(state)
+  const ledger = seasonLedger(state)
+  const entry = historyLedger(state).find((e) => e.key === comp.key)
+  if (entry) verify(state, entry, '定向正例')
+  check(!!entry && entry.champChanged && entry.mine?.there === 'started' && ledger.rewrites.some(becauseOfMe),
+    '定向正例：真实比赛记录被账本读为改写冠军且玩家首发')
+  check(J(state) === beforeRead, '定向正例：读取比赛事实/账本不改变世界')
+
+  state.day = SEASON_DAYS - 1
+  me.weekDay = 0
+  const expected = atTheTurn(JSON.parse(J(state)) as GameState, year, '定向正例 赛季末')
+  let weeks = 0
+  while (state.year === year && me.phase !== 'retired' && weeks++ < 3) autoWeek(state)
+  const row = me.seasons.find((s) => s.year === year)
+  check(state.year === year + 1 && !!row && !!expected, '定向正例：真实周推进跨年并写入赛季记录')
+  check(!!row && !!expected && J({ rewrites: row.rewrites ?? [], retitled: row.retitled }) === J(expected),
+    '定向正例：存下的完整赛季账本与冬歇前读取值逐字相等')
+  check(!!row?.rewrites?.some(becauseOfMe), '存下的赛季记录里至少有一条「因为你」（否则这一步什么也没验）')
+  const restored = JSON.parse(J(state)) as GameState
+  check(J(restored.me!.seasons) === J(me.seasons) && !!restored.me!.seasons.find((s) => s.year === year)?.rewrites?.some(becauseOfMe),
+    '定向正例：序列化再读取完整赛季记录，仍保留「因为你」及所有事实字段')
+  if (!bad) pass(`定向正例：${games} 场真实比赛树结算，首发夺冠 → 冬歇前账本 → 赛季落账 → 序列化读取`)
+  return restored
+}
+const D = controlledTitleSeason()
 
 // ---------------------------------------------------------------- 五 the hall, and saves from before
 console.log('\n五 殿堂、生涯名片、开新生涯')
 hallOf('一 北美', A.state)
 hallOf('一 欧洲', B.state)
 hallOf('一 韩国', C.state)
+hallOf('定向正例', D)
 {
   // a save from before 2026-09-18: its rows keep neither field, and nothing is said — never 「暂无」
   const strip = (s: MeSeason): MeSeason => { const x = { ...s }; delete x.rewrites; delete x.retitled; return x }

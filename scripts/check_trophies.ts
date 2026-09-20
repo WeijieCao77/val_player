@@ -163,6 +163,21 @@ function judgeFacts(label: string, state: GameState, list: Trophy[]): void {
 /** every number written in a sentence */
 const numsIn = (s: string): number[] => (s.match(/\d+/g) ?? []).map(Number)
 
+/** Parentheses inside a recorded proper name are part of that name, not a
+ * claim about the final's maps (e.g. 晋级赛（2030 访客席位）). Remove only
+ * complete known names containing parentheses; every remaining parenthetical
+ * map claim still has to match the final's actual map ledger. Do NOT ignore
+ * arbitrary parentheses merely because the current prose seldom lists maps.
+ */
+function unsupportedMapClaims(t: Trophy, text: string): string[] {
+  let facts = text
+  for (const name of [t.name, t.club, t.realChamp, t.final?.opp, t.final?.label, ...t.clubs]) {
+    if (name?.includes('（')) facts = facts.split(name).join('')
+  }
+  return (facts.match(/（([^）]*)）/g) ?? []).map(m => m.slice(1, -1)).filter(claim =>
+    !claim.split('、').every(map => (t.final?.maps ?? []).includes(map)) && !/^\d+-\d+$/.test(claim))
+}
+
 function judgeProse(label: string, state: GameState, list: Trophy[]): void {
   const wrong: string[] = []
   const seen = new Map<string, Trophy>()
@@ -189,12 +204,7 @@ function judgeProse(label: string, state: GameState, list: Trophy[]): void {
     if (t.realChamp && !text.includes(t.realChamp)) say('真实历史的冠军没写进去')
     if (!t.realChamp && /真实历史/.test(text)) say('没有可写的真实历史，却写了')
     // a map named in the passage is a map the record kept
-    for (const m of (text.match(/（([^）]*)）/g) ?? [])) {
-      const parts = m.slice(1, -1).split('、')
-      if (parts.every((x) => (t.final?.maps ?? []).includes(x))) continue
-      if (/^\d+-\d+$/.test(m.slice(1, -1))) continue
-      say(`括号里的「${m.slice(1, -1)}」不是明细里的地图`)
-    }
+    for (const claim of unsupportedMapClaims(t, text)) say(`括号里的「${claim}」不是明细里的地图`)
     // every figure the passage writes itself is the year, the score or the number of starts — the figures inside a
     // name the save chose (「挑战者赛 2」, 「杯赛 1」) belong to that name, so the names come out first
     let rest = text
@@ -249,6 +259,32 @@ judgeProse('C', C, ct)
 check(ct.some((t) => !!t.final && t.final.maps.length > 0),
   `C：刚夺冠的卡上有决赛和地图（${ct.map((t) => `${t.name}:${t.final ? `${t.final.score}/${t.final.maps.length} 图` : '无'}`).join('、')}）`)
 check(ct.every((t) => !t.clubId || !!t.club), 'C：夺冠俱乐部读得出来')
+
+/* ---- names with parentheses are not map claims; genuine claims stay strict ---- */
+{
+  const source = ct.find(t => !!t.final)!
+  const name = '中国 · 晋级赛（2030 访客席位）'
+  const t: Trophy = { ...source, comp: name, name, tier: 'league',
+    club: '测试队（华东）', realChamp: '历史队（青年）',
+    final: { ...source.final!, label: '总决赛（BO5）', opp: '对手（华北）', maps: ['Ascent', 'Bind'] } }
+  const lines = trophyProse(t)
+  check(lines.join('').includes(name) && unsupportedMapClaims(t, lines.join('')).length === 0,
+    '括号回归：实际生成的赛事/队名/轮次括号不误当地图')
+  // Put claims in the final's own sentence, not the event title. Neither a
+  // real-but-unplayed map nor a wholly invented map may become a passing test.
+  const withFinalMaps = (maps: string) => lines.map((line, i) => i === 1 ? `${line}（${maps}）` : line).join('')
+  check(unsupportedMapClaims(t, withFinalMaps('Ascent、Bind')).length === 0,
+    '括号回归：含赛事括号时，决赛地图段仍接受明细中的地图')
+  for (const map of ['Haven', 'InventedMap']) {
+    const wrong = unsupportedMapClaims(t, withFinalMaps(`Ascent、${map}`))
+    check(wrong.length === 1 && wrong[0] === `Ascent、${map}`,
+      `括号回归：决赛地图段中的 ${map} 不在明细，必须失败`)
+  }
+  const old = { ...t, final: null }
+  check(unsupportedMapClaims(old, trophyProse(old).join('')).length === 0
+    && unsupportedMapClaims(old, `${trophyProse(old).join('')}（Ascent）`).length === 1,
+    '括号回归：没有决赛明细时仍不能编造地图；赛事名称保留')
+}
 
 /* ---- a save from before any of the newer records ---- */
 {
