@@ -7,6 +7,8 @@ import { compCn } from '../../engine/me/compname'
 import { compClass } from '../../engine/me/compclass'
 import { hallLine } from '../../engine/me/hall'
 import { rankAt, rankShort } from '../../engine/me/rank'
+import { TROPHY_RANK, trophyTier } from '../../engine/me/trophies'
+import type { TrophyTier } from '../../engine/me/trophies'
 import type { MeSeason, MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
@@ -239,20 +241,17 @@ function WorldLines({ me }: { me: MeState }) {
 /*  the three tiers                                                     */
 /* ------------------------------------------------------------------ */
 
-type Tier = 'champions' | 'masters' | 'league'
-const RANK: Record<Tier, number> = { champions: 0, masters: 1, league: 2 }
-
 /**
  * 冠军赛 > 大师赛 > 赛区冠军, read off what the event is rather than off an
  * English word in its name — the same call me/endings.ts judges the ending by.
- * LOCK//IN is an international, so it sits with the 大师赛.
+ * LOCK//IN is an international, so it sits with the 大师赛. The call itself now
+ * lives beside the trophy case that shares this wall's order
+ * (engine/me/trophies.ts), so there is one ranking of a trophy and not three.
  */
-function tierOf(name: string): Tier {
-  const c = compClass(name)
-  return c === 'champions' ? 'champions' : c === 'masters' || c === 'lockin' ? 'masters' : 'league'
-}
+const RANK = TROPHY_RANK
+const tierOf = trophyTier
 
-const ICON: Record<Tier, ReactNode> = {
+const ICON: Record<TrophyTier, ReactNode> = {
   champions: <TrophyChampions />,
   masters: <TrophyMasters />,
   league: <TrophyLeague />,

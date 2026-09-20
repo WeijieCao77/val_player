@@ -420,7 +420,11 @@ export default function Career({ opened, onHome }: {
             return <button className="primary hero-go" onClick={advance} title={go.title}>{go.label}</button>
           })()}
           <div className="tiles">
-            <div className="tile"><small>冠军</small><b>{me.seasons.reduce((s, x) => s + x.titles.length, 0)}</b></div>
+            {/* the trophies themselves (me.titles), not the finished seasons' rows: a season's row is written the
+                night the year turns (me/week.ts), so a trophy lifted in the season being played was not counted
+                until the winter — a career that had just won a Masters and a Champions read 「冠军 0」 while the
+                成就 page's 本局奖杯 listed five (2026-09-19, beside ui/me/TrophyCase.tsx) */}
+            <div className="tile"><small>冠军</small><b>{me.titles.length}</b></div>
             {/* the tier's badge beside the words (asked 2026-09-18: 「连段位图标都不显示」); the words are as they were */}
             <div className={`tile${rank ? ' rank' : ''}`}>
               {rank && <RankBadge tier={rank.tier} div={rank.div} size={40} />}

@@ -1,0 +1,79 @@
+/* ---------------------------------------------------------------- 本局奖杯 (ui/me/TrophyCase.tsx)
+
+   The trophy case at the top of 成就, in the 转播红 the moment cards and the history ledger wear
+   (moment.css, worldline.css): a red slanted name strip over a wash of the same red with its bar down
+   the left. Each trophy is a card you can press; what opens is the ordinary card in front of the page.
+
+   Every rule sits under .trc / .trd, so none of it reaches the achievement list beside it. Colours are
+   the theme's tokens only — the three themes set --accent, --accent-wash and --accent-line themselves. */
+
+.trc-tag {
+  display: inline-block; margin: 0 0 6px; padding: 3px 20px 3px 10px;
+  background: var(--accent-fill, var(--accent)); color: #fff;
+  font-size: var(--t-tiny); font-weight: 800; letter-spacing: .14em; line-height: 1.6;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.trc-none { margin: 0; color: var(--muted); font-size: var(--t-body); line-height: 1.8; }
+
+.trc-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 860px) { .trc-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* a card is a button: the whole tile is the target, and it has to clear a thumb on a phone */
+.trc {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; min-height: 60px;
+  padding: 9px 11px; text-align: left; white-space: normal;
+  border: 1px solid var(--accent-line); border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-wash, color-mix(in srgb, var(--accent) 10%, transparent));
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.trc:hover { background: var(--accent-wash-2, var(--accent-wash)); }
+.trc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* watched from the bench: the same card, quieter, the way the wall rings a trophy it did not play for */
+.trc.ring { border-color: var(--line); border-left-color: var(--faint); background: var(--bg-rail); }
+.trc.ring:hover { background: var(--panel-2); }
+
+.trc-ic { flex: none; width: 30px; height: 30px; color: var(--accent); }
+.trc.ring .trc-ic { color: var(--faint); }
+.trc-ic svg { width: 100%; height: 100%; display: block; }
+
+.trc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.trc-n { font-size: var(--t-body); font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.trc-m { font-size: var(--t-tiny); color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+.trc-p { font-size: var(--t-tiny); font-weight: 650; color: var(--accent); }
+.trc.ring .trc-p { color: var(--muted); font-weight: 600; }
+.trc-go { flex: none; align-self: center; color: var(--faint); font-size: var(--t-small); }
+
+/* ---- the card that opens ---- */
+
+.trd-head { margin: 0 0 4px; font-size: 24px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.trd-when { margin: 0 0 12px; font-size: var(--t-small); color: var(--muted); line-height: 1.7; overflow-wrap: anywhere; }
+.trd-prose { margin: 0 0 14px; }
+.trd-prose p { margin: 0 0 6px; font-size: var(--t-body); line-height: 1.95; color: var(--text); }
+.trd-prose p:last-child { margin-bottom: 0; }
+
+.trd-sec { margin: 0 0 12px; }
+.trd-sec > h4 {
+  margin: 0 0 5px; font-size: var(--t-tiny); font-weight: 700; letter-spacing: .1em; color: var(--accent);
+}
+.trd-sec p { margin: 0 0 3px; font-size: var(--t-small); line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
+.trd-sec p b { color: var(--text); font-weight: 700; }
+
+/* the run: one row a match, the final marked */
+.trd-run { display: flex; flex-direction: column; gap: 4px; }
+.trd-m {
+  display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline;
+  padding: 5px 9px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--bg-rail);
+  font-size: var(--t-tiny); color: var(--muted);
+}
+.trd-m.last { border-color: var(--accent-line); background: var(--accent-wash, transparent); }
+.trd-m .lab { font-weight: 700; color: var(--text); }
+.trd-m .sc { font-variant-numeric: tabular-nums; font-weight: 700; }
+.trd-m .sc.w { color: var(--win); }
+.trd-m .sc.l { color: var(--loss); }
+.trd-m .me { color: var(--text); font-variant-numeric: tabular-nums; }
+.trd-m .hi { flex-basis: 100%; color: var(--faint); line-height: 1.6; }
+
+.trd-line { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 4px; }
+.trd-line > span { font-size: var(--t-tiny); color: var(--muted); }
+.trd-line > span b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 700; margin-left: 4px; }

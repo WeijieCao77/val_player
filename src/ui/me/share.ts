@@ -5,9 +5,9 @@ import { originName, originOf } from '../../engine/me/origins'
 import { rankAt, rankShort, serverAt } from '../../engine/me/rank'
 import { QR_RUNS, QR_SIZE, QR_URL } from './qr'
 import { compCn } from '../../engine/me/compname'
-import { compClass } from '../../engine/me/compclass'
 import { cny } from '../../engine/me/moneyfmt'
 import { careerRewrites, retitledLine, shareLine } from '../../engine/me/rewrites'
+import { TROPHY_RANK, trophyTier } from '../../engine/me/trophies'
 import type { LookKey } from '../../engine/me/hall'
 
 /**
@@ -284,11 +284,12 @@ function drawQr(g: CanvasRenderingContext2D, x: number, y: number, size: number)
  * `${year} 全球冠军赛`) — so on every modern save the picture ranked a world
  * title level with a Challengers stage, and named it first only by luck of the
  * year. Only the pre-2023 English names ever matched.
+ *
+ * The call is the trophy case's (engine/me/trophies.ts), counted upwards here
+ * because the card draws a bigger cup for a bigger number: one ranking of a
+ * trophy, read three ways.
  */
-const tierOf = (t: string) => {
-  const c = compClass(t)
-  return c === 'champions' ? 3 : c === 'masters' || c === 'lockin' ? 2 : 1
-}
+const tierOf = (t: string) => 3 - TROPHY_RANK[trophyTier(t)]
 
 /**
  * The ending's first sentence: the verdict in words, under its headline. The

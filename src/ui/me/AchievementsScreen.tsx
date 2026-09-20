@@ -2,6 +2,7 @@ import { useGame } from './ctx'
 import { Panel } from './common'
 import { ACHIEVEMENTS, ACH_ROUTES, earnedTitles, rewardText, wearTitle, wornTitle } from '../../engine/me/achievements'
 import { ENDINGS_ME } from '../../engine/me/endings'
+import TrophyCase from './TrophyCase'
 
 export default function AchievementsScreen() {
   const { game, commit, go } = useGame()
@@ -13,6 +14,9 @@ export default function AchievementsScreen() {
   // a phone gets one column: the list first, the endings under it
   const narrow = typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 720px)').matches
   return (
+    <>
+      {/* 本局奖杯 (ui/me/TrophyCase.tsx): this career's trophies, heaviest first, above the list of achievements */}
+      <TrophyCase />
     <div className="grid" style={{ gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : 'minmax(0, 1.6fr) minmax(0, 1fr)' }}>
       <Panel title={`成就 · ${got}/${ACHIEVEMENTS.length}`} actions={worn ? <span className="tag win" title="称号">{worn}</span> : undefined}>
         <p className="tiny faint" style={{ marginTop: 0 }}>解锁当周发奖励，每项只发一次。{titles.length > 1 ? '称号可以换着戴。' : ''}</p>
@@ -60,5 +64,6 @@ export default function AchievementsScreen() {
         ))}
       </Panel>
     </div>
+    </>
   )
 }
