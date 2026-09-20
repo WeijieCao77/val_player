@@ -81,8 +81,13 @@ const TWO = /两个|连着|双杀/
 const WIN = /(?<!没)拿下|收下|抢了回来|赢了下来/
 const LOSS = /丢了|没拿下|没收住|溜走|交了出去|没翻过来|没扛住|没打起来/
 const STAMP = /(^|[，。—])(可|好在|还好)?把?(这一波|这回合|这一回合|手枪局|赛点|回合)?(最后)?(还是|也|稳稳|照样|反而|硬是)?(拿下|丢了|没拿下|收下|没收住|没守住|抢了回来|交了出去|没翻过来|没扛住)了?。$/
-/** words from another game: the official ones are 辐能芯片、安装、拆除、残局 */
-const FOREIGN = /下包|炸包|拆包|包点|包已经|残血|团战/
+/**
+ * Words that are not this game's. 下包/炸包/拆包/包点/残血/团战 come from another
+ * game; 芯片 and 辐能芯片 were ours, invented here and used for months until a
+ * player reported it on 2026-09-20 — 国服 calls the Spike 爆能器 (繁中 辐能核心).
+ * The official ones are 爆能器、安装、拆除、残局.
+ */
+const FOREIGN = /下包|炸包|拆包|包点|包已经|残血|团战|芯片/
 const CELLS: HlCell[] = ['okWin', 'okLoss', 'failWin', 'failLoss']
 
 /** force whether the next call lands, touching only that roll: choose() draws the round from the same stream next */
@@ -109,7 +114,7 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
   for (const id of Object.keys(NODE_HL)) if (!ids.has(id)) fail(`文案表里有不存在的节点 ${id}`)
   const byPhase: Partial<Record<NodePhase, string[]>> = {}
   for (const n of NODES) {
-    for (const s of [n.q, n.ctx, ...n.a.map((o) => o.t)]) if (FOREIGN.test(s)) fail(`${n.id}：「${s}」用了别的游戏的说法`)
+    for (const s of [n.q, n.ctx, ...n.a.map((o) => o.t)]) if (FOREIGN.test(s)) fail(`${n.id}：「${s}」用了不该用的说法`)
     const rows: HlOpt[] | undefined = NODE_HL[n.id]
     if (!rows || rows.length !== n.a.length) { fail(`${n.id}：文案 ${rows?.length ?? 0} 组，选项 ${n.a.length} 个`); continue }
     rows.forEach((o, i) => {
@@ -128,7 +133,7 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
           if ((k === '' || k === 'k0') && KILL.test(s)) fail(`${where}${k && `.${k}`}：不按击杀数挑，却说了你杀了人：${s}`)
           if ((k === 'k1' || k === 'k2') && !KILL.test(s)) fail(`${where}.${k}：按击杀数挑的句子没说击杀：${s}`)
           if (k === 'k1' && TWO.test(s)) fail(`${where}.k1：一杀的句子说了两个：${s}`)
-          if (FOREIGN.test(s)) fail(`${where}${k && `.${k}`}：用了别的游戏的说法：${s}`)
+          if (FOREIGN.test(s)) fail(`${where}${k && `.${k}`}：用了不该用的说法：${s}`)
           if (/这张图(拿下了|丢了|打平了)/.test(s)) fail(`${where}${k && `.${k}`}：句子自己说了图的结果：${s}`)
         }
       }
@@ -140,7 +145,7 @@ function chooseForced(mm: MeMatch, idx: number, lands: boolean | undefined): Nod
     for (const s of h.flat()) {
       hints++
       if (WIN.test(s) || LOSS.test(s) || KILL.test(s)) fail(`${n.id} 的局面提示说了回合结果或击杀：${s}`)
-      if (FOREIGN.test(s)) fail(`${n.id} 的局面提示用了别的游戏的说法：${s}`)
+      if (FOREIGN.test(s)) fail(`${n.id} 的局面提示用了不该用的说法：${s}`)
     }
     // the facts a node reads point at options it has; an attribute is compared on one option, so its two facts come together
     for (const [k, i] of Object.entries(n.lean ?? {})) {
@@ -237,8 +242,8 @@ function premiseOnRecord(c: Call, rl: RoundLog, won: boolean): string | null {
   if (p.planted) {
     st.planted++
     const attackersWon = won === myAttack
-    if (rl.end === 'time') return '芯片已经安装，回合却以时间到结束'
-    if (attackersWon ? rl.end === 'defuse' : rl.end === 'spike') return `芯片已经安装，${attackersWon ? '进攻' : '防守'}方赢了，回合却以 ${rl.end} 结束`
+    if (rl.end === 'time') return '爆能器已经安装，回合却以时间到结束'
+    if (attackersWon ? rl.end === 'defuse' : rl.end === 'spike') return `爆能器已经安装，${attackersWon ? '进攻' : '防守'}方赢了，回合却以 ${rl.end} 结束`
   }
   if (!p.alive) return null
   const standing = c.ctx.alive
@@ -395,7 +400,7 @@ function verify(c: Call): void {
   // the hint: its fact true of the moment, its favoured option what the node says, its words clean
   if (!c.hint) st.noHint++
   else {
-    for (const s of [c.hint.text, c.hint.words]) if (WIN.test(s) || LOSS.test(s) || KILL.test(s) || FOREIGN.test(s)) { st.hintDirty++; fail(`${node.id} 的局面提示说了结果、击杀或别的游戏的词：${s}`) }
+    for (const s of [c.hint.text, c.hint.words]) if (WIN.test(s) || LOSS.test(s) || KILL.test(s) || FOREIGN.test(s)) { st.hintDirty++; fail(`${node.id} 的局面提示说了结果、击杀或不该用的词：${s}`) }
     const kind = c.hint.fact === 'pool' ? 'pool' : FACT_CLARITY[c.hint.fact]
     st.reads[kind][0]++
     st.reads[kind][1] += +(c.coach === c.hint.fav)
@@ -523,7 +528,7 @@ console.log(`\n二、${st.series} 场 BO3（2 个角色 × 两边 × 5 种答法
 console.log(`  四格出现：成+赢 ${st.cells.okWin} · 成+输 ${st.cells.okLoss} · 败+赢 ${st.cells.failWin} · 败+输 ${st.cells.failLoss} · 说到你击杀的句子 ${st.killLines}`)
 console.log(`  句子和回合记录矛盾 ${st.contra}（${f1(pct(st.contra, st.calls))}%）· 说你杀了人而你这回合 0 杀 ${st.killZero} · 击杀档不对 ${st.killBucket}`)
 console.log(`  定回合的决定和回合结果不符 ${st.forced} · 没钉在那一回合上 ${st.unpinned} · 引擎读数和记下的不一致 ${st.plumbing} · 说图打完了却没打完（或反过来）${st.mapClaim} · 缺句子 ${st.fallback}`)
-console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise}（其中逐个核对了芯片 ${st.planted} 次、场上人数 ${st.alive} 次）· 副本和真打不一样 ${st.peek} · 一张图超过 3 次（加时那一次另算）${st.overQuota}`)
+console.log(`  问在手枪局 ${st.pistol} · 不在关键回合 ${st.slot} · 前提不成立 ${st.premise}（其中逐个核对了爆能器 ${st.planted} 次、场上人数 ${st.alive} 次）· 副本和真打不一样 ${st.peek} · 一张图超过 3 次（加时那一次另算）${st.overQuota}`)
 console.log(`  退役节点被问到 ${st.retired} · 兜底节点占了阶段节点的位置 ${st.tier}`)
 const readPct = (k: 'plain' | 'subtle' | 'pool') => `${f1(pct(st.reads[k][1], st.reads[k][0]))}%（${st.reads[k][0]} 次）`
 const readAll = (['plain', 'subtle', 'pool'] as const).reduce((s, k) => [s[0] + st.reads[k][0], s[1] + st.reads[k][1]], [0, 0])
@@ -550,7 +555,7 @@ if (st.fallback) fail(`${st.fallback} 次没有对应的句子（定回合节点
 if (st.noRound) fail(`${st.noRound} 次找不到决定对应的回合`)
 if (st.pistol) fail(`${st.pistol} 次决定问在了手枪局`)
 if (st.slot) fail(`${st.slot} 次决定不在它那个关键回合的范围里`)
-if (st.premise) fail(`${st.premise} 次决定的前提（攻防、购买、芯片、场上人数、赛点）和回合记录对不上`)
+if (st.premise) fail(`${st.premise} 次决定的前提（攻防、购买、爆能器、场上人数、赛点）和回合记录对不上`)
 if (st.peek) fail(`${st.peek} 次问的时候在副本上打的回合和真打的不一样`)
 if (st.overQuota) fail(`${st.overQuota} 场有一张图问了超过 3 次，或加时问了不止一次`)
 if (st.retired) fail(`${st.retired} 次问到了退役的节点`)

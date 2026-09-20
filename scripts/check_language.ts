@@ -745,11 +745,14 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
   // one name for one thing (a copy audit, 2026-09-18): 晋级赛 for Ascension (not 晋升赛 / 升级赛), 半起 for a force buy (not
   // 半配 / 强起), 经济局 (not ECO), 选图 / 禁图 for the veto (not 「BP 过程」「ban 掉」「选下」) — in the career's own text and in
   // the shared engine's lines it shows: the stage names, the round highlights, the veto
-  const VARIANT = /晋升赛|升级赛|半配|强起|ECO|BP 过程|ban 掉|选下 /
+  // 2026-09-20, reported by a player: the Spike was called 芯片 / 辐能芯片 in 35 places. Neither is a real name —
+  // 国服 calls it 爆能器 (繁中 辐能核心), and 芯片 was invented here. It is banned outright, not listed as a variant,
+  // because there is nothing to choose between.
+  const VARIANT = /晋升赛|升级赛|半配|强起|ECO|BP 过程|ban 掉|选下 |芯片/
   const SHARED = ['src/engine/era.ts', 'src/engine/content.ts', 'src/engine/match.ts']
   const variants = [...lits, ...SHARED.flatMap(literalsOf)].filter((l) => VARIANT.test(l.s))
   if (variants.length) fail(`${variants.length} 句用了同一样东西的另一个叫法：${variants.slice(0, 4).map((l) => `${l.at}「${l.s.match(VARIANT)![0]}」`).join('；')}`)
-  else pass(`同一样东西一个叫法：晋级赛、半起、经济局、选图 / 禁图（生涯的字面，加上 ${SHARED.length} 个共用引擎文件里会显示出来的字）`)
+  else pass(`同一样东西一个叫法：晋级赛、半起、经济局、选图 / 禁图、爆能器（生涯的字面，加上 ${SHARED.length} 个共用引擎文件里会显示出来的字）`)
 
   // the weekly report puts 🏆 before a league's news and 📰 before a transfer; the engine's own line may already carry one
   const s = createCareer({ name: 'Words', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 9, year: 2026 })

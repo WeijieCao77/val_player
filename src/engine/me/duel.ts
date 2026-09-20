@@ -26,7 +26,7 @@ export const DUEL_SCENES: DuelScene[] = [
     a: [{ t: '抢先手，赌第一枪', dim: 'reaction', risk: 1.2 }, { t: '架住不动，等他探头', dim: 'awareness', risk: 0.8 }, { t: '跟队友同步进，不单挑', dim: 'teamwork', risk: 0.6 }] },
   { q: '中期：对面开始每回合往你守的点压。', ctx: '他显然想在教练面前把你打穿。',
     a: [{ t: '换个刁钻的位置反打', dim: 'awareness', risk: 1.0 }, { t: '叫一个队友过来补位', dim: 'communication', risk: 0.8 }, { t: '正面硬守，用枪说话', dim: 'aim', risk: 1.2 }] },
-  { q: '残局：芯片已经安装，场上只剩你和他。', ctx: '教练组全在身后看。',
+  { q: '残局：爆能器已经安装，场上只剩你和他。', ctx: '教练组全在身后看。',
     a: [{ t: '主动找他单挑', dim: 'clutch', risk: 1.1 }, { t: '藏起来，等他来拆', dim: 'awareness', risk: 0.7 }, { t: '假拆骗他出来', dim: 'clutch', risk: 1.0 }] },
   { q: '选人：教练问你要不要拿他的本命特工。', ctx: '拿了就是在他面前证明这个特工你也会。',
     a: [{ t: '拿，我玩得比他好', dim: 'utility', risk: 1.3 }, { t: '拿版本强势的，稳打', dim: 'utility', risk: 0.7 }, { t: '拿功能型的，帮队伍赢', dim: 'teamwork', risk: 0.9 }] },

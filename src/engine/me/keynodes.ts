@@ -65,36 +65,36 @@ export const KEY_NODES: NodeDef[] = [
     a: [{ t: '三个人抱在一起打一个点', dim: 'teamwork', risk: 0.55 }, { t: '你一个人绕去侧面找机会', dim: 'clutch', risk: 0.9 }] },
 
   // ---------------------------------------------------------------- post: the Spike is down
-  { id: 'post_hold', phase: 'post', q: '辐能芯片安装好了，你们散开守着它。', ctx: '对面的回防随时会到，站哪里、什么时候交技能，就在这几秒里定。',
+  { id: 'post_hold', phase: 'post', q: '爆能器安装好了，你们散开守着它。', ctx: '对面的回防随时会到，站哪里、什么时候交技能，就在这几秒里定。',
     premise: { side: 'atk', planted: true }, rec: 0,
     lean: { longLines: 0, duelUp: 1, duelDown: 0, teamUp: 2, teamDown: 0, theirSaved: 2, theirBroke: 1, theyHot: 0 },
     a: [
       { t: '找个远处的角度交叉架枪', dim: 'awareness', risk: 0.5 },
-      { t: '往前压，别让他们靠近芯片', dim: 'reaction', risk: 0.85 },
+      { t: '往前压，别让他们靠近爆能器', dim: 'reaction', risk: 0.85 },
       { t: '留着技能，等他们拆除时再交', dim: 'utility', risk: 0.6 },
     ] },
-  { id: 'post_retake', phase: 'post', q: '对面在点里安装了芯片，你们要回防。', ctx: '时间在走：等人齐了再进要时间，一个人先进是赌。',
+  { id: 'post_retake', phase: 'post', q: '对面在点里安装了爆能器，你们要回防。', ctx: '时间在走：等人齐了再进要时间，一个人先进是赌。',
     premise: { side: 'def', planted: true }, rec: 0,
     lean: { teamUp: 0, teamDown: 1, duelUp: 1, duelDown: 0, theirBroke: 1, theirSaved: 2, theyHot: 2, streakThem: 0 },
     a: [
       { t: '等人齐了一起回防', dim: 'teamwork', risk: 0.5 },
       { t: '你先摸进去，从背后打乱他们', dim: 'clutch', risk: 0.9 },
-      { t: '先把技能砸在芯片周围再进', dim: 'utility', risk: 0.6 },
+      { t: '先把技能砸在爆能器周围再进', dim: 'utility', risk: 0.6 },
     ] },
-  { id: 'post_three', phase: 'post', q: '芯片已经安装，双方各剩三个人。', ctx: '三对三，谁的配合先乱，这回合就是谁的麻烦。',
+  { id: 'post_three', phase: 'post', q: '爆能器已经安装，双方各剩三个人。', ctx: '三对三，谁的配合先乱，这回合就是谁的麻烦。',
     premise: { planted: true, alive: { mine: 3, theirs: [3, 3] } }, rec: 0,
     lean: { teamUp: 1, teamDown: 0, theyHot: 0, meHot: 1, longLines: 0, streakUs: 1, streakThem: 0 },
     a: [{ t: '三个人抱在一起打', dim: 'teamwork', risk: 0.5 }, { t: '分开，从两个方向夹', dim: 'communication', risk: 0.75 }] },
 
   // ---------------------------------------------------------------- clutch: who is left standing
-  { id: 'clutch_last_atk', phase: 'clutch', q: '你是最后一个人，芯片已经安装，对面还剩{M}个。', ctx: '他们必须来拆除；你不用赢下每一枪，只要让他们碰不到芯片。',
+  { id: 'clutch_last_atk', phase: 'clutch', q: '你是最后一个人，爆能器已经安装，对面还剩{M}个。', ctx: '他们必须来拆除；你不用赢下每一枪，只要让他们碰不到爆能器。',
     premise: { side: 'atk', planted: true, alive: { mine: 1, theirs: [1, 3] } }, rec: 1, decides: true,
     lean: { duelUp: 0, duelDown: 1, oneLeft: 0, manyLeft: 1, meHot: 0, theyHot: 1 },
     a: [{ t: '主动去找人', dim: 'clutch', risk: 1.0 }, { t: '藏好，等他们来拆除', dim: 'awareness', risk: 0.6 }] },
-  { id: 'clutch_last_def', phase: 'clutch', q: '队友都倒了，芯片在响，对面还剩{M}个人守着它。', ctx: '你得在它爆炸之前拆除，只有你一个人。',
+  { id: 'clutch_last_def', phase: 'clutch', q: '队友都倒了，爆能器在响，对面还剩{M}个人守着它。', ctx: '你得在它爆炸之前拆除，只有你一个人。',
     premise: { side: 'def', planted: true, alive: { mine: 1, theirs: [1, 3] } }, rec: 0, decides: true,
     lean: { duelUp: 1, duelDown: 0, oneLeft: 1, manyLeft: 0, meHot: 1, theyHot: 0 },
-    a: [{ t: '假拆，把守芯片的人骗出来', dim: 'awareness', risk: 0.75 }, { t: '先把人找出来再拆', dim: 'clutch', risk: 1.0 }] },
+    a: [{ t: '假拆，把守爆能器的人骗出来', dim: 'awareness', risk: 0.75 }, { t: '先把人找出来再拆', dim: 'clutch', risk: 1.0 }] },
   { id: 'clutch_two', phase: 'clutch', q: '你和一个队友还站着，对面还有{M}个人。', ctx: '两个人的残局：要么一起打，要么分开夹。',
     premise: { alive: { mine: 2, theirs: [2, 3] } }, rec: 0,
     lean: { downMen: 0, evenMen: 1, duelUp: 1, duelDown: 0, meHot: 1, theyHot: 0 },
@@ -171,8 +171,8 @@ export const KEY_NODES: NodeDef[] = [
     when: (c) => c.weak === 'clutch', premise: { alive: { mine: 2, theirs: [2, 2] } }, rec: 1,
     lean: { evenMen: 1, duelUp: 0, duelDown: 1, meHot: 0, theyHot: 1 },
     a: [{ t: '我去找人，先手在我', dim: 'clutch', risk: 0.95 }, { t: '和队友贴在一起，打同一个方向', dim: 'teamwork', risk: 0.5 }] },
-  { id: 'weak_hold', phase: 'post', tier: 'weak', q: '辐能芯片装好了，你的角度和队友的差一点就接不上。',
-    ctx: '枪线搭上了谁也靠不近芯片，搭不上就是各打各的。',
+  { id: 'weak_hold', phase: 'post', tier: 'weak', q: '爆能器装好了，你的角度和队友的差一点就接不上。',
+    ctx: '枪线搭上了谁也靠不近爆能器，搭不上就是各打各的。',
     when: (c) => c.weak === 'teamwork', premise: { side: 'atk', planted: true }, rec: 0,
     lean: { teamUp: 0, teamDown: 1, theirBroke: 1, theirSaved: 0, longLines: 1 },
     a: [{ t: '按队友的位置把枪线接上', dim: 'teamwork', risk: 0.5 }, { t: '自己挑个角度，等回防的第一个', dim: 'reaction', risk: 0.85 }] },
@@ -324,15 +324,15 @@ export const KEY_HL: Record<string, HlOpt[]> = {
   ],
   post_hold: [
     {
-      okWin: '你挑了个远处的角度，和队友的枪线交在芯片上，回防的人一个也靠不近。',
+      okWin: '你挑了个远处的角度，和队友的枪线交在爆能器上，回防的人一个也靠不近。',
       okLoss: '你们的交叉枪线架得很好，可对面的技能把角度一个个封死。',
       failWin: '你选的角度被对面先看到，只能挪位置。队友的枪线还在。',
       failLoss: '角度被对面先看到了。交叉枪线缺了一角。',
     },
     {
       okWin: { k0: '你往前压了一步，回防的人刚出门就被逼了回去。', k1: '你往前压，回防的第一个人刚出门就被你放倒。', k2: '你往前压，连着放倒两个回防的人。' },
-      okLoss: { k0: '你往前压拖住了回防，可他们从另一个方向摸到了芯片旁边。', k1: '你往前压放倒一个，可剩下的人从另一个方向摸到了芯片旁边。' },
-      failWin: '你往前压早了，被逼回芯片旁边。队友守住了角度。',
+      okLoss: { k0: '你往前压拖住了回防，可他们从另一个方向摸到了爆能器旁边。', k1: '你往前压放倒一个，可剩下的人从另一个方向摸到了爆能器旁边。' },
+      failWin: '你往前压早了，被逼回爆能器旁边。队友守住了角度。',
       failLoss: '你往前压早了，身后的角度就这么空了出来。',
     },
     {
@@ -345,7 +345,7 @@ export const KEY_HL: Record<string, HlOpt[]> = {
   post_retake: [
     {
       okWin: '你们等人到齐，从两个方向同时压进点。',
-      okLoss: '你们等人到齐才进，配合没毛病，可对面守芯片的角度太好。',
+      okLoss: '你们等人到齐才进，配合没毛病，可对面守爆能器的角度太好。',
       failWin: '等人齐等得太久，时间所剩无几。一进点就打得干净。',
       failLoss: '等人齐等得太久，进点的时候对面已经站好了位置。',
     },
@@ -356,10 +356,10 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '刚摸进去就被看到了。回防少了一个人。',
     },
     {
-      okWin: '你的技能把芯片周围砸得没人敢站，队友顺势压了进去。',
-      okLoss: '你的技能把芯片周围逼空了，可对面从远处架着枪。',
-      failWin: '你的技能砸空了，对面根本不在芯片旁边。队友找到了他们。',
-      failLoss: '技能砸空了。对面根本不在芯片旁边。',
+      okWin: '你的技能把爆能器周围砸得没人敢站，队友顺势压了进去。',
+      okLoss: '你的技能把爆能器周围逼空了，可对面从远处架着枪。',
+      failWin: '你的技能砸空了，对面根本不在爆能器旁边。队友找到了他们。',
+      failLoss: '技能砸空了。对面根本不在爆能器旁边。',
     },
   ],
   post_three: [
@@ -379,21 +379,21 @@ export const KEY_HL: Record<string, HlOpt[]> = {
   // who is left is filled in when asked, so no line here counts them
   clutch_last_atk: [
     {
-      okWin: { k0: '你主动去找，把他们逼得不敢靠近芯片。', k1: '你主动去找，抢先放倒一个，再没人敢去碰芯片。', k2: '你主动出击，这一回合放倒了两个，芯片始终没人碰到。' },
+      okWin: { k0: '你主动去找，把他们逼得不敢靠近爆能器。', k1: '你主动去找，抢先放倒一个，再没人敢去碰爆能器。', k2: '你主动出击，这一回合放倒了两个，爆能器始终没人碰到。' },
       failLoss: { k0: '你主动去找，却一直没摸到他们的位置。', k1: '你这回合放倒过一个，可主动去找的这一下扑了空。' },
     },
     {
-      okWin: { k0: '你藏在他们想不到的角落，一直没暴露，他们没能碰到芯片。', k1: '你藏住位置，抓住有人去拆除的那一下出了枪，这回合放倒一个。', k2: '你藏住位置，出枪的时机一次没错，这回合放倒两个。' },
+      okWin: { k0: '你藏在他们想不到的角落，一直没暴露，他们没能碰到爆能器。', k1: '你藏住位置，抓住有人去拆除的那一下出了枪，这回合放倒一个。', k2: '你藏住位置，出枪的时机一次没错，这回合放倒两个。' },
       failLoss: { k0: '你藏得太深，等你探出头，局面已经不在你手里了。', k1: '你这回合放倒过一个，可藏住的这一下被他们识破。' },
     },
   ],
   clutch_last_def: [
     {
-      okWin: { k0: '你假拆了一下，守芯片的人被骗得挪了位置，你趁这个空当回到芯片旁边。', k1: '你假拆骗出了守芯片的人，抢先放倒一个。', k2: '你假拆把人骗了出来，这回合放倒两个。' },
-      failLoss: { k0: '你假拆的声音没骗到任何人。', k1: '你这回合放倒过一个，可假拆没骗到守芯片的人。' },
+      okWin: { k0: '你假拆了一下，守爆能器的人被骗得挪了位置，你趁这个空当回到爆能器旁边。', k1: '你假拆骗出了守爆能器的人，抢先放倒一个。', k2: '你假拆把人骗了出来，这回合放倒两个。' },
+      failLoss: { k0: '你假拆的声音没骗到任何人。', k1: '你这回合放倒过一个，可假拆没骗到守爆能器的人。' },
     },
     {
-      okWin: { k0: '你绕开正面去找人，他们的注意力全在芯片上，你抓住空当回到芯片旁。', k1: '你先把人找了出来，放倒一个。', k2: '你先把人找了出来，这回合放倒两个。' },
+      okWin: { k0: '你绕开正面去找人，他们的注意力全在爆能器上，你抓住空当回到爆能器旁。', k1: '你先把人找了出来，放倒一个。', k2: '你先把人找了出来，这回合放倒两个。' },
       failLoss: { k0: '你去找人，却一直没摸清他们站在哪。', k1: '你这回合放倒过一个，可找人拖得太久。' },
     },
   ],
@@ -609,16 +609,16 @@ export const KEY_HL: Record<string, HlOpt[]> = {
   ],
   weak_hold: [
     {
-      okWin: '你挪了半步，把枪线和队友的接在了一起，回防的人在芯片外面绕了一圈也没进来。',
+      okWin: '你挪了半步，把枪线和队友的接在了一起，回防的人在爆能器外面绕了一圈也没进来。',
       okLoss: '你们的枪线接得很齐，可对面把技能全砸在了这一侧。',
       failWin: '你的角度和队友始终差着一点，回防从中间穿了进来。队友补得快。',
       failLoss: '角度和队友始终差着一点。回防从中间穿了进来。',
     },
     {
       okWin: { k0: '你挑了个自己顺手的角度，回防的第一个人一露头就被逼了回去。', k1: '你挑了个自己顺手的角度，回防的第一个人一露头就被你放倒。', k2: '你挑的那个角度把路封死了，连着放倒两个回防的人。' },
-      okLoss: { k0: '你守住了自己那个角度，可芯片另一侧没人看。', k1: '你在自己那个角度放倒一个，可芯片另一侧没人看。' },
-      failWin: '你挑的角度被对面先看到，只能挪地方。队友守住了芯片。',
-      failLoss: '你挑的角度被对面先看到，芯片旁边就这么空了出来。',
+      okLoss: { k0: '你守住了自己那个角度，可爆能器另一侧没人看。', k1: '你在自己那个角度放倒一个，可爆能器另一侧没人看。' },
+      failWin: '你挑的角度被对面先看到，只能挪地方。队友守住了爆能器。',
+      failLoss: '你挑的角度被对面先看到，爆能器旁边就这么空了出来。',
     },
   ],
   weak_call: [
@@ -649,10 +649,10 @@ export const KEY_HINTS: Record<string, string[][]> = {
   mid_up: [['对面剩下的三个人分在三个地方。'], ['对面剩下的人抱在一起，正等你们冲。']],
   mid_down: [['对面四个人分成了两边，中间隔得很远。'], ['对面四个人都盯着正面，侧面没人看。']],
   post_hold: [['对面回防习惯从一个口子进，交叉架住就进不来。'], ['对面回防的人到得很散，一个接一个来。'], ['对面喜欢一进点就直接去拆，不先清角落。']],
-  post_retake: [['对面守芯片的人站得很分散，一个一个进会被逐个击破。'], ['对面守芯片的人都盯着正面的口子。'], ['对面有人贴着芯片蹲着，技能能把他逼出来。']],
+  post_retake: [['对面守爆能器的人站得很分散，一个一个进会被逐个击破。'], ['对面守爆能器的人都盯着正面的口子。'], ['对面有人贴着爆能器蹲着，技能能把他逼出来。']],
   post_three: [['对面剩下的人各守一个角落，谁也照应不到谁。'], ['对面剩下的人贴在一起，正面打过去就是撞枪口。']],
-  clutch_last_atk: [['对面剩下的人分在芯片两边，谁也看不到谁。'], ['对面剩下的人正贴着墙清角落，找人比拆除更急。']],
-  clutch_last_def: [['守芯片的人总想看一眼拆除的声音是真是假。'], ['守芯片的人站在明处，身后没人照应。']],
+  clutch_last_atk: [['对面剩下的人分在爆能器两边，谁也看不到谁。'], ['对面剩下的人正贴着墙清角落，找人比拆除更急。']],
+  clutch_last_def: [['守爆能器的人总想看一眼拆除的声音是真是假。'], ['守爆能器的人站在明处，身后没人照应。']],
   clutch_two: [['对面剩下的人分得很开，一起打一个方向就能以多打少。'], ['对面剩下的人都盯着你们来的那条路。']],
   eco_ours: [['对面觉得你们会保枪，站位压得很靠前，也很散。'], ['对面进点总是一窝蜂地走，不看角落。']],
   force_ours: [['对面进点喜欢贴着墙走，近处的角落很多。'], ['对面有人喜欢站在远处架枪，不太往前走。']],
