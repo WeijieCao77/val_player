@@ -10,6 +10,7 @@ import { serverAt } from '../../engine/me/rank'
 import { cupOf, cupView } from '../../engine/me/cups'
 import { CAP_EXP_MAX, CAP_HARD, SEASON_LOOSENS, breakInfo, ceilingsOf } from '../../engine/me/bottleneck'
 import { ageNote } from '../../engine/me/growth'
+import { mvpNote } from '../../engine/me/postmatch'
 import { TIER_LADDER, attrRank, attrWord, bodyWord, mentalWord, tacWord, useNumbers } from './words'
 import { TAC_MAX } from '../../engine/me/prepro'
 import RivalsPanel from './Rivals'
@@ -187,7 +188,8 @@ export default function MeScreen() {
                       <td className="num">{m.started ? `${m.kills}/${m.deaths}/${m.assists}` : '替补'}</td>
                       <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}</td>
                       <td className="badge">
-                        {m.mvp ? <span className="tag win">MVP</span>
+                        {/* 这一行左边就是评分，两个数说不到一起去时，标签自己说（2026-09-20 玩家提问） */}
+                        {m.mvp ? <span className="tag win" title={mvpNote(m.maps)}>MVP</span>
                           : m.carried ? <span className="tag" title="输了这场，但你是全队评分最高的">全队最高</span> : null}
                       </td>
                     </tr>

@@ -202,6 +202,26 @@ export function boxScore(state: GameState, maps: MapScore[], mineIds: string[], 
 }
 
 /**
+ * What the MVP label reads, said where the label is shown.
+ *
+ * Reported 2026-09-20: 「他 ACS 和评分都不如 NPC，但是最后 MVP 给到了他，这是为什么？」
+ * Both columns are honest and so is the award; they are simply not the same
+ * sum. The label takes each map's own ACS and averages it over the maps, plus
+ * a nod to the winning side (engine/match.ts); the table adds the damage and
+ * the rounds of the whole series up first, so a big map that ran short weighs
+ * less there than it does in the average. Measured over five seasons of a
+ * world, twice: in about 4% of matches the label does not sit on the highest
+ * ACS of its own side, and in about 15% not on the highest 评分 — often enough
+ * that a player will meet it, so the screens say it rather than leave him
+ * counting. The author's decision, the same day: the rule stays as it is and
+ * the screens explain it.
+ */
+export const mvpNote = (maps: number): string =>
+  maps > 1
+    ? 'MVP 看的是每张图的 ACS 平均，胜方优先；表里的 ACS 和评分是几张图合起来算的，所以 MVP 不一定是表里最高的那个。'
+    : 'MVP 看的是这张图的 ACS，胜方优先，所以不一定是表里评分最高的那个。'
+
+/**
  * Where the night actually went wrong, on my own side.
  *
  * 破晓 hands the surplus loss to the teammates by arithmetic because it has no
