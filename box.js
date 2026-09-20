@@ -31,7 +31,8 @@
    box.jsonl：一行一条操作（new / vote / st / pin / del / merge / set），追加前后都带换行，
    避免写到一半的坏尾粘住下一条成功记录。启动时按顺序重放，空行、坏行跳过。
    追加成功才更新内存，写不进去就回一句中文（不保证断电落盘或失败写入的原子回滚）。文件到上限就压实（每条一行 set），
-   条目到上限就不再收新投稿，点赞照常。
+   条目到上限就不再收新投稿，点赞照常；字节硬上限前改用候选快照原子提交，
+   有效数据已满时仍允许减少占用的删除/合并/退票。写失败的审核操作明确返回失败。
 
    信箱出任何毛病都不该变成游戏打不开：每个入口自己把错兜住，记一行，进程继续服务 dist/。 */
 import fs from 'node:fs'
@@ -52,7 +53,7 @@ const MAX_PENDING = 200
 const MAX_VOTERS = 5000
 /** 日志到这么大就压实成每条一行 */
 const COMPACT_AT = 4 * 1024 * 1024
-/** 压实之后还这么大（只可能是被塞了什么）：不再收写，审核页写明 */
+/** 压实之后仍到这个大小：暂停增加占用，但保留减量清理路径，审核页写明 */
 const HARD_BYTES = 8 * 1024 * 1024
 /** 公开列表一次最多发这么多条，「我的」最多这么多条 */
 const LIST_MAX = 200
@@ -98,7 +99,7 @@ function logErr(where, e) {
 }
 
 /* ---------- 重放与落盘 ---------- */
-function applyOp(o) {
+function applyOp(o, items = ITEMS) {
   if (!o || typeof o !== 'object') return
   const id = typeof o.id === 'string' ? o.id : ''
   if (!ID_RE.test(id)) return
@@ -113,10 +114,10 @@ function applyOp(o) {
       votes: new Set(Array.isArray(o.v) ? o.v.filter((x) => typeof x === 'string').slice(0, MAX_VOTERS) : []),
     }
     if (o.o === 'new' && it.dev) it.votes.add(it.dev)      // 提了一条就是投了自己一票
-    ITEMS.set(id, it)
+    items.set(id, it)
     return
   }
-  const it = ITEMS.get(id)
+  const it = items.get(id)
   if (!it) return
   if (o.o === 'vote') {
     if (typeof o.dev !== 'string' || !o.dev) return
@@ -126,24 +127,42 @@ function applyOp(o) {
   } else if (o.o === 'pin') {
     it.pin = o.v ? 1 : 0
   } else if (o.o === 'del') {
-    ITEMS.delete(id)
+    items.delete(id)
   } else if (o.o === 'merge') {
-    const to = ITEMS.get(typeof o.to === 'string' ? o.to : '')
+    const to = items.get(typeof o.to === 'string' ? o.to : '')
     if (to) for (const v of it.votes) { if (to.votes.size < MAX_VOTERS) to.votes.add(v) }
-    ITEMS.delete(id)
+    items.delete(id)
   }
 }
 
 /** 一条操作：追加成功才记账。写不进去回 false，调用方显示失败。 */
 function write(o) {
-  if (BOX.bytes >= HARD_BYTES) { BOX.full = 'bytes'; return false }
   let line
   // 不能只在启动时检查坏尾：同一进程的 append 也可能写了一半才抛错。
   // 每条都先隔开前面的残片；重放本就忽略空行，旧日志和压实快照无需迁移。
   try { line = `\n${JSON.stringify(o)}\n` } catch (e) { logErr('stringify', e); return false }
+  if (BOX.bytes + Buffer.byteLength(line) >= HARD_BYTES) {
+    // 日志可能只是历史操作太多，也可能有效数据本身已满。先在副本里演算，
+    // 用一次原子替换提交“压实 + 本次操作”；任何落盘失败都不提前改内存。
+    const next = new Map([...ITEMS].map(([id, it]) => [id, { ...it, votes: new Set(it.votes) }]))
+    applyOp(o, next)
+    const body = snapshot(next)
+    const bytes = Buffer.byteLength(body)
+    const cleanup = o.o === 'del' || o.o === 'merge' || (o.o === 'vote' && !o.on)
+    if (bytes >= HARD_BYTES && !(cleanup && bytes < Buffer.byteLength(snapshot(ITEMS)))) {
+      BOX.full = 'bytes'
+      return false
+    }
+    if (!replaceSnapshot(body)) return false
+    applyOp(o)
+    return true
+  }
   try {
     fs.appendFileSync(BOX.file, line)
   } catch (e) {
+    // append 可能已经留下半条；下一次容量判断也要按真实长度算。
+    try { BOX.bytes = fs.statSync(BOX.file).size } catch { /* 保留已知长度 */ }
+    BOX.full = BOX.bytes >= HARD_BYTES ? 'bytes' : ''
     logErr('append', e)
     return false
   }
@@ -153,19 +172,41 @@ function write(o) {
   return true
 }
 
-/** 压实：按内存里的样子每条写一行，临时文件 + rename（写到一半挂了，原来那份一个字节没动） */
-function compact() {
+function snapshot(items) {
+  let body = ''
+  for (const it of items.values()) {
+    body += `${JSON.stringify({ o: 'set', id: it.id, t: it.t, dev: it.dev, text: it.text, s: it.state, p: it.pin, v: [...it.votes] })}\n`
+  }
+  // 空信箱仍留下“曾开张过”的记号，否则删光后重启会把预置建议重新放回来。
+  return body || '\n'
+}
+
+/** 同目录临时文件 + rename；失败不覆盖原日志、不更新内存/字节账。 */
+function replaceSnapshot(body) {
+  const tmp = `${BOX.file}.${crypto.randomBytes(8).toString('hex')}.tmp`
+  let collision = false
   try {
-    let body = ''
-    for (const it of ITEMS.values()) {
-      body += `${JSON.stringify({ o: 'set', id: it.id, t: it.t, dev: it.dev, text: it.text, s: it.state, p: it.pin, v: [...it.votes] })}\n`
-    }
-    const tmp = `${BOX.file}.tmp`
-    fs.writeFileSync(tmp, body)
+    fs.writeFileSync(tmp, body, { flag: 'wx' })
     fs.renameSync(tmp, BOX.file)
     BOX.bytes = Buffer.byteLength(body)
     BOX.full = BOX.bytes >= HARD_BYTES ? 'bytes' : ''
-  } catch (e) { logErr('compact', e) }
+    return true
+  } catch (e) {
+    collision = e.code === 'EEXIST'
+    logErr('compact', e)
+    return false
+  }
+  finally {
+    // wx 碰到已有路径时没有取得该文件的所有权，不清理它。
+    if (!collision) {
+      try { fs.unlinkSync(tmp) } catch (e) { if (e.code !== 'ENOENT') logErr('compact-cleanup', e) }
+    }
+  }
+}
+
+/** 常规追加已经成功后，压实失败也不撤销已落盘的操作。 */
+function compact() {
+  try { return replaceSnapshot(snapshot(ITEMS)) } catch (e) { logErr('compact', e); return false }
 }
 
 /* ---------- 开张时先放几条 ----------
@@ -189,6 +230,7 @@ export function initBox({ dir, volatile }) {
   let txt = ''
   try { txt = fs.readFileSync(BOX.file, 'utf8') } catch { txt = '' }
   BOX.bytes = Buffer.byteLength(txt)
+  BOX.full = BOX.bytes >= HARD_BYTES ? 'bytes' : ''
   for (const ln of txt.split('\n')) {
     if (!ln) continue
     let o
@@ -484,7 +526,7 @@ ${BOX.volatile ? `<div class="warn big">⚠ <b>没挂持久化卷：这些建议
 统计丢了还能从头再收，玩家写给你的话丢了就是丢了——写的人不会再写第二遍。<br>
 到 Railway 服务设置里挂一个 Volume，把 DATA_DIR 指过去，再重新部署一次；在那之前，看到想留的就先自己抄一份。<br>
 现在存在容器磁盘上：${esc(BOX.dir)}/box.jsonl</div>` : ''}
-${BOX.full ? '<div class="warn">⚠ 信箱写满了，新的投稿收不进来了。删掉一些旧的再说。</div>' : ''}
+${BOX.full ? '<div class="warn">⚠ 信箱达到容量上限，新的写入暂时受限。作者仍可删除或合并旧条目来释放空间；失败会明确提示，请确认清理成功后再试。</div>' : ''}
 ${c.total >= MAX_ITEMS ? `<div class="warn">⚠ 信箱到了 ${MAX_ITEMS} 条上限，新的投稿暂时收不进来（点赞照常）。删掉一些就好。</div>` : ''}
 <div class="grid"><div class="st"><div class="n">${c.pending}</div><div class="l">待审核</div></div><div class="st"><div class="n">${c.shown}</div><div class="l">榜上</div></div><div class="st"><div class="n">${c.total}</div><div class="l">一共</div></div></div>
 <h2>待审核（早的在上面）</h2>
@@ -549,14 +591,19 @@ export async function handleBoxAdmin(req, res, pathname) {
   const f = form(await readBody(req))
   const id = typeof f.id === 'string' && ID_RE.test(f.id) ? f.id : ''
   const it = id ? ITEMS.get(id) : null
+  let written = true
   if (it) {
-    if (f.act === 'show') write({ o: 'st', id, s: 'shown' })
-    else if (f.act === 'hide') write({ o: 'st', id, s: 'hidden' })
-    else if (f.act === 'state' && STATES.has(f.s)) write({ o: 'st', id, s: f.s })
-    else if (f.act === 'pin') write({ o: 'pin', id, v: 1 })
-    else if (f.act === 'unpin') write({ o: 'pin', id, v: 0 })
-    else if (f.act === 'del') write({ o: 'del', id })
-    else if (f.act === 'merge' && ID_RE.test(String(f.to || '')) && f.to !== id && ITEMS.has(f.to)) write({ o: 'merge', id, to: f.to })
+    if (f.act === 'show') written = write({ o: 'st', id, s: 'shown' })
+    else if (f.act === 'hide') written = write({ o: 'st', id, s: 'hidden' })
+    else if (f.act === 'state' && STATES.has(f.s)) written = write({ o: 'st', id, s: f.s })
+    else if (f.act === 'pin') written = write({ o: 'pin', id, v: 1 })
+    else if (f.act === 'unpin') written = write({ o: 'pin', id, v: 0 })
+    else if (f.act === 'del') written = write({ o: 'del', id })
+    else if (f.act === 'merge' && ID_RE.test(String(f.to || '')) && f.to !== id && ITEMS.has(f.to)) written = write({ o: 'merge', id, to: f.to })
+  }
+  if (!written) {
+    res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+    return res.end('这次操作未能保存，不能当作成功。请返回信箱确认当前状态后再试；如果持续失败，请检查服务器存储空间和写入权限。')
   }
   res.writeHead(303, { location: pathname, 'cache-control': 'no-store' })
   res.end()

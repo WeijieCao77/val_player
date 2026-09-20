@@ -68,6 +68,30 @@ KEEP = re.compile(r'open|closed|invited|week|road to vct|vcc|strike arabia|champ
                   r'relegation|first division|^group|seed into|tiebreaker|first strike|qualif|vot|^vrl |sea ec', re.I)
 
 
+def normalize_lcq_places(year: str, event: str, routes: dict, by_id: dict) -> None:
+    """A verified multi-place LCQ route is not two copies of its champion.
+
+    Riot's Champions 2022 primer lists S. America LCQ 1 and LCQ 2 in pool 4:
+    https://valorantesports.com/en-US/news/valorant-champions-2022-everything-you-need-to-know
+    Keep this whitelist narrow: duplicate winner labels alone do not prove that
+    another event/year awards multiple places. Its real finishers must agree too.
+    """
+    verified = {('2022', '1015', '1111'): 2}
+    groups = collections.defaultdict(list)
+    for team, route in routes.items():
+        if route['kind'] == 'winner':
+            groups[route['event']].append(team)
+    for feeder, teams in groups.items():
+        if len(teams) < 2:
+            continue
+        count = verified.get((year, event, feeder))
+        places = dict(by_id[feeder]['places'])
+        if count != len(teams) or sorted(places.get(t, 999) for t in teams) != list(range(1, count + 1)):
+            raise ValueError(f'Unverified repeated winner route: {year}/{event} <- {feeder}: {teams}')
+        for team in teams:
+            routes[team]['kind'] = 'top'
+
+
 def norm(s: str) -> str:
     return re.sub(r'[^a-z0-9]', '', (s or '').lower())
 
@@ -317,6 +341,7 @@ def main() -> int:
                 routes[best] = resolve(card.get('qualifier') or '', e)
                 report['种子有来路'] += 1
                 report['来路·' + routes[best]['kind']] += 1
+            normalize_lcq_places(year, eid, routes, by_id)
             place_in = {ev_id: {t: p for t, p in by_id[ev_id]['places']} for ev_id in
                         {r['event'] for r in routes.values() if r.get('event')}}
             groups = collections.defaultdict(list)
