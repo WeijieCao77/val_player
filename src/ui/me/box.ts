@@ -21,7 +21,13 @@ import { deviceId } from '../../engine/me/telemetry'
 const BASE = './api/box'
 
 /** 状态 as the server spells it (box.js STATE_CN). pending / hidden are only ever this device's own. */
-export type BoxState = 'pending' | 'shown' | 'taken' | 'fixed' | 'hidden'
+export type BoxState = 'pending' | 'shown' | 'taken' | 'fixed' | 'hidden' | 'merged'
+
+export interface BoxMerge {
+  availability: 'public' | 'private' | 'missing'
+  /** Only a currently public final target is returned; private content never crosses this API. */
+  target?: { id: string; text: string; state: 'shown' | 'taken' | 'fixed'; votes: number }
+}
 
 export interface BoxItem {
   id: string
@@ -36,6 +42,8 @@ export interface BoxItem {
   mine: boolean
   /** this browser has voted for it */
   voted: boolean
+  /** Owner-only receipt, resolved to the final target at list time. */
+  merge?: BoxMerge
 }
 
 export interface BoxList {
@@ -48,7 +56,7 @@ export interface BoxList {
 }
 
 export const STATE_CN: Record<BoxState, string> = {
-  pending: '待审核', shown: '已展示', taken: '已采纳', fixed: '已修复', hidden: '未展示',
+  pending: '待审核', shown: '已展示', taken: '已采纳', fixed: '已修复', hidden: '未展示', merged: '已合并',
 }
 
 /** how long a call may take before the card says the server is not answering */
@@ -77,6 +85,16 @@ async function call(path: string, body: Record<string, unknown>): Promise<{ ok: 
   }
 }
 
+function asMerge(value: unknown): BoxMerge | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const m = value as Partial<BoxMerge>
+  if (m.availability === 'private' || m.availability === 'missing') return { availability: m.availability }
+  const t = m.target
+  if (m.availability !== 'public' || !t || typeof t.id !== 'string' || typeof t.text !== 'string'
+    || !['shown', 'taken', 'fixed'].includes(t.state)) return undefined
+  return { availability: 'public', target: { id: t.id, text: t.text, state: t.state, votes: typeof t.votes === 'number' ? t.votes : 0 } }
+}
+
 const asItem = (v: unknown): BoxItem | null => {
   const o = v as Partial<BoxItem> | null
   if (!o || typeof o.id !== 'string' || typeof o.text !== 'string') return null
@@ -89,6 +107,7 @@ const asItem = (v: unknown): BoxItem | null => {
     pin: o.pin ? 1 : 0,
     mine: !!o.mine,
     voted: !!o.voted,
+    merge: o.state === 'merged' && o.mine === true ? asMerge(o.merge) : undefined,
   }
 }
 const asList = (v: unknown): BoxItem[] => (Array.isArray(v) ? v.map(asItem).filter((x): x is BoxItem => !!x) : [])
@@ -100,7 +119,7 @@ export async function boxList(): Promise<{ ok: true; list: BoxList } | { ok: fal
   return {
     ok: true,
     list: {
-      items: asList(r.data.items),
+      items: asList(r.data.items).filter((it) => ['shown', 'taken', 'fixed'].includes(it.state)),
       mine: asList(r.data.mine),
       max: typeof r.data.max === 'number' ? r.data.max : 200,
       full: !!r.data.full,

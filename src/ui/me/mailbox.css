@@ -67,6 +67,12 @@ table.mbx-table td { vertical-align: top; white-space: normal; overflow-wrap: an
 .mbx-tag.s-fixed { background: var(--win-wash); color: var(--win); }
 .mbx-tag.s-pending { background: var(--warn-wash); color: var(--warn); }
 .mbx-tag.s-hidden { background: var(--well); color: var(--faint); }
+.mbx-tag.s-merged { background: var(--well); color: var(--muted); }
+.mbx-merge { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.mbx-merge > p { margin: 8px 0; }
+.mbx-merge details { min-width: 0; }
+.mbx-merge summary { color: var(--accent); cursor: pointer; padding: 8px 0; min-height: 44px; }
+.mbx-merge summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- 首页右下角的按钮和那张卡 ----
    只在首页（还没开生涯的时候）挂：生涯里信箱是导航上的一栏，角上再放一个就是重复，

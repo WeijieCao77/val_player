@@ -35,7 +35,35 @@ const TABS: { key: Tab; label: string }[] = [
 ]
 
 /** 已展示 needs no tag — being on the board says it; the two that moved on do */
-const TAG: Partial<Record<BoxItem['state'], string>> = { taken: '已采纳', fixed: '已修复' }
+const TAG: Partial<Record<BoxItem['state'], string>> = { taken: '已采纳', fixed: '已修复', merged: '已合并' }
+
+function mergeProgress(it: BoxItem): string {
+  if (it.merge?.target) return `合并后：${STATE_CN[it.merge.target.state]}`
+  if (it.merge?.availability === 'private') return '合并目标暂未公开'
+  if (it.merge?.availability === 'missing') return '合并目标暂不可查看'
+  return '合并信息暂不可用'
+}
+
+function MergeReceipt({ item }: { item: BoxItem }) {
+  const target = item.merge?.target
+  return <section className="mbx-merge" aria-label="建议合并回执">
+    <strong>你的建议已合并至同类建议</strong>
+    <p>这条原文为你保留，支持票已合并并去重。谢谢你帮助作者发现这个问题。</p>
+    {target ? <>
+      <p>当前处理进度：<span className={`mbx-tag s-${target.state}`}>{STATE_CN[target.state]}</span> · {target.votes} 赞</p>
+      <details>
+        <summary>查看合并后的建议</summary>
+        <p className="mbx-detail-meta">建议编号 #{target.id}</p>
+        <p className="mbx-fulltext">{target.text}</p>
+      </details>
+      <p className="tiny faint">之后的采纳或修复状态会跟随这条建议更新，重新打开信箱或点击刷新即可查看。</p>
+    </> : <p>{item.merge?.availability === 'private'
+      ? '合并后的建议暂未公开，暂时不能查看正文；公开后可在这里继续查看处理进度。'
+      : item.merge?.availability === 'missing'
+        ? '合并后的建议已移除或暂时不可用，但你提交过的这条建议和合并回执仍然保留。'
+        : '暂时无法读取合并去向，请稍后刷新。你的原建议仍在这里。'}</p>}
+  </section>
+}
 
 const day = (t: number): string => {
   if (!t) return ''
@@ -78,7 +106,8 @@ function Board() {
     const r = await boxList()
     if (!alive.current) return
     if (!r.ok) { setLoad('off'); setNote(r.why); return }
-    setItems(r.list.items)
+    // Receipts belong only under 我的, even if an older/proxy response mixes them into the public list.
+    setItems(r.list.items.filter((it) => it.state !== 'merged'))
     setMine(r.list.mine)
     setMax(r.list.max)
     setFull(r.list.full)
@@ -221,16 +250,17 @@ function Board() {
                           <span className="mbx-read">{expanded === it.id ? '收起全文' : '查看全文'} ›</span>
                         </button>
                         <span className="mbx-when tiny faint">{day(it.t)}{it.mine ? ' · 你提的' : ''}{it.pin ? ' · 置顶' : ''}</span>
+                        {it.state === 'merged' && <span className="mbx-when tiny muted">{mergeProgress(it)}</span>}
                       </td>
                       <td className="num">
-                        <button
+                        {it.state === 'merged' ? <span className="tiny faint" title="支持票已合并至目标建议，不重复计票">已合票</span> : <button
                           className={`mbx-vote${it.voted ? ' on' : ''}`}
                           disabled={it.mine || it.state === 'pending' || it.state === 'hidden'}
                           title={it.mine ? '自己提的，已经算你一票了' : it.voted ? '取消这一票' : '赞同这条'}
                           onClick={() => void vote(it)}
                         >
                           <span aria-hidden="true">▲</span> {it.votes}
-                        </button>
+                        </button>}
                       </td>
                       <td className="num">
                         {it.mine && (it.state === 'pending' || it.state === 'hidden')
@@ -245,8 +275,9 @@ function Board() {
                           <strong>建议全文</strong>
                           <button className="sm ghost" onClick={closeDetail}>收起全文 ✕</button>
                         </div>
-                        <p className="mbx-detail-meta">{day(it.t)} · {STATE_CN[it.state]} · {it.votes} 赞{it.mine ? ' · 你提的' : ''}{it.pin ? ' · 置顶' : ''}</p>
+                        <p className="mbx-detail-meta">{day(it.t)} · {STATE_CN[it.state]}{it.state === 'merged' ? ' · 支持票已合并' : ` · ${it.votes} 赞`}{it.mine ? ' · 你提的' : ''}{it.pin ? ' · 置顶' : ''}</p>
                         <p className="mbx-fulltext">{it.text}</p>
+                        {it.state === 'merged' && <MergeReceipt item={it} />}
                       </div>
                     </td></tr>}
                     </Fragment>
@@ -258,6 +289,7 @@ function Board() {
 
       <p className="tiny faint mbx-foot">
         一台设备一条一票，可以收回。作者照着赞多的往下改；改好了这条会写「已修复」。
+        合并的建议会留在「我的」，点开可查看去向和处理进度。
         {mine.some((x) => x.state === 'pending') && ' 你有建议在等作者看，别急。'}
       </p>
     </div>

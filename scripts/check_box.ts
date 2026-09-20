@@ -347,7 +347,10 @@ try {
     await vote(s, 'dev-M3', b!.id, true)
     eq(await act(s, { act: 'merge', id: b!.id, to: a!.id }), 303, '把 B 合并进 A')
     const items = (await list(s, 'dev-M9')).items
-    check(!items.some((i) => i.id === b!.id), '被合并的那条没了')
+    check(!items.some((i) => i.id === b!.id), '被合并的来源退出公开榜')
+    const receipt = (await list(s, 'dev-M2')).mine.find((i) => i.id === b!.id) as any
+    eq(receipt?.state, 'merged', '原作者保留已合并回执')
+    eq(receipt?.merge?.target?.id, a!.id, '原作者知道合并去向')
     // A 是 M1 提的（自投一票）+ M3；B 是 M2 提的（自投一票）+ M4 + M3。两边都投过的 M3 只算一次：2 + 3 − 1 = 4
     eq(items.find((i) => i.id === a!.id)?.votes, 4, 'B 的票并进了 A，两边都投过的那台设备只算一次（2 + 3 − 1 = 4）')
     eq(await act(s, { act: 'del', id: a!.id }), 303, '删掉 A')

@@ -55,17 +55,17 @@ const MAX_VOTERS = 5000
 const COMPACT_AT = 4 * 1024 * 1024
 /** 压实之后仍到这个大小：暂停增加占用，但保留减量清理路径，审核页写明 */
 const HARD_BYTES = 8 * 1024 * 1024
-/** 公开列表一次最多发这么多条，「我的」最多这么多条 */
+/** 公开榜只取前 200；「我的」不分页，不能把旧建议/回执挤掉，总条目上限仍有界。 */
 const LIST_MAX = 200
-const MINE_MAX = 50
+const MINE_MAX = MAX_ITEMS
 /** id 的样子：8 位十六进制 */
 const ID_RE = /^[0-9a-f]{8}$/
 
-/** 状态。pending / hidden 只有提交的那台设备和作者看得见；其余三个在榜上。 */
-const STATES = new Set(['pending', 'shown', 'taken', 'fixed', 'hidden'])
+/** pending / hidden / merged 只有提交的那台设备和作者看得见；shown / taken / fixed 在榜上。 */
+const STATES = new Set(['pending', 'shown', 'taken', 'fixed', 'hidden', 'merged'])
 const PUBLIC_STATES = new Set(['shown', 'taken', 'fixed'])
 export const STATE_CN = {
-  pending: '待审核', shown: '已展示', taken: '已采纳', fixed: '已修复', hidden: '未展示',
+  pending: '待审核', shown: '已展示', taken: '已采纳', fixed: '已修复', hidden: '未展示', merged: '已合并',
 }
 
 /* ---------- 第一道闸的词表 ----------
@@ -99,6 +99,19 @@ function logErr(where, e) {
 }
 
 /* ---------- 重放与落盘 ---------- */
+/** A live endpoint, never a missing node, loop, or path back to the proposed source. */
+function mergeTarget(id, items = ITEMS, source = '') {
+  const seen = new Set(source ? [source] : [])
+  while (typeof id === 'string' && ID_RE.test(id) && !seen.has(id)) {
+    seen.add(id)
+    const it = items.get(id)
+    if (!it) return null
+    if (it.state !== 'merged') return it
+    id = it.mergedTo
+  }
+  return null
+}
+
 function applyOp(o, items = ITEMS) {
   if (!o || typeof o !== 'object') return
   const id = typeof o.id === 'string' ? o.id : ''
@@ -112,23 +125,44 @@ function applyOp(o, items = ITEMS) {
       state: STATES.has(o.s) ? o.s : 'pending',
       pin: o.p ? 1 : 0,
       votes: new Set(Array.isArray(o.v) ? o.v.filter((x) => typeof x === 'string').slice(0, MAX_VOTERS) : []),
+      ...(o.s === 'merged' ? { mergedTo: typeof o.mergedTo === 'string' ? o.mergedTo : '', mergedAt: Number.isFinite(o.mergedAt) ? o.mergedAt : 0 } : {}),
     }
-    if (o.o === 'new' && it.dev) it.votes.add(it.dev)      // 提了一条就是投了自己一票
+    if (it.state === 'merged') { it.votes.clear(); it.pin = 0 }
+    else if (o.o === 'new' && it.dev) it.votes.add(it.dev)      // 提了一条就是投了自己一票
     items.set(id, it)
     return
   }
   const it = items.get(id)
   if (!it) return
   if (o.o === 'vote') {
+    if (it.state === 'merged') return
     if (typeof o.dev !== 'string' || !o.dev) return
     if (o.on) { if (it.votes.size < MAX_VOTERS) it.votes.add(o.dev) } else it.votes.delete(o.dev)
   } else if (o.o === 'st') {
-    if (STATES.has(o.s)) it.state = o.s
+    if (it.state !== 'merged' && o.s !== 'merged' && STATES.has(o.s)) it.state = o.s
   } else if (o.o === 'pin') {
-    it.pin = o.v ? 1 : 0
+    if (it.state !== 'merged') it.pin = o.v ? 1 : 0
   } else if (o.o === 'del') {
     items.delete(id)
   } else if (o.o === 'merge') {
+    if (o.keep === true) {
+      if (it.state === 'merged') return
+      const to = mergeTarget(o.to, items, id)
+      if (!to) return
+      const votes = new Set([...to.votes, ...it.votes])
+      if (votes.size > MAX_VOTERS) return
+      // Flatten existing receipts in this same atomic operation. Removing an intermediate
+      // receipt later must not orphan the original author's route to the still-live endpoint.
+      const upstream = [...items.values()].filter(receipt => receipt.state === 'merged'
+        && mergeTarget(receipt.mergedTo, items, receipt.id)?.id === id)
+      for (const receipt of upstream) receipt.mergedTo = to.id
+      to.votes = votes
+      it.state = 'merged'; it.mergedTo = to.id
+      it.mergedAt = Number.isFinite(o.t) ? o.t : 0
+      it.votes.clear(); it.pin = 0
+      return
+    }
+    // Legacy logs really deleted their source: never resurrect a once-deleted private message.
     const to = items.get(typeof o.to === 'string' ? o.to : '')
     if (to) for (const v of it.votes) { if (to.votes.size < MAX_VOTERS) to.votes.add(v) }
     items.delete(id)
@@ -141,7 +175,7 @@ function write(o) {
   // 不能只在启动时检查坏尾：同一进程的 append 也可能写了一半才抛错。
   // 每条都先隔开前面的残片；重放本就忽略空行，旧日志和压实快照无需迁移。
   try { line = `\n${JSON.stringify(o)}\n` } catch (e) { logErr('stringify', e); return false }
-  if (BOX.bytes + Buffer.byteLength(line) >= HARD_BYTES) {
+  if ((o.o === 'merge' && o.keep === true) || BOX.bytes + Buffer.byteLength(line) >= HARD_BYTES) {
     // 日志可能只是历史操作太多，也可能有效数据本身已满。先在副本里演算，
     // 用一次原子替换提交“压实 + 本次操作”；任何落盘失败都不提前改内存。
     const next = new Map([...ITEMS].map(([id, it]) => [id, { ...it, votes: new Set(it.votes) }]))
@@ -175,7 +209,7 @@ function write(o) {
 function snapshot(items) {
   let body = ''
   for (const it of items.values()) {
-    body += `${JSON.stringify({ o: 'set', id: it.id, t: it.t, dev: it.dev, text: it.text, s: it.state, p: it.pin, v: [...it.votes] })}\n`
+    body += `${JSON.stringify({ o: 'set', id: it.id, t: it.t, dev: it.dev, text: it.text, s: it.state, p: it.pin, v: [...it.votes], ...(it.state === 'merged' ? { mergedTo: it.mergedTo, mergedAt: it.mergedAt } : {}) })}\n`
   }
   // 空信箱仍留下“曾开张过”的记号，否则删光后重启会把预置建议重新放回来。
   return body || '\n'
@@ -341,6 +375,12 @@ function readBody(req) {
 }
 
 /** 发给玩家的样子：绝不带 dev（别人的设备号谁都不该拿到） */
+function mergeReceipt(it) {
+  const target = mergeTarget(it.mergedTo, ITEMS, it.id)
+  if (!target) return { availability: 'missing' }
+  if (!PUBLIC_STATES.has(target.state)) return { availability: 'private' }
+  return { availability: 'public', target: { id: target.id, text: target.text, state: target.state, votes: target.votes.size } }
+}
 const wire = (it, vid) => ({
   id: it.id,
   t: it.t,
@@ -351,6 +391,7 @@ const wire = (it, vid) => ({
   // 开张时预置的那几条没有设备号；没认出设备的人也不该看到「你提的」
   mine: !!vid && !!it.dev && it.dev === vid,
   voted: !!vid && it.votes.has(vid),
+  ...(it.state === 'merged' && !!vid && it.dev === vid ? { merge: mergeReceipt(it) } : {}),
 })
 
 /** 榜的顺序：置顶的在前，然后票多的，一样多的新的在前 */
@@ -463,17 +504,21 @@ function row(it, dupOf) {
   const acts = []
   const btn = (act, label, extra = '', cls = '') =>
     `<form method="post"><input type="hidden" name="act" value="${act}"><input type="hidden" name="id" value="${esc(it.id)}">${extra}<button class="${cls}">${label}</button></form>`
+  if (it.state !== 'merged') {
   if (it.state !== 'shown') acts.push(btn('show', '展示', '', 'go'))
   if (it.state !== 'pending' && it.state !== 'hidden') acts.push(btn('hide', '不展示'))
   if (it.state !== 'taken') acts.push(btn('state', '已采纳', '<input type="hidden" name="s" value="taken">'))
   if (it.state !== 'fixed') acts.push(btn('state', '已修复', '<input type="hidden" name="s" value="fixed">'))
   acts.push(btn(it.pin ? 'unpin' : 'pin', it.pin ? '取消置顶' : '置顶'))
   acts.push(`<form method="post"><input type="hidden" name="act" value="merge"><input type="hidden" name="id" value="${esc(it.id)}"><input name="to" size="8" placeholder="并到 id" value="${esc(dupOf || '')}"><button>合并</button></form>`)
+  }
   acts.push(btn('del', '删除', '', 'bad'))
+  const target = it.state === 'merged' ? mergeTarget(it.mergedTo, ITEMS, it.id) : null
+  const receipt = it.state === 'merged' ? `<br>原文仅原作者可见 · ${target ? `终点 #${esc(target.id)} · ${esc(STATE_CN[target.state])}<br>${esc(target.text)}` : '目标已删除或链路失效'}<br>合并于 ${esc(when(it.mergedAt))}` : ''
   return `<tr class="s-${esc(it.state)}">
 <td class="tx">${esc(it.text)}</td>
 <td class="num">${it.votes.size}</td>
-<td class="dim">${esc(STATE_CN[it.state] || it.state)}${it.pin ? ' · 置顶' : ''}<br>${esc(when(it.t))}<br>#${esc(it.id)} · ${it.dev ? esc(short(it.dev)) : '开张预置'}${dupOf ? `<br><b class="dup">疑似重复 #${esc(dupOf)}</b>` : ''}</td>
+<td class="dim">${esc(STATE_CN[it.state] || it.state)}${it.pin ? ' · 置顶' : ''}<br>${esc(when(it.t))}<br>#${esc(it.id)} · ${it.dev ? esc(short(it.dev)) : '开张预置'}${dupOf ? `<br><b class="dup">疑似重复 #${esc(dupOf)}</b>` : ''}${receipt}</td>
 <td class="acts">${acts.join('')}</td>
 </tr>`
 }
@@ -483,14 +528,15 @@ export function boxHtml() {
   const all = [...ITEMS.values()]
   // 全站同文的：后来的那条标一下，作者一眼看见能合并
   const first = new Map()
-  for (const it of [...all].sort((a, b) => a.t - b.t)) {
+  for (const it of all.filter(it => it.state !== 'merged').sort((a, b) => a.t - b.t)) {
     const k = normal(it.text)
     if (!first.has(k)) first.set(k, it.id)
   }
-  const dupOf = (it) => (first.get(normal(it.text)) !== it.id ? first.get(normal(it.text)) : '')
+  const dupOf = (it) => (it.state !== 'merged' && first.get(normal(it.text)) !== it.id ? first.get(normal(it.text)) : '')
   const wait = all.filter((it) => it.state === 'pending').sort((a, b) => a.t - b.t)
   const live = all.filter((it) => PUBLIC_STATES.has(it.state)).sort(rank)
   const away = all.filter((it) => it.state === 'hidden').sort((a, b) => b.t - a.t)
+  const merged = all.filter((it) => it.state === 'merged').sort((a, b) => b.mergedAt - a.mergedAt)
   const table = (rows) => (rows.length
     ? `<table><tr><th>建议</th><th class="num">赞</th><th>状态</th><th>动作</th></tr>${rows.map((it) => row(it, dupOf(it))).join('')}</table>`
     : '<p class="dim">这一栏是空的。</p>')
@@ -526,7 +572,7 @@ ${BOX.volatile ? `<div class="warn big">⚠ <b>没挂持久化卷：这些建议
 统计丢了还能从头再收，玩家写给你的话丢了就是丢了——写的人不会再写第二遍。<br>
 到 Railway 服务设置里挂一个 Volume，把 DATA_DIR 指过去，再重新部署一次；在那之前，看到想留的就先自己抄一份。<br>
 现在存在容器磁盘上：${esc(BOX.dir)}/box.jsonl</div>` : ''}
-${BOX.full ? '<div class="warn">⚠ 信箱达到容量上限，新的写入暂时受限。作者仍可删除或合并旧条目来释放空间；失败会明确提示，请确认清理成功后再试。</div>' : ''}
+${BOX.full ? '<div class="warn">⚠ 信箱达到容量上限，新的写入暂时受限。作者仍可删除旧条目清理；合并保留回执，不减少条目数，也不保证释放空间。失败会明确提示。</div>' : ''}
 ${c.total >= MAX_ITEMS ? `<div class="warn">⚠ 信箱到了 ${MAX_ITEMS} 条上限，新的投稿暂时收不进来（点赞照常）。删掉一些就好。</div>` : ''}
 <div class="grid"><div class="st"><div class="n">${c.pending}</div><div class="l">待审核</div></div><div class="st"><div class="n">${c.shown}</div><div class="l">榜上</div></div><div class="st"><div class="n">${c.total}</div><div class="l">一共</div></div></div>
 <h2>待审核（早的在上面）</h2>
@@ -535,8 +581,10 @@ ${table(wait)}
 ${table(live)}
 <h2>收起来的</h2>
 ${table(away)}
+<h2>合并回执（原文仅原作者可见，不进入公开榜）</h2>
+${table(merged)}
 <div class="foot">「不展示」把已展示的收回，内容还在、随时能再展示；「删除」才是真的删掉。
-合并会把那一条的赞并进你填的 id，然后删掉那一条。<br>
+合并把来源的赞去重并入最终目标，保留来源正文、原提交时间和去向供原作者查看；回执也占用条目上限。目标公开时才向玩家展示目标内容和处理状态，私密目标不泄漏。回执不能再次审核、合并或投票，只能删除。<br>
 存在 ${esc(BOX.dir)}/box.jsonl · ${(c.bytes / 1024).toFixed(1)} KB · 不记 IP、不记 User-Agent，设备号只显示前 6 位哈希${c.errCount ? ` · 信箱内部错误 ${c.errCount} 次（最近：${esc(c.lastErr)}）` : ''}</div>
 </body></html>`
 }
@@ -592,14 +640,25 @@ export async function handleBoxAdmin(req, res, pathname) {
   const id = typeof f.id === 'string' && ID_RE.test(f.id) ? f.id : ''
   const it = id ? ITEMS.get(id) : null
   let written = true
+  let invalid = ''
   if (it) {
-    if (f.act === 'show') written = write({ o: 'st', id, s: 'shown' })
+    if (it.state === 'merged' && f.act !== 'del') invalid = '这条已合并，只能查看回执或删除，不能重复合并或改为普通状态。'
+    else if (f.act === 'show') written = write({ o: 'st', id, s: 'shown' })
     else if (f.act === 'hide') written = write({ o: 'st', id, s: 'hidden' })
-    else if (f.act === 'state' && STATES.has(f.s)) written = write({ o: 'st', id, s: f.s })
+    else if (f.act === 'state' && STATES.has(f.s) && f.s !== 'merged') written = write({ o: 'st', id, s: f.s })
     else if (f.act === 'pin') written = write({ o: 'pin', id, v: 1 })
     else if (f.act === 'unpin') written = write({ o: 'pin', id, v: 0 })
     else if (f.act === 'del') written = write({ o: 'del', id })
-    else if (f.act === 'merge' && ID_RE.test(String(f.to || '')) && f.to !== id && ITEMS.has(f.to)) written = write({ o: 'merge', id, to: f.to })
+    else if (f.act === 'merge') {
+      const target = mergeTarget(f.to, ITEMS, id)
+      if (!target) invalid = '合并目标不存在、已删除或形成循环，没有执行。'
+      else if (new Set([...it.votes, ...target.votes]).size > MAX_VOTERS) invalid = '合并后的投票数超过上限，没有执行，也没有丢弃任何投票。'
+      else written = write({ o: 'merge', id, to: target.id, t: Date.now(), keep: true })
+    } else invalid = '没有识别到有效的审核动作，没有执行。'
+  } else invalid = '这条记录已不存在，没有执行。'
+  if (invalid) {
+    res.writeHead(409, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+    return res.end(invalid)
   }
   if (!written) {
     res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
