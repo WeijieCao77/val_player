@@ -19,7 +19,7 @@
  * It is an extra, never a gate. The list, the vote and the send each fail into a
  * sentence; the career is played offline exactly as before.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { boxList, boxNew, boxVote, STATE_CN } from './box'
 import type { BoxItem } from './box'
 import { Panel } from './common'
@@ -58,7 +58,21 @@ function Board() {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const detailId = useId()
+  const detail = useRef<HTMLDivElement>(null)
+  const detailOpener = useRef<HTMLButtonElement | null>(null)
   const alive = useRef(true)
+
+  useEffect(() => {
+    if (!expanded) return
+    detail.current?.focus({ preventScroll: true })
+    detail.current?.scrollIntoView({ block: 'start' })
+  }, [expanded])
+  const closeDetail = () => {
+    setExpanded(null)
+    detailOpener.current?.focus()
+  }
 
   const read = useCallback(async () => {
     const r = await boxList()
@@ -94,6 +108,7 @@ function Board() {
     setSending(false)
     if (!r.ok) { setSent(r.why); return }
     setText('')
+    setExpanded(null)
     setMine((old) => [r.item, ...old.filter((x) => x.id !== r.item.id)])
     setTab('mine')
     setSent('收到了。作者看过之后才会展示到榜上——在「我的」里能看到它到哪一步了。')
@@ -125,7 +140,10 @@ function Board() {
   const over = left < 0
 
   return (
-    <div className="mbx">
+    <div className="mbx" onKeyDownCapture={(e) => {
+      // Close only this disclosure, not the homepage's enclosing mailbox.
+      if (e.key === 'Escape' && expanded) { e.preventDefault(); e.stopPropagation(); closeDetail() }
+    }}>
       <div className="mbx-write">
         <label className="mbx-lbl" htmlFor="mbx-text">想让游戏变成什么样？一条说一件事</label>
         <textarea
@@ -159,12 +177,12 @@ function Board() {
             role="tab"
             aria-selected={tab === t.key}
             className={`sm ${tab === t.key ? 'primary' : 'ghost'}`}
-            onClick={() => setTab(t.key)}
+            onClick={() => { setExpanded(null); setTab(t.key) }}
           >
             {t.label}{t.key === 'mine' && mine.length ? ` ${mine.length}` : ''}
           </button>
         ))}
-        <button className="sm ghost mbx-again" onClick={() => { setLoad('wait'); void read() }}>刷新</button>
+        <button className="sm ghost mbx-again" onClick={() => { setExpanded(null); setLoad('wait'); void read() }}>刷新</button>
       </div>
 
       {note && <p className="tiny mbx-warn mbx-note">{note}</p>}
@@ -188,11 +206,20 @@ function Board() {
                 </thead>
                 <tbody>
                   {rows.map((it, i) => (
-                    <tr key={it.id} className={it.mine ? 'mine' : ''}>
+                    <Fragment key={it.id}>
+                    <tr className={it.mine ? 'mine' : ''}>
                       <td className="num muted">{tab === 'hot' ? i + 1 : '·'}</td>
                       <td className="mbx-text">
                         {/* 玩家写的字：当成字来渲染，一个标签都不解析 */}
-                        <span>{it.text}</span>
+                        <button className="mbx-preview" aria-expanded={expanded === it.id} aria-controls={expanded === it.id ? detailId : undefined}
+                          onClick={(e) => {
+                            if (expanded === it.id) { closeDetail(); return }
+                            detailOpener.current = e.currentTarget
+                            setExpanded(it.id)
+                          }}>
+                          <span className="mbx-excerpt">{it.text}</span>
+                          <span className="mbx-read">{expanded === it.id ? '收起全文' : '查看全文'} ›</span>
+                        </button>
                         <span className="mbx-when tiny faint">{day(it.t)}{it.mine ? ' · 你提的' : ''}{it.pin ? ' · 置顶' : ''}</span>
                       </td>
                       <td className="num">
@@ -212,6 +239,17 @@ function Board() {
                             : <span className="tiny faint">—</span>}
                       </td>
                     </tr>
+                    {expanded === it.id && <tr className="mbx-detail-row"><td colSpan={4}>
+                      <div ref={detail} id={detailId} className="mbx-detail" role="region" aria-label="建议全文" tabIndex={-1}>
+                        <div className="mbx-detail-head">
+                          <strong>建议全文</strong>
+                          <button className="sm ghost" onClick={closeDetail}>收起全文 ✕</button>
+                        </div>
+                        <p className="mbx-detail-meta">{day(it.t)} · {STATE_CN[it.state]} · {it.votes} 赞{it.mine ? ' · 你提的' : ''}{it.pin ? ' · 置顶' : ''}</p>
+                        <p className="mbx-fulltext">{it.text}</p>
+                      </div>
+                    </td></tr>}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
