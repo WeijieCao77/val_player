@@ -93,7 +93,7 @@ export default function Support({ raised = false, career = false }: { raised?: b
                 </a>
                 <p className="tiny faint" style={{ margin: 0 }}>
                   手机扫码，或点上面的按钮。<br />
-                  ¥10/月 可进专属群，抢先体验正在做的新内容。也可以自选金额，一次即可。
+                  10 元/月可进专属群，抢先体验正在做的新内容。也可以自选金额，一次即可。
                 </p>
               </div>
             </div>
