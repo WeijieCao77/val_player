@@ -168,12 +168,15 @@ export function roadsOf(state: GameState): Road[] {
     }
   }
 
-  // 天梯: where I stand today against where the calls start
+  // 天梯: where I stand today against where the calls start, and how long I have stood there (prepro.ts noteWatched)
   const ln = ladderNear(state)
   const now = rankText(rankAt(state))
+  const watched = me.pre.scoutWeeks ?? 0
   roads.push({
-    key: 'ladder', label: '天梯', near: ln, nums: rankFull(rankAt(state)),
-    text: ln === 3 ? `${now}：够了，俱乐部会来看` : `${now}，要到${rankBar(state, INVITE_LADDER)}：${NEAR_CN[ln]}`,
+    key: 'ladder', label: '天梯', near: ln, nums: `${rankFull(rankAt(state))}${ln === 3 ? ` · 站住 ${watched} 周` : ''}`,
+    text: ln === 3
+      ? `${now}：够了，${watched > 1 ? '站住越久来电话越勤' : '俱乐部会来看'}`
+      : `${now}，要到${rankBar(state, INVITE_LADDER)}：${NEAR_CN[ln]}`,
   })
 
   // 粉丝: in the tiers' own words
@@ -237,7 +240,8 @@ export function weekLine(state: GameState): Line | null {
     }
     const hour = hourLine(state)
     if (callsShut(state)) {
-      return hour ? { pre: '前三个月只有杯赛会带来电话，先把综合练上去：现在练', b: hour.b, post: '涨得最多。' } : null
+      // PRE_EARLIEST weeks, said in months
+      return hour ? { pre: '前两个月只有杯赛会带来电话，先把综合练上去：现在练', b: hour.b, post: '涨得最多。' } : null
     }
     if (ladderNear(state) === 2) return { pre: `天梯离${rankBar(state, INVITE_LADDER)}不远了：多打`, b: '排位', post: '。' }
     if (fansNear(state) === 2) return { pre: `粉丝快到「${fanTier(INVITE_FANS).name}」了：点两次`, b: '直播', post: '。' }

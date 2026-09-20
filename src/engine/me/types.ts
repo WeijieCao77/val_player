@@ -495,6 +495,12 @@ export interface PreState {
   cups: CupRun[]
   /** how many times a club's people wrote my name down */
   scoutSeen: number
+  /**
+   * How many weeks running I have stood at or over the line where the ladder's calls open, up to
+   * SCOUT_WEEKS_MAX (me/prepro.ts noteWatched): the longer somebody has been watching, the likelier
+   * the phone. Absent in a save from before it: nobody has been watching yet.
+   */
+  scoutWeeks?: number
   invites: Invite[]
   /** `${year}:${key}` milestones already offered */
   seen: string[]

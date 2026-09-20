@@ -12,7 +12,10 @@
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
-import { clubBars, reachableClubs, tryoutSkill } from '../src/engine/me/prepro'
+import { PRE_EARLIEST, clubBars, reachableClubs, tryoutSkill } from '../src/engine/me/prepro'
+import { ENTRY_YEARS } from '../src/engine/era'
+import { SEASON_DAYS } from '../src/engine/season'
+import type { Region } from '../src/engine/types'
 import { GRADE_TEXT, gradeOf, tryoutDays } from '../src/engine/me/tryout'
 import { ASKS, askDeal, declineDeal, makeDeal } from '../src/engine/me/contract'
 import { vctNeeds } from '../src/engine/me/transfer'
@@ -164,5 +167,49 @@ if (!bars.length) { bad++; console.log('✗ 门槛阶梯是空的。') }
   console.log(`\n今年不再来：${parts.join(' · ')}`)
 }
 
-console.log(bad ? '\n✗ 有问题。' : '\n✓ 四段都走得通，评级有分布、谈判会崩、门槛看得见；回绝过的俱乐部当年不再来，第二年可以再来。')
+/**
+ * 天梯起点到第一份合同有多少周 — the length of the stretch itself, pinned.
+ *
+ * The author, 2026-09-20: 「天梯签约前 18 周要不要缩短…最好能缩短到 14-16 周」. It was a median 18 weeks
+ * (scripts/measure_first_hour.ts, 2026-09-18, 30 seeds × four regions × both entry years), and the three weeks
+ * off PRE_EARLIEST and the scout's notebook (me/prepro.ts noteWatched) brought it into the band he asked for.
+ *
+ * The same cells as that survey, four seeds each: the ladder start under 托管, both entry years, one league's
+ * biggest scene each. The band is wide enough for the sampling noise of 32 careers and for a world that evolves
+ * a little from one change to the next — it catches a drift back to the old length, not a wobble.
+ */
+{
+  const REGIONS: Region[] = ['China', 'Europe', 'North America', 'Korea']
+  const CAP = 60
+  const BAND: [number, number] = [11, 17]
+  const weeks: number[] = []
+  let never = 0
+  for (const year of ENTRY_YEARS) {
+    for (const region of REGIONS) {
+      for (let i = 0; i < 4; i++) {
+        const s = createCareer({ name: 'Probe', region, role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 4001 + i * 97 + year * 13 + REGIONS.indexOf(region) * 7919, year })
+        const m = s.me!
+        const y0 = s.year
+        let w = 0
+        while (w++ < CAP && m.phase !== 'pro' && !m.moveAfter) {
+          if (autoWeek(s).kind === 'game-over' || m.phase === 'retired') break
+        }
+        if (m.phase === 'pro' || m.moveAfter) weeks.push(((s.year - y0) * SEASON_DAYS + s.day) / 7)
+        else never++
+      }
+    }
+  }
+  // a career that never signed counts as longer than every one that did
+  const all = [...weeks, ...Array(never).fill(Infinity)].sort((a, b) => a - b)
+  const q = (p: number): number => all[Math.min(all.length - 1, Math.floor((all.length - 1) * p + 0.5))]
+  const f = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : '—')
+  console.log(`\n天梯起点到第一份合同（托管，${REGIONS.length} 个赛区 × ${ENTRY_YEARS.length} 个入行年份 × 4 个种子 = ${all.length} 局，${CAP} 周封顶）：中位 ${f(q(0.5))} 周 [${f(q(0.25))}–${f(q(0.75))}]，${never} 局没签上；天梯和粉丝的电话从第 ${PRE_EARLIEST} 周开`)
+  if (!(q(0.5) >= BAND[0] && q(0.5) <= BAND[1])) {
+    bad++
+    console.log(`✗ 中位 ${f(q(0.5))} 周不在 ${BAND[0]}–${BAND[1]} 周之间——作者要的是 14-16 周，签约前这一段又变长（或者短得不像话）了。`)
+  }
+  if (never > all.length / 4) { bad++; console.log(`✗ ${never}/${all.length} 局 ${CAP} 周里没签上，这一段不是变短，是签不上。`) }
+}
+
+console.log(bad ? '\n✗ 有问题。' : '\n✓ 四段都走得通，评级有分布、谈判会崩、门槛看得见；回绝过的俱乐部当年不再来，第二年可以再来；天梯到第一份合同的周数在作者要的区间里。')
 if (bad) process.exit(1)
