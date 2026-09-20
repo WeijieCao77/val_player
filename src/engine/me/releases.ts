@@ -47,10 +47,13 @@ export const ARRIVALS: Arrival[] = [
   { name: 'Tejo', kind: 'agent', year: 2025, day: 7 },        // 8 Jan 2025, patch 10.0
   { name: 'Waylay', kind: 'agent', year: 2025, day: 63 },     // 5 Mar 2025, patch 10.04
   { name: 'Corrode', kind: 'map', year: 2025, day: 174 },     // 24 Jun 2025, patch 11.0
+  // Riot's 13.00 notes: Summit enters Competitive on 23 June 2026.
+  // https://playvalorant.com/en-us/news/game-updates/valorant-patch-notes-13-00/
+  { name: 'Summit', kind: 'map', year: 2026, day: 173 },
 ]
 
 /** The last year this table speaks for; after it, a patch night names nothing. */
-export const ARRIVALS_UNTIL = 2025
+export const ARRIVALS_UNTIL = 2026
 
 const at = (year: number, day: number) => year * 400 + day
 

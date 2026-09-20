@@ -1,5 +1,6 @@
 import { Rng, clamp } from './rng'
 import { MAPS, HIGHLIGHT_TEMPLATES as HL, mapCn } from './content'
+import { mapAvailableOn, mapsAvailableOn } from './me/mapEra'
 import { agentMod, autoAgents, normalizeAgents } from './agents'
 import { DIAL_SCALE, callBoost, compStyle, famBonus, familiarity, tacticEdge } from './comp'
 import type { CompStyle } from './comp'
@@ -355,12 +356,12 @@ export const poolPhaseOf = (stage: StageKey): PoolPhase =>
  * with its own swap on top, not a fresh deal. Deterministic in (seed, phase),
  * so every screen and both veto paths agree on what is legal today.
  */
-export function activePool(seed: number, phase: PoolPhase = 0): string[] {
+export function activePool(seed: number, phase: PoolPhase = 0, available: readonly string[] = MAPS): string[] {
   const rng = new Rng(seed ^ 0x5eed)
-  const order = rng.shuffle(MAPS.slice() as string[])
+  const order = rng.shuffle([...available])
   const pool = order.slice(0, 7)
   const bench = order.slice(7)
-  for (let ph = 1; ph <= phase; ph++) {
+  for (let ph = 1; ph <= phase && bench.length > 0; ph++) {
     const swaps = 1 + rng.int(0, 1)
     for (let i = 0; i < swaps; i++) {
       const out = rng.int(0, pool.length - 1)
@@ -374,8 +375,8 @@ export function activePool(seed: number, phase: PoolPhase = 0): string[] {
 }
 
 /** Today's pool for this save — the one every veto and every screen must use. */
-export const poolFor = (state: Pick<GameState, 'seed' | 'year' | 'stage'>): string[] =>
-  activePool(state.seed + state.year, poolPhaseOf(state.stage))
+export const poolFor = (state: Pick<GameState, 'seed' | 'year' | 'stage'> & Partial<Pick<GameState, 'day' | 'me'>>): string[] =>
+  activePool(state.seed + state.year, poolPhaseOf(state.stage), state.me ? mapsAvailableOn(state.year, state.day ?? 0) : MAPS)
 
 export function vetoOrder(bo: 1 | 2 | 3 | 5): ('ban' | 'pick')[] {
   // 7-map pool
@@ -420,7 +421,13 @@ export function runVeto(
   let remaining = pool.slice()
   const picked: string[] = []
   const log: string[] = []
+  // Careers in early 2021 have only five/six released maps. Drop surplus
+  // bans from the tail; never run out of maps before a BO5 can be decided.
   const order = vetoOrder(bo)
+  let excess = Math.max(0, order.filter(a => a === 'ban').length - Math.max(0, pool.length - bo))
+  for (let i = order.length - 1; i >= 0 && excess > 0; i--) {
+    if (order[i] === 'ban') { order.splice(i, 1); excess-- }
+  }
 
   const prefOf = (t: Team, m: string) => (t.mapPrefs[m] ?? 50) + rng.range(-6, 6)
 
@@ -1010,12 +1017,17 @@ export class MatchSim {
     this.format = agreed?.format ?? 'first13'
     if (agreed) {
       // a scrim has no veto — both sides agreed the map when booking it
-      this.maps = [agreed.map]
-      this.vetoLog = []
-    } else if (state.vetoPlan && state.vetoPlan.maps.length === bo) {
+      const legal = !state.me || mapAvailableOn(agreed.map, state.year, state.day)
+      this.maps = [legal ? agreed.map : poolFor(state)[0]]
+      this.vetoLog = legal ? [] : [`旧安排的地图尚未发布，训练赛改为${mapCn(this.maps[0])}。`]
+    } else if (state.vetoPlan && state.vetoPlan.maps.length === bo
+      && (!state.me || (new Set(state.vetoPlan.maps).size === bo
+        && state.vetoPlan.maps.every(map => poolFor(state).includes(map))))) {
       // the manager ran the veto himself on the pre-match screen
       this.maps = state.vetoPlan.maps.slice()
-      this.vetoLog = state.vetoPlan.log.slice()
+      // A legacy career's valid picks can still carry bans of future maps in
+      // its free-text log. Keep the picks, not those anachronistic ban lines.
+      this.vetoLog = state.me ? this.maps.map(map => `沿用已确定地图：${mapCn(map)}`) : state.vetoPlan.log.slice()
     } else {
       const pool = poolFor(state)
       const { maps, log } = runVeto(state, aId, bId, bo, pool, rng)

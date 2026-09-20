@@ -1,6 +1,6 @@
 import { Rng, clamp, hashStr } from './rng'
 import {
-  activePool, applyMatchStats, poolFor, poolPhaseOf, pruneMatchDetail, simulateMatch, stripRoundLogs,
+  applyMatchStats, poolFor, pruneMatchDetail, simulateMatch, stripRoundLogs,
 } from './match'
 import type { MatchResult } from './types'
 import {
@@ -944,7 +944,10 @@ export function commitFixture(
     // true. Both sides learn, win or lose, and less than a week of the 跑图
     // drill: that costs a whole team-training slot and gives about +2, this
     // costs a day and a squad's condition.
-    const scrimMap = f.scrim?.map
+    // A legacy career may have booked an unreleased map. MatchSim chooses a
+    // legal substitute; award practice for the map actually played, not the
+    // stale booking. Existing completed match records are never rewritten.
+    const scrimMap = state.me ? result.maps[0]?.map : f.scrim?.map
     if (scrimMap) {
       for (const teamId of [f.teamA, f.teamB]) {
         const t = state.teams[teamId]
@@ -1098,7 +1101,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
     notes.push(`—— 进入 ${stageNameIn(state.year, state.stage, onTimeline(state))} ——`)
     // The pool rotates when a new window opens — say which maps moved, or a
     // manager walks into a veto to find a map he trained all stage is gone.
-    const prevPool = activePool(state.seed + state.year, poolPhaseOf(prevStage))
+    const prevPool = poolFor({ ...state, stage: prevStage })
     const nowPool = poolFor(state)
     const gone = prevPool.filter((m) => !nowPool.includes(m))
     const fresh = nowPool.filter((m) => !prevPool.includes(m))
