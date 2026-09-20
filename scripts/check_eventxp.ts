@@ -203,6 +203,15 @@ if (!promised) pass(`事件池里带训练的选项 ${opts} 次落在瓶颈上�
 console.log('\n五 真事件走一遍：按钮、结果和日志是同一句话')
 {
   const s = structuredClone(base)
+  // Warm-up may stop with a real card awaiting an answer (seed 7, day 140:
+  // ch_show_ok). fireEvent correctly refuses to cover it with a second card.
+  // Answer that card normally before preparing this isolated patch-XP case;
+  // do not bypass event conditions or change the warm state used elsewhere.
+  if (s.me!.pendingEvent) {
+    const waiting = eventOf(s.me!.pendingEvent)
+    if (!waiting) throw new Error(`探针有找不到定义的待处理事件：${s.me!.pendingEvent}`)
+    resolveEvent(s, waiting.id, waiting.rec)
+  }
   const k: K = 'utility'
   pin(s, k)
   const ev = eventOf('patch')!
