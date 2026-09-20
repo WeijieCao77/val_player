@@ -1,0 +1,75 @@
+/* 玩家信箱 (ui/me/Mailbox.tsx) —— 一张榜和一个写建议的框。
+   颜色全走主题变量，三套地（dark / light / cream）一起跟着变；表格借的是游戏本来就在用的
+   table.box（积分榜、全队十项那张），不另起一套样式。手机上表格自己横向滚，
+   .table-wrap 已经写好了。 */
+
+.mbx { display: flex; flex-direction: column; gap: 12px; }
+.mbx .mbx-warn { color: var(--warn); }
+.mbx .mbx-ok { color: var(--win); }
+
+/* ---- 写建议的框 ---- */
+.mbx-write {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  padding: 10px 12px; background: var(--well);
+}
+.mbx-lbl { font-size: var(--t-small); color: var(--muted); }
+.mbx-area {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
+  font: inherit; font-size: var(--t-small); line-height: 1.6;
+}
+.mbx-send { display: flex; align-items: center; gap: 10px; }
+.mbx-send > span { flex: 1; min-width: 0; }
+.mbx-priv { margin: 2px 0 0; line-height: 1.6; }
+.mbx-sent { margin: 2px 0 0; line-height: 1.6; }
+
+/* ---- 最热 / 最新 / 我的 ---- */
+.mbx-tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mbx-tabs .mbx-again { margin-left: auto; }
+.mbx-note { margin: 0; }
+.mbx-empty { margin: 6px 0; }
+.mbx-lead { margin: 0 0 10px; }
+.mbx-foot { margin: 2px 0 0; line-height: 1.6; }
+
+/* ---- 榜 ---- */
+.mbx-table { table-layout: auto; }
+.mbx-table th:nth-child(1), .mbx-table td:nth-child(1) { width: 2.4em; }
+.mbx-table td.mbx-text { max-width: 0; }          /* 让这一列吃掉剩下的宽度，长句子自己折行 */
+.mbx-table td.mbx-text > span { display: block; word-break: break-word; overflow-wrap: anywhere; }
+.mbx-when { display: block; margin-top: 1px; }
+.mbx-table th:nth-child(3), .mbx-table td:nth-child(3) { width: 4.2em; }
+.mbx-table th:nth-child(4), .mbx-table td:nth-child(4) { width: 4.6em; white-space: nowrap; }
+
+.mbx-vote {
+  font: inherit; font-size: var(--t-tiny); line-height: 1.4;
+  padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--line-hi); background: transparent; color: var(--muted);
+  font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap;
+}
+.mbx-vote:hover:not(:disabled) { color: var(--text); border-color: var(--accent-line); }
+.mbx-vote.on { color: var(--accent); border-color: var(--accent-line); background: var(--accent-wash); }
+.mbx-vote:disabled { cursor: default; opacity: .6; }
+.mbx-vote:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.mbx-tag {
+  font-size: var(--t-tiny); padding: 1px 6px; border-radius: 2px;
+  letter-spacing: .04em; white-space: nowrap;
+  background: var(--accent-wash); color: var(--accent);
+}
+.mbx-tag.s-fixed { background: var(--win-wash); color: var(--win); }
+.mbx-tag.s-pending { background: var(--warn-wash); color: var(--warn); }
+.mbx-tag.s-hidden { background: var(--well); color: var(--faint); }
+
+/* ---- 首页右下角的按钮和那张卡 ----
+   只在首页（还没开生涯的时候）挂：生涯里信箱是导航上的一栏，角上再放一个就是重复，
+   手机的角本来也只塞得下那两个圆钮。首页上 支持作者 在最下面、更新日志在它上面
+   （base.css / me.css），信箱再往上一层。 */
+.mbx-fab { bottom: 108px; }
+.mbx-fab.raised { bottom: 152px; }
+.mbx-card { width: min(560px, calc(100vw - 32px)); }
+
+@media (max-width: 720px) {
+  .mbx-fab { bottom: 106px; }
+  .mbx-fab.raised { bottom: 150px; }
+  .mbx-send { flex-wrap: wrap; }
+}

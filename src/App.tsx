@@ -8,6 +8,7 @@ import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
 import MusicPlayer from './ui/me/MusicPlayer'
 import Support from './ui/me/Support'
+import Mailbox from './ui/me/Mailbox'
 
 /**
  * The site is the player career and nothing else. The manager game and the
@@ -76,6 +77,9 @@ export default function App() {
           {/* the same corner button as inside a career: 更新日志 belongs to the build, not to a career, so the
               cover page has it too — someone who has not started yet is exactly who wants to read what changed (me.css) */}
           <Changelog />
+          {/* 玩家信箱 (ui/me/Mailbox.tsx): 提建议、给别人的建议点赞，按赞排成一张榜。
+              首页才有这个角标；生涯里它是导航上的一栏 (src/PlayerGame.tsx)。 */}
+          <Mailbox />
           <NewCareer
             // the home page's card is drawn from the summary beside the save (engine/me/saveMeta.ts), never from the save itself
             save={autosaveInfo()}

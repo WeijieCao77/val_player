@@ -46,6 +46,7 @@ import SoundToggle from './ui/me/SoundToggle'
 import { attrWord, useNumbers } from './ui/me/words'
 import { ceilingsOf } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
+import { MailboxScreen } from './ui/me/Mailbox'
 import Tour from './ui/me/Tour'
 import { openTour, useOpenTour, weekTourOf } from './ui/me/guide'
 import { countScreen, countTurn } from './engine/me/telemetry'
@@ -63,6 +64,8 @@ const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = 
   { key: 'log', label: '日志' },
   { key: 'auto', label: '托管', sep: true },
   { key: 'help', label: '帮助' },
+  // 玩家信箱 (ui/me/Mailbox.tsx, 2026-09-20): 大家提的建议按赞排成一张榜，作者照着赞多的往下改
+  { key: 'box', label: '信箱' },
 ]
 
 // the shared engine's save slots (engine/save.ts) under the player's name, as App.tsx used to set them on every render
@@ -377,7 +380,8 @@ export default function Career({ opened, onHome }: {
                 : screen === 'log' ? LogScreen
                   : screen === 'auto' ? AutoScreen
                     : screen === 'help' ? HelpScreen
-                      : null
+                      : screen === 'box' ? MailboxScreen
+                        : null
 
   return (
     <GameCtx.Provider value={ctxValue}>

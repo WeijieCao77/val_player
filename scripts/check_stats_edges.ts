@@ -103,7 +103,8 @@ interface Site { dir: string; preload: string }
 function site(name: string, withDist: boolean): Site {
   const dir = path.join(tmp, name)
   fs.mkdirSync(dir, { recursive: true })
-  for (const f of ['server.js', 'stats-contract.js']) fs.copyFileSync(path.join(ROOT, f), path.join(dir, f))
+  // box.js 是玩家信箱（2026-09-20）：server.js 引它，不抄过来的话这份核查里的服务器起不来
+  for (const f of ['server.js', 'stats-contract.js', 'box.js']) fs.copyFileSync(path.join(ROOT, f), path.join(dir, f))
   // server.js 是 ESM（仓库的 package.json 写着 type: module），抄出来也得是
   fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"module"}')
   const preload = path.join(dir, 'edge-preload.mjs')
