@@ -116,7 +116,15 @@ const base = (): GameState => {
 // the leak's mark was the rest: at no floor the career buying everything rested 15% of what the one buying nothing did
 // (248 hours fewer in 8 seasons) and trained 11% more; with the floor, 90–100% and ±3%. One seed over three seasons moves
 // the training hours by about ±5% on its own, so the rest is held to 70% and the practice to +8%.
-const REST_MIN = 0.7
+//
+// 2026-09-20, lowered 0.70 → 0.65 by the author's own call (「不要管这个 check buy，68 我能接受」) after the
+// instant-action week landed: a plan is now spent card by card instead of being laid out for the week, so a
+// rested player's coach reaches for 休息 less often. Measured at the same three seasons: 79% at 36f7ab7,
+// 68% here. The leak this check exists for did NOT move — the peak gap stayed inside its bounds (+0.20 mean,
+// worst seed +1 of 2 allowed) and practice inside its own (+4.4% of 8%), which are the two that say money
+// bought strength. Only this proxy moved. If it ever falls under 0.60, or if the peak or practice bound goes
+// with it, that is the leak coming back: find the cause, do not lower this again.
+const REST_MIN = 0.65
 const TRAIN_MAX = 0.08
 // The peak is held one way: buying everything must not end stronger. Ending weaker is trophy luck, not a leak —
 // on 2026-09-14, after the qualification fixes changed the world, seed 7 went 79 → 77 with 581 → 586 hours of
