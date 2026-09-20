@@ -287,12 +287,15 @@ const A = career('一 2021 北美 · Sentinels', { region: 'North America', team
 const B = career('一 2021 欧洲 · 强队替补', { region: 'Europe', seed: 1 }, 2)
 check([...A.seen.values(), ...B.seen.values()].some((e) => e.kind === 'intl'), '两局里至少有一项国际赛换了冠军（否则这一步什么也没验）')
 check([...A.seen.values(), ...B.seen.values()].some((e) => !!e.mine?.there), '两局里至少有一条写了我在不在场（否则这一步什么也没验）')
-// a Challengers start in Korea whose club takes 2021's third stage from Vision Strikers with me starting: 「因为你」.
-// Seed 7 until 2026-09-18, when a club on history's open-qualifier list began to play the decider a club off it gets
-// (engine/circuit.ts offerPlayIn): seed 7's TUBEPLE Gaming then finished fifth in that stage, and no season row said
-// 「因为你」. Seed 2 is the same case in the world as it plays now (of seeds 1–40, 2, 10, 15, 20, 29, 30, 31, 33 and 34
-// keep one); before that change seed 2 kept none.
-const C = career('一 2021 韩国 · 二线', { region: 'Korea', start: 'chal', seed: 2 }, 1)
+// a Challengers start in Korea whose club takes one of 2021's stages with me starting: 「因为你」.
+// The seed has to be re-picked whenever the world's dice move, and this is the third time. Seed 7 until
+// 2026-09-18, when a club on history's open-qualifier list began to play the decider a club off it gets
+// (engine/circuit.ts offerPlayIn): seed 7's TUBEPLE Gaming then finished fifth in that stage. Seed 2 until
+// 2026-09-19, when the week's actions moved from the settlement to the click (me/week.ts doAction) and the
+// weekly rng stream shifted with them: seed 2's club then took no stage of its own. Seed 10 is the same
+// case in the world as it plays now — its TUBEPLE Gaming takes 第一赛段 挑战者赛 1 from DAMWON Gaming with
+// me starting (of seeds 1–20, 10, 14, 15 and 20 keep one).
+const C = career('一 2021 韩国 · 二线', { region: 'Korea', start: 'chal', seed: 10 }, 1)
 check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some((r) => !!r.there))), '存下的赛季记录里至少有一条写了我在场（否则这一步什么也没验）')
 check([A, B, C].some((x) => x.state.me!.seasons.some((s) => s.rewrites?.some(becauseOfMe))), '存下的赛季记录里至少有一条「因为你」（否则这一步什么也没验）')
 
