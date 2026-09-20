@@ -25,7 +25,7 @@ import type { MeMatchRecord, NodeLogEntry } from './types'
 import { afterMyMatch, refreshMyRounds } from './coach'
 import { iglAfterMatch } from './igl'
 import { bondNoteMatch } from './bond'
-import { blameLine, boxScore, seriesEdgeRows, verdict } from './postmatch'
+import { blameLine, boxScore, rankInBox, seriesEdgeRows, verdict } from './postmatch'
 import { starBeat, starBeatLine } from './stars'
 import { rivalAfterMatch, rivalNodeEdge } from './rivals'
 import { noteMatch, trimDetail } from './detail'
@@ -452,6 +452,7 @@ export class MeMatch {
     const f = this.fixture
     const result = this.sim.finish()
     const mineIds = (this.mineIsA ? result.lineups?.a : result.lineups?.b) ?? []
+    const theirIds = (this.mineIsA ? result.lineups?.b : result.lineups?.a) ?? []
     const started = mineIds.includes(me.id)
     const won = this.mineIsA ? result.mapsWonA > result.mapsWonB : result.mapsWonB > result.mapsWonA
     const drawn = result.mapsWonA === result.mapsWonB
@@ -460,17 +461,9 @@ export class MeMatch {
     const sum: MapLine = totals[me.id] ?? { kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0, clutches: 0, rounds: 0, acs: 0 }
     const modern = usesPerformanceRating(result.maps)
     const rate = modern ? performanceRating : ratingOf
-    // my place on my own side is read the way the box score reads it: by 评分, as that table sorts and prints it
-    // (me/postmatch.ts, rounded to two places), ACS only between equal ratings. It used to be ACS alone, and the line
-    // under the score said 「评分 0.86 · 队内第 3」 over a table where 0.86 was second (reported 2026-09-19)
-    const order = Object.entries(totals).filter(([pid]) => mineIds.includes(pid))
-      .map(([pid, t]) => ({
-        pid,
-        acs: t.acs,
-        rating: Math.round(rate(t) * 100) / 100,
-      }))
-      .sort((a, b) => b.rating - a.rating || b.acs - a.acs)
-    const rank = started ? order.findIndex((x) => x.pid === me.id) + 1 : 0
+    // One ordered box owns the displayed position and the coach's decision, including rounded ties.
+    const matchBox = boxScore(state, result.maps, mineIds, theirIds)
+    const rank = started ? rankInBox(matchBox, me.id) : 0
     const acs = sum.rounds ? (sum.damage / sum.rounds) * 1.45 : 0
     const rating = started ? rate(sum) : 0
 
@@ -501,10 +494,9 @@ export class MeMatch {
     }
     // why it went that way — the engine already added these terms up when it
     // decided the round win rate; until now nothing read them back out
-    const theirIds = (this.mineIsA ? result.lineups?.b : result.lineups?.a) ?? []
     rec.edge = seriesEdgeRows(result.maps, this.mineIsA)
     rec.verdict = verdict(rec, rec.edge)
-    rec.box = boxScore(state, result.maps, mineIds, theirIds)
+    rec.box = matchBox
     rec.blame = blameLine(rec.box, rec)
     // the man in my position on the other side, if he is anybody
     const beat = starBeat(state, rec, this.me.role)

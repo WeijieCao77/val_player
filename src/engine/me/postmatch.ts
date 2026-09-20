@@ -194,6 +194,10 @@ export function boxScore(state: GameState, maps: MapScore[], mineIds: string[], 
   return out.sort((x, y) => (x.mine === y.mine ? y.rating - x.rating || y.acs - x.acs : x.mine ? -1 : 1))
 }
 
+/** Selection reads the same rounded values and stable ties the player sees. */
+export const rankInBox = (rows: readonly BoxRow[], playerId: string): number =>
+  rows.filter(r => r.mine).findIndex(r => r.id === playerId) + 1
+
 /**
  * Explain the rule that actually produced this record. The role-balance
  * update switches NEW matches to contribution rating. Historical records
@@ -227,7 +231,7 @@ export function blameLine(rows: BoxRow[], rec: MeMatchRecord): string | null {
     return `你 ${me.rating.toFixed(2)}。${sank.map((r) => r.ign).join('、')} 都在 0.85 以下。`
   }
   if (!rec.won && me.rating < 0.85 && mateAvg >= 1.0) {
-    return `你 ${me.rating.toFixed(2)}，队友均分 ${mateAvg.toFixed(2)}。今晚枪没开张。`
+    return `你 ${me.rating.toFixed(2)}，队友均分 ${mateAvg.toFixed(2)}。${rec.performanceVersion === 1 ? '今晚的整体贡献没跟上。' : '今晚枪没开张。'}`
   }
   if (rec.won && me.rating < 0.85) {
     return `你 ${me.rating.toFixed(2)}，队友均分 ${mateAvg.toFixed(2)}。赢了。`

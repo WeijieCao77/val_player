@@ -9,6 +9,7 @@ import { ratingOf } from '../src/engine/player'
 import { packState, unpackState } from '../src/engine/save'
 import { emptyStats } from '../src/engine/types'
 import { Rng } from '../src/engine/rng'
+import { boxScore, rankInBox } from '../src/engine/me/postmatch'
 import type { Fixture } from '../src/engine/types'
 
 globalThis.fetch = () => Promise.reject(new Error('offline role consumer check'))
@@ -62,4 +63,15 @@ for (const [id, version] of [['new-role-test', 1], ['old-role-test', undefined]]
 }
 assert.equal(JSON.stringify(loaded.me!.matches), originalHistory)
 assert.equal(packState(unpackState(packState(loaded))), packState(loaded), 'Repeated save is idempotent')
+const same = { kills: 14, deaths: 14, assists: 6, firstKills: 1, firstDeaths: 1, clutches: 1, rounds: 20 }
+const tieMap = { map: 'Ascent', scoreA: 13, scoreB: 7, performanceVersion: 1 as const, lines: {
+  [p.id]: { ...same, damage: 200.1 / 1.45 * 20, acs: 200.1 },
+  [fragger.id]: { ...same, damage: 200.4 / 1.45 * 20, acs: 200.4 },
+} }
+const tieRows = boxScore(s, [tieMap], [p.id, fragger.id], [])
+assert.equal(tieRows[0].rating, tieRows[1].rating)
+assert.equal(tieRows[0].acs, tieRows[1].acs)
+assert.equal(rankInBox(tieRows, p.id), 1, 'Displayed rounded tie is the exact coach rank')
+assert.equal(rankInBox(tieRows, fragger.id), 2)
+assert.equal(rankInBox(tieRows, 'absent'), 0)
 console.log('PASS role consumers: support awards/scouting/overview agree, sample guard, read-only old history, mixed-version scoreboard save roundtrip')
