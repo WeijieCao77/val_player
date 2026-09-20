@@ -6,6 +6,7 @@ import { autosaveInfo } from './engine/me/saveInfo'
 import NewCareer from './ui/me/NewCareer'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
+import { takeReopen } from './ui/me/update'
 import MusicPlayer from './ui/me/MusicPlayer'
 import Support from './ui/me/Support'
 
@@ -53,6 +54,24 @@ export default function App() {
   }, [])
   const home = useCallback(() => setOpen(null), [])
 
+  /** open the autosave: what 继续 does, and what a page that reloaded itself does on its own */
+  const continueCareer = useCallback(async (): Promise<boolean | null> => {
+    const m = await fetchGame()
+    if (!m) return null
+    const g = await m.openSavedCareer()
+    if (!g) return false
+    openCareer(m, g)
+    return true
+  }, [fetchGame, openCareer])
+
+  // This page reloaded itself onto a new build (ui/me/UpdateNudge.tsx): the player pressed nothing, so put them back
+  // where they were instead of on the cover, which would read as the game throwing them out (asked 2026-09-20). The
+  // marker is taken once and gone: a save that will not open, or a plain reload after this one, lands here as usual.
+  useEffect(() => {
+    if (!takeReopen(window.sessionStorage) || !autosaveInfo()) return
+    void continueCareer()
+  }, [continueCareer])
+
   // Another page of the game wrote the save or took it (reported 2026-09-18, an outside audit): the card is drawn
   // again, so it shows what is there now. A career open here hears the same event itself (PlayerGame.tsx).
   const [, redraw] = useReducer((x: number) => x + 1, 0)
@@ -70,8 +89,9 @@ export default function App() {
     <>
       {open ? <open.Career key={open.seq} opened={open.game} onHome={home} /> : (
         <>
-          {/* a build that went live while this page was open: 刷新 / 稍后 (ui/me/UpdateNudge.tsx); nothing to save before it here */}
-          <UpdateNudge busy={unloaded} />
+          {/* a build that went live while this page was open: the page takes it by itself (ui/me/UpdateNudge.tsx);
+              nothing to save before it here. When the files did not arrive, 游戏没载入成功 below has this corner. */}
+          <UpdateNudge hushed={unloaded} />
           {unloaded && <Unloaded />}
           {/* the same corner button as inside a career: 更新日志 belongs to the build, not to a career, so the
               cover page has it too — someone who has not started yet is exactly who wants to read what changed (me.css) */}
@@ -88,14 +108,7 @@ export default function App() {
               openCareer(m, m.createCareer(opts))
               return true
             }}
-            onContinue={async () => {
-              const m = await fetchGame()
-              if (!m) return null
-              const g = await m.openSavedCareer()
-              if (!g) return false
-              openCareer(m, g)
-              return true
-            }}
+            onContinue={continueCareer}
             onSeedHall={async () => {
               const m = await fetchGame()
               if (m) await m.seedHallFromSave()
