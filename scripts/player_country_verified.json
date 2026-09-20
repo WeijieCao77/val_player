@@ -1,0 +1,7 @@
+[
+  {"pid":"9143","year":2021,"from":"po","to":"de","source":"https://www.vlr.gg/player/9143/darkosek","checked":"2026-09-20","evidence":"VLR player profile GERMANY; historical rosters also de; do not copy bios Poland"},
+  {"pid":"9576","year":2021,"from":"un","to":"cz","source":"https://www.vlr.gg/player/9576/peter","checked":"2026-09-20","evidence":"VLR player profile CZECH REPUBLIC; Petr Vočadlo; historical rosters also cz"},
+  {"pid":"17830","year":2021,"from":"un","to":"vn","source":"https://www.vlr.gg/player/17830/kay","checked":"2026-09-20","evidence":"VLR player profile VIETNAM; Hoàng Quốc Huy; historical rosters also vn"},
+  {"pid":"4244","year":2021,"from":"wa","to":"gb","source":"https://www.vlr.gg/player/4244/yaboilewis","checked":"2026-09-20","evidence":"VLR player profile WALES; normalized to existing game UK code gb"},
+  {"pid":"4307","year":2021,"from":"wa","to":"gb","source":"https://www.vlr.gg/player/4307/hyperzxz","checked":"2026-09-20","evidence":"VLR player profile WALES; normalized to existing game UK code gb"}
+]

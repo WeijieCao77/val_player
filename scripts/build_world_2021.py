@@ -102,9 +102,11 @@ import random
 import re
 import sys
 from datetime import date
+from player_bios import trusted_bio, normalized_birth
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import staff as staff_book  # noqa: E402  who was on a staff when
+from player_countries import player_country  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
@@ -240,7 +242,8 @@ def pctiles(rows: list[dict], key: str, invert: bool = False) -> dict[str, float
 
 
 def age_on(birth: str | None, ref: date) -> int | None:
-    if not birth or not re.match(r'^\d{4}-\d{2}-\d{2}$', str(birth)):
+    birth = normalized_birth(birth)
+    if not birth:
         return None
     y, m, d = (int(x) for x in str(birth).split('-'))
     return ref.year - y - ((ref.month, ref.day) < (m, d))
@@ -358,7 +361,7 @@ def main() -> int:
     staff = staff_book.Staff(a.staff)
     if a.staff_pass:
         return staff_pass(a.out, history, staff)
-    bios = load('bios.json')
+    bios = {pid: trusted_bio(bio, pid) for pid, bio in load('bios.json').items()}
     raw_stats = load('stats_history.json')
 
     # ---- 1. the 2021 events, in order, with the tier each one played at
@@ -518,7 +521,8 @@ def main() -> int:
                 continue
             age = DEBUT_AGE.get(when.year, 18)
             birth = None
-        age = int(clamp(age, 15, 40))
+        # Published age is a calendar fact, not a gameplay eligibility floor.
+        age = int(clamp(age, 15, 40)) if estimated else int(age)
 
         rng = random.Random(seed_of('p21:' + pid))
         g = lambda k, _pid=pid: P[k].get(_pid, 0.5)  # noqa: E731
@@ -550,7 +554,7 @@ def main() -> int:
         L = line.get(pid)
         people[pid] = {
             'id': f'V{pid}', 'ign': raw['ign'], 'club': club, 'region': club_meta[club]['region'],
-            'nat': (raw.get('country') or bio.get('country') or '')[:2].lower() or None,
+            'nat': player_country(raw.get('country'), bio, pid),
             'realName': bio.get('name') if str(bio.get('name') or '').lower() != raw['ign'].lower() else None,
             'birth': birth, 'joined': None,
             'rounds': int(L['rnd']) if L else 0,

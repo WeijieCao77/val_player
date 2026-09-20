@@ -1,4 +1,4 @@
-import { natName } from '../../engine/nat'
+import { playerLocation } from '../../engine/me/playerLocation'
 import { AgentIcon, Bar, Modal, OvrBadge, Radar, Roles, Traits, moneyIn, worldMoney } from './common'
 import { payOf } from '../../engine/me/paytable'
 import { leagueCurOf } from '../../engine/me/currency'
@@ -6,7 +6,7 @@ import { useGame } from './ctx'
 import { callerOf } from '../../engine/roster'
 import { ratingOf } from '../../engine/match'
 import { statLine } from '../../engine/player'
-import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
+import { ATTR_CN, ATTR_KEYS } from '../../engine/types'
 import type { Stats } from '../../engine/types'
 import { agentCn } from '../../engine/content'
 import { StarTitleTag } from './Rivals'
@@ -27,6 +27,7 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
   const p = game.players[playerId]
   if (!p) return null
   const team = p.teamId ? game.teams[p.teamId] : null
+  const location = playerLocation(p, team ?? null, game.year)
   // the club's named caller, and the IGLs by trade who back him up
   const teamCaller = p.teamId ? callerOf(game, p.teamId) : undefined
   const isMain = p.isIgl && teamCaller?.id === p.id
@@ -59,17 +60,16 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
         <div>
           <div className="row" style={{ gap: 10, marginBottom: 8 }}>
             <Face id={p.id} name={p.ign} size={56} />
-            {(p.realName || p.nat) && (
+            {p.realName && (
               <div className="small muted">
                 {p.realName}
-                {p.realName && p.nat ? ' · ' : ''}
-                {p.nat ? natName(p.nat) : ''}
               </div>
             )}
           </div>
           <div className="row wrap" style={{ gap: 7, marginBottom: 12 }}>
             <span className="tag">{team?.name ?? '自由人'}</span>
-            <span className="tag">{REGION_CN[p.region]}</span>
+            <span className="tag">{location.nationality}</span>
+            {location.competition && <span className="tag">{location.competition}</span>}
             <span className="tag" title={p.birth ? `生日 ${p.birth}` : '未收录生日，年龄为推算值'}>
               {p.age} 岁{p.ageEstimated ? '（推算）' : ''}
             </span>

@@ -39,6 +39,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, '.cache', 'lp')
@@ -90,15 +91,78 @@ def get(params: dict, cache_name: str) -> dict:
 
 
 def field(wikitext: str, key: str):
-    m = re.search(r'\|\s*' + key + r'\s*=([^\n|]*)', wikitext)
+    # Only parameters at the outer template level count. A nested team/match
+    # template may have its own `name`, `country` or `vlr` parameter.
+    depth, i, start = 0, 0, None
+    while i < len(wikitext):
+        pair = wikitext[i:i + 2]
+        end = (wikitext[i] == '|' and depth == 1) or (pair == '}}' and depth == 1)
+        if end and start is not None:
+            param = wikitext[start:i]
+            if '=' in param:
+                name, value = param.split('=', 1)
+                if name.strip() == key:
+                    return value.strip() or None
+        if end:
+            start = i + 1 if wikitext[i] == '|' else None
+        if pair == '{{':
+            depth += 1
+            i += 2
+        elif pair == '}}':
+            depth -= 1
+            i += 2
+        else:
+            i += 1
+    return None
+
+
+def player_infobox(wikitext: str) -> str | None:
+    """Read only the player template; events also carry a name and a vlr id.
+
+    Scanning the whole page silently joins a tournament's VLR event id to an
+    unrelated player's VLR player id. Nested templates must remain balanced.
+    """
+    clean = re.sub(r'<!--[\s\S]*?-->', '', wikitext)
+    starts = list(re.finditer(r'\{\{\s*Infobox[ _]player\s*(?=\||\n|\r|\}\})', clean, re.I))
+    if len(starts) != 1:
+        return None
+    start = starts[0].start()
+    depth = 0
+    for token in re.finditer(r'\{\{|\}\}', clean[start:]):
+        depth += 1 if token.group() == '{{' else -1
+        if depth == 0:
+            return clean[start:start + token.end()]
+    return None
+
+
+def normalized_birth(value: str | None) -> str | None:
+    """Known full dates only: remove wiki comments and pad month/day, never guess."""
+    clean = re.sub(r'<!--[\s\S]*?-->', '', value or '').strip().rstrip("'").strip()
+    m = re.fullmatch(r'(\d{4})-(\d{1,2})-(\d{1,2})', clean)
     if not m:
         return None
-    v = m.group(1).strip()
-    return v or None
+    try:
+        return date(*(int(part) for part in m.groups())).isoformat()
+    except ValueError:
+        return None
 
 
-def parse_infobox(wikitext: str) -> dict:
-    return {k: field(wikitext, k) for k in FIELDS}
+def parse_infobox(wikitext: str) -> dict | None:
+    body = player_infobox(wikitext)
+    if body is None:
+        return None
+    info = {k: field(body, k) for k in FIELDS}
+    raw_birth = info['birth_date']
+    info['birth_date'] = normalized_birth(raw_birth)
+    if raw_birth and raw_birth != info['birth_date']:
+        info['birth_date_raw'] = raw_birth
+    info['playerInfoboxVerified'] = True
+    return info
+
+
+def matching_player(wikitext: str, vlr_id: str) -> dict | None:
+    info = parse_infobox(wikitext)
+    return info if info and (info.get('vlr') or '').strip() == vlr_id else None
 
 
 def pages_by_title(titles: list[str], tag: str) -> dict[str, str]:
@@ -160,30 +224,21 @@ def main() -> int:
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
             print(f'  ! batch {i}: {e}', flush=True)
             continue
-        # Two ways a page is ours. Requiring `vlr=` was too strict: plenty of
-        # pages simply do not carry it, and the first pass threw away Dep, Rb,
-        # foxz and Haodong — all with published birthdates — for that reason.
+        # A handle alone is not an identity. Laz/nobody/Kaminari and others
+        # belong to several different people, sometimes in different countries.
+        # Missing ids now remain unknown instead of importing someone else's bio.
         by_vlr: dict[str, tuple] = {}
-        by_name: dict[str, tuple] = {}
         for title, wt in pages.items():
-            if 'Infobox player' not in wt:
-                continue
             info = parse_infobox(wt)
+            if not info:
+                continue
             v = (info.get('vlr') or '').strip()
             if v:
                 by_vlr[v] = (title, info)
-            else:
-                by_name[title.lower()] = (title, info)
         for pid in chunk:
-            ign = (people[pid] or '').lower()
             if pid in by_vlr:
                 out[pid] = {'ign': people[pid], 'page': by_vlr[pid][0],
                             'matchedBy': 'vlr', **by_vlr[pid][1]}
-            elif ign in by_name:
-                # a name match only when the page names no vlr id at all; a page
-                # carrying a *different* id is a different player, same handle
-                out[pid] = {'ign': people[pid], 'page': by_name[ign][0],
-                            'matchedBy': 'name', **by_name[ign][1]}
         if (i // BATCH) % 5 == 0 or i + BATCH >= len(ids):
             print(f'  第一轮 {min(i + BATCH, len(ids))}/{len(ids)}  命中 {len(out)}', flush=True)
 
@@ -203,8 +258,8 @@ def main() -> int:
                 wt = pages.get(title)
                 if not wt:
                     continue
-                info = parse_infobox(wt)
-                if (info.get('vlr') or '').strip() == pid:
+                info = matching_player(wt, pid)
+                if info:
                     out[pid] = {'ign': people[pid], 'page': title,
                                 'matchedBy': 'search', **info}
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:

@@ -29,6 +29,8 @@ import { cny } from './moneyfmt'
 import { CNY_FLAG } from './cnyMigrate'
 import { TALENT_MAX, buildAttrs, talentCeilings, zeroTalents } from './talent'
 import type { StartPoint } from './talent'
+import { repairPlayerCountries, repairPlayerTeamNames } from './playerDataRepair'
+import { repairPlayerBios } from './playerBioRepair'
 
 /**
  * The new-career screen's numbers — the doors, the talent points, the ceilings
@@ -348,6 +350,11 @@ export function createCareer(o: CareerOpts): GameState {
   // born in RMB: nothing for me/cnyMigrate.ts to convert
   me.flags[CNY_FLAG] = 1
   state.me = me
+  // Historical identity corrections never replace the main character or a
+  // simulated roster. Apply the same guarded repairs as a subsequently loaded save.
+  repairPlayerCountries(state)
+  repairPlayerBios(state)
+  repairPlayerTeamNames(state)
   // the book that counts toward breaking the eight ceilings (me/bottleneck.ts)
   ensureCeilings(state)
   initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))

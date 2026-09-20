@@ -62,6 +62,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_circuit as bc  # noqa: E402  names, regions, stages, scenes
 import build_world_2021 as bw  # noqa: E402  the ruler
 import staff as staff_book  # noqa: E402  who was on a staff when
+from player_countries import player_country  # noqa: E402
 
 DATA = bw.DATA
 YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
@@ -284,7 +285,7 @@ def main() -> int:
     a = ap.parse_args()
 
     history = bw.load('history.json')
-    bios = bw.load('bios.json')
+    bios = {pid: bw.trusted_bio(bio, pid) for pid, bio in bw.load('bios.json').items()}
     raw_stats = bw.load('stats_history.json')
     world = bw.load('world_2021.json')
     leagues = bw.load('leagues.json')
@@ -339,7 +340,7 @@ def main() -> int:
         birth = (bios.get(pid) or {}).get('birth_date')
         age = bw.age_on(birth, date(year, 1, 1))
         if age is not None:
-            return int(bw.clamp(age, 15, 40)), False, birth
+            return int(age), False, birth
         debut = first_year.get(pid, year)
         return int(bw.clamp(bw.DEBUT_AGE.get(debut, 17) + (year - debut), 15, 40)), True, None
 
@@ -476,7 +477,7 @@ def main() -> int:
             raw = who.get(pid, {})
             real = bio.get('name') if str(bio.get('name') or '').lower() != str(raw.get('ign', '')).lower() else None
             debuts[pid] = {'ign': raw.get('ign') or pid,
-                           'nat': (raw.get('country') or bio.get('country') or '')[:2].lower() or None,
+                           'nat': player_country(raw.get('country'), bio, pid),
                            'name': real, 'birth': birth, 'age': age, 'est': est}
         introduced |= set(debuts)
         for tid, c in clubs_out.items():

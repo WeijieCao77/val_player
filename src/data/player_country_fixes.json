@@ -1,0 +1,1256 @@
+{
+  "version": 1,
+  "checked": "2026-09-20",
+  "scope": "Only exact VLR IDs and proven original bad nat values. No name matching, club inference or global code substitution.",
+  "fixes": [
+    {
+      "pid": "175",
+      "year": 2021,
+      "from": "li",
+      "to": "lt",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Lithuania",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "lt"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "lt"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "197",
+      "year": 2021,
+      "from": "de",
+      "to": "dk",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Denmark",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "dk"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "dk"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "917",
+      "year": 2021,
+      "from": "un",
+      "to": "gb",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "United Kingdom",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "gb"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "gb"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "919",
+      "year": 2021,
+      "from": "ic",
+      "to": "is",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Iceland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "is"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "is"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1166",
+      "year": 2021,
+      "from": "sl",
+      "to": "si",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Slovenia",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "si"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "si"
+          },
+          {
+            "event": "1512",
+            "country": "si"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1370",
+      "year": 2021,
+      "from": "sp",
+      "to": "es",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Spain",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "es"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "es"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1830",
+      "year": 2021,
+      "from": "ge",
+      "to": "de",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Germany",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "de"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "de"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2042",
+      "year": 2021,
+      "from": "ge",
+      "to": "de",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Germany",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "de"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "de"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2187",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "731",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2572",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "pl"
+          },
+          {
+            "event": "489",
+            "country": "pl"
+          },
+          {
+            "event": "526",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2618",
+      "year": 2021,
+      "from": "un",
+      "to": "gb",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "United Kingdom",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "gb"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "gb"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2696",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "pl"
+          },
+          {
+            "event": "731",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2723",
+      "year": 2021,
+      "from": "sp",
+      "to": "es",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Spain",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "es"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "es"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2749",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "731",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "3551",
+      "year": 2021,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1027",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "3592",
+      "year": 2021,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1109",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "3662",
+      "year": 2021,
+      "from": "un",
+      "to": "gb",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "United Kingdom",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "gb"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "gb"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "4224",
+      "year": 2021,
+      "from": "la",
+      "to": "lv",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Latvia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "lv"
+        ],
+        "events": [
+          {
+            "event": "489",
+            "country": "lv"
+          },
+          {
+            "event": "1306",
+            "country": "lv"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "4234",
+      "year": 2021,
+      "from": "un",
+      "to": "gb",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "United Kingdom",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "gb"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "gb"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "4542",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "731",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "4968",
+      "year": 2021,
+      "from": "li",
+      "to": "lt",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Lithuania",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "lt"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "lt"
+          },
+          {
+            "event": "1074",
+            "country": "lt"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "5488",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "831",
+            "country": "pl"
+          },
+          {
+            "event": "832",
+            "country": "pl"
+          },
+          {
+            "event": "833",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "5549",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "pl"
+          },
+          {
+            "event": "731",
+            "country": "pl"
+          },
+          {
+            "event": "1306",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7243",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "1670",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7244",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "731",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7276",
+      "year": 2021,
+      "from": "un",
+      "to": "gb",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "United Kingdom",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "gb"
+        ],
+        "events": [
+          {
+            "event": "489",
+            "country": "gb"
+          },
+          {
+            "event": "1074",
+            "country": "gb"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7459",
+      "year": 2021,
+      "from": "es",
+      "to": "ee",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Estonia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "ee"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "ee"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "9561",
+      "year": 2021,
+      "from": "bu",
+      "to": "bg",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Bulgaria",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "bg"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "bg"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "9574",
+      "year": 2021,
+      "from": "sl",
+      "to": "sk",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Slovakia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "sk"
+        ],
+        "events": [
+          {
+            "event": "314",
+            "country": "sk"
+          },
+          {
+            "event": "672",
+            "country": "sk"
+          },
+          {
+            "event": "1512",
+            "country": "sk"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "11198",
+      "year": 2021,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "1306",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "12066",
+      "year": 2021,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1027",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "12672",
+      "year": 2021,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1109",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "12673",
+      "year": 2021,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1109",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "170",
+      "year": 2022,
+      "from": "sw",
+      "to": "se",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Sweden",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "se"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "se"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "564",
+      "year": 2022,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "833",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "2548",
+      "year": 2022,
+      "from": "no",
+      "to": "mk",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "North Macedonia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "mk"
+        ],
+        "events": [
+          {
+            "event": "1512",
+            "country": "mk"
+          },
+          {
+            "event": "1670",
+            "country": "mk"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "4365",
+      "year": 2022,
+      "from": "no",
+      "to": "mk",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "North Macedonia",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "mk"
+        ],
+        "events": [
+          {
+            "event": "1074",
+            "country": "mk"
+          },
+          {
+            "event": "1670",
+            "country": "mk"
+          },
+          {
+            "event": "1866",
+            "country": "mk"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "5876",
+      "year": 2022,
+      "from": "se",
+      "to": "rs",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Serbia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "rs"
+        ],
+        "events": [
+          {
+            "event": "1074",
+            "country": "rs"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "12064",
+      "year": 2022,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1027",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "20308",
+      "year": 2022,
+      "from": "no",
+      "to": "mk",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "North Macedonia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "mk"
+        ],
+        "events": [
+          {
+            "event": "1074",
+            "country": "mk"
+          },
+          {
+            "event": "1670",
+            "country": "mk"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1243",
+      "year": 2023,
+      "from": "mo",
+      "to": "ma",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Morocco",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "ma"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "ma"
+          },
+          {
+            "event": "1439",
+            "country": "ma"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1257",
+      "year": 2023,
+      "from": "tu",
+      "to": "tn",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Tunisia",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "tn"
+        ],
+        "events": [
+          {
+            "event": "1439",
+            "country": "tn"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "1269",
+      "year": 2023,
+      "from": "mo",
+      "to": "ma",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Morocco",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "ma"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "ma"
+          },
+          {
+            "event": "1439",
+            "country": "ma"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7884",
+      "year": 2023,
+      "from": "sp",
+      "to": "es",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Spain",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "es"
+        ],
+        "events": [
+          {
+            "event": "672",
+            "country": "es"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "9698",
+      "year": 2023,
+      "from": "uk",
+      "to": "ua",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Ukraine",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "ua"
+        ],
+        "events": [
+          {
+            "event": "526",
+            "country": "ua"
+          },
+          {
+            "event": "1074",
+            "country": "ua"
+          },
+          {
+            "event": "1306",
+            "country": "ua"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "13941",
+      "year": 2023,
+      "from": "tu",
+      "to": "tn",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Tunisia",
+        "bioMatchedBy": "name",
+        "rosterFlags": [
+          "tn"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "tn"
+          },
+          {
+            "event": "1439",
+            "country": "tn"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "15210",
+      "year": 2023,
+      "from": "mo",
+      "to": "ma",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Morocco",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "ma"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "ma"
+          },
+          {
+            "event": "1439",
+            "country": "ma"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "19580",
+      "year": 2023,
+      "from": "tu",
+      "to": "tr",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Turkey",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "tr"
+        ],
+        "events": [
+          {
+            "event": "1027",
+            "country": "tr"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "21305",
+      "year": 2023,
+      "from": "tu",
+      "to": "tn",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Tunisia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "tn"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "tn"
+          },
+          {
+            "event": "1439",
+            "country": "tn"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "6742",
+      "year": 2024,
+      "from": "mo",
+      "to": "ma",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Morocco",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "ma"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "ma"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "7185",
+      "year": 2024,
+      "from": "is",
+      "to": "il",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Israel",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "il"
+        ],
+        "events": [
+          {
+            "event": "1512",
+            "country": "il"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "15383",
+      "year": 2024,
+      "from": "sl",
+      "to": "si",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Slovenia",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "si"
+        ],
+        "events": [
+          {
+            "event": "1110",
+            "country": "si"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "19505",
+      "year": 2024,
+      "from": "po",
+      "to": "pl",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Poland",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "pl"
+        ],
+        "events": [
+          {
+            "event": "1306",
+            "country": "pl"
+          },
+          {
+            "event": "1512",
+            "country": "pl"
+          },
+          {
+            "event": "1866",
+            "country": "pl"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "27023",
+      "year": 2024,
+      "from": "se",
+      "to": "rs",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Serbia",
+        "bioMatchedBy": "search",
+        "rosterFlags": [
+          "rs"
+        ],
+        "events": [
+          {
+            "event": "1866",
+            "country": "rs"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "23056",
+      "year": 2026,
+      "from": "mo",
+      "to": "ma",
+      "source": "history.json exact VLR player ID; unanimous recorded valid flags",
+      "evidence": {
+        "bioCountry": "Morocco",
+        "bioMatchedBy": "vlr",
+        "rosterFlags": [
+          "ma"
+        ],
+        "events": [
+          {
+            "event": "1152",
+            "country": "ma"
+          }
+        ]
+      }
+    },
+    {
+      "pid": "9143",
+      "year": 2021,
+      "from": "po",
+      "to": "de",
+      "source": "https://www.vlr.gg/player/9143/darkosek",
+      "checked": "2026-09-20",
+      "evidence": "VLR player profile GERMANY; historical rosters also de; do not copy bios Poland"
+    },
+    {
+      "pid": "9576",
+      "year": 2021,
+      "from": "un",
+      "to": "cz",
+      "source": "https://www.vlr.gg/player/9576/peter",
+      "checked": "2026-09-20",
+      "evidence": "VLR player profile CZECH REPUBLIC; Petr Vočadlo; historical rosters also cz"
+    },
+    {
+      "pid": "17830",
+      "year": 2021,
+      "from": "un",
+      "to": "vn",
+      "source": "https://www.vlr.gg/player/17830/kay",
+      "checked": "2026-09-20",
+      "evidence": "VLR player profile VIETNAM; Hoàng Quốc Huy; historical rosters also vn"
+    },
+    {
+      "pid": "4244",
+      "year": 2021,
+      "from": "wa",
+      "to": "gb",
+      "source": "https://www.vlr.gg/player/4244/yaboilewis",
+      "checked": "2026-09-20",
+      "evidence": "VLR player profile WALES; normalized to existing game UK code gb"
+    },
+    {
+      "pid": "4307",
+      "year": 2021,
+      "from": "wa",
+      "to": "gb",
+      "source": "https://www.vlr.gg/player/4307/hyperzxz",
+      "checked": "2026-09-20",
+      "evidence": "VLR player profile WALES; normalized to existing game UK code gb"
+    }
+  ]
+}

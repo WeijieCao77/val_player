@@ -16,6 +16,8 @@ import { track } from './telemetry'
 import { PACKED, canPack, packStored, readStored } from './saveCodec'
 import { exportBackupFromStored } from './backup'
 import type { ExportResult } from './backup'
+import { repairPlayerCountries, repairPlayerTeamNames } from './playerDataRepair'
+import { repairPlayerBios } from './playerBioRepair'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -91,6 +93,11 @@ const DESK_PLAYER_FIELDS = ['listed', 'listedOn', 'payAskedOn', 'rumourOn', 'per
  */
 export function migratePlayerSave(state: GameState): GameState {
   migrateWorld(state)
+  if (state.me) {
+    repairPlayerCountries(state)
+    repairPlayerBios(state)
+    repairPlayerTeamNames(state)
+  }
   // a career kept in dollars before the four currencies: once, into RMB and its contracts' own currencies (me/cnyMigrate.ts)
   migrateToCny(state)
   const s = state as unknown as Record<string, unknown>
