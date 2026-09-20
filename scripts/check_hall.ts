@@ -286,10 +286,21 @@ G.localStorage = good
 G.localStorage = good
 {
   // a real 「因为你」: a 2026 start whose first season's Challengers title went to my club over history's champion
+  //
+  // The seed is a fixture, not the rule: it is picked because that world plays
+  // out with the case in it, and only about one 2026 二线 start in seven does in
+  // a single season. It was 7 until 2026-09-20, when the rebalance
+  // (engine/age.ts, engine/ruler.ts) moved which clubs the ruler puts where and
+  // seed 7 stopped winning its split; seed 8 plays the same case out — two
+  // 因为你 in its first season, the 北欧与东欧 splits, as seed 7's one was.
+  // Re-pick it the same way if a later change moves the world again: run a
+  // season on a handful of seeds and take one whose 挑战者 title came to the
+  // player's club over history's champion. Nothing about what is asserted below
+  // may be loosened for it.
   {
     const { becauseOfMe } = await import('../src/engine/me/rewrites')
     delete mem[HALL_KEY]
-    const R = play('R 2026 二线 欧洲 决斗者（一季）', { name: 'HallR', seed: 7, year: 2026, start: 'chal', region: 'Europe' as Region }, 1)
+    const R = play('R 2026 二线 欧洲 决斗者（一季）', { name: 'HallR', seed: 8, year: 2026, start: 'chal', region: 'Europe' as Region }, 1)
     const rh = readHall()!
     const rc = rh.cards.find((c) => c.id === careerIdOf(R.state))
     const mine = R.state.me!.seasons.reduce((n, x) => n + (x.rewrites ?? []).filter(becauseOfMe).length, 0)

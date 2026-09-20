@@ -96,8 +96,11 @@ export const FULL_SEASON = 1500
  */
 export const LEAGUE_SHAPE = 0.7
 
+/** lines a top flight needs before it is one, rather than a club history put up for one event */
+export const LEAGUE_MIN = 24
+
 interface TRating { o: number; n: number; i?: number }
-interface TClub { k: 1 | 2; d: number; l: string | null }
+interface TClub { k: 1 | 2; d: number; l: string | null; r: string }
 interface TYear { clubs: Record<string, TClub>; rosters: Record<string, string[]>; ratings: Record<string, TRating> }
 const BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
 const CIRCUIT = circuitRaw as unknown as Record<string, { rosters?: Record<string, string[]> }[]>
@@ -186,6 +189,10 @@ function shiftsOf(lines: Line[]): Map<string, number> {
   // each closed league read on its own order, laid over the shape all four make together
   const byLeague = new Map<string, number[]>()
   lines.forEach((l, i) => { if (l.tier === 1 && l.lg) byLeague.set(l.lg, [...(byLeague.get(l.lg) ?? []), i]) })
+  // a handful of lines is not a top flight to be levelled against anything — a
+  // club or two history put in the first tier for one event, and 2021's whole
+  // open pool once it is cut by region
+  for (const [lg, idx] of byLeague) if (idx.length < LEAGUE_MIN) byLeague.delete(lg)
   const level = new Map<number, number>()
   if (byLeague.size >= 2 && LEAGUE_SHAPE > 0) {
     // by rank, not by quantile: a league whose scoreboards list 93 people and one
@@ -226,6 +233,9 @@ const readOf = (o: number, igl: boolean | undefined, shift: number): number => o
 function bookLines(year: number): Line[] {
   const Y = BOOK.years[String(year)]
   if (!Y) return []
+  // A year has closed leagues from 2023. Before that the whole top flight is one
+  // open pool and there is nothing to level it against, so it is left alone.
+  const closed = Object.values(Y.clubs).some((c) => c.k === 1 && !!c.l)
   const seen = new Map<string, { top: number; sub: number; lg: Record<string, number> }>()
   const mark = (club: string, ids: string[]) => {
     const c = Y.clubs[club]
@@ -234,8 +244,18 @@ function bookLines(year: number): Line[] {
       const s = seen.get(id) ?? { top: 0, sub: 0, lg: {} }
       if (top) s.top++
       else s.sub++
-      // which closed league he mostly played it in — null before 2023, when there were none
-      if (top && c?.l) s.lg[c.l] = (s.lg[c.l] ?? 0) + 1
+      // Which top flight he mostly played in. A top-flight club with no seat is a
+      // scene of its own, not a hole in the table: in 2023 China's domestic
+      // circuit was 22 of the year's 52 first-tier clubs and had no league, so
+      // without this it escaped the levelling entirely — 106 lines of 300 rounds
+      // or more against some fifty in each real league, a median 1304 rounds
+      // against 865–973, and 12 of them read 90 or better where the three real
+      // leagues had 5, 6 and 5 (reported 2026-09-20: 「连 Flex1n 这种很菜的职业
+      // 选手都有 96 的综合分」 — 2142 rounds at a 1.124 rating, raw 96).
+      if (top && closed) {
+        const key = c!.l ?? `open:${c!.r}`
+        s.lg[key] = (s.lg[key] ?? 0) + 1
+      }
       seen.set(id, s)
     }
   }
