@@ -7,7 +7,7 @@ import { ceilingNote } from '../../engine/me/bottleneck'
 import { fillerNote, goalOf, hourLine, weightsOf } from '../../engine/me/goal'
 import NextStep, { LineText } from './NextStep'
 import { nextCardDue, useNextHidden } from './guide'
-import { actionBlock, doAction, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
+import { actionBlock, doAction, matchAhead, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
@@ -271,6 +271,19 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 <span className="n">{left}</span>
                 <span className="tiny muted">{left < 40 ? '太累了' : ''}</span>
               </div>
+            )
+          })()}
+          {/* a match of mine still to come this week: what is spent now is still on the body
+              when it is played (engine/me/week.ts matchAhead) — said where the choice is made */}
+          {(() => {
+            const up = matchAhead(game)
+            if (!up) return null
+            const left = up.day - game.day
+            const opp = game.teams[up.fixture.teamA === game.myTeam ? up.fixture.teamB : up.fixture.teamA]
+            return (
+              <p className="tiny muted" style={{ margin: '-6px 0 12px' }}>
+                {left <= 0 ? '今天' : `${left} 天后`}打 {opp?.tag ?? '对手'}，你是首发：现在练的累，到比赛那天还在身上。
+              </p>
             )
           })()}
           {/* 本周流水: what this week's clicks did, over the cards — 破晓 keeps the

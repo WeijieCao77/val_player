@@ -269,6 +269,24 @@ export function weekMatches(state: GameState): WeekMatch[] {
   return out.sort((a, b) => a.day - b.day)
 }
 
+/**
+ * My club's next official match still to come inside this week's seven days,
+ * while the coach has me in the five — or null.
+ *
+ * The week board says it over the cards, because an hour is spent the moment
+ * it is clicked now (doAction) and the body carries it into the match
+ * (engine/match.ts: 疲劳 comes off the rating at kickoff). Under the old board
+ * the week's hours landed on the seventh day, after the match, so the choice
+ * was free; it is not any more, and the player is told where he makes it.
+ * Only for a starter: a substitute's match asks nothing of his legs.
+ */
+export function matchAhead(state: GameState): WeekMatch | null {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return null
+  if (!state.teams[state.myTeam]?.starters.includes(me.id)) return null
+  return weekMatches(state).find((w) => w.day >= state.day && !w.fixture.played) ?? null
+}
+
 export interface WeekDay {
   day: number
   /** my club's official matches that day */

@@ -6,6 +6,8 @@
  *    that says so all move before anything is advanced, and the week is not settled by it
  *  二 the guards in front of the click are the ones that were there: the points, the ≤0 stamina block,
  *    the greyed reason, 没有队伍 on the club's three, and 对位挑战 only through its own button
+ *  二之二 a match of mine still to come this week is said over the cards, and only when it is true:
+ *    a starter with one left this week, never a substitute, never a week already played out
  *  三 the settlement does not do it again: after 推进一周 the body has only what a week gives back, and
  *    the week's tally, its books and its paper are cleared
  *  四 the same save and the same clicks in the same order play out the same way (破晓's own guarantee)
@@ -18,7 +20,7 @@
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { ACTIONS, ACTION_BY_KEY, DUELS_PER_WEEK } from '../src/engine/me/actions'
-import { actionBlock, advanceWeek, doAction, settleWeek, staminaLeft } from '../src/engine/me/week'
+import { actionBlock, advanceWeek, doAction, matchAhead, settleWeek, staminaLeft, weekMatches } from '../src/engine/me/week'
 import { autoPlan } from '../src/engine/me/auto'
 import { startDuel } from '../src/engine/me/duel'
 import { migratePlayerSave } from '../src/engine/me/save'
@@ -165,6 +167,36 @@ console.log('\n二、点之前的拦截一个没少：点数、体力、灰掉�
     me.duelLive = undefined
   }
   check(done <= DUELS_PER_WEEK, `一周最多 ${DUELS_PER_WEEK} 次对位挑战，这周打了 ${done} 次`)
+}
+
+/* ---- 二之二 ---- */
+console.log('\n二之二、这周还有你的比赛时，周页会说一句——只在真有这回事的时候')
+{
+  const s = proReady()
+  const me = s.me!
+  const team = s.teams[s.myTeam]
+  // on the bench: his legs are not what the match asks for, so nothing is said
+  team.starters = team.roster.filter((id) => id !== me.id).slice(0, 5)
+  check(matchAhead(s) === null, '替补的一周不说这句：他的腿不是这场比赛要的东西')
+  // in the five, with one of my club's matches still to come inside the week
+  team.starters = [me.id, ...team.roster.filter((id) => id !== me.id).slice(0, 4)]
+  check(matchAhead(s) === null, '首发，但这周没有你的比赛：一个字不说')
+  // one tie of my club's, written for tomorrow — the only thing matchAhead reads off it
+  const other = Object.keys(s.teams).find((id) => id !== s.myTeam)!
+  s.fixtures.push({
+    id: 'wi:ahead', day: s.day + 1, stage: s.stage, comp: '中国联赛',
+    teamA: s.myTeam, teamB: other, bo: 3, label: '常规赛 W1', played: false,
+  })
+  const mine = weekMatches(s).filter((w) => w.day >= s.day && !w.fixture.played)
+  const up = matchAhead(s)
+  check(!!up && up.day === mine[0]?.day && up.day === s.day + 1,
+    `首发、明天就有一场：说的是最近那一场（第 ${up?.day} 天，今天是第 ${s.day} 天，本周还剩 ${mine.length} 场）`)
+  // a week with nothing of mine left says nothing
+  const quiet = proReady(11)
+  for (const f of quiet.fixtures) if (f.teamA === quiet.myTeam || f.teamB === quiet.myTeam) f.played = true
+  check(matchAhead(quiet) === null, '这周的比赛都打完了：一个字不说')
+  // and without a club there is nothing to say either
+  check(matchAhead(career()) === null, '没有俱乐部：一个字不说')
 }
 
 /* ---- 三 ---- */
