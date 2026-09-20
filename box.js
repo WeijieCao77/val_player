@@ -28,9 +28,9 @@
    ================== 存储 ==================
 
    和统计同一个目录（DATA_DIR / RAILWAY_VOLUME_MOUNT_PATH / ~/.val_player-stats），自己的文件
-   box.jsonl：一行一条操作（new / vote / st / pin / del / merge / set），追加写天然崩溃安全，
-   启动时按顺序重放成内存里的状态，写到一半的半行 JSON.parse 失败就跳过。先落盘、落成了才记账：
-   写不进去就回一句中文，玩家看到的和盘上那份永远是同一个。文件到上限就压实（每条一行 set），
+   box.jsonl：一行一条操作（new / vote / st / pin / del / merge / set），追加前后都带换行，
+   避免写到一半的坏尾粘住下一条成功记录。启动时按顺序重放，空行、坏行跳过。
+   追加成功才更新内存，写不进去就回一句中文（不保证断电落盘或失败写入的原子回滚）。文件到上限就压实（每条一行 set），
    条目到上限就不再收新投稿，点赞照常。
 
    信箱出任何毛病都不该变成游戏打不开：每个入口自己把错兜住，记一行，进程继续服务 dist/。 */
@@ -134,11 +134,13 @@ function applyOp(o) {
   }
 }
 
-/** 一条操作：先落盘，落成了才记账。写不进去回 false，调用方回一句中文，盘上和内存里永远是同一份。 */
+/** 一条操作：追加成功才记账。写不进去回 false，调用方显示失败。 */
 function write(o) {
   if (BOX.bytes >= HARD_BYTES) { BOX.full = 'bytes'; return false }
   let line
-  try { line = `${JSON.stringify(o)}\n` } catch (e) { logErr('stringify', e); return false }
+  // 不能只在启动时检查坏尾：同一进程的 append 也可能写了一半才抛错。
+  // 每条都先隔开前面的残片；重放本就忽略空行，旧日志和压实快照无需迁移。
+  try { line = `\n${JSON.stringify(o)}\n` } catch (e) { logErr('stringify', e); return false }
   try {
     fs.appendFileSync(BOX.file, line)
   } catch (e) {
