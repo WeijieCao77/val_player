@@ -141,7 +141,7 @@ export default function NewCareer({
     <>
       {/* the cover carries the title; the heading stays for screen readers */}
       <img className="nc-cover" src={`${import.meta.env.BASE_URL}cover.svg`} alt="" width={1200} height={630} />
-      <h1 className="sr-only">无畏契约 · 选手生涯 demo</h1>
+      <h1 className="sr-only">无畏契约 · 选手生涯</h1>
     </>
   )
   const intro = '世界里的每一支队、每一个人都是真实的 VCT 选手。你是一个虚构的新人——从哪一年、哪里开始，由你定。'

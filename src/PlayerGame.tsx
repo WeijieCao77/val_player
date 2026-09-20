@@ -403,7 +403,7 @@ export default function Career({ opened, onHome }: {
         <header className="hero" aria-label="总览">
           <div className="hero-row">
             <button className="brand as-link" onClick={() => goScreen('week')}>
-              VAL<span>选手生涯</span><em className="by">demo</em>
+              VAL<span>选手生涯</span>
             </button>
             {/* before who I am in the page's order, so a phone can hold it at the right of the wordmark's line; a monitor
                 puts it back at the end of the line (me.css .hero-home) */}

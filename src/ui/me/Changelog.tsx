@@ -106,7 +106,7 @@ function LogSheet({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="support-foot">
-          <span className="tiny faint">选手生涯 demo · 每一版改了什么都在这里，回看用</span>
+          <span className="tiny faint">选手生涯 · 每一版改了什么都在这里，回看用</span>
         </div>
       </div>
     </div>
