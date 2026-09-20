@@ -300,7 +300,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 {log.slice(-3).map((l, i) => <p key={i}>{l}</p>)}
                 {tally.length > 0 && <p className="sum">这周：{tally.join(' · ')}</p>}
                 {/* the boundary, said where the cards are and never as a dialog (engine/me/undo.ts) */}
-                {undoDepth(game) > 0 && <p className="sum">{UNDO_EDGE_CN}{log.length > 1 ? REPLAY_CN : ''}</p>}
+                {undoDepth(game) > 0 && <p className="sum">{UNDO_EDGE_CN}</p>}
               </div>
             )
           })()}
@@ -355,7 +355,8 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                                 「每个选项后面都可以加减，加了数值就会变化，减了就变回去」 */}
                             {canUndo(game, a.key) && (
                               <button
-                                className="sm" aria-label={`${a.label} 退回一次`} title={`退回一次${a.label}`}
+                                className="sm" aria-label={`${a.label} 退回一次`}
+                                title={`退回一次${a.label}${(me.weekDone ?? []).lastIndexOf(a.key) < (me.weekDone ?? []).length - 1 ? `。${REPLAY_CN}` : ''}`}
                                 onClick={(e) => { e.stopPropagation(); const why = undoAction(game, a.key); if (why) toast(why); commit() }}
                               >
                                 −
