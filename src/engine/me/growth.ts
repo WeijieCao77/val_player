@@ -1,17 +1,17 @@
-import { Rng, clamp } from '../rng'
+import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
 import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
 import { duoBonded } from '../bonds'
-import { ACTIONS } from './actions'
+import { ACTIONS, ACTION_BY_KEY } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
 import { FLAT_RELIEF, RELIEF_FLOOR, courseMul, psychMul } from './shop'
 import { ladderLabel, playRanked } from './prepro'
-import { contentGross, mediaAfterCap, streamWeek, streamerHeatMul } from './stream'
+import { contentGross, payMedia, streamIncome, streamWeekMul, streamerHeatMul } from './stream'
 import { questProgress } from './quests'
 import { addMoney } from './money'
 import { cny } from './moneyfmt'
@@ -117,7 +117,7 @@ const EXTRA = 0.55
 export const IGL_STUDY = 0.35
 export const IGL_CALL_STUDY = 0.5
 
-/** what ranked puts into each of the role's three heaviest attributes, per game night, of a training week (settleTraining) */
+/** what ranked puts into each of the role's three heaviest attributes, per game night, of a training week (runAction) */
 const RANKED_SHARE = 0.18
 /** and a scrim into 协同 and 沟通 */
 const SCRIM_SHARE = 0.35
@@ -132,7 +132,7 @@ export interface HourValue {
 
 /**
  * What an action point of each practice is worth to 综合 right now — the same
- * sums settleTraining books, weighted by what the role is judged on, counting
+ * sums runAction books, weighted by what the role is judged on, counting
  * only attributes under their ceilings. The week board says which is worth the
  * most; the steady plan does not follow it, a player chasing his peak can.
  */
@@ -190,123 +190,167 @@ export function primaryFocus(me: MeState, p: Player): keyof Attrs | 'rest' {
 /** tilt above 55 drags on the calls; 运动心理 takes a fifth off it (me/shop.ts) */
 export const tiltDrag = (me: MeState): number => (me.tilt > 55 ? (me.tilt - 55) * 0.04 * psychMul(me.courses ?? []) : 0)
 
-/** Apply the week's plan at the weekly settlement. */
-export function settleTraining(state: GameState, rng: Rng, notes: string[]): void {
-  const me = state.me
-  if (!me) return
+/**
+ * This week's training base (gainBase), rolled once and kept.
+ *
+ * It used to be rolled at the weekly settlement, where one roll covered the
+ * whole week's plan. A card now resolves the moment it is clicked
+ * (me/week.ts doAction), so it is rolled at the week's first session and every
+ * session of that week is worth exactly that much — otherwise a week's
+ * practice would be worth less the more of it you did, because each session's
+ * own fatigue would be reading back into the next one's base.
+ *
+ * The seed is the one the settlement used: this week's seventh day. The state
+ * it reads is the week's as it stands at that first session rather than at the
+ * settlement, so a week whose matches push fatigue past 45 or 70 is worth a
+ * little more than it would have been (me/week.ts, 2026-09-19).
+ */
+export function weekGain(state: GameState): number {
+  const me = state.me!
+  if (me.trainWeek && me.trainWeek.week === me.week) return me.trainWeek.g
   const p = state.players[me.id]
   const team = me.phase === 'pro' ? state.teams[state.myTeam] : undefined
-  if (!p) return
-  const pro = me.phase === 'pro'
+  const end = state.day - me.weekDay + 7
+  const rng = new Rng(hashStr(`me:${state.seed}:${state.year}:${end}`))
   const g = gainBase(p, team ?? { coach: null, facilities: 40 } as Team, rng) * traitMul(me, 'train') * (me.flags.trainMul ?? 1)
+  me.trainWeek = { week: me.week, g }
+  return g
+}
+
+const ROSE_CN: Record<keyof Attrs, string> = {
+  aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
+  clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
+}
+
+/**
+ * One session of a week-board action, resolved on the click: what it gives,
+ * what it costs the body, and the one line that says so.
+ *
+ * The author, 2026-09-19: 「玩家们表示都不喜欢每周的行动点了之后不执行要等点
+ * 下一周才会统一执行这个方式，希望改成破晓那样点击就直接执行。」 破晓 does
+ * exactly this — doTrain/doAction write the attributes, the money and the
+ * fatigue and return — so this is that function, with our own two budgets in
+ * front of it (me/week.ts actionBlock). me.plan has already counted this
+ * session when this runs, so `me.plan[key] − 1` is which one of the week it is:
+ * the second stream of a week is worth less than the first, as it always was.
+ *
+ * The draw has its own seed per session, so a save and the same clicks in the
+ * same order play out the same way — 破晓's own guarantee (rng.ts:「同一份存档、
+ * 同样的操作，结果一样」).
+ */
+export function runAction(state: GameState, key: MeAction): string {
+  const me = state.me!
+  const p = state.players[me.id]
+  const def = ACTION_BY_KEY[key]
+  const pro = me.phase === 'pro'
+  // which one of the week this is, counting from zero
+  const i = Math.max(0, (me.plan[key] ?? 1) - 1)
+  const rng = new Rng(hashStr(`act:${state.seed}:${state.year}:${state.day}:${key}:${i}`))
+  const was = Math.round(100 - p.fatigue)
+  const g = weekGain(state)
   const w = weightsFor(p)
-  const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
-  let fatigue = 0
   const rose: (keyof Attrs)[] = []
   // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
   const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k) * (p.caps ? roomMul(p, k) : 1)) && !rose.includes(k)) rose.push(k) }
-  // stream and content money share the platform's weekly settlement (me/stream.ts mediaAfterCap)
-  let media = 0
-  let capped = false
-  const payMedia = (gross: number): number => {
-    const got = mediaAfterCap(state, media, gross)
-    media += gross
-    if (got < gross) capped = true
-    return got
-  }
-
-  for (const a of ACTIONS) {
-    const n = me.plan[a.key] ?? 0
-    if (!n) continue
-    fatigue += a.fatigue * n
-    switch (a.key) {
-      case 'aim': case 'vod': case 'util': {
-        const split = SPLIT[a.key]!
-        // without a club the hours are mine alone: no team practice underneath them
-        const alone = pro ? 1 : 1.6
-        for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) {
-          bump(k, g * EXTRA * n * share * alone)
-        }
-        // and 指挥 on top, twice as fast for the man who calls (IGL_STUDY)
-        if (a.key === 'vod') bump('igl', g * EXTRA * n * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY))
-        // 复盘方法 (me/shop.ts): a loss looked at properly is a loss put down; the hours train what they always did
-        if (a.key === 'vod' && me.courses.includes('review')) me.tilt = clamp(me.tilt - 2 * n, 0, 100)
-        questProgress(state, 'train', n)
-        break
-      }
-      case 'ranked': {
-        for (const k of top3) bump(k, g * 0.18 * n)
-        p.form = clamp(p.form + 0.8 * n, 30, 99)
-        me.tilt = clamp(me.tilt - 3 * n, 0, 100)
-        me.body = clamp(me.body + 0.1 * n, 0, 100)
-        let w = 0, l = 0
-        for (let i = 0; i < n; i++) { const r = playRanked(state, rng); w += r.wins; l += r.losses }
-        notes.push(`排位 ${w} 胜 ${l} 负，${ladderLabel(state)}。`)
-        questProgress(state, 'ranked', n)
-        break
-      }
-      case 'content': {
-        const income = payMedia(contentGross(state, n))
-        addMoney(state, 'media', income)
-        me.heat += 6 * n
-        notes.push(`做了 ${n} 期内容，热度涨了，收入 ${cny(income)}。`)
-        break
-      }
-      case 'scrim':
-        me.coachTrust = clamp(me.coachTrust + 2.5 * n * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.2), 0, 100)
-        questProgress(state, 'scrim', n)
-        me.scrimRounds += 40 * n
-        bump('teamwork', g * 0.35 * n)
-        bump('communication', g * 0.35 * n)
-        me.tilt = clamp(me.tilt - 1 * n, 0, 100)
-        break
-      case 'duo':
-        if (me.duoWith && state.players[me.duoWith]?.teamId === state.myTeam) {
-          duoBonded(state, me.id, me.duoWith, 3 * n * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.3))
-          notes.push(`和 ${state.players[me.duoWith].ign} 双排了 ${n} 次，关系近了一点。`)
-        }
-        bump('communication', g * 0.3 * n)
-        break
-      case 'stream': {
-        const income = payMedia(streamWeek(state, n))
-        addMoney(state, 'media', income)
-        // 小主播's room was there before the career was: it pays more and talks faster (me/stream.ts)
-        me.heat += 9 * n * streamerHeatMul(state)
-        me.stream.total += n
-        me.stream.thisStage += n
-        notes.push(`直播 ${n} 次，收入 ${cny(income)}${n > 1 ? '（同一周里看的是同一批人，后几场礼物少一些）' : ''}。`)
-        questProgress(state, 'stream', n)
-        break
-      }
-      case 'rest':
-        // 体质 makes rest worth more; nerve settles when the body does
-        fatigue -= 14 * n * ((me.body - 50) / 200)
-        fatigue -= 14 * n * (traitMul(me, 'rest') - 1)
-        me.tilt = clamp(me.tilt - 10 * n, 0, 100)
-        me.mental = clamp(me.mental + 0.3 * n, 0, 100)
-        me.body = clamp(me.body + 0.3 * n, 0, 100)
-        break
-      case 'duel':
-        // resolved the moment it was called — only the wear is booked here
-        break
+  let fatigue = def.fatigue
+  let line = ''
+  switch (key) {
+    case 'aim': case 'vod': case 'util': {
+      const split = SPLIT[key]!
+      // without a club the hours are mine alone: no team practice underneath them
+      const alone = pro ? 1 : 1.6
+      for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) bump(k, g * EXTRA * share * alone)
+      // and 指挥 on top, twice as fast for the man who calls (IGL_STUDY)
+      if (key === 'vod') bump('igl', g * EXTRA * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY))
+      // 复盘方法 (me/shop.ts): a loss looked at properly is a loss put down; the hours train what they always did
+      if (key === 'vod' && me.courses.includes('review')) me.tilt = clamp(me.tilt - 2, 0, 100)
+      questProgress(state, 'train', 1)
+      line = `练了一次${def.label}。`
+      break
     }
+    case 'ranked': {
+      const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3)
+      for (const k of top3) bump(k, g * RANKED_SHARE)
+      p.form = clamp(p.form + 0.8, 30, 99)
+      me.tilt = clamp(me.tilt - 3, 0, 100)
+      me.body = clamp(me.body + 0.1, 0, 100)
+      const r = playRanked(state, rng)
+      line = `排位 ${r.wins} 胜 ${r.losses} 负，${ladderLabel(state)}。`
+      questProgress(state, 'ranked', 1)
+      break
+    }
+    case 'content': {
+      const { got, capped } = payMedia(state, contentGross(state, 1))
+      addMoney(state, 'media', got)
+      me.heat += 6
+      line = `做了一期内容，热度涨了，收入 ${cny(got)}。${capped ? MEDIA_CAP_CN : ''}`
+      break
+    }
+    case 'scrim':
+      me.coachTrust = clamp(me.coachTrust + 2.5 * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.2), 0, 100)
+      questProgress(state, 'scrim', 1)
+      me.scrimRounds += 40
+      bump('teamwork', g * SCRIM_SHARE)
+      bump('communication', g * SCRIM_SHARE)
+      me.tilt = clamp(me.tilt - 1, 0, 100)
+      line = '跟队打了一次训练赛，教练看在眼里。'
+      break
+    case 'duo':
+      if (me.duoWith && state.players[me.duoWith]?.teamId === state.myTeam) {
+        duoBonded(state, me.id, me.duoWith, 3 * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.3))
+        line = `和 ${state.players[me.duoWith].ign} 双排了一次，关系近了一点。`
+      } else line = '双排了一次。'
+      bump('communication', g * 0.3)
+      break
+    case 'stream': {
+      // the same people watch every stream in a week: the second is worth less than the first (STREAM_WEEK_MUL)
+      const { got, capped } = payMedia(state, streamIncome(state, streamWeekMul(i)))
+      addMoney(state, 'media', got)
+      // 小主播's room was there before the career was: it pays more and talks faster (me/stream.ts)
+      me.heat += 9 * streamerHeatMul(state)
+      me.stream.total += 1
+      me.stream.thisStage += 1
+      line = `直播了一次，收入 ${cny(got)}${i > 0 ? '（这周看的是同一批人，礼物少一些）' : ''}。${capped ? MEDIA_CAP_CN : ''}`
+      questProgress(state, 'stream', 1)
+      break
+    }
+    case 'rest':
+      // 体质 makes rest worth more; nerve settles when the body does
+      fatigue -= 14 * ((me.body - 50) / 200)
+      fatigue -= 14 * (traitMul(me, 'rest') - 1)
+      me.tilt = clamp(me.tilt - 10, 0, 100)
+      me.mental = clamp(me.mental + 0.3, 0, 100)
+      me.body = clamp(me.body + 0.3, 0, 100)
+      line = '休息了一会儿。'
+      break
+    // played out the moment it is called, with its own wear (me/duel.ts startDuel)
+    case 'duel': return ''
   }
-  if (capped) notes.push('这周直播和内容挣的钱超过了平台按你工资结算的额度，超出的部分只结了一成。')
-  // a week passes: the body gets some of it back on its own, more with a
-  // better constitution — so an idle week is never a dead week, and a full
-  // week of training is a real choice against it
-  // 出征仪式的时差：国际赛期间身体回得快一点或慢一点
-  fatigue -= clamp(6 + (me.body - 50) / 10, 3, 12) * cerRestMul(state)
   p.fatigue = clamp(p.fatigue + fatigue, 0, 100)
+  if (rose.length) {
+    const up = `${rose.map((k) => ROSE_CN[k]).join('、')}练上去了。`
+    line += up
+    pushLog(state, 'train', up)
+  }
+  return `${line}体力 ${was} → ${Math.round(100 - p.fatigue)}。`
+}
+
+/** said once, on the session that runs past the platform's weekly settlement (me/stream.ts) */
+const MEDIA_CAP_CN = '这周直播和内容挣的钱超过了平台按你工资结算的额度，超出的部分只结了一成。'
+
+/**
+ * The week's own share of the body, at the settlement: what a week gives back
+ * by itself, more with a better constitution — so an idle week is never a dead
+ * week, and a full week of training is a real choice against it. The hours
+ * themselves were booked as they were clicked (runAction).
+ */
+export function settleBody(state: GameState): void {
+  const me = state.me
+  if (!me) return
+  const p = state.players[me.id]
+  if (!p) return
+  // 出征仪式的时差：国际赛期间身体回得快一点或慢一点
+  p.fatigue = clamp(p.fatigue - clamp(6 + (me.body - 50) / 10, 3, 12) * cerRestMul(state), 0, 100)
   // the flat's better sleep (me/shop.ts): a hard week given back faster, down to RELIEF_FLOOR and no further
   if (me.flags.relax_flat && p.fatigue > RELIEF_FLOOR) p.fatigue = Math.max(RELIEF_FLOOR, p.fatigue - FLAT_RELIEF)
-  if (rose.length) {
-    const cn: Record<keyof Attrs, string> = {
-      aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
-      clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
-    }
-    const line = `${rose.map((k) => cn[k]).join('、')}练上去了。`
-    notes.push(line)
-    pushLog(state, 'train', line)
-  }
 }

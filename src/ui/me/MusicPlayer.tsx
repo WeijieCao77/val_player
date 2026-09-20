@@ -14,7 +14,7 @@ import './music.css'
  * 2026-09-19 by the author: 「网页里的音乐播放器可以做成浮窗吗？现在这个太大了，
  * 影响游玩」. Val Manager's window stood open by default, a 529×52 bar at the
  * bottom of the page (327×98 on a phone), and at 1920×1000 it lay over 推进一周
- * and 按推荐安排; on a 360px phone over the 下一步 card and its 去挑一家. Now the
+ * and 按推荐做完; on a 360px phone over the 下一步 card and its 去挑一家. Now the
  * record is all there is until it is pressed: 42px (40 on a phone), turning
  * while a song plays, with a small ▶ or ❚❚ on its edge. Pressed, it opens a
  * small card beside it — the song, play and pause, the songs either side, the

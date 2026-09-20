@@ -360,39 +360,29 @@ export function storyWeek(state: GameState): void {
 }
 
 /**
- * 按推荐 keeps a live chain's task in the week: the hours it needs, or the
- * stream it must not have. `set` is week.ts setPlan, passed in so this file
- * does not import the week it is called from.
+ * What a live chain wants of this week: the action to make sure of, or
+ * 'quiet' for the week that has to stay off the stream. Null when no chain is
+ * asking, or when its task is already done.
+ *
+ * 按推荐 used to take the week's least important hours back to make room for
+ * the task (「room first」). A card is done the moment it is clicked now
+ * (me/week.ts doAction) and there is nothing to take back, so the task is the
+ * first thing the steady plan spends on instead — which is where it ended up
+ * anyway. A week that tight is a man on the bench on 托管, two practice duels
+ * in, and the old loop used to lose 「合同年」 on 按推荐 every week of its task
+ * (found 2026-09-17; scripts/check_story.ts).
  */
-export function storyPlan(state: GameState, set: (k: MeAction, d: 1 | -1) => boolean): void {
+export function chainTask(state: GameState): MeAction | 'quiet' | null {
   const me = state.me
   const c = me?.chain
-  if (!me || !c?.track || c.asked || c.track === 'win' || c.track === 'window') return
-  const plan = me.plan
-  if (c.track === 'quiet') {
-    // a signed platform's minimum is a contract; the chain can lose to it
-    const owed = !!me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage
-    let guard = 0
-    if (!owed) while ((plan.stream ?? 0) > 0 && guard++ < 8 && set('stream', -1)) { /* taken back */ }
-    guard = 0
-    while (me.ap > 0 && guard++ < 8 && set('ranked', 1)) { /* the hours go to the ladder instead */ }
-    return
-  }
-  if ((c.need ?? 1) - chainProgress(state, c) <= 0) return
+  if (!me || !c?.track || c.asked || c.track === 'win' || c.track === 'window') return null
+  if (c.track === 'quiet') return 'quiet'
+  if ((c.need ?? 1) - chainProgress(state, c) <= 0) return null
   const key = c.track as MeAction
-  if (!(plan[key] ?? 0)) {
-    // room first: the week's least important hours make way
-    for (const k of ['ranked', 'stream', 'content', 'aim', 'util', 'vod', 'rest'] as MeAction[]) {
-      if (set(key, 1)) break
-      if (k !== key && (plan[k] ?? 0) > 0) set(k, -1)
-    }
-    // …and one more try once the last of them has. The loop tries the task before each hour it
-    // frees, so when it is 休息, the last in line, that makes the room, it used to end right there:
-    // the room made and the task never booked. A week that tight is a man on the bench on 托管 —
-    // two practice duels in (me/auto.ts autoPlan) — and it cost 「合同年」 on 按推荐 every week of
-    // its task (found 2026-09-17, once a Challengers signing could lose his place, me/coach.ts
-    // PROMISE_FLOOR; scripts/check_story.ts).
-    if (!(plan[key] ?? 0)) set(key, 1)
-  }
-  if (key === 'duo' && (plan.duo ?? 0) > 0) me.duoWith = c.mate
+  return (me.plan[key] ?? 0) ? null : key
+}
+
+/** who the chain's 双排 is owed to */
+export function chainMate(state: GameState): string | undefined {
+  return state.me?.chain?.mate
 }

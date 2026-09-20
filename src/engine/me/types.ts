@@ -716,7 +716,19 @@ export interface MeState {
   weekDay: number
   ap: number
   apMax: number
+  /**
+   * What has already been done this week, action by action — not what is
+   * planned. Since 2026-09-19 a card resolves the moment it is clicked
+   * (me/week.ts doAction), so this is the week's tally, and the injuries, the
+   * ceilings, the ladder and the coach all read it as the week's work.
+   */
   plan: Partial<Record<MeAction, number>>
+  /** the result lines this week's clicks left, for the week board's 本周流水; cleared at the settlement */
+  weekLog?: string[]
+  /** this week's training base, rolled once and kept so every session of the week is worth the same (me/growth.ts weekGain) */
+  trainWeek?: { week: number; g: number }
+  /** stream and content money earned this week, against the platform's weekly cap (me/stream.ts payMedia); cleared at the settlement */
+  mediaWeek?: number
   /** the talent points the career was made with — me/career.ts talentsOf; a save from before they were kept has them read once off its ceilings */
   talents?: Record<keyof Attrs, number>
   /** who the 双排 goes to */

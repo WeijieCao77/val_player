@@ -18,7 +18,7 @@
 .pinbar .ap-chip b { color: var(--accent); }
 .pinbar .ap-chip.spent { color: var(--faint); border-color: var(--line); background: none; }
 .pinbar .ap-chip.spent b { color: var(--muted); }
-/* 体力, and what this week's plan leaves of it: the 本周行动 panel's bar, in words */
+/* 体力: the 本周行动 panel's bar, in words */
 .pinbar .stamina em { font-style: normal; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pinbar .stamina em.dn { color: var(--loss); }
 
@@ -179,6 +179,17 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .act-card .d { font-size: var(--t-small); color: var(--muted); flex: 1; }
 .act-card .c { display: flex; align-items: center; gap: 8px; }
 .act-card .c b { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* 本周流水: what this week's clicks did, over the cards. 破晓 keeps the same strip at the top of
+   its action card — 「现在每个行动都留一句话在行动卡顶上」 — because a click that only moves a
+   number somewhere reads as nothing happening. */
+.week-did {
+  border-left: 2px solid var(--accent-line); background: var(--accent-wash);
+  border-radius: 0 var(--radius) var(--radius) 0; padding: 6px 10px; margin: 0 0 12px;
+}
+.week-did p { margin: 0 0 2px; font-size: var(--t-small); }
+.week-did p:last-child { margin-bottom: 0; }
+.week-did p.sum { color: var(--muted); font-size: var(--t-tiny); }
 
 .winbar { position: relative; height: 10px; border-radius: 5px; background: var(--well); overflow: hidden; }
 .winbar > i { display: block; height: 100%; background: var(--win); transition: width .35s ease; }

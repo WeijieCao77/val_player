@@ -24,7 +24,7 @@ const mem: Record<string, string> = {}
 
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { advanceUntil, autoPlan, autoResolve, leftToMe, matchLoad, runAutoPilot, runBlocked } from '../src/engine/me/auto'
-import { advanceTurn, advanceWeek, planBlock, setPlan } from '../src/engine/me/week'
+import { actionBlock, advanceTurn, advanceWeek, doAction } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { TEMP_MINE, TEMP_OPP, afterCupMatch, cupEntryBlock, cupFor, cupLastDay, cupOf, cupOpensOn, cupRng, cupRoundDay, cupStatus, enterCup, forfeitCup, isCupRound, mountCupMatch, resumeCup, roundDayAfter, skipCup } from '../src/engine/me/cups'
 import { nextUp } from '../src/engine/me/nextup'
@@ -124,9 +124,9 @@ function pressThrough(s: GameState, plan: (s: GameState) => void, tag: string): 
     if (me.weekDay === 0 && me.ap === me.apMax) {
       if (run.next != null && run.next > s.day) {
         between++
-        if (planBlock(s, 'rest')) fail(`${tag}：两轮之间排不了休息（${planBlock(s, 'rest')}）`)
-        if (setPlan(s, 'aim', 1)) fail(`${tag}：两轮之间排不了训练`)
-        else setPlan(s, 'aim', -1)
+        if (actionBlock(s, 'rest')) fail(`${tag}：两轮之间休息不了（${actionBlock(s, 'rest')}）`)
+        // asked without doing it: a click is the thing now (me/week.ts doAction), there is no taking one back
+        if (actionBlock(s, 'aim')) fail(`${tag}：两轮之间练不了`)
         const had = me.money
         const p = s.players[me.id]
         const fat = p.fatigue
@@ -240,7 +240,7 @@ function signUp(s: GameState, tag: string): number | null {
 /* ---- 一、by hand ---- */
 console.log('一、手动：报名，两轮之间排休息，比赛日当天打')
 /** the week between rounds: six hours of rest, six of ranked */
-const restWeek = (s: GameState) => { for (let i = 0; i < 6; i++) setPlan(s, 'rest', 1); while (s.me!.ap > 0 && !setPlan(s, 'ranked', 1)) { /* filling */ } }
+const restWeek = (s: GameState) => { for (let i = 0; i < 6; i++) doAction(s, 'rest'); while (s.me!.ap > 0 && !doAction(s, 'ranked')) { /* filling */ } }
 for (const c of CAREERS) {
   for (const strong of [false, true]) {
     const tag = `${c.label}${strong ? ' · 练强了再报' : ''}`
@@ -261,13 +261,13 @@ for (const c of CAREERS) {
         let h = 0
         while (w.me!.pending.length && h++ < 20 && !isCupRound(w, w.me!.pending[0])) autoResolve(w, w.me!.pending[0])
       }
-      if (w.me!.pre.cup?.next != null && w.day < w.me!.pre.cup.next && matchLoad(w) <= 0) fail(`${tag}：这周有一轮杯赛，推荐安排却没算它的体力`)
-      if (matchLoad(s) !== 0) fail(`${tag}：报名这周没有比赛，推荐安排却算了比赛体力`)
+      if (w.me!.pre.cup?.next != null && w.day < w.me!.pre.cup.next && matchLoad(w) <= 0) fail(`${tag}：这周有一轮杯赛，按推荐做完却没算它的体力`)
+      if (matchLoad(s) !== 0) fail(`${tag}：报名这周没有比赛，按推荐做完却算了比赛体力`)
       // the same week rested or trained through: the rest has to show before the next round
       const a = clone(s)
       const b = clone(s)
-      for (let i = 0; i < 12; i++) setPlan(a, 'rest', 1)
-      for (let i = 0; i < 6; i++) setPlan(b, 'aim', 1)
+      for (let i = 0; i < 12; i++) doAction(a, 'rest')
+      for (let i = 0; i < 6; i++) doAction(b, 'aim')
       for (const x of [a, b]) {
         let st = advanceWeek(x)
         let k = 0

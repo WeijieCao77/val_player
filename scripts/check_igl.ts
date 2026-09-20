@@ -580,8 +580,11 @@ function roomy(t: Record<keyof Attrs, number>): GameState {
   t.me!.plan = {}
   t.me!.ap = t.me!.apMax
   t.players[t.me!.id].fatigue = 0
+  // who I got on worst with when the week opened: the 双排 is played the moment it is clicked now
+  // (me/week.ts doAction), so by the end of it that man is no longer the one I get on worst with
+  const worst = duoMate(t)?.id
   autoPlan(t)
-  ok((t.me!.plan.duo ?? 0) >= 1 && t.me!.duoWith === duoMate(t)?.id, `沟通那一周托管没有排和关系最差的队友双排：${JSON.stringify(t.me!.plan)} · ${t.me!.duoWith}`)
+  ok((t.me!.plan.duo ?? 0) >= 1 && t.me!.duoWith === worst, `沟通那一周托管没有排和关系最差的队友双排：${JSON.stringify(t.me!.plan)} · ${t.me!.duoWith}，周初关系最差的是 ${worst}`)
   // a session a live break counts never makes room: 枪法 at its ceiling keeps its 枪法训练
   const u = structuredClone(s)
   const q = u.players[u.me!.id]

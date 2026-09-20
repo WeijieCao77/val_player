@@ -345,9 +345,10 @@ export default function Career({ opened, onHome }: {
   const pro = me.phase === 'pro'
   const team = pro ? game.teams[game.myTeam] : null
   const starter = !!team && team.starters.includes(me.id)
-  // 体力 now, and what this week's plan leaves of it (engine/me/week.ts staminaLeft, the 本周行动 panel's bar)
-  const stamina = Math.round(100 - p.fatigue)
-  const planned = staminaLeft(game)
+  // 体力 now — the same number the 本周行动 panel's bar shows (engine/me/week.ts staminaLeft). It used to carry
+  // 「安排后 N」 beside it for what the week's plan would cost at the settlement; a card is paid for as it is
+  // clicked now (me/week.ts doAction), so this figure is already the answer.
+  const stamina = staminaLeft(game)
   // where I stand on the ladder today, for the overview's badge; a retired man's reads 「—」
   const rank = me.phase === 'retired' ? null : rankAt(game)
   // a run's summary first, then what just unlocked, then the card it stopped on — 破晓's order: the unlock card
@@ -448,20 +449,19 @@ export default function Career({ opened, onHome }: {
             The eight, 心态, 体质, 疲劳 and 气压 all still drive every sum; they are read in full on 我的. */}
         {/* The numbers switch rides the end of this line on every screen, 我的 included, the way 破晓 keeps 「数值」 on its attribute bar. */}
         {/* The week's two budgets lead it, on every screen (asked 2026-09-18: 「行动点应该是冻结一直出现在界面里，不然往下划一点就不知道还有多少行动点了」):
-            what is left of the week's action points, and 体力 with what this week's plan leaves of it — the same two
-            figures as the 本周行动 panel's title and bar, which scroll away with the cards under them. 破晓 puts 行动 first on its bar. */}
+            what is left of the week's action points, and 体力 — the same two figures as the 本周行动 panel's title
+            and bar, which scroll away with the cards under them. 破晓 puts 行动 first on its bar. */}
         <div className="pinbar" role="group" aria-label="本周行动与能力">
           {/* the readings wrap among themselves on a narrow phone, and the two buttons keep the line's end */}
           <div className="pin-list">
             {me.phase !== 'retired' && (
-              // read out when it changes, as a card is planned or taken back; the rest of the line is not
-              <span className={`chip ap-chip${me.ap > 0 ? '' : ' spent'}`} role="status" title={me.ap > 0 ? '这周还能安排的行动点，推进以后没用完的作废' : '这周的行动点用完了'}>
+              // read out when it changes, as a card is clicked; the rest of the line is not
+              <span className={`chip ap-chip${me.ap > 0 ? '' : ' spent'}`} role="status" title={me.ap > 0 ? '这周还能用的行动点，点一张卡当场花掉；推进以后没用完的作废' : '这周的行动点用完了'}>
                 本周行动<b>剩 {me.ap} 点</b>
               </span>
             )}
             <span className={`pin stamina${p.fatigue >= 60 ? ' dn' : ''}`}>
               <span>体力</span><b>{stamina}</b>
-              {planned < stamina && <em className={planned < 40 ? 'dn' : ''}>安排后 {planned}</em>}
             </span>
             {screen !== 'me' && (
               <>

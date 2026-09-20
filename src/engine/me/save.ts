@@ -1,5 +1,6 @@
 import { migrateWorld, packState, unpackState } from '../save'
 import { resumeCup } from './cups'
+import { refundStalePlan } from './week'
 import type { GameState } from '../types'
 import { buildSaveMeta, writeSaveMeta } from './saveMeta'
 import { AUTOSAVE, OLD_AUTOSAVE, OLD_OWNER, OWNER, adoptOldSave } from './saveInfo'
@@ -119,6 +120,9 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me) migrateRuler(state)
   // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
   if (state.me) resumeCup(state)
+  // a week planned under the old board, where the hours settled on the seventh day: nothing of it is run,
+  // the points go back, and the week board says so once (me/week.ts refundStalePlan, 2026-09-19)
+  if (state.me) refundStalePlan(state)
   // 生涯明细只保留最近一年的 (me/detail.ts): a save from before the window carried up to 120
   // records, however far back they went. What has to outlive a year is read off them once —
   // which is all that save could see anyway — and then the older detail is let go.

@@ -7,9 +7,9 @@ import { holdScale } from '../ruler'
 import { bookCovers } from '../timeline'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, Fixture, GameState } from '../types'
-import { ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
+import { ACTIONS, ACTION_BY_KEY, AP_HURT, AP_SEASON, DUELS_PER_WEEK } from './actions'
 import type { MeAction, PendingItem } from './types'
-import { primaryFocus, settleTraining } from './growth'
+import { primaryFocus, runAction, settleBody } from './growth'
 import { bottleneckSeason, bottleneckStage, bottleneckTitle, bottleneckWeek, finalMvp, startedIn } from './bottleneck'
 import { deskLine, weekReport } from './press'
 import { bondCloseStage, bondNoteTitle, bondReportDepartures, bondSync } from './bond'
@@ -87,42 +87,55 @@ export function beginWeek(state: GameState): void {
 
 const PRO_ONLY: MeAction[] = ['scrim', 'duo', 'duel']
 
-/** Put a point on (or take one off) an action. Returns a reason when it cannot be done. */
-export function setPlan(state: GameState, action: MeAction, delta: 1 | -1): string | null {
+/** One line of what just happened, for the week board's 本周流水 and the week's paper. */
+export function noteAction(state: GameState, line: string): void {
   const me = state.me!
-  const def = ACTION_BY_KEY[action]
-  const cur = me.plan[action] ?? 0
-  // the club's programme follows the hours as they are put in or taken out: in
-  // a week of days that can happen after the first morning (see weekInDays)
-  const follow = () => { if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, state.players[me.id]) }
-  if (delta < 0) {
-    if (cur <= 0) return null
-    me.plan[action] = cur - 1
-    me.ap += def.cost
-    follow()
-    return null
-  }
+  if (!line) return
+  me.weekNotes.push(line)
+  ;(me.weekLog ??= []).push(line)
+}
+
+/**
+ * Do one of the week's actions, now.
+ *
+ * The author, 2026-09-19: 「玩家们表示都不喜欢每周的行动点了之后不执行要等点
+ * 下一周才会统一执行这个方式，希望改成破晓那样点击就直接执行。」 So the click
+ * spends the points, books the body and settles the session on the spot
+ * (me/growth.ts runAction), exactly as 对位挑战 always has (me/duel.ts
+ * startDuel). me.plan stays: it is the week's tally now, and the injuries, the
+ * ceilings, the ladder and the coach go on reading it as the week's work.
+ *
+ * There is no taking one back — a stream already paid and six ranked games
+ * already played cannot be unplayed — so the guard is in front of the click
+ * (actionBlock), which is what the card is greyed by. Returns a reason when
+ * it cannot be done.
+ */
+export function doAction(state: GameState, action: MeAction): string | null {
+  const me = state.me!
   if (action === 'duel') return '对位挑战是当场打的，用下面的按钮。'
-  if (me.phase !== 'pro' && PRO_ONLY.includes(action)) return '没有队伍，做不了这件事。'
-  if (me.ap < def.cost) return '行动点不够了。'
-  me.plan[action] = cur + 1
-  me.ap -= def.cost
-  follow()
+  const why = actionBlock(state, action)
+  if (why) return why
+  me.ap -= ACTION_BY_KEY[action].cost
+  me.plan[action] = (me.plan[action] ?? 0) + 1
+  noteAction(state, runAction(state, action))
+  // the club's programme follows the hours as they go in: in a week of days
+  // that can happen after the first morning (see weekInDays)
+  if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, state.players[me.id])
   return null
 }
 
 /**
- * Why one more of this action cannot be planned right now, without planning
- * it. The week screen greys the card out and prints this under it: a locked
- * option is still a signpost — hide it and the player never learns it exists.
+ * Why this action cannot be done right now, without doing it. The week screen
+ * greys the card out and prints this under it: a locked option is still a
+ * signpost — hide it and the player never learns it exists.
  */
-export function planBlock(state: GameState, action: MeAction): string | null {
+export function actionBlock(state: GameState, action: MeAction): string | null {
   const me = state.me!
   const def = ACTION_BY_KEY[action]
   if (action === 'duel') return null
   if (me.phase !== 'pro' && PRO_ONLY.includes(action)) return '需要先加入战队'
   if (me.ap < def.cost) return `行动点不够（需 ${def.cost}，剩 ${me.ap}）`
-  // stamina is the other budget: what is already planned this week counts
+  // stamina is the other budget, and it is spent as the card is clicked
   if (def.fatigue > 0) {
     const left = staminaLeft(state)
     if (left < def.fatigue) return `体力不够（需 ${def.fatigue}，剩 ${left}）`
@@ -130,16 +143,39 @@ export function planBlock(state: GameState, action: MeAction): string | null {
   return null
 }
 
-/** 体力 = 100 − 疲劳, minus what this week's plan will already cost */
+/**
+ * 体力 = 100 − 疲劳. It used to take off what the week's plan would cost when
+ * it settled; now a card is paid for as it is clicked, so this is the number
+ * itself and 「安排后」 is gone with the plan.
+ */
 export function staminaLeft(state: GameState): number {
-  const me = state.me!
-  const p = state.players[me.id]
-  let planned = 0
-  for (const [k, n] of Object.entries(me.plan)) {
-    const d = ACTION_BY_KEY[k as MeAction]
-    if (d && d.fatigue > 0) planned += d.fatigue * (n ?? 0)
+  const p = state.players[state.me!.id]
+  return Math.max(0, Math.round(100 - p.fatigue))
+}
+
+/**
+ * An old save whose week was planned and never settled: nothing of it is run
+ * — its dice, its body and its injury roll all belong to a build that no
+ * longer exists — the points go back, and the player is told once
+ * (me/save.ts migratePlayerSave, 2026-09-19).
+ */
+export function refundStalePlan(state: GameState): void {
+  const me = state.me
+  if (!me) return
+  let back = 0
+  for (const a of ACTIONS) {
+    // 对位挑战 was played on the day it was called, so its count is not a plan
+    if (a.key === 'duel') continue
+    const n = me.plan[a.key] ?? 0
+    if (!n) continue
+    back += a.cost * n
+    delete me.plan[a.key]
   }
-  return Math.max(0, Math.round(100 - p.fatigue - planned))
+  if (!back) return
+  me.ap = Math.min(me.apMax || back, me.ap + back)
+  const line = `本周行动改成点一下就执行了：上次排好还没结算的安排退回了 ${back} 点行动，重新点一下就好。`
+  noteAction(state, line)
+  pushLog(state, 'info', line)
 }
 
 /** A practice duel happens now, not at the settlement. */
@@ -328,7 +364,9 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
   }
   if (me.weekDay === 0) {
     if (me.phase === 'pro') state.training[me.id] = primaryFocus(me, p)
-    me.weekNotes = []
+    // last week's paper goes when this week starts running — but what I have
+    // already done this week stays on it (me.weekLog, written by doAction)
+    me.weekNotes = [...(me.weekLog ?? [])]
   }
   let ran = 0
   while (me.weekDay < 7 && ran++ < days) {
@@ -511,8 +549,9 @@ export function settleWeek(state: GameState): void {
   const rng = new Rng(hashStr(`me:${state.seed}:${state.year}:${state.day}`))
   const notes: string[] = []
   const pro = me.phase === 'pro'
-  settleTraining(state, rng, notes)
-  // the plan is still on the board: count it against whatever sits at its ceiling
+  // the hours were booked as they were clicked (me/growth.ts runAction); what a week gives the body back is the week's
+  settleBody(state)
+  // the week's tally is still on the board: count it against whatever sits at its ceiling
   bottleneckWeek(state)
 
   // The pay slip, itemised. The net is unchanged — the agent's cut and the
@@ -591,6 +630,10 @@ export function settleWeek(state: GameState): void {
   me.week++
   me.weekDay = 0
   me.plan = {}
+  // the week's own books: what was done, what it was worth, what the platform already settled
+  me.weekLog = []
+  me.trainWeek = undefined
+  me.mediaWeek = 0
   me.duoWith = undefined
   me.ap = apFor(state)
   me.apMax = me.ap

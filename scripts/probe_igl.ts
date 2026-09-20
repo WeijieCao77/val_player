@@ -19,7 +19,7 @@ import { createCareer, emptyTalents, TALENT_PRESETS } from '../src/engine/me/car
 import { autoPlan, autoResolve } from '../src/engine/me/auto'
 import { ACTION_BY_KEY } from '../src/engine/me/actions'
 import type { MeAction } from '../src/engine/me/types'
-import { advanceWeek, setPlan } from '../src/engine/me/week'
+import { advanceWeek, doAction } from '../src/engine/me/week'
 import type { WeekStop } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { clubCaller } from '../src/engine/me/igl'
@@ -79,7 +79,7 @@ export interface Row {
 }
 
 /**
- * A player chasing the calls: the steady plan (autoPlan), with its 排位 points spent on a 跟队训练赛 and a
+ * A player chasing the calls: a 跟队训练赛 and a 双排 first, then the steady plan (autoPlan) on what is left — the
  * 双排 with the club's caller instead — the 综合 hours stay. Everything else as 快进 plays it.
  */
 function callerWeek(state: GameState, hours: Record<string, number>): WeekStop {
@@ -87,15 +87,14 @@ function callerWeek(state: GameState, hours: Record<string, number>): WeekStop {
   const clear = () => { let g = 0; while (me.pending.length && g++ < 20) autoResolve(state, me.pending[0]) }
   clear()
   if (me.phase === 'retired' || state.gameOver) return { kind: 'game-over' }
-  autoPlan(state)
+  // the scrim and the 双排 go in first: a click is done the moment it is made (me/week.ts doAction),
+  // so the hours they used to be taken back from are simply never spent on the ladder
   if (me.phase === 'pro' && state.myTeam) {
-    let guard = 0
-    while ((me.plan.ranked ?? 0) > 0 && me.ap < 3 && guard++ < 6) setPlan(state, 'ranked', -1)
-    if (me.ap >= 3) setPlan(state, 'scrim', 1)
-    if ((me.plan.ranked ?? 0) > 0 && me.ap < 1) setPlan(state, 'ranked', -1)
+    if (me.ap >= 3) doAction(state, 'scrim')
     const mate = clubCaller(state) ?? squadOf(state, state.myTeam).find((x) => x.id !== me.id)
-    if (mate && me.ap >= 1 && setPlan(state, 'duo', 1) === null) me.duoWith = mate.id
+    if (mate) { me.duoWith = mate.id; if (me.ap >= 1) doAction(state, 'duo') }
   }
+  autoPlan(state)
   return playWeek(state, hours, clear)
 }
 

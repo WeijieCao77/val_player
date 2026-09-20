@@ -125,6 +125,23 @@ export function mediaAfterCap(state: GameState, before: number, gross: number): 
   return Math.round(under + (gross - under) * MEDIA_OVER)
 }
 
+/**
+ * One session's side income, booked against the week's cap as it is earned.
+ *
+ * The cap used to be settled in one pass at the week's end, where a local
+ * running total was enough. A stream or a video now pays the moment it is
+ * clicked (me/week.ts doAction), so the week's total lives in the save
+ * (me.mediaWeek) and is cleared with the rest of the week (me/week.ts
+ * settleWeek).
+ */
+export function payMedia(state: GameState, gross: number): { got: number; capped: boolean } {
+  const me = state.me!
+  const before = me.mediaWeek ?? 0
+  const got = mediaAfterCap(state, before, gross)
+  me.mediaWeek = before + gross
+  return { got, capped: got < gross }
+}
+
 /** Weekly: the share moving up, and a platform deciding I am worth a contract. */
 export function streamTick(state: GameState): void {
   const me = state.me!

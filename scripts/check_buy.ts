@@ -33,9 +33,8 @@
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoPlan } from '../src/engine/me/auto'
-import { settleTraining } from '../src/engine/me/growth'
+import { doAction } from '../src/engine/me/week'
 import { COURSES, GEAR_SLOTS, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax } from '../src/engine/me/shop'
-import { Rng } from '../src/engine/rng'
 import { ATTR_KEYS } from '../src/engine/types'
 import type { GameState } from '../src/engine/types'
 import { runCareer } from './probe_buy'
@@ -66,12 +65,12 @@ const base = (): GameState => {
   for (const g of GEAR_SLOTS) { buyGear(rich, g.key); buyGear(rich, g.key) }
   for (const c of COURSES) buyCourse(rich, c.key)
   buyRelax(rich, 'flat')
-  const plan = { aim: 1, vod: 1, util: 1, ranked: 1 }
+  // the same four clicks, in the same order, on the same body (me/week.ts doAction)
+  const week = ['aim', 'vod', 'util', 'ranked'] as const
   const xp: string[] = []
   for (const s of [plain, rich]) {
-    s.me!.plan = { ...plan }
     s.players[s.me!.id].fatigue = 20
-    settleTraining(s, new Rng(12345), [])
+    for (const k of week) doAction(s, k)
     const p = s.players[s.me!.id]
     xp.push(JSON.stringify(ATTR_KEYS.map((k) => [p.attrs[k], Math.round((p.xp[k] ?? 0) * 1000)])))
   }
@@ -110,7 +109,7 @@ const base = (): GameState => {
   buyRelax(bought, 'flat')
   autoPlan(plain)
   autoPlan(bought)
-  facts.push([`一周从疲劳 30 开始：买了理疗、旅行、电竞公寓，托管排的训练和不买一样（${JSON.stringify(plain.me!.plan)}）`, JSON.stringify(plain.me!.plan) === JSON.stringify(bought.me!.plan)])
+  facts.push([`一周从疲劳 30 开始：买了理疗、旅行、电竞公寓，按推荐做完的这一周和不买一样（${JSON.stringify(plain.me!.plan)}）`, JSON.stringify(plain.me!.plan) === JSON.stringify(bought.me!.plan)])
 }
 
 // 4. careers paired on their seed

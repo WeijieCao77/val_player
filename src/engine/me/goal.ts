@@ -228,7 +228,7 @@ export function weekLine(state: GameState): Line | null {
     const left = run ? (run.next ?? state.day) - state.day : 99
     if (run && raw && left < 7 - me.weekDay) {
       const c = cupView(raw, state.year, state.players[me.id]?.region)
-      return { pre: `${c.name}${c.rounds[run.round]?.label ?? ''}${left <= 0 ? '今天' : ` ${left} 天后`}开打：`, b: '按推荐安排', post: '会给比赛留出体力。' }
+      return { pre: `${c.name}${c.rounds[run.round]?.label ?? ''}${left <= 0 ? '今天' : ` ${left} 天后`}开打：`, b: '按推荐做完', post: '会给比赛留出体力。' }
     }
     // a 自荐 with a real chance is the one thing no plan does for you (托管 never sends one)
     const pitch = pitchNow(state)
@@ -240,7 +240,7 @@ export function weekLine(state: GameState): Line | null {
       return hour ? { pre: '前三个月只有杯赛会带来电话，先把综合练上去：现在练', b: hour.b, post: '涨得最多。' } : null
     }
     if (ladderNear(state) === 2) return { pre: `天梯离${rankBar(state, INVITE_LADDER)}不远了：多打`, b: '排位', post: '。' }
-    if (fansNear(state) === 2) return { pre: `粉丝快到「${fanTier(INVITE_FANS).name}」了：排两次`, b: '直播', post: '。' }
+    if (fansNear(state) === 2) return { pre: `粉丝快到「${fanTier(INVITE_FANS).name}」了：点两次`, b: '直播', post: '。' }
     return hour
   }
   const team = state.teams[state.myTeam]

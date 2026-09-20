@@ -180,12 +180,12 @@ function focusGroups(g: GameState): TourTarget[] {
 /** what the 重点 tags mark for this goal, and when the 调剂 ones are right (engine/me/goal.ts weightsOf, fillerNote) */
 function focusBody(g: GameState): string {
   const kind = goalOf(g)?.kind
-  const tap = '点卡片安排一次，「−」退回。'
+  const tap = '点一下卡片就做一次，当场出结果，做了就算数。'
   if (kind === 'contract') {
     return `标「重点」的卡对目标最有用：枪法、复盘、道具涨综合，杯赛和试训都看它；打排位爬天梯。标「调剂」的几张，体力见底、缺钱或想走粉丝这条路时再点。${tap}`
   }
   const filler = '标「调剂」的几张，体力见底、缺钱或签了直播合约时再点。'
-  if (kind === 'seat') return `标「重点」的是对位挑战和跟队训练赛：对位当场就打，训练赛让教练看得见你。${filler}${tap}`
+  if (kind === 'seat') return `标「重点」的是对位挑战和跟队训练赛：对位是三局两胜的卡，训练赛让教练看得见你。${filler}${tap}`
   return `标「重点」的是跟队训练赛和眼下最值的一项练习：教练看得见你，综合也在涨。${filler}${tap}`
 }
 
@@ -200,18 +200,18 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
     {
       screen: WEEK, at: [{ sel: '.ap-chip' }], title: '行动点',
       body: pro
-        ? `签约后每周 ${AP_SEASON} 点，受伤时只有 ${AP_HURT} 点。推进以后，没用完的作废。`
-        : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。推进以后，没用完的作废。`,
+        ? `签约后每周 ${AP_SEASON} 点，受伤时只有 ${AP_HURT} 点。点一张卡当场花掉，推进以后没用完的作废。`
+        : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。点一张卡当场花掉，推进以后没用完的作废。`,
     },
     {
       screen: WEEK, at: focusGroups(g), title: '这周做什么',
       body: focusBody(g),
     },
     {
-      screen: WEEK, at: [{ sel: '.advance-me button', text: '按推荐安排' }], title: '按推荐安排',
+      screen: WEEK, at: [{ sel: '.advance-me button', text: '按推荐做完' }], title: '按推荐做完',
       body: pro
-        ? `不知道怎么排就按这个：剩下的点按稳妥的路子填满，这周要打的比赛也算进去，周末体力留在 ${calm} 上下。填完还能改。`
-        : `不知道怎么排就按这个：剩下的点按稳妥的路子填满，补短板、打排位，周末体力留在 ${calm} 上下。填完还能改。`,
+        ? `不知道怎么做就按这个：剩下的点按稳妥的路子一次做完，这周要打的比赛也算进去，周末体力留在 ${calm} 上下。做完给你一句总结。`
+        : `不知道怎么做就按这个：剩下的点按稳妥的路子一次做完，补短板、打排位，周末体力留在 ${calm} 上下。做完给你一句总结。`,
     },
     pro
       ? {
@@ -265,7 +265,7 @@ export function pageNotes(g: GameState): { title: string; body: string }[] {
     },
     {
       title: '体力',
-      body: '贴顶那一行和「本周行动」里的体力条是同一个数。安排的事先从这里扣，排了会累的事，旁边写「安排后」还剩多少；休息和身体自己回的那些在周末补上。低于四成，状态和比赛发挥明显下滑。',
+      body: '贴顶那一行和「本周行动」里的体力条是同一个数。点一张会累的卡，当场就从这里扣；休息也是当场回。身体自己回的那一点在周末补上。低于四成，状态和比赛发挥明显下滑。',
     },
   ]
   return notes.concat(pro
@@ -274,7 +274,7 @@ export function pageNotes(g: GameState): { title: string; body: string }[] {
       { title: '教练怎么看你', body: '他的信任决定你能不能留在首发。跟队训练赛、对位挑战和正赛表现都会改变它。' },
     ]
     : [
-      { title: '天梯', body: '一点行动打六把排位，分数朝你的真实水平走，越高越难爬。不打分数不掉，但神话起别人还在涨分，名次会往后掉。' },
+      { title: '天梯', body: '一点行动当场打六把排位，分数朝你的真实水平走，越高越难爬。不打分数不掉，但神话起别人还在涨分，名次会往后掉。' },
       { title: '今年的赛事', body: '到了开打那一周，会弹卡片问你报不报名。四个路人队友，走得越远越容易被俱乐部记住。' },
       { title: '怎么被看见', body: '俱乐部从杯赛、天梯、粉丝三处发现你；不想干等，也可以在「转会」页挑一家发自荐。邀请来了去试训，拿到合同就进了职业。' },
     ])

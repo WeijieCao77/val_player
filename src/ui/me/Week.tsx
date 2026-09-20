@@ -7,7 +7,7 @@ import { ceilingNote } from '../../engine/me/bottleneck'
 import { fillerNote, goalOf, hourLine, weightsOf } from '../../engine/me/goal'
 import NextStep, { LineText } from './NextStep'
 import { nextCardDue, useNextHidden } from './guide'
-import { planBlock, setPlan, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
+import { actionBlock, doAction, staminaLeft, weekCalendar, weekInDays } from '../../engine/me/week'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
 import DuelPlay from './DuelPlay'
@@ -102,8 +102,10 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
   // the cup opened from 「今年的赛事」 (ui/me/CupDetail.tsx)
   const [cupOpen, setCupOpen] = useState<string | null>(null)
 
-  const plan = (k: typeof ACTIONS[number]['key'], d: 1 | -1) => {
-    const why = setPlan(game, k, d)
+  // the card is the button and the click is the action: it happens now, and the
+  // line it leaves goes on 本周流水 over the cards (engine/me/week.ts doAction)
+  const act = (k: typeof ACTIONS[number]['key']) => {
+    const why = doAction(game, k)
     if (why) toast(why)
     commit()
   }
@@ -259,16 +261,30 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               </div>
             ) : null
           })()}
-          {/* the other budget: what the body has left after this week's plan */}
+          {/* the other budget, and it is spent as the cards are clicked: the number itself, never a forecast */}
           {(() => {
             const left = staminaLeft(game)
-            const now = Math.round(100 - p.fatigue)
             return (
               <div className="winbar-row" style={{ margin: '0 0 12px' }}>
                 <span className="tiny muted">体力</span>
                 <div className="winbar" style={{ flex: 1 }}><i style={{ width: `${left}%`, background: left < 40 ? 'var(--loss)' : undefined }} /></div>
                 <span className="n">{left}</span>
-                <span className="tiny muted">{left < now ? '安排后' : ''}{left < 40 ? ' · 太累了' : ''}</span>
+                <span className="tiny muted">{left < 40 ? '太累了' : ''}</span>
+              </div>
+            )
+          })()}
+          {/* 本周流水: what this week's clicks did, over the cards — 破晓 keeps the
+              same strip at the top of its action card, for exactly this reason
+              (「点了「练操作」之后原来只有数字悄悄变了一下」) */}
+          {(() => {
+            const log = me.weekLog ?? []
+            const tally = acts.filter((a) => (me.plan[a.key] ?? 0) > 0).map((a) => `${a.label} ×${me.plan[a.key]}`)
+            if ((me.plan.duel ?? 0) > 0) tally.push(`对位挑战 ×${me.plan.duel}`)
+            if (!log.length && !tally.length) return null
+            return (
+              <div className="week-did" role="status" aria-label="本周流水">
+                {log.slice(-3).map((l, i) => <p key={i}>{l}</p>)}
+                {tally.length > 0 && <p className="sum">这周：{tally.join(' · ')}</p>}
               </div>
             )
           })()}
@@ -286,16 +302,16 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 <div className="act-grid">
                   {rows.map((a) => {
                     const n = me.plan[a.key] ?? 0
-                    const why = planBlock(game, a.key)
+                    const why = actionBlock(game, a.key)
                     const locked = !!why && n === 0
-                    // the card itself is the action: one click plans it once
-                    // more, the way 破晓 does it; a small − takes one back
+                    // the card itself is the button, and the click is the thing:
+                    // it happens now, the way 破晓 does it. Nothing takes it back.
                     return (
                       <div
                         key={a.key} role="button" tabIndex={why ? -1 : 0} aria-disabled={!!why}
                         className={`act-card${n ? ' on' : ''}${locked ? ' locked' : ''}`}
-                        onClick={() => { if (!why) plan(a.key, 1) }}
-                        onKeyDown={(e) => { if (!why && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); plan(a.key, 1) } }}
+                        onClick={() => { if (!why) act(a.key) }}
+                        onKeyDown={(e) => { if (!why && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); act(a.key) } }}
                       >
                         <div className="t">{a.label}{weightTag(a.key)}<span className="tag">{a.cost} 点</span></div>
                         {/* the body's cost is the bar above and the lock's reason; its figure rides the switch */}
@@ -303,18 +319,15 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                         {why && <div className="why">{why}</div>}
                         {/* at the ceiling: what more hours do, and what opens it — never a bare 1/2 (me/bottleneck.ts) */}
                         {!why && ceilingNote(game, a.key) && <div className="tiny muted" style={{ marginTop: 4 }}>{ceilingNote(game, a.key)}</div>}
-                        {a.key === 'duo' && n > 0 && (
+                        {/* who the 双排 goes to is picked before the click, not after it: there is no changing
+                            your mind once the evening has been played (2026-09-19) */}
+                        {a.key === 'duo' && mates.length > 0 && (
                           <select value={me.duoWith ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
                             <option value="">和谁双排…</option>
                             {mates.map((m) => <option key={m.id} value={m.id}>{m.ign}</option>)}
                           </select>
                         )}
-                        {n > 0 && (
-                          <div className="c">
-                            <b>已安排 {n} 次</b>
-                            <button className="sm" onClick={(e) => { e.stopPropagation(); plan(a.key, -1) }}>−</button>
-                          </div>
-                        )}
+                        {n > 0 && <div className="c"><b>这周做了 {n} 次</b></div>}
                       </div>
                     )
                   })}
@@ -364,11 +377,12 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   )
                 })}
               </div>
-              <p className="tiny faint" style={{ margin: '6px 0 0' }}>行动点还是按周给：没有比赛的日子拿来练，第七天和工资一起结算。</p>
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>行动点还是按周给：点一下当场就做，剩下的点哪天用都行，第七天结工资。</p>
             </>
           )}
           <div className="advance-me">
-            <button onClick={() => { autoPlan(game); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐填满，填完还能改">按推荐安排</button>
+            {/* one press, the whole rest of the week, through the same clicks a player makes — and one line for what it did */}
+            <button onClick={() => { const line = autoPlan(game); toast(line); commit() }} disabled={me.ap === 0} title="把这周剩下的行动点按推荐一次做完；做了就算数">按推荐做完</button>
             {/* one way forward on the button; the longer runs share one control (asked 2026-09-11: four advance buttons read as clutter) */}
             {/* here, at the end of the week's panel, on a phone too: 破晓 keeps its 进入下一周 in the row under the actions, not pinned over the tab bar */}
             {(() => {
@@ -384,7 +398,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                   value=""
                   aria-label="快进"
                   disabled={!!wait}
-                  title={wait ? `先处理：${stopLine(game, wait)}` : '按推荐安排一路推进，路上的小事替你处理；合同、邀请这类要你拿主意的事会停下来'}
+                  title={wait ? `先处理：${stopLine(game, wait)}` : '按推荐一路推进，路上的小事替你处理；合同、邀请这类要你拿主意的事会停下来'}
                   onChange={(e) => {
                     const v = e.target.value
                     if (v === 'month' || v === 'match' || v === 'stage' || v === 'season') onAdvanceUntil(v)

@@ -1,5 +1,5 @@
 /**
- * The whole player career, headless: the same setPlan / doDuel / advanceWeek /
+ * The whole player career, headless: the same doAction / doDuel / advanceWeek /
  * MeMatch / autoResolve path the buttons use, from the ladder to retirement.
  *
  *   npx tsx scripts/bot_me.ts [seasons=10] [seed=7] [region=China] [role=决斗者] [start=pre|chal|t1] [origin=netcafe] [clubId]

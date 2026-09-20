@@ -20,7 +20,7 @@ import { autoPlan, autoResolve, autoWeek } from '../src/engine/me/auto'
 import { EVENTS, eventOf, resolveEvent } from '../src/engine/me/events'
 import { openChain } from '../src/engine/me/storyweek'
 import { CHAIN_CN, chainLine, plantSeed, storyTag } from '../src/engine/me/story'
-import { advanceWeek, setPlan } from '../src/engine/me/week'
+import { advanceWeek, doAction } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { Rng } from '../src/engine/rng'
 
@@ -176,7 +176,7 @@ function drive(id: string, strategy: 'rec' | 'ignore') {
     answer(s, strategy, cards)
     if ((me.chainsDone ?? []).length > done0) break
     if (strategy === 'rec') autoPlan(s)
-    else if (me.chain?.track === 'quiet') setPlan(s, 'stream', 1)
+    else if (me.chain?.track === 'quiet') doAction(s, 'stream')
     const l = chainLine(s)
     if (l && !lines.includes(l)) lines.push(l)
     let st = advanceWeek(s)

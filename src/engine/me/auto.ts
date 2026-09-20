@@ -7,13 +7,12 @@ import { hourValues } from './growth'
 import { emptyTalents, talentsOf } from './career'
 import { ceilingOf, weightsFor } from '../player'
 import { chasing } from './bottleneck'
-import { traitMul } from './traits'
-import { ACTION_BY_KEY } from './actions'
-import { advanceWeek, doDuel, setPlan } from './week'
+import { ACTIONS, ACTION_BY_KEY } from './actions'
+import { advanceWeek, doAction, doDuel } from './week'
 import type { WeekStop } from './week'
 import { FRIENDLY_MAP_FATIGUE, MeMatch } from './matchplay'
 import { EDGE_NEED } from './coach'
-import type { PendingItem } from './types'
+import type { MeAction, PendingItem } from './types'
 import { pop } from './pending'
 import { asideItems, asideStop, lapsedSince } from './aside'
 import { cupFor, enterCup, mountCupMatch, afterCupMatch, skipCup, TEMP_MINE, TEMP_OPP, cupRng, forfeitCup, isCupRound } from './cups'
@@ -32,7 +31,7 @@ import { compCn } from './compname'
 import { injuryHelpedBy, injuryStatus } from './injury'
 import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
-import { storyPlan } from './storyweek'
+import { chainMate, chainTask } from './storyweek'
 import { mineBy } from './nextup'
 import { closePitchReply } from './selfpitch'
 
@@ -64,21 +63,16 @@ export function matchLoad(state: GameState): number {
 }
 
 /**
- * Where fatigue lands at the end of this week if the plan stands: what is
- * already on it, the matches still to come, and what a week gives back by
- * itself — the same sums as growth.ts settleTraining.
+ * Where fatigue lands at the end of this week as things stand: what the body
+ * carries now — every hour already clicked is already in it (me/week.ts
+ * doAction) — the matches still to come, and what a week gives back by itself
+ * (growth.ts settleBody).
  */
 export function weekEndFatigue(state: GameState, load = matchLoad(state)): number {
   const me = state.me!
   let f = state.players[me.id].fatigue + load
-  for (const [k, n] of Object.entries(me.plan)) {
-    const d = ACTION_BY_KEY[k as keyof typeof ACTION_BY_KEY]
-    if (!d || !n) continue
-    f += d.fatigue * n
-    if (k === 'rest') f -= 14 * n * ((me.body - 50) / 200 + traitMul(me, 'rest') - 1)
-  }
   f -= clamp(6 + (me.body - 50) / 10, 3, 12)
-  // the flat gives a hard week back, down to RELIEF_FLOOR (growth.ts settleTraining)
+  // the flat gives a hard week back, down to RELIEF_FLOOR (growth.ts settleBody)
   return me.flags.relax_flat && f > RELIEF_FLOOR ? Math.max(RELIEF_FLOOR, f - FLAT_RELIEF) : f
 }
 
@@ -88,7 +82,7 @@ export type Practice = 'aim' | 'vod' | 'util' | 'duo'
 /**
  * The practice that trains each attribute, for the talent's session: the week board's own (actions.ts), 复盘
  * carrying 指挥 too — and for 沟通 two 队友双排, which put 0.3 of a training week an hour into it where a
- * session of 道具与跑图 puts 0.11 in two (growth.ts settleTraining), with the team-mate I get on worst with.
+ * session of 道具与跑图 puts 0.11 in two (growth.ts runAction), with the team-mate I get on worst with.
  */
 export const TALENT_PRACTICE: Record<keyof Attrs, Practice> = {
   aim: 'aim', reaction: 'aim', awareness: 'vod', clutch: 'vod', igl: 'vod',
@@ -190,7 +184,7 @@ export function talentSessions(state: GameState, role: Practice[]): Practice[] {
  * a probe's ladder start had 24 weeks under 40). The headless bot's week goes
  * through exactly the buttons' functions.
  */
-export function autoPlan(state: GameState, talent = true): void {
+export function autoPlan(state: GameState, talent = true): string {
   const me = state.me!
   const p = state.players[me.id]
   const pro = me.phase === 'pro'
@@ -198,14 +192,26 @@ export function autoPlan(state: GameState, talent = true): void {
   const starter = pro && team.starters.includes(me.id)
   const load = matchLoad(state)
   const end = () => weekEndFatigue(state, load)
-  const spend = (k: keyof typeof ACTION_BY_KEY) => setPlan(state, k, 1) === null
+  const spend = (k: keyof typeof ACTION_BY_KEY) => doAction(state, k) === null
   const rest = ACTION_BY_KEY.rest
+  const was = { ap: me.ap, plan: { ...me.plan }, stamina: Math.round(100 - p.fatigue) }
+  const said = () => autoLine(state, was)
   // hurt: the week goes on rest, which is what heals it (me/injury.ts) — a signed stream minimum aside
   if (injuryStatus(state)) {
     if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage) spend('stream')
     while (me.ap > 0 && spend('rest')) { /* resting */ }
-    return
+    return said()
   }
+  // a chain under way asks for its hours first: there is no taking an hour back
+  // to make room for it any more (me/storyweek.ts storyPlan)
+  const task = chainTask(state)
+  if (task && task !== 'quiet') {
+    if (task === 'duo') me.duoWith = chainMate(state) ?? duoMate(state)?.id ?? me.duoWith
+    spend(task)
+  }
+  // 「安静」: this week must stay off the stream, so it is never spent on one —
+  // a signed platform's minimum excepted, which is a contract and beats the chain
+  const quiet = task === 'quiet'
   // an hour of k if the week can take it; rest first while that makes the room and still leaves the hour's points
   const want = (k: keyof typeof ACTION_BY_KEY): boolean => {
     const d = ACTION_BY_KEY[k]
@@ -248,18 +254,31 @@ export function autoPlan(state: GameState, talent = true): void {
   if (!pro) { want('ranked'); want('ranked') }
   session(sessions[1])
   session(sessions[2])
-  if (me.quests.some((q) => q.kind === 'stream' && q.done < q.need)) want('stream')
-  // a signed stream deal is a contract: its minimum is kept even on a tired week
+  if (!quiet && me.quests.some((q) => q.kind === 'stream' && q.done < q.need)) want('stream')
+  // a signed stream deal is a contract: its minimum is kept even on a tired week, and even on a 「安静」 week
   if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage && !want('stream')) spend('stream')
   while (me.ap > 0) {
-    if (me.ap >= 2 && me.fans < 200 && want('stream')) continue
+    if (!quiet && me.ap >= 2 && me.fans < 200 && want('stream')) continue
     if (want('ranked')) continue
     // nothing else fits this week: the hour goes to rest, while there is anything to rest off
     if (end() > 0 && spend('rest')) continue
     break
   }
-  // a chain under way keeps its task in the week (me/storyweek.ts)
-  storyPlan(state, (k, d) => setPlan(state, k, d) === null)
+  return said()
+}
+
+/** what 按推荐做完 did, in one line — 破晓 says it in one line too (routine.ts quickPlan) */
+function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAction, number>>; stamina: number }): string {
+  const me = state.me!
+  const p = state.players[me.id]
+  const spent = was.ap - me.ap
+  const parts = ACTIONS
+    .map((a) => ({ a, n: (me.plan[a.key] ?? 0) - (was.plan[a.key] ?? 0) }))
+    .filter((x) => x.n > 0)
+    .map((x) => `${x.a.label} ×${x.n}`)
+  if (!parts.length) return me.ap > 0 ? '这周没有还能做的事了，剩下的行动点用不出去。' : '这周的行动点已经用完了。'
+  const now = Math.round(100 - p.fatigue)
+  return `按推荐做完了 ${spent} 点：${parts.join('、')}。体力 ${was.stamina} → ${now}。`
 }
 
 /** Answer whatever is in front of me the steady way. Returns a line for the record. */

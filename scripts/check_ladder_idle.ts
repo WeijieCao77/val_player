@@ -24,7 +24,7 @@ import {
   BOARD_CLIMB, BOARD_RISE_MAX, BOARD_SETTLE, PUT_OFF_CN, RADIANT_SLOTS, rankAt, rankBar, rankFull, rankText, standAtLeast, standingOf,
 } from '../src/engine/me/rank'
 import { INVITE_LADDER, INVITE_LADDER_T1, ladderLabel, ladderWeekly, playRanked, rollInvites, skillToLadder, tryoutSkill } from '../src/engine/me/prepro'
-import { setPlan, settleWeek } from '../src/engine/me/week'
+import { doAction, settleWeek } from '../src/engine/me/week'
 import { applyEffect } from '../src/engine/me/fx'
 import { EVENTS, describeEffect } from '../src/engine/me/events'
 import { ACHIEVEMENTS } from '../src/engine/me/achievements'
@@ -170,7 +170,7 @@ console.log('\n一、不打排位的周：分数和 RR 一点不动')
     else check(never && (r.pos ?? 0) > (r0.pos ?? 0), `${tier}：名次只往后掉，第 ${n(r0.pos)} → 第 ${n(r.pos)} 名`)
   }
 
-  // the week's own settlement, a plan without ranked
+  // the week's own settlement, a week without ranked
   const s = career(7)
   const me = s.me!
   me.pre.ladder = scoreAt(300, s)
@@ -181,7 +181,7 @@ console.log('\n一、不打排位的周：分数和 RR 一点不动')
   for (let w = 0; w < 6; w++) {
     me.plan = {}
     me.ap = me.apMax
-    setPlan(s, 'rest', 1)
+    doAction(s, 'rest')
     settleWeek(s)
   }
   const r = rankAt(s)
