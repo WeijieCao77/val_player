@@ -76,6 +76,9 @@ try {
   fs.appendFileSync = originalAppend
   server.closeAllConnections()
   await new Promise(resolve => server.close(resolve))
-  // 只清本次 mkdtemp 创建的临时目录。
-  fs.rmSync(tmp, { recursive: true, force: true })
+  // 只清本次 mkdtemp 创建的临时目录，清理前验证绝对路径与专用前缀。
+  const cleanup = path.resolve(tmp)
+  assert.equal(path.dirname(cleanup), path.resolve(os.tmpdir()))
+  assert.ok(path.basename(cleanup).startsWith('valbox-tail-'))
+  fs.rmSync(cleanup, { recursive: true, force: true })
 }
