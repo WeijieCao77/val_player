@@ -139,6 +139,16 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
  * still means exactly what it meant and a spread build is not quietly
  * punished. The rest of the lift is on the trophies (me/bottleneck.ts
  * BREAK_VALUE), which is where the author wanted it.
+ *
+ * Handle it carefully: it is by far the heaviest dial in the career, and not
+ * because of its own arithmetic. Measured 2026-09-20 on three 托管 careers of
+ * eight seasons, the same seeds both times: at 69 they ended 83/86/87 with a
+ * ceiling median of 91, at 70 they ended 90/92/92 with a ceiling median of 97.
+ * One point of it is worth six of 综合, because room under a ceiling feeds back
+ * into how fast the hours fill it (me/growth.ts roomMul) and into how many break
+ * paths are live at once — so it compounds instead of adding. Three runs cannot
+ * separate that from which of them happened to win a 冠军赛, and nobody has
+ * measured it at a proper sample yet. Move it by halves, and re-measure.
  */
 export const CAP_BASE = 70
 

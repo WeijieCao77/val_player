@@ -111,10 +111,16 @@ export const MECH_VALUE_MAX = 1.4
 export const MILE_VALUE_MAX = 5.0
 /**
  * Professional seasons that each loosen the experience ceilings by one. Five
- * until 2026-09-20; seven so that a long career is worth something on its own,
+ * until 2026-09-20; six so that a long career is worth something on its own,
  * without making it worth as much as winning.
+ *
+ * Measured, and worth less than it looks: 6 and 7 gave exactly the same band
+ * (three 托管 careers of eight seasons, 90/92/92 either way), because a career
+ * that is already opening its ceilings on trophies rarely has these five short.
+ * So this is NOT the dial to reach for when the band needs moving —
+ * me/talent.ts CAP_BASE is, and it is a very heavy one (see there).
  */
-export const CAP_EXP_MAX = 7
+export const CAP_EXP_MAX = 6
 /** a club this strong teaches by being in the room: the weakest tenth of a new world's VCT clubs (engine/ruler.ts) */
 export const STRONG_TEAM = 80
 /** old enough to have seen most of it */
