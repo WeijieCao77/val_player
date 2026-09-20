@@ -44,7 +44,7 @@ import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
-import { noteQualify, pushMoment } from './moments'
+import { momentMark, noteQualify, pushMoment } from './moments'
 import { intlLinesOf, noteIntlRun } from './intl'
 import { seasonLedger } from './worldline'
 import type { SeasonLedger } from './worldline'
@@ -393,6 +393,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     expireDeals(state, 1)
     expireInvites(state, 1)
     const yearBefore = state.year
+    // the big-moment queue as the day opens (me/moments.ts): a card raised in the day stops the clock below
+    const momentsBefore = momentMark(state)
     // the eight before the day: a turn of the year ages them, and a slip is said (onSeasonEnd)
     const attrsBefore = { ...p.attrs }
     const pro = me.phase === 'pro'
@@ -443,6 +445,19 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
       ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
       // hurt on a day the coach would start me: play through it or sit it out (me/hurtplay.ts)
       hurtBeforeMatch(state, today)
+    }
+    // A big moment was raised today (me/moments.ts): the card comes up now, before
+    // today's match, anything else waiting, or the rest of the week. Reported
+    // 2026-09-19 — 「每次世界赛的时候都是打完第一场世界赛之后才弹出你进了世界赛的
+    // 弹窗」: 打进大赛 was queued on the draw's own day all along (circuit.ts begin,
+    // noteQualify above), but nothing stopped the clock for it, so one press of the
+    // week ran straight past the draw to the club's first tie there — 2021 seed 11,
+    // 雷克雅未克大师赛 drawn on day 142 and the card first drawn on screen on day 144,
+    // after the match — and a 快进 played the whole campaign first (probe_qualtime.ts).
+    // Today's match is held for the next press the way a week of days holds it.
+    if (momentMark(state) !== momentsBefore) {
+      if (today) me.dueFixture = today.id
+      return { kind: 'day' }
     }
     if (me.pending.length) {
       if (today) me.dueFixture = today.id

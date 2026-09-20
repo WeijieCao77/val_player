@@ -35,6 +35,20 @@ export function takeMoment(state: GameState): void {
 }
 
 /**
+ * The queue as it stands, for a run that has to hand the screen back the moment a
+ * new card is raised (me/week.ts runDays, me/auto.ts advanceUntil). A mark that
+ * differs from the one taken before the day means a card was queued in it.
+ *
+ * Not the length: the queue is capped (MOMENTS_CAP), so the twelfth card pushes the
+ * first out and the count never moves. The newest card's key does move, and one key
+ * is queued once (pushMoment).
+ */
+export function momentMark(state: GameState): string {
+  const list = state.me?.moments
+  return list?.length ? `${list.length}:${list[list.length - 1].key}` : ''
+}
+
+/**
  * The ladder's best just rose (me/prepro.ts notePeak): the first arrival in a big tier is a
  * moment, once a career — the tier as the screen shows it that day, place and all (me/rank.ts
  * rankAt): a score whose RR would read 辐能战魂 on a board that has climbed past its place is no

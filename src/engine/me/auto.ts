@@ -30,6 +30,7 @@ import { compCn } from './compname'
 import { injuryHelpedBy, injuryStatus } from './injury'
 import { autoHurt, autoSitsOut } from './hurtplay'
 import { eventOf as circuitEventOf } from '../circuit'
+import { momentMark } from './moments'
 import { chainMate, chainTask } from './storyweek'
 import { mineBy } from './nextup'
 import { closePitchReply } from './selfpitch'
@@ -588,8 +589,26 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     }
     if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
     const onTable = asideItems(state)
+    const momentsBefore = momentMark(state)
     stop = advanceWeek(state)
     notes.push(...lapsedSince(state, onTable))
+    // A big moment was raised under the run (me/moments.ts): the week hands the screen
+    // back on that very day, and so does the run — the card is the next thing the player
+    // should see. Without this, a 快进 read the day loop's 「停下」 as a day of nothing and
+    // ran on: reported 2026-09-19, 「打进大赛」 for a Masters drawn mid-run was first drawn
+    // on screen after the club's whole campaign had been played (scripts/probe_qualtime.ts).
+    // A match handed back keeps its own branch below: the card follows it, as it always has.
+    // A week that did run to its end still counts as run — a card raised on its last day
+    // (a ladder tier at the weekly settle, say) must not make the run look like it stood still.
+    if (stop.kind !== 'match' && momentMark(state) !== momentsBefore) {
+      if (stop.kind === 'week-end') weeks++
+      // The week this run would have handed back for an offer set aside (me/aside.ts asideStop,
+      // the check at the top of this loop) is handed back here instead, with the card behind it:
+      // the reminder comes once in a career, and a card raised in the same week used to eat it
+      // (scripts/check_deal_defer.ts 「快进为它停了 0 次」).
+      const aside = weeks > 0 && me.weekDay === 0 ? asideStop(state) : undefined
+      return { stop, weeks, notes, aside }
+    }
     if (stop.kind === 'match') {
       // the next match is what "到下一场比赛" runs to; a longer run plays it
       // the skipped way — the coach's calls made for me, with nobody in the chair (me/matchplay.ts runOut)

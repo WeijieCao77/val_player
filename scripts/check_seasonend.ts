@@ -19,6 +19,10 @@
  *
  *  - 打了：an international my club is seated in and that this world plays has ties
  *    of my club's in the schedule, and results in them, by the time it ends
+ *  - 卡来得是时候：「打进大赛」 comes up on the day the draw seats my club, and never
+ *    after the club has played its first tie there (reported 2026-09-19; this is what
+ *    fails on the old behaviour). The cards are taken where the screen takes them —
+ *    at a stop, never under a match or a 推进总结
  *  - 记下了：the season's row names it — 几胜几负, the placing, how many I started
  *    (engine/me/intl.ts; this is what fails on the old behaviour)
  *  - 两条路一样：both ways of playing the season see the same events, the same
@@ -81,29 +85,53 @@ interface Row {
   fxPlayed: number
   /** matches of it on my own record — the bench counts */
   mine: number
+  /** the day the draw first seated my club here, and the day its first tie here was played — both kept from the day they happened */
+  drawn?: number
+  playedAt?: number
 }
 
 /**
  * a 打进大赛 card the screen showed (engine/me/moments.ts noteQualify, ui/me/MomentQueue.tsx), and the club I was at
  * the morning it was taken — the club it said had qualified, read off the world rather than off the card
  */
-interface Card { year: number; key: string; comp: string; club: string }
+interface Card { year: number; key: string; comp: string; club: string; day: number; seen?: number }
 
 let bad = 0
 const fail = (m: string): void => { bad++; if (bad <= 30) console.log(`  ✗ ${m}`) }
 
 /**
- * The screen takes the cards one at a time; here they are taken every morning, so
- * none is lost to the queue's cap (me/moments.ts MOMENTS_CAP) and every card the
- * player would have been shown is counted.
+ * Every card the engine raised, written down the day it is raised and never lost to
+ * the queue's cap (me/moments.ts MOMENTS_CAP) — but left in the queue, because when
+ * the *screen* gets to draw it is the other half of what is checked here.
  */
-function drain(state: GameState, cards: Card[]): void {
+function noteCards(state: GameState, cards: Card[]): void {
+  const me = state.me
+  for (const m of me?.moments ?? []) {
+    if (m.kind !== 'qualify') continue
+    const key = m.key.replace(/^qualify:/, '')
+    if (cards.some((c) => c.year === m.year && c.key === key)) continue
+    cards.push({ year: m.year, key, comp: m.comp ?? '?', club: state.myTeam, day: m.day })
+  }
+}
+
+/**
+ * The screen is up and nothing covers it: MomentQueue draws whatever is queued, one
+ * card at a time (ui/me/MomentQueue.tsx, PlayerGame.tsx `!live && !summary`), and the
+ * player takes them. Called exactly where the player would be looking — never under a
+ * match, which covers the queue until it is over.
+ */
+function showCards(state: GameState, cards: Card[]): void {
   const me = state.me
   if (!me?.moments?.length) return
   let guard = 0
   while (me.moments.length && guard++ < 40) {
     const m = me.moments[0]
-    if (m.kind === 'qualify') cards.push({ year: m.year, key: m.key.replace(/^qualify:/, ''), comp: m.comp ?? '?', club: state.myTeam })
+    if (m.kind === 'qualify') {
+      const key = m.key.replace(/^qualify:/, '')
+      const had = cards.find((c) => c.year === m.year && c.key === key)
+      if (had) had.seen ??= state.day
+      else cards.push({ year: m.year, key, comp: m.comp ?? '?', club: state.myTeam, day: m.day, seen: state.day })
+    }
     takeMoment(state)
   }
 }
@@ -136,52 +164,66 @@ function rowsOf(state: GameState, book: Map<string, Row>): void {
       || !!c?.seeds.includes(club) || Object.values(c?.fill ?? {}).includes(club)
     const fx = state.fixtures.filter((f) => f.comp === comp.key && (f.teamA === club || f.teamB === club))
     const mine = me.matches.filter((m) => m.year === state.year && !m.friendly && m.comp === comp.name)
+    const was = book.get(`${state.year}:${comp.key}:${club}`)
     book.set(`${state.year}:${comp.key}:${club}`, {
       year: state.year, key: comp.key, name: comp.name, club,
       // an old world with no real calendar plays its internationals too (engine/season.ts createMasters)
       sim: !c || c.mode === 'sim',
       seated, over: !!comp.champion || !!c?.done,
       fx: fx.length, fxPlayed: fx.filter((f) => f.played).length, mine: mine.length,
+      // the day it happened, kept: the rest of the row is overwritten every day, these two are not
+      drawn: was?.drawn ?? (seated && (!c || !!c.mode) ? state.day : undefined),
+      playedAt: was?.playedAt ?? (fx.some((f) => f.played) ? state.day : undefined),
     })
   }
 }
 
-/** sample every morning; the year's turn puts the day back to 0 with the old year's competitions still on the books */
+/**
+ * Sample twice a day change: once with the clock still on the day that just
+ * finished — so `drawn` and `playedAt` are the day the thing happened, not the
+ * morning after — and once on the new day, which is the read the rest of the row
+ * has always been taken on. The year's turn puts the day back to 0 with the old
+ * year's competitions still on the books, and is not a day going forward.
+ */
 function watchDays(state: GameState, on: () => void): void {
   let d = state.day
   Object.defineProperty(state, 'day', {
     get: () => d,
-    set: (v: number) => { const fwd = v > d; d = v; if (fwd) on() },
+    set: (v: number) => { if (v > d) { on(); d = v; on() } else d = v },
     configurable: true, enumerable: true,
   })
 }
 
 const clone = (state: GameState): GameState => JSON.parse(JSON.stringify(state)) as GameState
 
-function weekly(state: GameState, untilYear: number): void {
+/** the week screen's own button: every stop draws the screen again — a match covers it until it is over */
+function weekly(state: GameState, untilYear: number, cards: Card[]): void {
   const me = state.me!
   let guard = 0
-  while (state.year < untilYear && me.phase !== 'retired' && !state.gameOver && guard++ < 4000) {
+  while (state.year < untilYear && me.phase !== 'retired' && !state.gameOver && guard++ < 6000) {
     runAutoPilot(state)
     let g = 0
     while (me.pending.length && g++ < 40) autoResolve(state, me.pending[0])
     if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
     const stop = advanceTurn(state)
     if (stop.kind === 'match') new MeMatch(state, stop.fixture).runOut()
+    showCards(state, cards)
     if (stop.kind === 'game-over') break
   }
 }
 
-function fastForward(state: GameState, untilYear: number): string[] {
+/** 「快进到赛季末」: PlayerGame.tsx advanceMany — a match opens at once, anything else comes back as the 推进总结 */
+function fastForward(state: GameState, untilYear: number, cards: Card[]): string[] {
   const me = state.me!
   const notes: string[] = []
   let guard = 0
   let at = ''
-  while (state.year < untilYear && me.phase !== 'retired' && !state.gameOver && guard++ < 400) {
+  while (state.year < untilYear && me.phase !== 'retired' && !state.gameOver && guard++ < 4000) {
     const r = advanceUntil(state, 'season')
     notes.push(...r.notes)
     if (r.stop.kind === 'game-over') break
-    if (r.stop.kind === 'match') { new MeMatch(state, r.stop.fixture).runOut(); continue }
+    if (r.stop.kind === 'match') { new MeMatch(state, r.stop.fixture).runOut(); showCards(state, cards); continue }
+    showCards(state, cards)
     if (r.stop.kind === 'pending' && me.pending.length) { autoResolve(state, me.pending[0]); continue }
     const now = `${state.year}:${state.day}:${me.pending.length}`
     if (now === at && !r.weeks) break
@@ -207,10 +249,11 @@ for (const o of SCN) {
     const state = clone(born)
     const book = new Map<string, Row>()
     const cards: Card[] = []
-    watchDays(state, () => { drain(state, cards); rowsOf(state, book) })
+    watchDays(state, () => { noteCards(state, cards); rowsOf(state, book) })
     rowsOf(state, book)
-    const notes = mode === '周推' ? (weekly(state, o.year + o.years), []) : fastForward(state, o.year + o.years)
-    drain(state, cards)
+    const notes = mode === '周推' ? (weekly(state, o.year + o.years, cards), []) : fastForward(state, o.year + o.years, cards)
+    noteCards(state, cards)
+    showCards(state, cards)
     runs.push({ label: mode, book, notes, cards, state })
   }
 
@@ -240,6 +283,24 @@ for (const o of SCN) {
       const r = run.book.get(`${c.year}:${c.key}:${c.club}`)
       if (!r || !r.fx) {
         fail(`${o.label} · ${run.label}：${c.year} 弹了「打进${compCn(c.comp)}」的卡，我队（${run.state.teams[c.club]?.name ?? c.club}）整届一场都没打`)
+      }
+      // and it comes up the day the draw seats my club — not after the club's first tie there.
+      // Reported 2026-09-19: 「每次世界赛的时候都是打完第一场世界赛之后才弹出你进了世界赛的弹窗」.
+      // The engine raised it on the draw's own day all along; nothing stopped the clock for it, so
+      // one press of the week ran past the draw and a 快进 played the whole campaign first
+      // (scripts/probe_qualtime.ts: 15 of 15 cards late, 10 of them after the club had played).
+      if (c.seen == null) {
+        fail(`${o.label} · ${run.label}：${c.year} 第 ${c.day} 天弹了「打进${compCn(c.comp)}」的卡，屏幕上一直没出现过`)
+      } else {
+        if (r?.drawn != null && c.day !== r.drawn) {
+          fail(`${o.label} · ${run.label}：${c.year} ${compCn(c.comp)} 第 ${r.drawn} 天抽签定下我队，卡是第 ${c.day} 天才记下的`)
+        }
+        if (c.seen !== c.day) {
+          fail(`${o.label} · ${run.label}：${c.year}「打进${compCn(c.comp)}」第 ${c.day} 天（抽签当天）就该弹，第 ${c.seen} 天才弹到玩家面前`)
+        }
+        if (r?.playedAt != null && c.seen >= r.playedAt) {
+          fail(`${o.label} · ${run.label}：${c.year}「打进${compCn(c.comp)}」第 ${c.seen} 天才弹，我队第 ${r.playedAt} 天就把第一场打完了`)
+        }
       }
       cardsSeen++
     }
@@ -310,7 +371,7 @@ console.log(bad
   ? `\n✗ ${bad} 项不对。`
   : `\n✓ 我队打过的 ${sample} 项大师赛 / 冠军赛，两条路（周推、快进到赛季末）打出的场次和结果一样，`
     + `每一项都真打了、也都写进了赛季总结；推进总结里写到了其中 ${inSummary} 项，我自己的记录共 ${played} 场；`
-    + `${cardsSeen} 张「打进大赛」的卡，每一张都是我队真打了的赛事，真打了的也都弹了卡；`
+    + `${cardsSeen} 张「打进大赛」的卡，每一张都是我队真打了的赛事、都在抽签当天就弹到了玩家面前，真打了的也都弹了卡；`
     + `${fieldsSeen} 条战绩记下的赛事类别和名次，和那一行写的一字不差`
     + ` · ${((Date.now() - t0) / 1000).toFixed(0)}s`)
 process.exit(bad ? 1 : 0)

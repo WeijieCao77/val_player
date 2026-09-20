@@ -91,7 +91,7 @@ export default function Career({ opened, onHome }: {
   const [fixture, setFixture] = useState<Fixture | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(null)
   // what a multi-week run did on my behalf, shown once it stops
-  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string; aside?: boolean } | null>(null)
+  const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string; aside?: boolean; card?: boolean } | null>(null)
   // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
   const [nums, setNums] = useNumbers()
   const mainRef = useRef<HTMLElement>(null)
@@ -238,6 +238,10 @@ export default function Career({ opened, onHome }: {
     } else if (stop.kind === 'week-end') {
       toast(`新的一周 · ${dateLabel(g)}${weekInDays(g) ? ` · 这周 ${weekMatches(g).length} 场比赛，一天一推` : ''}`)
     } else if (stop.kind === 'day') {
+      // a big moment's card is what stopped the day, and it says where we are itself
+      // (me/week.ts runDays, ui/me/MomentQueue.tsx): a line under it about the week's
+      // matches would be answering a question nobody asked
+      if (g.me.moments?.length) return
       // the week turned under the run: say why it stopped on a day with nothing in it
       if (!inDays) { toast(`这周排进了第 ${weekMatches(g).length} 场比赛，接下来一天一推${weekCalendar(g).some((d) => d.next && d.day === g.day) ? '，今天就有一场' : ''}。`); return }
       const tomorrow = weekCalendar(g).find((d) => d.day === g.day + 1)?.matches[0]
@@ -284,7 +288,10 @@ export default function Career({ opened, onHome }: {
     const why = stop.kind === 'pending' && leftToMe(g, stop.item) ? stopLine(g, stop.item) : aside
     // it never started: the card is already in front
     if (why && !weeks && !notes.length) { toast(`没有推进：${why}。`); return }
-    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why, aside: !!aside })
+    // a big moment raised on the road stopped the run on its own day (engine/me/auto.ts
+    // advanceUntil): the summary says so, and the card is under it
+    const card = !why && !!g.me.moments?.length
+    setSummary({ until, weeks, notes, ended: stop.kind === 'game-over', why, aside: !!aside, card })
   }, [commit, toast])
 
   /**
@@ -536,14 +543,16 @@ export default function Career({ opened, onHome }: {
           </Modal>
         )}
         {summary && (
-          <Modal title={`推进总结 · ${summary.weeks} 周 · ${summary.why ? '停在这里' : `到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
+          <Modal title={`推进总结 · ${summary.weeks} 周 · ${summary.why || summary.card ? '停在这里' : `到${summary.until === 'season' ? '赛季末' : summary.until === 'stage' ? '赛段末' : summary.until === 'month' ? '一个月后' : '这里'}`}`} onClose={() => setSummary(null)} onBgClose={() => setSummary(null)}>
             {/* why the run stopped short: a decision it leaves to me, whose card opens when this closes */}
             {summary.why && <div className="node-line" style={{ marginTop: 0 }}>没推完就停了：{summary.why}。</div>}
-            <p className="small muted" style={{ marginTop: summary.why ? undefined : 0 }}>
+            {/* or a big moment of the career's, whose card is right behind this one (ui/me/MomentQueue.tsx) */}
+            {!summary.why && summary.card && <div className="node-line" style={{ marginTop: 0 }}>没推完就停了：路上有一件大事。</div>}
+            <p className="small muted" style={{ marginTop: summary.why || summary.card ? undefined : 0 }}>
               现在是 {dateLabel(game)} · {stageNameIn(game.year, game.stage, onTimeline(game))}。{summary.ended ? (game.timelinePause ?? '生涯到头了。') : ''}
             </p>
             {summary.notes.length === 0
-              ? <p className="muted">{summary.why ? '路上没替你处理什么。' : '一路没有需要拿主意的事。'}</p>
+              ? <p className="muted">{summary.why || summary.card ? '路上没替你处理什么。' : '一路没有需要拿主意的事。'}</p>
               : <ul className="diary">{summary.notes.map((n, i) => <li key={i}><span>{n}</span></li>)}</ul>}
             <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 12 }}>
               {/* stopped for an offer set aside: the page it is waiting on, one press away (engine/me/aside.ts) */}
