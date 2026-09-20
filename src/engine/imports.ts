@@ -14,12 +14,20 @@
  * A squad already over the limit when the rule turns on keeps its players —
  * renewals are retention, not recruitment — it simply cannot add more.
  */
+import { regionIn } from './era'
 import type { GameState, Player, Region, Team } from './types'
 import { REGION_CN } from './types'
 
 export const IMPORT_MAX = 2
 
-/** Mirrors NAT_REGION in scripts/build_world.py. */
+/**
+ * Nationality → the VCT league a person belongs to. Mirrored in src/engine/prospects.ts, which builds the same
+ * players out of prospects.json.
+ *
+ * 港澳台算中国 (the author, 2026-09-20): a player from Hong Kong, Macau or Taiwan is counted in the China region —
+ * local at a VCT China club, and from the China league at a club anywhere else. This is the author's call for this
+ * game, not a quirk of Riot's rule: Riot has such a player declare a main region on the roster sheet.
+ */
 const NAT_REGION: Record<string, Region> = {
   us: 'Americas', ca: 'Americas', br: 'Americas', ar: 'Americas',
   cl: 'Americas', mx: 'Americas', pe: 'Americas', co: 'Americas',
@@ -52,9 +60,18 @@ const NAT_REGION: Record<string, Region> = {
 export const originOf = (p: Player): Region =>
   NAT_REGION[(p.nat ?? '').toLowerCase()] ?? p.region
 
-/** Is this player an import for this club? */
+/**
+ * Is this player an import for this club?
+ *
+ * By the LEAGUE on both sides, never by the club's own country. `originOf` answers with one of the four leagues,
+ * while a club carries the region it competed in when the world was built — 'Europe', 'CIS', 'Brazil' — so the
+ * plain `!==` called every man at every club of a 2021-built world an import: a Frenchman at Alliance read
+ * 'EMEA' against 'Europe'. Found 2026-09-20 on the author's report that a move inside one league was being
+ * counted as a move out of it (「navi 去 tl…会算成去外赛区，这不合理」). Riot's rule is a league rule as well —
+ * one import means one player from outside the club's international league, whatever country the two orgs sit in.
+ */
 export const isImport = (p: Player, team: Team): boolean =>
-  originOf(p) !== team.region
+  regionIn(originOf(p), 2099) !== regionIn(team.region, 2099)
 
 /** How many imports a club currently holds, bench included. */
 export const importCount = (state: GameState, teamId: string): number => {
@@ -78,7 +95,7 @@ export function importBlock(state: GameState, teamId: string, p: Player): string
   if (!team || !isImport(p, team)) return null
   if (importCount(state, teamId) < IMPORT_MAX) return null
   return teamId === state.myTeam
-    ? `外援名额已满（${IMPORT_MAX}/${IMPORT_MAX}）——${p.ign} 来自${regionCn(originOf(p))}赛区，签他要先放走一名外援。`
+    ? `外援名额已满（${IMPORT_MAX}/${IMPORT_MAX}）——${p.ign} 来自${regionCn(regionIn(originOf(p), 2099))}赛区，签他要先放走一名外援。`
     : `${team.name} 的外援名额已满。`
 }
 

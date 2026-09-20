@@ -156,8 +156,10 @@ export const EVENTS: EventDef[] = [
   { id: 'after_sign', w: 0, max: 4, when: pro, rec: 0,
     q: '官宣签约的那条微博下面，第一条评论问你是谁。', ctx: '很正常。',
     a: [{ t: '回一句「打给你看」', g: 'hard', e: { heat: 15, mental: 1 } }, { t: '不回', g: 'grind', e: { tilt: -4, mental: 1, heat: -5, note: '评论区自己吵去，你关了手机' } }, { t: '发一段训练视频', g: 'show', e: { heat: 25 } }] },
+  // 出海 is by country (me/contract.ts joinClub `me.abroad`): a club of my own VCT league from another country counts,
+  // so the line says 国外 and not 外赛区 (reported 2026-09-20: NAVI 到 Team Liquid is one league, not two)
   { id: 'abroad', w: 0, max: 2, when: (s) => s.me!.abroad, rec: 0,
-    q: '外赛区的第一周，队友的玩笑你一个都没听懂。', ctx: '食堂的菜单也看不太懂。',
+    q: '到国外的第一周，队友的玩笑你一个都没听懂。', ctx: '食堂的菜单也看不太懂。',
     a: [{ t: '硬着头皮多说', g: 'hard', e: { xp: { communication: 14 }, bond: 3, mental: -1 } }, { t: '找翻译软件先撑着', g: 'grind', e: { bond: -2 } }, { t: '请全队吃饭', g: 'warm', e: { money: -2000, bond: 8 } }] },
   { id: 'injury_scare', w: 0, max: 3, when: pro, rec: 0,
     q: '手腕疼了一周，队医说要么休要么打封闭。', ctx: '下周有比赛。',

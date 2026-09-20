@@ -145,7 +145,9 @@ check(keyOf({ abroad: 2, pro: 5, titles: [M(2028)] }) === 'master' && keyOf({ ab
   '国际赛冠军、三冠赛区功勋仍排在「远征」前面')
 check(keyOf({ abroad: 1, pro: 5, titles: [L(2027)] }) === 'titled', '只在外赛区打过一个赛季：还是「拿过冠军」')
 
-// ------------------------------------------------------------------ 五 结局那段话里的外赛区
+// ------------------------------------------------------------------ 五 结局那段话里的国外赛季
+// 出海按国家 (me/contract.ts joinClub `me.abroad`), so these lines say 国外 and never 外赛区: a move inside one VCT
+// league is 「国外俱乐部」, not another 赛区 (the author, 2026-09-20; scripts/check_language.ts 十二)
 console.log('\n结局那段话')
 const said = (seed: number, c: Case): { key: string; text: string } => {
   const s = fix(fresh(seed), c)
@@ -154,15 +156,15 @@ const said = (seed: number, c: Case): { key: string; text: string } => {
   return { key: e.key, text: e.text }
 }
 const away = said(6, { abroad: 3, pro: 4 })
-check(away.key === 'journeyman' && away.text.includes('外赛区') && away.text.includes('3 个赛季'),
-  `无冠但出去打过的，结局里仍写着那几个赛季：${away.text.split('。').filter((x) => x.includes('外赛区')).join('。') || '（这一句没写出来）'}。`)
+check(away.key === 'journeyman' && away.text.includes('在国外打的') && away.text.includes('3 个赛季') && !away.text.includes('外赛区'),
+  `无冠但出去打过的，结局里仍写着那几个赛季、而且不说「外赛区」：${away.text.split('。').filter((x) => x.includes('国外')).join('。') || '（这一句没写出来）'}。`)
 const home = said(7, { abroad: 0, pro: 4 })
-check(home.key === 'journeyman' && !home.text.includes('外赛区'), '没出去过的，不多这一句')
+check(home.key === 'journeyman' && !home.text.includes('在国外打的'), '没出去过的，不多这一句')
 const won = said(8, { abroad: 3, pro: 5, tenure: 1, titles: [L(2027)] })
-check(won.key === 'abroad' && won.text.includes('奖杯柜也不空') && !won.text.includes('其中 3 个赛季'),
-  '「远征」自己那段话不重复说一遍外赛区')
+check(won.key === 'abroad' && won.text.includes('奖杯柜也不空') && !won.text.includes('其中 3 个赛季') && !won.text.includes('外赛区'),
+  '「远征」自己那段话不重复说一遍出海，也不说「外赛区」')
 const one = said(9, { abroad: 1, pro: 4 })
-check(!one.text.includes('外赛区'), '只在外赛区打过一个赛季：不写这一句（和「远征」是同一条线）')
+check(!one.text.includes('在国外打的'), '只在国外打过一个赛季：不写这一句（和「远征」是同一条线）')
 
 console.log(bad ? `\n✗ ${bad} 项没过。` : '\n✓ 结局判定：无冠就是无冠，出去赢过的照样写「远征」。')
 if (bad) process.exit(1)

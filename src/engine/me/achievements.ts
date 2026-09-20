@@ -235,9 +235,13 @@ export const ACHIEVEMENTS: AchDef[] = [
   { key: 'lockin', route: 'world', secret: true, name: '圣保罗', desc: '首发打过 LOCK//IN 圣保罗', reward: { title: 'LOCK//IN 一代' }, cond: (s) => starts(s).some((m) => compClass(m.comp) === 'lockin') },
 
   // ---- 转会与出海
-  { key: 'abroad', route: 'move', name: '出海', desc: '在外赛区效力', reward: { heat: 20 }, cond: (s) => M(s).abroad },
-  { key: 'abroad2', route: 'move', name: '他乡两年', desc: '在外赛区打满两个赛季', reward: { title: '远行者' }, cond: (s) => (M(s).flags.abroadSeasons ?? 0) >= 2 },
-  { key: 'home_again', route: 'move', name: '回到熟悉的服务器', desc: '出海之后，回本赛区打职业', reward: { fans: 20 },
+  // 出海 is by country (me/contract.ts joinClub `me.abroad`; the author, 2026-09-14: 「标签按联赛、出海按国家」), so these
+  // three must not say 外赛区: reported 2026-09-20 — 「在四大赛区内部进行转会比如 navi 去 tl，但是会算成去外赛区，这不合理」.
+  // A club of my own VCT league from another country is 「国外俱乐部」 and never 外赛区 (me/prepro.ts awayWord); going there
+  // is still going abroad — the language, these achievements and the following read the country.
+  { key: 'abroad', route: 'move', name: '出海', desc: '去国外的俱乐部效力', reward: { heat: 20 }, cond: (s) => M(s).abroad },
+  { key: 'abroad2', route: 'move', name: '他乡两年', desc: '在国外打满两个赛季', reward: { title: '远行者' }, cond: (s) => (M(s).flags.abroadSeasons ?? 0) >= 2 },
+  { key: 'home_again', route: 'move', name: '回到熟悉的服务器', desc: '出海之后，回国内的俱乐部打职业', reward: { fans: 20 },
     cond: (s) => (M(s).flags.abroadSeasons ?? 0) >= 1 && M(s).phase === 'pro' && !M(s).abroad },
   { key: 'clubs3', route: 'move', name: '流浪者', desc: '效力过三家俱乐部', reward: { fans: 15 }, cond: (s) => new Set((P(s).clubHist ?? []).map((h) => h.team)).size >= 3 },
   { key: 'loyal5', route: 'move', name: '一队五年', desc: '在一家俱乐部待满五个赛季', reward: { title: '老队员' }, cond: (s) => M(s).tenure >= 5 },
