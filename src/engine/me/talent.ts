@@ -129,8 +129,18 @@ export function buildAttrs(role: Role, talents: Record<keyof Attrs, number>, ori
   return attrs
 }
 
-/** Where every talent ceiling starts; each point of talent is +3 on it, as on the start. */
-export const CAP_BASE = 68
+/**
+ * Where every talent ceiling starts; each point of talent is +3 on it, as on
+ * the start.
+ *
+ * 68 until 2026-09-20, when a whole career measured out at 84 against a world
+ * whose median VCT starter was 85.9. Two is the floor being lifted for every
+ * build alike — what a point of talent buys is untouched, so the talent screen
+ * still means exactly what it meant and a spread build is not quietly
+ * punished. The rest of the lift is on the trophies (me/bottleneck.ts
+ * BREAK_VALUE), which is where the author wanted it.
+ */
+export const CAP_BASE = 70
 
 /**
  * The eight ceilings a talent gives, 破晓's 天赋上限 (cap = 57 + 4.3 × talent) on
@@ -179,7 +189,7 @@ export function ceilingPreview(role: Role, talents: Record<keyof Attrs, number>,
   const attrs = buildAttrs(role, talents, originKey)
   const start = recomputeOverall({ role, attrs, stageBonus: 0 } as Player)
   const caps = talentCeilings(role, talents, originKey)
-  const talent = ceilingPotential({ role, attrs, stageBonus: 0 }, caps)
+  const talent = ceilingPotential({ role, attrs, stageBonus: 0, isIgl: false }, caps)
   return { start, talent, reach: Math.min(99, talent + BREAK_REACH), bands }
 }
 

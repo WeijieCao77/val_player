@@ -242,20 +242,84 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
   return p
 }
 
-/** The year's numbers, laid over a man history kept out of the player's reach — moved by `shift` onto the world's ruler (engine/ruler.ts). */
-function applyRating(p: Player, r: TRating, shift = 0): void {
-  ATTRS.forEach((k, i) => { p.attrs[k] = r.a[i] != null ? clamp(r.a[i] + shift, 20, 99) : p.attrs[k] })
-  const roles = r.r.split('|') as Role[]
-  p.role = roles[0]
-  p.roles = roles
-  p.flex = roles.length > 1
-  if (r.g.length) p.agentPool = canonAgents(r.g)
+/**
+ * 一年之内，这本书最多把一个人往它的数字推多远。
+ *
+ * Reported 2026-09-20: 「他跟我一队时 60 多，我转会后他 90 多」, and measured —
+ * the book rewrites every real player's eight from that year's real results, and
+ * a quarter to a third of the people it rates two years running move ten points
+ * or more in one winter (in game: −27 to +27). A player reads that as somebody
+ * becoming a different person over one Christmas, not as a season going well.
+ * Five points is what a season of training and a winter are worth here, so a
+ * re-rating at that size reads as 「这一年他确实变了」.
+ *
+ * Age-scaled, not flat, because the careers the book moves furthest are the
+ * teenagers it is describing correctly — keiko is 57 in 2021 and 94 in 2025, and
+ * that really happened. A flat 5 left him at about 85. The two shapes are one
+ * line apart: `[[20, 8], [24, 5]]` for this one, `[[0, 5]]` for flat 5.
+ */
+export const STEP_KNOTS: [number, number][] = [[20, 8], [24, 5]]
+
+/** How far the book may move one attribute of a player this age, in a year. */
+export function ratingStep(age: number): number {
+  if (age <= STEP_KNOTS[0][0]) return STEP_KNOTS[0][1]
+  const last = STEP_KNOTS[STEP_KNOTS.length - 1]
+  if (age >= last[0]) return last[1]
+  for (let i = 1; i < STEP_KNOTS.length; i++) {
+    const [a1, s1] = STEP_KNOTS[i]
+    if (age > a1) continue
+    const [a0, s0] = STEP_KNOTS[i - 1]
+    return Math.round(s0 + ((s1 - s0) * (age - a0)) / (a1 - a0))
+  }
+  return last[1]
+}
+
+/** One attribute, moved at most `step` toward where the book has it. */
+const toward = (now: number, want: number, step: number): number =>
+  clamp(now + clamp(want - now, -step, step), 20, 99)
+
+/**
+ * The year's numbers, laid over a real player — moved by `shift` onto the
+ * world's ruler (engine/ruler.ts), and at most `ratingStep` a year (above).
+ *
+ * `numbersOnly` for the people inside the player's reach. They are re-rated
+ * like everybody else now — leaving them out is what froze a team-mate beside
+ * the player and paid the whole winter's worth in one step the year he left
+ * (measured 2026-09-20: 0% of team-mates moved five points or more while at his
+ * club, 44% in the year they left) — but which position a man plays, which
+ * agents he is on and who calls are decisions his club makes in this world
+ * (me/igl.ts), not things the book gets to hand back.
+ *
+ * Every one of the eight moves at most `step`, so the weighted sum of them —
+ * 综合 — moves at most `step` too, without a second clamp on top.
+ */
+function applyRating(p: Player, r: TRating, shift = 0, numbersOnly = false, atOnce = false): void {
+  const step = atOnce ? 99 : ratingStep(p.age)
+  const before = p.overall
+  ATTRS.forEach((k, i) => { if (r.a[i] != null) p.attrs[k] = toward(p.attrs[k], clamp(r.a[i] + shift, 20, 99), step) })
+  if (!numbersOnly) {
+    const roles = r.r.split('|') as Role[]
+    p.role = roles[0]
+    p.roles = roles
+    p.flex = roles.length > 1
+    if (r.g.length) p.agentPool = canonAgents(r.g)
+    p.isIgl = !!r.i
+  }
   p.traits = traitsOf(r)
-  p.isIgl = !!r.i
   p.rounds = (p.rounds ?? 0) + r.n
   p.vlr = { rating: r.v[0] ?? null, acs: r.v[1] ?? null, rounds: r.n }
   recomputeOverall(p)
-  p.potential = Math.max(Math.min(99, r.p + shift), p.overall)
+  // A change of position, or of who calls, moves 综合 on its own — the eight are
+  // weighted by the role and the caller carries IGL_BONUS — so the eight being
+  // each within `step` is not enough on its own: qck went 87 → 77 in a winter
+  // he changed role in. The year may still only move him `step`, so the eight
+  // come back together until it does.
+  const over = p.overall - clamp(p.overall, before - step, before + step)
+  if (over) {
+    for (const k of ATTRS) p.attrs[k] = clamp(p.attrs[k] - over, 20, 99)
+    recomputeOverall(p)
+  }
+  p.potential = Math.max(toward(p.potential, Math.min(99, r.p + shift), step), p.overall)
   refreshValue(p)
 }
 
@@ -652,8 +716,18 @@ export interface YearSync {
   notes: string[]
 }
 
-/** Bring the world up to `year` as history had it, outside the player's reach. Run at the season turn. */
-export function syncYear(state: GameState, year: number): YearSync {
+/**
+ * Bring the world up to `year` as history had it, outside the player's reach.
+ * Run at the season turn.
+ *
+ * `atOnce` when the world is being built rather than played — a career that
+ * opens in 2026 is the 2021 book fast-forwarded (me/career.ts createWorldAt), and
+ * a year of that is not a year anybody lived through, so the book is laid on
+ * whole instead of a step at a time (applyRating). Without it the opening world
+ * of 2026 came out five years' worth of steps short of the book: measured
+ * 2026-09-20, the people rated 90 or more fell from 31 to 20.
+ */
+export function syncYear(state: GameState, year: number, atOnce = false): YearSync {
   const out: YearSync = { moved: 0, founded: [], renamed: [], folded: [], retire: [], notes: [] }
   const Y = BOOK.years[String(year)]
   if (!Y || !isTimelineWorld(state)) return out
@@ -662,9 +736,14 @@ export function syncYear(state: GameState, year: number): YearSync {
   inherit(state, mine, year, LATE_START, out.notes)
   if (year === 2023) judgeSeat(state, mine, Y, out.notes)
 
+  // Everyone the book rates, the player's own team-mates included: a man beside
+  // him is a player of this world like any other, and the freeze is what made
+  // him jump the year he left (applyRating). The player himself is never in
+  // Y.ratings — he is not a real person — and the roster loops below still
+  // leave his club alone, so history re-rates his squad without reclaiming it.
   for (const [vlr, r] of Object.entries(Y.ratings)) {
     const p = state.players[`V${vlr}`]
-    if (p && !people.has(p.id)) applyRating(p, r, rulerOn(state) ? rulerShift(year, vlr) : 0)
+    if (p) applyRating(p, r, rulerOn(state) ? rulerShift(year, vlr) : 0, people.has(p.id), atOnce)
   }
 
   const active = new Set<string>()
@@ -771,7 +850,7 @@ export function openWorldAt(state: GameState, year: number): void {
     // a winter each, as the rollover would have given it
     for (const p of Object.values(state.players)) p.age += 1
     state.year = y
-    const r = syncYear(state, y)
+    const r = syncYear(state, y, true)
     for (const id of r.retire) delete state.players[id]
   }
   for (const t of Object.values(state.teams)) if (t.dormant) delete state.teams[t.id]

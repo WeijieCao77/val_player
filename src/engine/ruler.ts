@@ -2,7 +2,7 @@ import timelineRaw from '../data/timeline.json'
 import circuitRaw from '../data/circuit.json'
 import world2021Raw from '../data/world_2021.json'
 import { clamp } from './rng'
-import { recomputeOverall, refreshValue } from './player'
+import { IGL_BONUS, recomputeOverall, refreshValue } from './player'
 import { ATTR_KEYS } from './types'
 import type { GameState, Player, WorldState } from './types'
 
@@ -62,16 +62,66 @@ export const SUB_RATIO = 0.831
 export const K_SUB = K_TOP / SUB_RATIO ** 2
 /** the rounds of a full season at a club that plays its league through: what a winter past the book counts as */
 export const FULL_SEASON = 1500
+/**
+ * How far the four closed leagues are read as having the same shape.
+ *
+ * Reported 2026-09-20: 「这些人在现实里并不是明星选手」, and measured — 2026 opens
+ * with 14 of VCT China's 60 starters at 90 or more (23%) against 5 of EMEA's 65
+ * (8%), and the world's top twenty holds eleven Chinese league players.
+ *
+ * It is not the middles, and it is not the sample either. Read through this
+ * ruler the four leagues' means already sit within a point of one another (EMEA
+ * 82.4, Americas 83.1, Pacific 83.3, China 83.5), and normalising the round
+ * counts — China's median line is 1476 rounds against EMEA's 1043, so China is
+ * pulled toward the middle a little less — is worth about half a point. What is
+ * left is the tail: China's raw scoreboards run three points higher at the
+ * median and spread further at the top, and the ruler ranks the whole world in
+ * one pool, so it cannot tell 「China's scoreboards run hot」 from 「China's
+ * players are better」.
+ *
+ * So each league is read on its own order and laid over the shape all four of
+ * them make together: the man ranked tenth of his league reads like the tenth of
+ * any other. 1 says the four leagues are equally deep; 0 is what it did before.
+ * 0.7 keeps China the deepest of the four — it has won the last two world
+ * titles, so saying otherwise would be its own kind of wrong — while cutting the
+ * gap that made it look like a different sport (measured 2026-09-20, starters at
+ * 90 or more: at 0 China 14/60 and EMEA 5/65, at 0.7 12/60 and 7/65, at 1
+ * 10/60 and 8/65 with the other two at 7).
+ * It moves where people rank and nothing else — the readings themselves are
+ * handed out again unchanged (shiftsOf), so the world's shape is untouched and
+ * one league's extra 90 is another league's.
+ *
+ * Only the closed leagues have a league at all, so 2021 and 2022 — no leagues,
+ * one open pool — are untouched, and so is everyone below them.
+ */
+export const LEAGUE_SHAPE = 0.7
 
-interface TRating { o: number; n: number }
-interface TClub { k: 1 | 2; d: number }
+interface TRating { o: number; n: number; i?: number }
+interface TClub { k: 1 | 2; d: number; l: string | null }
 interface TYear { clubs: Record<string, TClub>; rosters: Record<string, string[]>; ratings: Record<string, TRating> }
 const BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
 const CIRCUIT = circuitRaw as unknown as Record<string, { rosters?: Record<string, string[]> }[]>
-interface W21Player { id: string; teamId: string | null; overall: number; vlr?: { rounds: number } | null; rounds?: number }
+interface W21Player { id: string; teamId: string | null; overall: number; isIgl?: boolean; vlr?: { rounds: number } | null; rounds?: number }
 const W21 = world2021Raw as unknown as { players: W21Player[]; teams: { id: string; tier: number }[] }
 
-interface Line { id: string; o: number; n: number; tier: 1 | 2 }
+interface Line { id: string; o: number; n: number; tier: 1 | 2; lg?: string; igl?: boolean }
+
+/**
+ * How much higher the man who calls reads than his own statline.
+ *
+ * Reported 2026-09-20: 「指挥位被系统性低估」 — Boaster, captain of the 2023 world
+ * champions, opens at 73 with a ceiling of 74. The reason is that the builders
+ * rate a line off its statline, and calling does not appear in one. So he is
+ * moved this far up the order the curve produced — up the order, not above it:
+ * the readings themselves are handed out again unchanged (shiftsOf), so the
+ * world's shape is exactly what it was and somebody else takes the slot.
+ *
+ * The game's own IGL_BONUS (engine/player.ts) is then taken back out of the
+ * shift, because it is added again when his 综合 is computed — otherwise every
+ * caller in the world would be three points above where the ruler put him, and
+ * the opening world would not match the one a winter re-reads (holdScale).
+ */
+const IGL_READ = 3
 
 const mean = (xs: number[]): number => xs.reduce((s, v) => s + v, 0) / xs.length
 
@@ -104,7 +154,19 @@ function curveOf(lines: Line[]): (o: number) => number {
   }
 }
 
-/** How far each line of a year moves: the curve, then the sample toward its level's mean. */
+/**
+ * How far each line of a year moves: the curve, then the sample toward its
+ * level's mean — and then two nudges to where a line ranks among the others.
+ *
+ * The nudges are rank-preserving on purpose. Within each level the same set of
+ * readings the curve produced is handed out again, in the new order, so naming
+ * the callers and levelling the leagues change WHO is where and never how high
+ * the world goes: the count at 90 and at 95 is the curve's, before and after.
+ * An earlier build added the caller's lift to the line before the curve was
+ * fitted, which flattened the curve for everybody — measured 2026-09-20: the
+ * people rated 90 or more in 2026 fell from 31 to 16 and the VCT median with
+ * them, which is the world being nerfed by a fix meant for one role.
+ */
 function shiftsOf(lines: Line[]): Map<string, number> {
   const curve = curveOf(lines)
   const levelMean = (tier: 1 | 2, fallback: number): number => {
@@ -115,15 +177,46 @@ function shiftsOf(lines: Line[]): Map<string, number> {
   // above the Challengers upper decile a line from below the leagues has nobody of its
   // own level left to be measured against: what it shows past there counts at the ratio squared
   const subTop = SUB_KNOTS[SUB_KNOTS.length - 1][1]
-  const out = new Map<string, number>()
-  for (const l of lines) {
+  const read = lines.map((l) => {
     const v = curve(l.o)
     const level = l.tier === 1 ? v : Math.min(v, subTop) + Math.max(0, v - subTop) * SUB_RATIO ** 2
     const w = l.n / (l.n + (l.tier === 1 ? K_TOP : K_SUB))
-    out.set(l.id, Math.round(mu[l.tier] + (level - mu[l.tier]) * w - l.o))
+    return mu[l.tier] + (level - mu[l.tier]) * w
+  })
+  // each closed league read on its own order, laid over the shape all four make together
+  const byLeague = new Map<string, number[]>()
+  lines.forEach((l, i) => { if (l.tier === 1 && l.lg) byLeague.set(l.lg, [...(byLeague.get(l.lg) ?? []), i]) })
+  const level = new Map<number, number>()
+  if (byLeague.size >= 2 && LEAGUE_SHAPE > 0) {
+    // by rank, not by quantile: a league whose scoreboards list 93 people and one
+    // that lists 64 both field twelve clubs of five, so it is the r-th best of each
+    // that has to read alike, and the r-th of four leagues is the 4r-th of the pool
+    const pool = [...byLeague.values()].flat().map((i) => read[i]).sort((a, b) => b - a)
+    const k = byLeague.size
+    for (const idx of byLeague.values()) {
+      const order = idx.slice().sort((a, b) => read[b] - read[a])
+      order.forEach((i, r) => {
+        const want = pool[Math.min(pool.length - 1, Math.round((r + 0.5) * k))]
+        level.set(i, LEAGUE_SHAPE * (want - read[i]))
+      })
+    }
+  }
+  const nudged = lines.map((l, i) => read[i] + (l.igl ? IGL_READ : 0) + (level.get(i) ?? 0))
+  // the same readings, in the new order, one level at a time. What the eight have
+  // to move by is then whatever makes 综合 — the weighted eight plus what sits on
+  // top of them (player.ts baseBonus) — land on that reading.
+  const out = new Map<string, number>()
+  for (const tier of [1, 2] as const) {
+    const idx = lines.map((_, i) => i).filter((i) => lines[i].tier === tier)
+    const vals = idx.map((i) => read[i]).sort((a, b) => b - a)
+    const order = idx.slice().sort((a, b) => nudged[b] - nudged[a])
+    order.forEach((i, r) => out.set(lines[i].id, Math.round(vals[r] - lines[i].o - (lines[i].igl ? IGL_BONUS : 0))))
   }
   return out
 }
+
+/** Where the ruler puts a real player of that year, 综合 and all: what a club is rated on. */
+const readOf = (o: number, igl: boolean | undefined, shift: number): number => o + shift + (igl ? IGL_BONUS : 0)
 
 /**
  * Everyone the book rates that year, and the level he mostly played it at: the
@@ -133,13 +226,16 @@ function shiftsOf(lines: Line[]): Map<string, number> {
 function bookLines(year: number): Line[] {
   const Y = BOOK.years[String(year)]
   if (!Y) return []
-  const seen = new Map<string, { top: number; sub: number }>()
+  const seen = new Map<string, { top: number; sub: number; lg: Record<string, number> }>()
   const mark = (club: string, ids: string[]) => {
-    const top = Y.clubs[club]?.k === 1
+    const c = Y.clubs[club]
+    const top = c?.k === 1
     for (const id of ids) {
-      const s = seen.get(id) ?? { top: 0, sub: 0 }
+      const s = seen.get(id) ?? { top: 0, sub: 0, lg: {} }
       if (top) s.top++
       else s.sub++
+      // which closed league he mostly played it in — null before 2023, when there were none
+      if (top && c?.l) s.lg[c.l] = (s.lg[c.l] ?? 0) + 1
       seen.set(id, s)
     }
   }
@@ -147,7 +243,9 @@ function bookLines(year: number): Line[] {
   for (const ev of CIRCUIT[String(year)] ?? []) for (const [club, ids] of Object.entries(ev.rosters ?? {})) mark(club, ids)
   return Object.entries(Y.ratings).map(([id, r]) => {
     const s = seen.get(id)
-    return { id, o: r.o, n: r.n, tier: s && s.top > 0 && s.top >= s.sub ? 1 : 2 }
+    const tier = s && s.top > 0 && s.top >= s.sub ? 1 : 2
+    const lg = tier === 1 && s ? Object.entries(s.lg).sort((a, b) => b[1] - a[1])[0]?.[0] : undefined
+    return { id, o: r.o, n: r.n, tier: tier as 1 | 2, lg, igl: !!r.i }
   })
 }
 
@@ -156,7 +254,7 @@ function worldLines(): Line[] {
   const tier = new Map(W21.teams.map((t) => [t.id, t.tier === 1 ? 1 : 2] as const))
   return W21.players.map((p) => ({
     id: p.id.replace(/^V/, ''), o: p.overall, n: p.vlr?.rounds ?? p.rounds ?? 0,
-    tier: (p.teamId ? tier.get(p.teamId) : undefined) ?? 2,
+    tier: (p.teamId ? tier.get(p.teamId) : undefined) ?? 2, igl: !!p.isIgl,
   }))
 }
 
@@ -193,12 +291,12 @@ const top5 = (xs: number[]): number | null => {
 export function rulerClubRating(year: number, ids: string[]): number | null {
   const Y = BOOK.years[String(year)]
   if (!Y) return null
-  return top5(ids.filter((id) => Y.ratings[id]).map((id) => Y.ratings[id].o + rulerShift(year, id)))
+  return top5(ids.filter((id) => Y.ratings[id]).map((id) => readOf(Y.ratings[id].o, !!Y.ratings[id].i, rulerShift(year, id))))
 }
 
 /** A club of January 2021's world, on this ruler. */
 export function rulerTeamRating2021(teamId: string): number | null {
-  return top5(W21.players.filter((p) => p.teamId === teamId).map((p) => p.overall + rulerShift(2021, p.id.replace(/^V/, ''))))
+  return top5(W21.players.filter((p) => p.teamId === teamId).map((p) => readOf(p.overall, p.isIgl, rulerShift(2021, p.id.replace(/^V/, '')))))
 }
 
 /**
@@ -333,7 +431,7 @@ export function entryBands(year: number): EntryBands {
     const by = new Map<string, number[]>()
     for (const p of W21.players) {
       if (!p.teamId) continue
-      by.set(p.teamId, [...(by.get(p.teamId) ?? []), p.overall + rulerShift(2021, p.id.replace(/^V/, ''))])
+      by.set(p.teamId, [...(by.get(p.teamId) ?? []), readOf(p.overall, p.isIgl, rulerShift(2021, p.id.replace(/^V/, '')))])
     }
     for (const [team, os] of by) for (const o of os.sort((a, b) => b - a).slice(0, 5)) starters.push({ tier: tier.get(team) ?? 2, o })
   } else {
@@ -342,7 +440,7 @@ export function entryBands(year: number): EntryBands {
     for (const [club, ids] of Object.entries(Y.rosters)) {
       const c = Y.clubs[club]
       if (!c || c.d > 60 || ids.length < 5) continue
-      const os = ids.filter((id) => Y.ratings[id]).map((id) => Y.ratings[id].o + rulerShift(y, id)).sort((a, b) => b - a).slice(0, 5)
+      const os = ids.filter((id) => Y.ratings[id]).map((id) => readOf(Y.ratings[id].o, !!Y.ratings[id].i, rulerShift(y, id))).sort((a, b) => b - a).slice(0, 5)
       for (const o of os) starters.push({ tier: c.k === 1 ? 1 : 2, o })
     }
   }

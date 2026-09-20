@@ -1,6 +1,8 @@
 import { duoBonded } from '../bonds'
 import { ageDrift } from '../player'
+import { TURN } from '../age'
 import { bookCovers, isTimelineWorld } from '../timeline'
+import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { GameState, Player, Team } from '../types'
 import { trainAgeMul } from './growth'
 
@@ -182,12 +184,17 @@ export function lifeDay(state: GameState, newYear: boolean): void {
   for (const l of out) me.weekNotes.push(l)
 }
 
-/** What changes at this age, in the game's own numbers, or nothing worth saying. */
+/**
+ * What changes at this age, in the game's own numbers, or nothing worth saying.
+ *
+ * Each of the eight turns on its own year now (engine/age.ts TURN): the hands
+ * first, reading the game last. So the line names the one that turned this
+ * winter rather than announcing a single 「属性开始下滑」 for all of them.
+ */
 function ageSign(age: number): string {
-  const was = ageDrift({ age: age - 1 } as Player)
-  const now = ageDrift({ age } as Player)
-  if (now < 0 && was >= 0) return '这个冬天起属性开始下滑，枪法和反应最先。'
-  if (now < 0 && now < was) return '下滑得比去年快了。'
+  const turned = ATTR_KEYS.filter((k) => TURN[k] === age)
+  if (turned.length) return `${turned.map((k) => ATTR_CN[k]).join('、')}从这个冬天起开始往下走了。`
+  if (ageDrift({ age } as Player) < ageDrift({ age: age - 1 } as Player) && age > TURN.reaction) return '下滑得比去年快了。'
   if (trainAgeMul(age) < trainAgeMul(age - 1)) return '同样的训练，涨得比去年慢一点。'
   return ''
 }

@@ -47,9 +47,30 @@ export const ceilingOf = (p: Pick<Player, 'caps'>, k: keyof Attrs): number => p.
 export const atOwnCeiling = (p: Pick<Player, 'caps' | 'attrs'>, k: keyof Attrs): boolean =>
   !!p.caps && p.attrs[k] >= p.caps[k]
 
+/**
+ * What the man who calls is worth on top of his own eight.
+ *
+ * Reported 2026-09-20: 「指挥位被系统性低估」, with the evidence — Boaster, the
+ * captain who won the 2023 world title, opens a career at 73 with a ceiling of
+ * 74 and spends his whole life at Challengers-starter level; ScreaM is 77 in
+ * 2021. 综合 weighs 指挥 at 0.02 for a duelist and 0.04 flat, and 沟通 at 0.05
+ * to 0.08, so a man who wins a world final by talking can never read as one.
+ *
+ * It is not free: a club names its caller (engine/world.ts ensureCaller,
+ * me/igl.ts for the career's own player) and takes the job away again, and the
+ * bonus goes with the job. The weights themselves are left alone — they have to
+ * stay in step with scripts/build_world.py, which is where every opening rating
+ * in the world comes from.
+ */
+export const IGL_BONUS = 3
+
+/** What sits on top of the weighted eight: the big-stage lift, and the caller's job. */
+export const baseBonus = (p: Pick<Player, 'stageBonus' | 'isIgl'>): number =>
+  (p.stageBonus ?? 0) + (p.isIgl ? IGL_BONUS : 0)
+
 export function recomputeOverall(p: Player): number {
   const w = weightsFor(p)
-  let v = p.stageBonus ?? 0
+  let v = baseBonus(p)
   for (const k of ATTR_KEYS) v += p.attrs[k] * w[k]
   p.overall = Math.round(clamp(v, 30, 99))
   return p.overall
@@ -109,15 +130,15 @@ export function statLine(s: Stats) {
 
 export const AGE_PEAK = 24
 
-/** Yearly attribute drift: growth for the young, decline for veterans. */
-export function ageDrift(p: Player): number {
-  if (p.age <= 21) return 1.0
-  if (p.age <= 24) return 0.65
-  if (p.age <= 26) return 0.3
-  if (p.age <= 28) return -0.25
-  if (p.age <= 30) return -0.9
-  return -1.6
-}
+/**
+ * Yearly attribute drift, the eight read as one number.
+ *
+ * The curve itself moved to engine/age.ts on 2026-09-20 — one file for what a
+ * year gives and what it takes, each attribute on its own clock — and this is
+ * re-exported from here so that nothing which only wants 「which way is this age
+ * going」 has to know where it lives.
+ */
+export { ageDrift } from './age'
 
 /** The role's colour as a CSS token, so it follows the page's ground: the
  *  yellow that reads on black is invisible on white, and styles.css holds a

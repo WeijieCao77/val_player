@@ -1,6 +1,7 @@
 import { Rng, clamp, dayStream } from './rng'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { recomputeOverall, refreshValue, ratingOf, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { attrDrift, holdOff, trainAgeMul } from './age'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
 import { growLoyalty } from './attachment'
@@ -45,16 +46,82 @@ export function recommendedTrainingFocus(p: Player): keyof Attrs | 'rest' {
   })
 }
 
+// ---------------------------------------------------------------- 谁涨得快：这个世界自己给的证据
+//
+// The author, 2026-09-20: 「就算选手会增长，明星选手的数值也要增长的高于普通选手，
+// 而不是让那些不知名选手分数达到 90+」.
+//
+// Growth used to be the same for everyone with headroom, so who ended up at the
+// top of the world was decided by the roster book and then by nothing at all.
+// It is decided by three things now, all of them this world's own record of the
+// man rather than a dice roll or a label:
+//
+//   · his own season line — what he actually did with the rounds he played
+//   · where the world puts his club — its best five, re-rated every winter
+//     (engine/ruler.ts rerateClubs)
+//   · and whether that club holds a seat in a closed league
+//
+// His own line is the heaviest of the three, and it caps what the other two can
+// say about him (STAND_CARRY), so a big club cannot carry a man who is not
+// playing: a benched no-name at a 92-rated side reads barely above average, and
+// a 1.25 rating at a Challengers club reads well above one.
+//
+// This decides how fast people move, never how high the world goes: the winter's
+// re-read (engine/ruler.ts holdScale) lays the whole world back on one fixed
+// curve every year, so 90+ stays about the top 3% of the best 240 lines. What
+// these numbers change is who is in it.
+
+/** club rating at which the club term is nothing, and where it is everything */
+export const STAND_CLUB = [68, 90] as const
+/** season rating at which his own line is nothing, and where it is everything */
+export const STAND_LINE = [0.85, 1.20] as const
+/** rounds before a season line is evidence at all; under it he reads as this */
+export const STAND_ROUNDS = 150
+export const STAND_UNPLAYED = 0.30
+/** how far the club and the seat may speak above his own line — the anti-circularity clause */
+export const STAND_CARRY = 0.25
+/** what the three are worth, his own line the heaviest */
+export const STAND_W = { line: 0.50, club: 0.30, tier: 0.20 } as const
+/** and the multiplier that share becomes */
+export const STAND_LO = 0.55
+export const STAND_HI = 1.45
+/** the winter re-rating of a young player's projection: nothing to show, and everything */
+export const REVISE_LO = 0.10
+export const REVISE_SPAN = 0.30
+
+/** Nothing the world has noticed about him, 0, to everything it could, 1. */
+export function standingShare(state: GameState, p: Player): number {
+  const t = p.teamId ? state.teams[p.teamId] : undefined
+  if (!t || t.dormant) return 0
+  const line = p.season.rounds >= STAND_ROUNDS
+    ? clamp((ratingOf(p.season) - STAND_LINE[0]) / (STAND_LINE[1] - STAND_LINE[0]), 0, 1)
+    : STAND_UNPLAYED
+  const roof = Math.min(1, line + STAND_CARRY)
+  const club = Math.min(roof, clamp((t.rating - STAND_CLUB[0]) / (STAND_CLUB[1] - STAND_CLUB[0]), 0, 1))
+  const tier = Math.min(roof, t.tier === 1 ? 1 : 0)
+  return clamp(STAND_W.line * line + STAND_W.club * club + STAND_W.tier * tier, 0, 1)
+}
+
+/** The same, as the multiplier growth is scaled by: STAND_LO with nothing to show, STAND_HI with everything. */
+export const standingOf = (state: GameState, p: Player): number =>
+  STAND_LO + (STAND_HI - STAND_LO) * standingShare(state, p)
+
 /**
- * A title makes rival clubs accelerate high-upside youngsters, not every
- * veteran and unattached player in the database. The boost is deliberately
- * bounded: coaching, facilities, age, morale and headroom remain the engine.
+ * How much faster this player's weekly practice runs than a nobody's.
+ *
+ * It used to be a title bonus alone — rival clubs pushing high-upside
+ * youngsters while a champion was in the room — which touched ≤23-year-olds at
+ * other clubs and nothing else. The standing term is on top of it and applies
+ * to everybody, so the week's hours also favour the people this world rates.
  */
+export const AI_STAND = [0.85, 1.15] as const
+
 export function aiGrowthMultiplier(state: GameState, p: Player, team: Team): number {
+  const stand = AI_STAND[0] + (AI_STAND[1] - AI_STAND[0]) * standingShare(state, p)
   const eligible = team.id !== state.myTeam && p.teamId === team.id &&
     p.age <= 23 && p.potential - p.overall >= 3
-  if (!eligible) return 1
-  return 1 + 0.10 * Math.min(Math.max(state.rivalry ?? 0, 0), 2)
+  if (!eligible) return stand
+  return stand * (1 + 0.10 * Math.min(Math.max(state.rivalry ?? 0, 0), 2))
 }
 
 /**
@@ -89,7 +156,10 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng, mods?: C
 
   const coach = (coachOr(team, 'development') - 55 + (mods?.devHelp ?? 0)) / 100
   const facility = (team.facilities - 55) / 130
-  const age = p.age <= 20 ? 1.35 : p.age <= 23 ? 1.1 : p.age <= 26 ? 0.8 : 0.45
+  // one curve for the whole game (engine/age.ts): 17 is worth 1.75, 24 half of
+  // that, 33 nothing. It used to be four steps written out here and again in
+  // me/growth.ts, flat at 0.45 from 27 on — so 34 trained exactly as well as 27.
+  const age = trainAgeMul(p.age)
   const tired = p.fatigue > 70 ? 0.5 : p.fatigue > 45 ? 0.8 : 1
   const motivated = 0.75 + p.morale / 200
 
@@ -326,17 +396,22 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     // to be pushed: clubs chasing a champion coach their youth harder.
     const playedEnough = p.season.maps >= 10 || p.season.rounds >= 200
     const revisions = p.potentialRevisions ?? 0
+    const stand = standingShare(state, p)
     if (p.teamId && seasonAge <= 23 && playedEnough && revisions < 2 &&
         p.potential - p.overall < 4 && p.potential < 97) {
       const pressure = p.teamId !== state.myTeam
         ? Math.min(Math.max(state.rivalry ?? 0, 0), 2)
         : 0
-      if (rng.chance(0.28 + pressure * 0.08)) {
+      // It was 0.28 for everyone with headroom, which is how a world ends up
+      // with names at the top nobody recognises. The evidence decides it now:
+      // nothing to show is REVISE_LO, a full season at a side the world rates is
+      // REVISE_LO + REVISE_SPAN (standingShare).
+      if (rng.chance(REVISE_LO + REVISE_SPAN * stand + pressure * 0.08)) {
         p.potential = clamp(p.potential + rng.int(1, 2), p.potential, 99)
         p.potentialRevisions = revisions + 1
       }
     }
-    const drift = ageDrift(p)
+    const grow = standingOf(state, p)
     // Captured before a single attribute moves. It used to sit further down,
     // which was fine while recomputeOverall was called exactly once at the
     // bottom — the moment the growth loop started recomputing as it went, a
@@ -344,35 +419,30 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     // audit_feedback.ts caught it as 「2 silent days」.
     const before = p.overall
 
+    // Each of the eight on its own clock (engine/age.ts): the hands turn at 25
+    // and 26, reading the game and calling hold to 30 and 31, and past the turn
+    // the slope steepens every year. What a man works at and what he is built
+    // for can flatten that slope to a third of itself — never to nothing, never
+    // to a rise (holdOff, HOLD_MAX).
     for (const k of ATTR_KEYS) {
-      if (drift > 0) {
+      const d = attrDrift(p, k)
+      if (d > 0) {
         // Live headroom, re-read after every bump rather than measured once
         // before the loop. Nine attributes each rolling up to +2 against a
         // single stale reading walked a player straight past his own ceiling.
-        if (p.overall < p.potential && rng.chance(0.55 * drift)) {
+        if (p.overall < p.potential && rng.chance(Math.min(0.95, 0.55 * d * grow))) {
           // his own ceiling holds here too; the dice are rolled the same either way
           p.attrs[k] = clamp(p.attrs[k] + rng.int(0, 2), 20, Math.max(p.attrs[k], ceilingOf(p, k)))
           // and reaching it keeps no progress over (no 存点数, me/bottleneck.ts)
           if (atOwnCeiling(p, k)) p.xp[k] = 0
           recomputeOverall(p)
         }
-      } else if (rng.chance(Math.abs(drift) * 0.5)) {
-        // aim and reaction go first
-        const hit = k === 'aim' || k === 'reaction' ? 2 : 1
-        p.attrs[k] = clamp(p.attrs[k] - rng.int(0, hit), 20, 99)
+      } else if (d < 0) {
+        const fall = Math.abs(d) * (1 - holdOff(state, p, k))
+        let lost = Math.floor(fall)
+        if (rng.chance(fall - lost)) lost++
+        if (lost > 0) p.attrs[k] = clamp(p.attrs[k] - lost, 20, 99)
       }
-    }
-    // Experience keeps rising even as the mechanics fade — but not past the
-    // ceiling either. This pair asked nothing about potential at all, so a
-    // veteran gained 意识 (and 指挥, if he called) every winter forever: one
-    // player a season finished above his own projection, which reads as
-    // 「成长空间 +-1」 on the training screen and quietly bricks him, because
-    // addXp refuses to work on anybody at his ceiling. Read after the decline
-    // above, so a fading veteran still trades aim for reading the game.
-    recomputeOverall(p)
-    if (p.age >= 25 && p.overall < p.potential) {
-      p.attrs.awareness = clamp(p.attrs.awareness + (rng.chance(0.4) ? 1 : 0), 20, Math.max(p.attrs.awareness, ceilingOf(p, 'awareness')))
-      if (p.isIgl) p.attrs.igl = clamp(p.attrs.igl + (rng.chance(0.5) ? 1 : 0), 20, Math.max(p.attrs.igl, ceilingOf(p, 'igl')))
     }
 
     recomputeOverall(p)

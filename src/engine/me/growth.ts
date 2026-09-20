@@ -1,7 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
-import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { HOLD_MAX, TURN, attrDrift, trainAgeMul } from '../age'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
 import { bondBetween, duoBonded } from '../bonds'
@@ -19,8 +20,13 @@ import { cny } from './moneyfmt'
 import { cerRestMul } from './ceremony'
 import { injuryTrainMul } from './injury'
 
-/** How much a week of practice is worth at this age; me/life.ts says the year it drops. */
-export const trainAgeMul = (age: number): number => (age <= 20 ? 1.35 : age <= 23 ? 1.1 : age <= 26 ? 0.8 : 0.45)
+/**
+ * How much a week of practice is worth at this age; me/life.ts says the year it
+ * drops. The curve itself is engine/age.ts, shared with every club in the world
+ * (training.ts trainPlayer) — it was written out twice, in four steps that went
+ * flat at 0.45 from 27 and never fell again.
+ */
+export { trainAgeMul }
 
 /**
  * The same week-of-practice base the club engine uses (training.ts
@@ -84,19 +90,18 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
 }
 
 /**
- * The winter's ageing, for the 我的 page: from 27 the hands go first
- * (engine/training.ts seasonRollover: |ageDrift| / 2 a year that an attribute
- * is hit, by 0–2 for 枪法 and 反应, so a real slip two times in three). In words;
- * the chances only when the 数值 switch is on.
+ * The winter's ageing, for the 我的 page. Each attribute has its own turn now
+ * (engine/age.ts TURN): 反应 at 24 and 枪法 at 25, 意识 and 沟通 not until 29,
+ * 指挥 at 30 — and past the turn the slope steepens every year. In words; the
+ * figures only when the 数值 switch is on.
  */
 export function ageNote(age: number, nums: boolean): string | null {
-  if (age < 25) return null
-  const words = age < 27
-    ? '27 岁起，每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。'
-    : `${age} 岁了：每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。`
+  if (age < 23) return null
+  const head = age < TURN.reaction ? `${TURN.reaction} 岁起` : `${age} 岁了`
+  const words = `${head}：反应先开始掉，${TURN.aim} 岁起枪法跟上，越往后掉得越快；意识、沟通能撑到 ${TURN.awareness} 岁，指挥到 ${TURN.igl} 岁。练得勤、又正好是你的长项，能掉得慢一些，但拦不住。`
   if (!nums) return words
-  const slip = (a: number) => Math.round(Math.min(1, Math.abs(ageDrift({ age: a } as Player)) * 0.5) * 200 / 3)
-  return `${words}（枪法、反应每个休赛期掉点的机会：27–28 岁约 ${slip(27)}%，29–30 岁约 ${slip(29)}%，31 岁起约 ${slip(31)}%。）`
+  const fall = (k: keyof Attrs, a: number) => Math.max(0, -attrDrift({ age: a, isIgl: false }, k)).toFixed(1)
+  return `${words}（每个休赛期平均掉几点 —— 枪法：${TURN.aim} 岁 ${fall('aim', TURN.aim)}、30 岁 ${fall('aim', 30)}、34 岁 ${fall('aim', 34)}；意识：${TURN.awareness} 岁 ${fall('awareness', TURN.awareness)}、34 岁 ${fall('awareness', 34)}。最勤奋、最有天赋的那一项只掉其中的 ${Math.round((1 - HOLD_MAX) * 100)}%。）`
 }
 
 /** How each extra hour splits across attributes. */
@@ -108,6 +113,22 @@ const SPLIT: Partial<Record<MeAction, Partial<Record<keyof Attrs, number>>>> = {
 
 /** my extra hours are worth this much of a club training week, per point */
 const EXTRA = 0.55
+
+/**
+ * And what they are worth with no club underneath them — the ladder start's
+ * whole first stretch, where there is no coach, no facility and no team
+ * practice: `gainBase` reads a 40-facility, no-coach club for him, which is a
+ * tenth off the base before anything else.
+ *
+ * 1.6 until 2026-09-20. The age curve (engine/age.ts) now makes 17 worth 1.75
+ * and 24 worth 0.82, which puts a career's most valuable years exactly where a
+ * ladder start has nobody teaching him — the door that opens a year earlier
+ * would have been paid in the one currency it was supposed to be buying. This
+ * is the crutch for that, and 帮助「开局怎么选」 already says the ladder is the
+ * long way round rather than the weak one. Measured both ways; the three doors
+ * are meant to end within two points of each other.
+ */
+const SOLO = 1.8
 
 /**
  * 复盘 puts this share of an hour into 指挥 on top of 意识 and 残局, and the man
@@ -148,7 +169,7 @@ export function hourValues(state: GameState): HourValue[] {
   const out: HourValue[] = []
   for (const key of ['aim', 'vod', 'util'] as const) {
     const split = SPLIT[key]!
-    const mul = EXTRA * (pro ? 1 : 1.6)
+    const mul = EXTRA * (pro ? 1 : SOLO)
     const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
     let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
     if (key === 'vod' && open('igl')) { v += (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY) * EXTRA * worth('igl'); attrs.push('igl') }
@@ -274,7 +295,7 @@ export function runAction(state: GameState, key: MeAction): string {
     case 'aim': case 'vod': case 'util': {
       const split = SPLIT[key]!
       // without a club the hours are mine alone: no team practice underneath them
-      const alone = pro ? 1 : 1.6
+      const alone = pro ? 1 : SOLO
       for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) bump(k, g * EXTRA * share * alone)
       // and 指挥 on top, twice as fast for the man who calls (IGL_STUDY)
       if (key === 'vod') bump('igl', g * EXTRA * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY))

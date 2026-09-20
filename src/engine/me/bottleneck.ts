@@ -1,7 +1,7 @@
 import { clamp } from '../rng'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player } from '../types'
-import { recomputeOverall, refreshValue, weightsFor } from '../player'
+import { baseBonus, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
 import { compClass, isIntlComp, isQualifier } from './compclass'
@@ -53,7 +53,22 @@ import { tallyOf } from './detail'
 export const CAP_HARD = 99
 /** the highest a talent alone puts a ceiling — under the hard cap, so a maxed attribute still has a path on the first day (破晓: talent 10 is 95 before its breaks) */
 export const TALENT_CAP_MAX = 98
-/** What each kind of break is worth, in 综合上限. */
+/**
+ * What each kind of break is worth, in 综合上限.
+ *
+ * Re-sized 2026-09-20 against the measured ladder: a career played all the way
+ * through ended at 84 — the world's own median VCT starter (85.9), the 47th
+ * percentile of them — while the world's top ten sat at 94–96. The author's
+ * brief is a game 「比现在游戏容易但是比破晓难度大」 (破晓's diligent player ends
+ * above every professional alive), so the target became: a full ordinary career
+ * 87–89, a career with real trophies 92–94, the world's very best still above
+ * the ordinary one.
+ *
+ * The weight went on the trophies rather than on the talent, because that is
+ * the other half of the same brief — 「明星选手的数值也要增长的高于普通选手」.
+ * Winning is what moves a career now; turning up for years moves it less
+ * (CAP_EXP_MAX), and grinding one attribute moves it least (MECH_VALUE_MAX).
+ */
 export const BREAK_VALUE = {
   /** a practice path: three weeks of 枪法, twelve ranked, six reviews, four scrims, eight maps calling */
   grind: 0.9,
@@ -61,14 +76,14 @@ export const BREAK_VALUE = {
   path: 1.0,
   /** a strong club or a veteran in the room — it comes to everyone who is there, so it is worth less than what is worked for */
   room: 0.4,
-  /** the first trophy, and the first in a VCT league */
-  league: 0.8,
-  /** a Masters or LOCK//IN, started in */
-  masters: 1.6,
-  /** Champions, started in — 破晓's world title is +3.5 and +3.0 on a fifth each, +1.3 */
-  champions: 2.4,
-  /** the final's MVP, on top of the title */
-  fmvp: 1.0,
+  /** the first trophy, and the first in a VCT league (was 0.8) */
+  league: 1.2,
+  /** a Masters or LOCK//IN, started in (was 1.6) */
+  masters: 3.0,
+  /** Champions, started in — 破晓's world title is +3.5 and +3.0 on a fifth each, +1.3 (was 2.4) */
+  champions: 4.5,
+  /** the final's MVP, on top of the title (was 1.0) */
+  fmvp: 2.0,
 } as const
 /**
  * most points one break puts on the attribute that broke; the rest goes where
@@ -82,13 +97,24 @@ export const BREAK_POINTS = 3
  * its overall, 1.2. At 2.0 the steady plan's ten grinds on a low-talent 枪法 and
  * 反应 bought back everything its talent had not given it, and a career that
  * chose its talent and worked every path ended within two points of one that did
- * neither (measured: 88 against 90).
+ * neither (measured: 88 against 90). 1.4 on 2026-09-20 — a nudge, deliberately
+ * short of the 2.0 that made the talent screen meaningless, because the brief
+ * was to reward winning rather than grinding.
  */
-export const MECH_VALUE_MAX = 1.2
-/** 综合 milestones can open, per attribute — apart, so the grind cannot eat a trophy's share */
-export const MILE_VALUE_MAX = 3.0
-/** professional seasons that each loosen the experience ceilings by one */
-export const CAP_EXP_MAX = 5
+export const MECH_VALUE_MAX = 1.4
+/**
+ * 综合 milestones can open, per attribute — apart, so the grind cannot eat a
+ * trophy's share. Raised from 3.0 on 2026-09-20 to leave room for the trophies
+ * above (BREAK_VALUE): at 3.0 a Masters and a Champions filled the 残局 pool
+ * between them and the third trophy of a career opened nothing.
+ */
+export const MILE_VALUE_MAX = 5.0
+/**
+ * Professional seasons that each loosen the experience ceilings by one. Five
+ * until 2026-09-20; seven so that a long career is worth something on its own,
+ * without making it worth as much as winning.
+ */
+export const CAP_EXP_MAX = 7
 /** a club this strong teaches by being in the room: the weakest tenth of a new world's VCT clubs (engine/ruler.ts) */
 export const STRONG_TEAM = 80
 /** old enough to have seen most of it */
@@ -99,7 +125,7 @@ type K = keyof Attrs
 /** The overall before recomputeOverall rounds it. */
 function rawOverall(p: Player): number {
   const w = weightsFor(p)
-  return ATTR_KEYS.reduce((s, k) => s + p.attrs[k] * w[k], p.stageBonus ?? 0)
+  return ATTR_KEYS.reduce((s, k) => s + p.attrs[k] * w[k], baseBonus(p))
 }
 
 /** The eight, heaviest first for his role. */
@@ -153,9 +179,9 @@ export function ceilingsOf(p: Player): Record<K, number> {
 export const atCeiling = (p: Player, k: K): boolean => p.attrs[k] >= ceilingsOf(p)[k]
 
 /** The overall the eight ceilings add up to — what the attribute card calls 上限. */
-export function ceilingPotential(p: Pick<Player, 'role' | 'attrs' | 'stageBonus'>, caps: Record<K, number> = ceilingsOf(p as Player)): number {
+export function ceilingPotential(p: Pick<Player, 'role' | 'attrs' | 'stageBonus' | 'isIgl'>, caps: Record<K, number> = ceilingsOf(p as Player)): number {
   const w = weightsFor(p)
-  const v = ATTR_KEYS.reduce((s, k) => s + Math.max(p.attrs[k], caps[k]) * w[k], p.stageBonus ?? 0)
+  const v = ATTR_KEYS.reduce((s, k) => s + Math.max(p.attrs[k], caps[k]) * w[k], baseBonus(p))
   return Math.round(clamp(v, 30, 99))
 }
 
