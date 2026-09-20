@@ -26,7 +26,7 @@
  * says nothing at all (ui/me/SaveNotice.tsx, App.tsx).
  */
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { AT_LEAST, EVERY, IDLE, QUIET, updateAct } from './update'
+import { AT_LEAST, EVERY, IDLE, QUIET, markReopen, updateAct } from './update'
 
 const ENTRY = /assets\/index-[^"'/\s]+\.js/
 /** the line is read before the page blinks */
@@ -133,6 +133,9 @@ export default function UpdateNudge({ busy = false, hushed = false, onBeforeRelo
       await seen
       // a hand came back to the page in that second, or a match started: leave it alone and ask again in a moment
       if (held || Date.now() - acted < IDLE) { reloading = false; emit(); return }
+      // nobody asked for this reload, so the page after it puts the player back in the career rather than on the
+      // cover (App.tsx). Only here: 刷新 below is a press, and the cover with its 继续 card answers a press fine
+      markReopen(window.sessionStorage)
       location.reload()
     })()
   }, [act, onBeforeReload])

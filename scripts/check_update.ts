@@ -13,12 +13,14 @@
  *    build newer than the one it was pressed on asks on its own again
  *  三 the clocks: found within about a minute and a half, asked often enough to
  *    matter, and no fetch storm when a tab is flicked in and out
- *  四 the old build's leftovers: a save written by the plan build has its week
+ *  四 back where they were: only a reload nobody asked for leaves the marker, it
+ *    is taken once, and a save that will not open lands on the cover page
+ *  五 the old build's leftovers: a save written by the plan build has its week
  *    refunded the first time the new build opens it, and the player is told once
  *
  *   npx tsx scripts/check_update.ts
  */
-import { AT_LEAST, EVERY, IDLE, QUIET, updateAct } from '../src/ui/me/update'
+import { AT_LEAST, EVERY, IDLE, QUIET, REOPEN, markReopen, takeReopen, updateAct } from '../src/ui/me/update'
 import type { UpdateNow } from '../src/ui/me/update'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { ACTION_BY_KEY } from '../src/engine/me/actions'
@@ -86,7 +88,46 @@ console.log('\n三、多久能发现')
 }
 
 /* ---- 四 ---- */
-console.log('\n四、老版本留下的那一周：新版本打开时退点，并且只说一次')
+console.log('\n四、自己刷新以后，人还在原来的地方')
+{
+  /** one tab's session storage, and a boot that does what App.tsx does with the marker */
+  const tab = (): Storage => {
+    const m: Record<string, string> = {}
+    return {
+      getItem: (k) => m[k] ?? null, setItem: (k, v) => { m[k] = String(v) },
+      removeItem: (k) => { delete m[k] }, clear: () => { for (const k of Object.keys(m)) delete m[k] },
+      key: (i) => Object.keys(m)[i] ?? null, get length() { return Object.keys(m).length },
+    } as Storage
+  }
+  /** where the page after a reload lands: 生涯 when the marker is there and the save opens, otherwise 首页 */
+  const boot = (s: Storage, opens: boolean): '生涯' | '首页' => (takeReopen(s) && opens ? '生涯' : '首页')
+
+  const auto = tab()
+  markReopen(auto)
+  check(auto.getItem(REOPEN) === '1', '页面自己刷新前，留下一个记号')
+  check(boot(auto, true) === '生涯', '刷新回来直接进生涯，不是把人扔回首页')
+  check(auto.getItem(REOPEN) === null, '记号用过就没了')
+  check(boot(auto, true) === '首页', '再刷新一次（这回是自己按的）就照常停在首页')
+
+  // 刷新 and 稍后 are presses: nobody needs putting back, and the cover with its 继续 card answers a press fine
+  const byHand = tab()
+  check(boot(byHand, true) === '首页', '自己按「刷新」的那次不留记号，照旧停在首页')
+
+  // the save is gone, or too broken to open: the marker is already spent, so the cover page takes it from here
+  const broken = tab()
+  markReopen(broken)
+  check(boot(broken, false) === '首页', '存档打不开时退回首页，不会卡在半路')
+  check(broken.getItem(REOPEN) === null, '打不开的那次也把记号清掉，下次开机不会再试一遍')
+
+  // a private window throws on session storage: nothing is written, nothing is read, the cover page is the fallback
+  const shut = { setItem() { throw new Error('denied') }, getItem() { throw new Error('denied') }, removeItem() { throw new Error('denied') } } as unknown as Storage
+  let threw = false
+  try { markReopen(shut); check(boot(shut, true) === '首页', '无痕窗口里存不下记号，就老老实实回首页') } catch { threw = true }
+  check(!threw, '存不下记号也不会把页面弄崩')
+}
+
+/* ---- 五 ---- */
+console.log('\n五、老版本留下的那一周：新版本打开时退点，并且只说一次')
 {
   const s: GameState = createCareer({
     name: '更新', region: 'China', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'pre', seed: 7,
@@ -110,5 +151,5 @@ console.log('\n四、老版本留下的那一周：新版本打开时退点，�
 
 console.log(fails
   ? `\n✗ ${fails} 项不对。`
-  : `\n✓ 开着的页面会自己换到新版本：没人动它就存档刷新，打比赛时只挂一条，「稍后」只安静半小时，老版本排好的那一周退点并只说一次。（${((Date.now() - t0) / 1000).toFixed(1)} 秒）`)
+  : `\n✓ 开着的页面会自己换到新版本：没人动它就存档刷新、刷新回来人还在生涯里，打比赛时只挂一条，「稍后」只安静半小时，老版本排好的那一周退点并只说一次。（${((Date.now() - t0) / 1000).toFixed(1)} 秒）`)
 process.exit(fails ? 1 : 0)

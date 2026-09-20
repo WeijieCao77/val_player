@@ -49,6 +49,35 @@ export interface UpdateNow {
   now: number
 }
 
+/**
+ * A page that reloaded itself leaves this for the page that comes up, which
+ * opens the career again instead of the cover (App.tsx).
+ *
+ * Only the automatic road leaves it: a player who pressed 刷新 asked for the
+ * reload and the cover with its 继续 card is a fine place to land, but one who
+ * pressed nothing would read the cover as the game throwing them out
+ * (asked 2026-09-20). It is a one-shot — taken once, gone whatever happens
+ * next — so a save that will not open, a second reload, or a tab reopened from
+ * history all land on the cover the ordinary way. sessionStorage, not local:
+ * it belongs to this tab and this reload, not to the browser.
+ */
+export const REOPEN = 'valplayer.reopen'
+
+/** about to reload by itself: the next page should go straight back into the career */
+export function markReopen(store: Pick<Storage, 'setItem'>): void {
+  try { store.setItem(REOPEN, '1') } catch { /* no session storage (a private window): the cover page is the fallback */ }
+}
+
+/** true for the page right after an automatic reload, and never twice */
+export function takeReopen(store: Pick<Storage, 'getItem' | 'removeItem'>): boolean {
+  try {
+    const on = store.getItem(REOPEN) === '1'
+    // cleared before the career is even asked for, so a save that will not open does not ask again on the next boot
+    if (on) store.removeItem(REOPEN)
+    return on
+  } catch { return false }
+}
+
 export function updateAct(x: UpdateNow): UpdateAct {
   if (!x.mine || !x.newest || x.newest === x.mine) return 'none'
   // 稍后: quiet for a while, then ask again — and by hand, because the player already said no once.
