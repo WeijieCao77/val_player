@@ -180,7 +180,7 @@ function focusGroups(g: GameState): TourTarget[] {
 /** what the 重点 tags mark for this goal, and when the 调剂 ones are right (engine/me/goal.ts weightsOf, fillerNote) */
 function focusBody(g: GameState): string {
   const kind = goalOf(g)?.kind
-  const tap = '点一下卡片就做一次，当场出结果，做了就算数。'
+  const tap = '点一下卡片就做一次，当场出结果；点错了按卡上的「−」退回去，推进一周才定下来。'
   if (kind === 'contract') {
     return `标「重点」的卡对目标最有用：枪法、复盘、道具涨综合，杯赛和试训都看它；打排位爬天梯。标「调剂」的几张，体力见底、缺钱或想走粉丝这条路时再点。${tap}`
   }
@@ -200,18 +200,18 @@ export function tourSteps(kind: TourKind, g: GameState): TourStep[] {
     {
       screen: WEEK, at: [{ sel: '.ap-chip' }], title: '行动点',
       body: pro
-        ? `签约后每周 ${AP_SEASON} 点，受伤时只有 ${AP_HURT} 点。点一张卡当场花掉，推进以后没用完的作废。`
-        : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。点一张卡当场花掉，推进以后没用完的作废。`,
+        ? `签约后每周 ${AP_SEASON} 点，受伤时只有 ${AP_HURT} 点。点一张卡当场花掉，按「−」能退回来；推进以后没用完的作废。`
+        : `没有队伍时每周 ${AP_PRE} 点，签约后每周 ${AP_SEASON} 点。点一张卡当场花掉，按「−」能退回来；推进以后没用完的作废。`,
     },
     {
       screen: WEEK, at: focusGroups(g), title: '这周做什么',
       body: focusBody(g),
     },
     {
-      screen: WEEK, at: [{ sel: '.advance-me button', text: '按推荐做完' }], title: '按推荐做完',
+      screen: WEEK, at: [{ sel: '.advance-me button', text: '按推荐做完' }], title: '不知道做什么',
       body: pro
-        ? `不知道怎么做就按这个：剩下的点按稳妥的路子一次做完，这周要打的比赛也算进去，周末体力留在 ${calm} 上下。做完给你一句总结。`
-        : `不知道怎么做就按这个：剩下的点按稳妥的路子一次做完，补短板、打排位，周末体力留在 ${calm} 上下。做完给你一句总结。`,
+        ? `「按推荐做完」把剩下的点按稳妥的路子一次做完，这周要打的比赛也算进去，周末体力留在 ${calm} 上下；「重复上一周」照你上周点过的再来一遍。两个都能用「−」一项项退回去。`
+        : `「按推荐做完」把剩下的点按稳妥的路子一次做完，补短板、打排位，周末体力留在 ${calm} 上下；「重复上一周」照你上周点过的再来一遍。两个都能用「−」一项项退回去。`,
     },
     pro
       ? {
@@ -265,7 +265,7 @@ export function pageNotes(g: GameState): { title: string; body: string }[] {
     },
     {
       title: '体力',
-      body: '贴顶那一行和「本周行动」里的体力条是同一个数。点一张会累的卡，当场就从这里扣；休息也是当场回。身体自己回的那一点在周末补上。低于四成，状态和比赛发挥明显下滑。',
+      body: '贴顶那一行和「本周行动」里的体力条是同一个数。点一张会累的卡，当场就从这里扣；休息也是当场回，按「−」退回去它也跟着回来。身体自己回的那一点在周末补上。低于四成，状态和比赛发挥明显下滑。',
     },
   ]
   return notes.concat(pro
