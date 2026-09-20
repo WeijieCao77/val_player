@@ -263,6 +263,21 @@ const themeNow = (): string => {
   try { return localStorage.getItem(THEME_KEY) ?? localStorage.getItem(OLD_THEME_KEY) ?? 'dark' } catch { return 'dark' }
 }
 
+/**
+ * This browser's anonymous id, made on first visit.
+ *
+ * Exported for the mailbox (ui/me/box.ts, 2026-09-20): a suggestion is voted on
+ * once per device, and the device is this same random id rather than a second
+ * one — one id in storage, one place that makes it. It carries nothing about
+ * the player and nothing about the career; what the mailbox stores beside it is
+ * what the player typed into the mailbox itself, and nothing else.
+ *
+ * Read here even when telemetry is switched off (localhost, file://): the id is
+ * only a number in this browser's storage, and the mailbox still needs to know
+ * which suggestions are this browser's own.
+ */
+export const deviceId = (): string => readId()
+
 function readId(): string {
   try {
     let v = localStorage.getItem(ID_KEY)

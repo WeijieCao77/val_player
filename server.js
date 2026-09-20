@@ -39,6 +39,10 @@ import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 // 事件词表和客户端共用一份，见 stats-contract.js
 import { EVENTS, PROP_RULES, ROLLUPS, cleanValue } from './stats-contract.js'
+/* 玩家信箱（2026-09-20 新增，见 box.js）：玩家写建议、作者审核之后展示、大家投票。
+   自己的文件、自己的接口、自己的聚合，和统计不共用任何存储——统计那边「不记玩家打进去的
+   任何文字」的规矩一个字没改。 */
+import { counts as boxCounts, handleBoxAdmin, handleBoxApi, initBox } from './box.js'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(ROOT, 'dist')
@@ -1030,6 +1034,9 @@ function dashHtml() {
   }).join('')
 
   const stat = (n, l, k) => `<div class="st"><div class="n"${k ? ` data-k="${esc(k)}"` : ''}>${n}</div><div class="l">${l}</div></div>`
+  /* 玩家信箱（box.js）：一打开看板就看得见有多少条在等着审核，点一下就过去 */
+  let box = { pending: 0, shown: 0, total: 0 }
+  try { box = boxCounts() } catch (e) { logErr('box-count', e) }
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="300"><title>val_player · 后台看板</title>
@@ -1042,6 +1049,8 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;color:#8fa2b8;margin:26px 0 1
 .st{background:#121923;border:1px solid #1f2b3a;border-radius:10px;padding:12px 18px;min-width:96px}
 .st .n{font-size:22px;font-weight:700;color:#5bc6cf;font-variant-numeric:tabular-nums}
 .st .l{font-size:12px;color:#8fa2b8}
+/* 玩家信箱那一块是个链接（box.js 的审核页） */
+a.st{display:block;text-decoration:none}a.st:hover{border-color:#5bc6cf}a.st .l{color:#5bc6cf}
 table{border-collapse:collapse;width:100%;max-width:760px;font-variant-numeric:tabular-nums;margin-bottom:6px}
 td,th{padding:5px 10px;border-bottom:1px solid #1f2b3a;text-align:left;font-size:13px}
 th{color:#8fa2b8;font-weight:600}.num{text-align:right}
@@ -1052,6 +1061,9 @@ th{color:#8fa2b8;font-weight:600}.num{text-align:right}
 <h1>val_player · 后台看板</h1>
 <div class="sub">只有拿着钥匙的你能看到这页 · 每 5 分钟自动刷新 · 北京时间归日 · 统计窗口 ${D} 天 · 原始事件留 ${RETAIN_DAYS} 天</div>
 ${VOLATILE ? '<div class="warn">⚠ 未检测到持久化卷——数据现在只存在容器磁盘上，<b>重新部署或重启就会清零</b>。到 Railway 服务设置里挂一个 Volume，并把 DATA_DIR 指过去。</div>' : ''}
+<h2>玩家信箱</h2>
+<div class="grid"><a class="st boxlink" href="/dash/box"><div class="n" data-k="信箱:待审核">${box.pending}</div><div class="l">待审核 →</div></a>${stat(box.shown, '榜上', '信箱:榜上')}${stat(box.total, '一共', '信箱:一共')}</div>
+<div class="sub">玩家在游戏里写的建议。你按「展示」之前，只有写的人自己看得见；点上面那块去审核页。</div>
 <h2>今日</h2>
 <div class="grid">${stat(today.nu, '新设备', '今日:新设备')}${stat(today.uv, '活跃设备', '今日:活跃')}${stat(today.sess, '会话数', '今日:会话')}${stat(today.pv, '浏览量', '今日:浏览')}</div>
 <h2>在线时长（近 ${D} 天）</h2>
@@ -1101,6 +1113,34 @@ const server = http.createServer((req, res) => {
   let url
   try { url = new URL(req.url ?? '/', 'http://localhost') } catch { return send(res, 400, 'bad request') }
   const p = url.pathname
+
+  /* 玩家信箱的三个接口（box.js）。放在最前面，/api/e 和别的路一个字没动：
+     接住了就由 box.js 回话，没接住照旧往下走。 */
+  if (p.startsWith('/api/box/')) {
+    try { if (handleBoxApi(req, res, p, clientIp(req))) return } catch (e) {
+      logErr('box-api', e)
+      return send(res, 200, '{"ok":false,"why":"信箱这会儿不太舒服，游戏没事。"}', 'application/json; charset=utf-8')
+    }
+  }
+  /* 信箱的审核页：和 /dash 同一把钥匙、同一套门（没配 STATS_KEY 就当这页不存在） */
+  if (p === '/dash/box') {
+    try {
+      const a = dashAuth(req)
+      if (a === 'blocked') return send(res, 429, '猜太多次了，十分钟后再试。')
+      if (a === 'ask') {
+        return send(res, 401, '需要密码：用户名留空，密码填 STATS_KEY。', 'text/plain; charset=utf-8',
+          { 'www-authenticate': 'Basic realm="val_player dash", charset="UTF-8"' })
+      }
+      if (a !== 'ok') return send(res, 404, 'not found')
+      return void handleBoxAdmin(req, res, p).catch((e) => {
+        logErr('box-dash', e)
+        try { send(res, 500, '信箱这页算不出来了，游戏没事。') } catch { /* 已经回过了 */ }
+      })
+    } catch (e) {
+      logErr('box-dash', e)
+      return send(res, 500, '信箱这页算不出来了，游戏没事。')
+    }
+  }
 
   if (req.method === 'POST') {
     if (p === '/api/e') { try { return handleIngest(req, res) } catch (e) { logErr('post', e); return send(res, 204, '') } }
@@ -1192,8 +1232,12 @@ const server = http.createServer((req, res) => {
 })
 
 try { loadStats() } catch (e) { logErr('boot', e) }
+/* 玩家信箱：把 box.jsonl 重放回内存（box.js）。信箱起不来也只记一行，游戏照样服务 dist/ */
+let boxUp = { pending: 0, total: 0 }
+try { boxUp = initBox({ dir: DATA_DIR, volatile: VOLATILE }) } catch (e) { logErr('box-boot', e) }
 server.listen(PORT, () => {
   console.log(`val_player static server on :${PORT}, serving ${DIST}`)
+  console.log(`[box] 玩家信箱 ${boxUp.total} 条（${boxUp.pending} 条待审核）· 审核页 ${STATS_KEY ? '/dash/box' : '未配 STATS_KEY，/dash/box 一律 404（投稿照收）'}`)
   console.log(`[stats] 数据目录 ${DATA_DIR}${VOLATILE ? '（⚠ 无持久化卷，重启即丢）' : ''} · 已记 ${REG.vids.length} 台设备 · `
     + `看板 ${STATS_KEY ? '已配钥匙，打开 /dash 在浏览器密码框里填钥匙' : '未配 STATS_KEY，/dash 一律 404（事件照记）'}`
     + `${BEHIND_PROXY ? ' · 受信代理后（X-Forwarded-For 取末段）' : ''}`)
