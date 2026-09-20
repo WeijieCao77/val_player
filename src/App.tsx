@@ -154,8 +154,8 @@ export default function App() {
         </>
       )}
       <MusicPlayer />
-      {/* 支持作者: the same corner button Val Manager has, beside 更新日志 on both pages (me.css .me-support) */}
-      <Support career={!!open} />
+      {/* The career owns its persistent support entry beside its changelog. */}
+      {!open && <Support />}
     </>
   )
 }

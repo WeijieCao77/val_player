@@ -1,15 +1,14 @@
 /**
  * The career's own copy of the thank-you float (src/ui/Support.tsx, which the manager mode still has): the player
  * game builds on player-owned code, never on the manager's (check_boundary, and the author's rule of 2026-09-11).
- * Same panel and same 爱发电 page; it remembers being closed under its own key, and reads the old one once so a
- * listener who has already closed it is not asked again.
+ * Same panel and same 爱发电 page; home remembers dismissal under its own key and reads the old one too.
+ * The career keeps a quiet, closed-by-default entry beside the changelog even after a home dismissal.
  *
  * A quiet way to say thank you.
  *
  * The game is free and stays free — this is a button in the corner, not a
  * wall in front of anything. It opens a small panel with the 爱发电 page and
- * a code to scan, and it remembers being closed: dismiss it and it shrinks to
- * a link in the footer instead of asking again every session.
+ * a code to scan. Dismissing the home entry never removes the career's entry.
  *
  * The QR is drawn inline rather than shipped as an image so it costs one
  * network request less, inherits the page's colour, and stays crisp at any
@@ -61,11 +60,12 @@ export default function Support({ raised = false, career = false }: { raised?: b
 
   return (
     <>
-      {!hidden && (
+      {(career || !hidden) && (
         <button
           className={`support-fab me-support${career ? ' in-career' : ''}${open ? ' on' : ''}${raised ? ' raised' : ''}`}
           onClick={() => setOpen((x) => !x)}
           aria-expanded={open}
+          aria-label="支持作者"
           title="喜欢的话，可以支持一下作者"
         >
           <span className="ico" aria-hidden="true">⚡</span>
@@ -98,7 +98,7 @@ export default function Support({ raised = false, career = false }: { raised?: b
               </div>
             </div>
             <div className="support-foot">
-              <button className="sm ghost" onClick={hide}>不用了，别再提示</button>
+              <button className="sm ghost" onClick={career ? () => setOpen(false) : hide}>{career ? '收起支持面板' : '不用了，别再提示'}</button>
               <span className="tiny faint">
                 作者：猪之家 · 小红书/抖音 @点点点点点点点点 · @Greenle4f<br />
                 数据来自 vlr.gg / Liquipedia，游戏内容为程序模拟，与现实无关

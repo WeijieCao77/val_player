@@ -14,6 +14,7 @@ import type { AdvanceUntil } from './engine/me/auto'
 import { noteHall } from './engine/me/hall'
 import { unseenAch } from './engine/me/achievements'
 import Changelog from './ui/me/Changelog'
+import Support from './ui/me/Support'
 import UpdateNudge from './ui/me/UpdateNudge'
 import SaveNotice, { SaveTakenNotice, useSaveLost, useSaveTrouble } from './ui/me/SaveNotice'
 import { ladderLabel } from './engine/me/prepro'
@@ -35,6 +36,7 @@ import MomentQueue from './ui/me/MomentQueue'
 import HallPage from './ui/me/HallScreen'
 import AutoScreen from './ui/me/AutoScreen'
 import PendingModal from './ui/me/Modals'
+import EndingFeedback from './ui/me/EndingFeedback'
 import Poster from './ui/me/Poster'
 import { LookPicker } from './ui/me/looks'
 import Schedule from './ui/me/Schedule'
@@ -518,7 +520,7 @@ export default function Career({ opened, onHome }: {
             <div className="nav-foot"><ThemeToggle compact /><SoundToggle /></div>
           </nav>
           <main className="main" id="main" ref={mainRef}>
-            {me.phase === 'retired' ? (
+            {me.phase === 'retired' && screen !== 'box' ? (
               <>
                 <Poster />
                 <LookPicker game={game} />
@@ -532,6 +534,7 @@ export default function Career({ opened, onHome }: {
         </div>
         {/* what changed in this build: the bottom-right corner, where 破晓 keeps its corner tools (me.css .log-fab) */}
         <Changelog />
+        <Support career />
         {more && <div className="nav-scrim" aria-hidden="true" onClick={() => setMore(false)} />}
 
         {playerId && <PlayerCard playerId={playerId} onClose={() => setPlayerId(null)} />}
@@ -601,6 +604,7 @@ export default function Career({ opened, onHome }: {
             }}
           />
         )}
+        <EndingFeedback blocked={!!live || !!summary || !!playerId || !!fixture || me.pending.length > 0 || moments > 0 || unlocks > 0 || heldNow() || more || touring || !!trouble || lost || leaving} />
         {/* first week and first club: coach marks over the real screen, behind anything the clock stopped on */}
         {/* an answer's result, up until it is closed (ui/me/hold.tsx) */}
         <Held />

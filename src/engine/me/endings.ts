@@ -10,6 +10,7 @@ import { compClass, isIntlComp } from './compclass'
 import { lifeLines } from './shop'
 import { outletLines } from './outlets'
 import { track } from './telemetry'
+import { queueEndingFeedback } from './endingFeedback'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -107,6 +108,7 @@ export function retire(state: GameState, why: string, kind: RetireWhy = 'other')
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
   me.ending = { key: e.key, title: e.title, text: `${e.text}${abroadLine(state, e.key).join('')}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
+  queueEndingFeedback(state)
   state.gameOver = `${why}——${e.title}`
   state.finished = true
   pushLog(state, 'season', `${why}。结局：${e.title}。`)
