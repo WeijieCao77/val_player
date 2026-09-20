@@ -97,12 +97,13 @@ export default function Career({ opened, onHome }: {
   const mainRef = useRef<HTMLElement>(null)
   // a phone's 更多: the screens that are not on its tab bar, opened over it (me.css)
   const [more, setMore] = useState(false)
+  // the tour walking: the update notice waits for it, and hears it from here — its own module must stay off the
+  // home page, which reaches no world (ui/me/UpdateNudge.tsx, scripts/check_boundary.ts)
+  const touring = !!useOpenTour().kind
   // the latest progress not in this browser (engine/me/save.ts): a bar says so until a save lands (ui/me/SaveNotice.tsx)
   const trouble = useSaveTrouble()
   // another page took the save (engine/me/save.ts holds): this one writes nothing more and says so (SaveTakenNotice)
   const lost = useSaveLost()
-  // the tour walking: the update bar waits for it (ui/me/UpdateNudge.tsx)
-  const touring = !!useOpenTour().kind
   // 回到首页 waits for the save to land
   const [leaving, setLeaving] = useState(false)
   const liveRef = useRef<MeMatch | null>(null)
@@ -602,10 +603,10 @@ export default function Career({ opened, onHome }: {
         {trouble && !lost && <SaveNotice trouble={trouble} onRetry={saveNow} />}
         {/* another page took the save: nothing more is written from here, said until a career is opened here again (ui/me/SaveNotice.tsx) */}
         {lost && <SaveTakenNotice onLoad={openSave} />}
-        {/* a build that went live under this tab: 刷新 saves and waits for the write. A match being played lives only in memory,
-            so the bar waits for it; and while a save is not going in, the save notice has the corner (a reload would lose that stretch),
-            as the notice that another page took the save does. It waits for the tour as well */}
-        <UpdateNudge busy={!!live || !!trouble || lost || touring} onBeforeReload={saveNow} />
+        {/* a build that went live under this tab: the page saves and takes it by itself (ui/me/UpdateNudge.tsx). A match being
+            played lives only in memory, so while one is on the page only says so and waits for it; and while a save is not going
+            in, or another page took it, the save notice has this corner and the update says nothing. It waits for the tour too */}
+        <UpdateNudge busy={!!live} hushed={!!trouble || lost || touring} onBeforeReload={saveNow} />
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </div>
     </GameCtx.Provider>

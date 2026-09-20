@@ -70,8 +70,9 @@ export default function App() {
     <>
       {open ? <open.Career key={open.seq} opened={open.game} onHome={home} /> : (
         <>
-          {/* a build that went live while this page was open: 刷新 / 稍后 (ui/me/UpdateNudge.tsx); nothing to save before it here */}
-          <UpdateNudge busy={unloaded} />
+          {/* a build that went live while this page was open: the page takes it by itself (ui/me/UpdateNudge.tsx);
+              nothing to save before it here. When the files did not arrive, 游戏没载入成功 below has this corner. */}
+          <UpdateNudge hushed={unloaded} />
           {unloaded && <Unloaded />}
           {/* the same corner button as inside a career: 更新日志 belongs to the build, not to a career, so the
               cover page has it too — someone who has not started yet is exactly who wants to read what changed (me.css) */}
