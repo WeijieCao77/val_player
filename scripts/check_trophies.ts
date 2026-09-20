@@ -178,6 +178,14 @@ function unsupportedMapClaims(t: Trophy, text: string): string[] {
     !claim.split('、').every(map => (t.final?.maps ?? []).includes(map)) && !/^\d+-\d+$/.test(claim))
 }
 
+/** Match the exact recorded opponent after a result verb. The comeback
+ * production template says 拿下, not 击败; a bare name elsewhere is not enough. */
+function mentionsFinalOpponent(t: Trophy, text: string): boolean {
+  if (!t.final?.opp) return false
+  const quoted = t.final.opp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(赢下|击败|拿下|对|和) ?${quoted}`).test(text)
+}
+
 function judgeProse(label: string, state: GameState, list: Trophy[]): void {
   const wrong: string[] = []
   const seen = new Map<string, Trophy>()
@@ -198,7 +206,7 @@ function judgeProse(label: string, state: GameState, list: Trophy[]): void {
     // every name in the passage is a name the record holds
     if (t.club && !text.includes(t.club) && !text.includes('你的俱乐部')) say('一句都没提俱乐部')
     if (t.final && /决赛/.test(text)
-      && !new RegExp(`(赢下|击败|对|和) ?${t.final.opp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(text)) {
+      && !mentionsFinalOpponent(t, text)) {
       say('说了决赛却没说对手')
     }
     if (t.realChamp && !text.includes(t.realChamp)) say('真实历史的冠军没写进去')
@@ -259,6 +267,27 @@ judgeProse('C', C, ct)
 check(ct.some((t) => !!t.final && t.final.maps.length > 0),
   `C：刚夺冠的卡上有决赛和地图（${ct.map((t) => `${t.name}:${t.final ? `${t.final.score}/${t.final.maps.length} 图` : '无'}`).join('、')}）`)
 check(ct.every((t) => !t.clubId || !!t.club), 'C：夺冠俱乐部读得出来')
+
+/* ---- actual final wording; missing and wrong opponents still fail ---- */
+{
+  const source = ct.find(t => !!t.final)!
+  for (const [score, comeback] of [['3-1', true], ['3-0', false], ['3-1', false]] as const) {
+    const t: Trophy = { ...source, final: { ...source.final!, score, comeback } }
+    const text = trophyProse(t).join('')
+    check(mentionsFinalOpponent(t, text),
+      `对手措辞回归：${comeback ? '先丢图逆转' : score === '3-0' ? '横扫' : '普通胜场'}真实模板说出记录对手`)
+    check(!mentionsFinalOpponent(t, text.split(t.final!.opp).join('')),
+      '对手措辞回归：删除真实对手名字仍必须失败')
+    check(!mentionsFinalOpponent(t, text.split(t.final!.opp).join('不存在的队伍')),
+      '对手措辞回归：替换成错误对手仍必须失败')
+  }
+  const escaped: Trophy = { ...source, final: { ...source.final!, opp: 'A+B (CN)' } }
+  check(mentionsFinalOpponent(escaped, '总决赛 3-1 拿下 A+B (CN)。')
+    && !mentionsFinalOpponent(escaped, '总决赛 3-1 拿下 AAB CN。'),
+    '对手措辞回归：正则特殊字符按记录名字字面匹配')
+  check(!mentionsFinalOpponent(source, `决赛发挥很好，${source.final!.opp} 也在现场。`),
+    '对手措辞回归：只提到队名却没写对阵，不算说了决赛对手')
+}
 
 /* ---- names with parentheses are not map claims; genuine claims stay strict ---- */
 {

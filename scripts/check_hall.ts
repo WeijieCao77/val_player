@@ -1,3 +1,10 @@
+import assert from 'node:assert/strict'
+import { MeMatch } from '../src/engine/me/matchplay'
+import { eventOf, progressCircuit, realSideOf } from '../src/engine/circuit'
+import { commitFixture, fixtureRng, SEASON_DAYS } from '../src/engine/season'
+import { MatchSim, simulateMatch } from '../src/engine/match'
+import { becauseOfMe as hallBecauseOfMe } from '../src/engine/me/rewrites'
+import { historyLedger, seasonLedger } from '../src/engine/me/worldline'
 /**
  * The 成就殿堂 (me/hall.ts), headless.
  *
@@ -75,6 +82,82 @@ function play(label: string, o: Partial<CareerOpts>, seasons: number): { state: 
   const fresh = noteHall(state).map((m) => m.key)
   console.log(`${label}：${me.entryYear}–${me.ending?.year} · 职业 ${me.seasons.filter((x) => x.tier > 0).length} 季 · ${me.titles.length} 冠 · 成就 ${me.achievements.length} · 「${me.ending?.title}」 · ${((Date.now() - t0) / 1000).toFixed(1)}s`)
   return { state, fresh }
+}
+
+/** Same 2026/seed7/TeamLiquidAcademy input as HallR, not a seed search.
+ * A real historical competition supplies draw, bracket, awards and lineups.
+ * Only round outcomes and a healthy named starter are controlled inputs.
+ * Positive: my club wins. Negative: another nonhistorical champion wins while
+ * I actually start and lose. Never hand-write a champion, rewrite or hall card.
+ */
+function controlledHallSeason(won: boolean) {
+  const state = createCareer({ name: `HallR-${won ? 'won' : 'lost'}`, seed: 7, year: 2026,
+    start: 'chal', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe' })
+  const me = state.me!, comp = state.comps['ev:2791'], year = state.year
+  assert.equal(state.myTeam, 'V21T17297', 'same club as original HallR fixture')
+  state.comps = { [comp.key]: comp }
+  state.fixtures = []
+  state.day = comp.circuit!.end
+  progressCircuit(state, comp, [])
+  assert.equal(comp.circuit!.mode, 'sim')
+  assert(comp.teams.includes(state.myTeam))
+  const event = eventOf(comp.circuit!.id)!
+  const realVlr = event.places.find(([, place]) => place === 1)![0]
+  const realChampion = realSideOf(state, event, realVlr)
+  const drawn = [...new Set(state.fixtures.filter(f => f.comp === comp.key && !f.played).flatMap(f => [f.teamA, f.teamB]))]
+  const desiredChampion = won ? state.myTeam : drawn.find(id => id !== state.myTeam && id !== realChampion)!
+  assert(desiredChampion && desiredChampion !== realChampion)
+  let games = 0, minePlayed = 0
+  while (!comp.champion && games++ < 100) {
+    const f = state.fixtures.find(f => f.comp === comp.key && !f.played)
+    assert(f, 'production bracket has next fixture')
+    state.day = Math.max(state.day, f.day)
+    if (f.teamA === state.myTeam || f.teamB === state.myTeam) {
+      const club = state.teams[state.myTeam]
+      club.starters = [me.id, ...club.roster.filter(id => id !== me.id).slice(0, 4)]
+      state.players[me.id].injuredUntil = 0
+      const match = new MeMatch(state, f)
+      let beats = 0
+      while (!match.done && beats++ < 30) {
+        const beat = match.step()
+        if (beat === 'map-start') {
+          const winner = won ? match.side! : match.side === 'a' ? 'b' : 'a'
+          while (!match.map!.over) match.map!.playRound(winner)
+        }
+      }
+      assert(match.done && match.record?.started)
+      assert.equal(match.record!.won, won)
+      minePlayed++
+    } else if (f.teamA === desiredChampion || f.teamB === desiredChampion) {
+      const match = new MatchSim(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f))
+      while (match.nextMap()) {
+        while (!match.current!.over) match.current!.playRound(match.sideOf(desiredChampion)!)
+        match.closeMap()
+      }
+      commitFixture(state, f, match.finish())
+    } else commitFixture(state, f, simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f)))
+  }
+  assert(minePlayed > 0)
+  assert.equal(comp.champion, desiredChampion)
+  assert.equal(comp.finished[0], desiredChampion)
+  assert.equal(comp.awarded, true)
+  const before = JSON.stringify(state)
+  const ledger = seasonLedger(state), entry = historyLedger(state).find(e => e.key === comp.key)
+  assert(entry?.champChanged && entry.mine?.there === 'started')
+  assert.equal(ledger.rewrites.some(hallBecauseOfMe), won)
+  assert.equal(JSON.stringify(state), before, 'ledger reading does not mutate world')
+  state.day = SEASON_DAYS - 1
+  me.weekDay = 0
+  let weeks = 0
+  while (state.year === year && me.phase !== 'retired' && weeks++ < 3) autoWeek(state)
+  assert.equal(state.year, year + 1)
+  const row = me.seasons.find(s => s.year === year)
+  assert(row)
+  assert.deepEqual(row.rewrites ?? [], ledger.rewrites)
+  assert.equal(row.retitled, ledger.retitled)
+  assert.equal(row.rewrites?.some(hallBecauseOfMe) ?? false, won)
+  if (me.phase !== 'retired') retire(state, '定向殿堂验收')
+  return { state, games, minePlayed, desiredChampion, ledger }
 }
 
 // ------------------------------------------------------------------ three careers
@@ -285,16 +368,38 @@ G.localStorage = good
 // chosen and once beside an empty one: every attribute, coin, action point, start and result must come out the same.
 G.localStorage = good
 {
-  // a real 「因为你」: a 2026 start whose first season's Challengers title went to my club over history's champion
+  // Same 2026/seed 7 input, but a production bracket with controlled round
+  // outcomes instead of assuming this seed will still win after every balance update.
   {
     const { becauseOfMe } = await import('../src/engine/me/rewrites')
-    delete mem[HALL_KEY]
-    const R = play('R 2026 二线 欧洲 决斗者（一季）', { name: 'HallR', seed: 7, year: 2026, start: 'chal', region: 'Europe' as Region }, 1)
-    const rh = readHall()!
-    const rc = rh.cards.find((c) => c.id === careerIdOf(R.state))
-    const mine = R.state.me!.seasons.reduce((n, x) => n + (x.rewrites ?? []).filter(becauseOfMe).length, 0)
-    check(mine > 0 && rc?.rw?.mine === mine && !!rc.rw.top?.startsWith('因为你') && openLooks(rh).has('redline') && rh.looks.redline?.id === rc.id,
-      `一局 2026 开局就有「因为你」（${rc?.rw?.top ?? '无'}）：「另一条世界线」开了，记在这一局名下`)
+    const hallBeforeControlled = mem[HALL_KEY]
+    try {
+      for (const won of [true, false]) {
+        delete mem[HALL_KEY]
+        const R = controlledHallSeason(won)
+        noteHall(R.state, true)
+        const rh = readHall()!
+        const rc = rh.cards.find((c) => c.id === careerIdOf(R.state))
+        const mine = R.state.me!.seasons.reduce((n, x) => n + (x.rewrites ?? []).filter(becauseOfMe).length, 0)
+        if (won) {
+          // Keep the original positive assertion in full, including attribution.
+          check(mine > 0 && rc?.rw?.mine === mine && !!rc.rw.top?.startsWith('因为你') && openLooks(rh).has('redline') && rh.looks.redline?.id === rc.id,
+            `一局 2026 开局就有「因为你」（${rc?.rw?.top ?? '无'}）：「另一条世界线」开了，记在这一局名下`)
+        } else {
+          check(mine === 0 && (rc?.rw?.mine ?? 0) === 0 && !!rc?.rw?.top
+            && !rc.rw.top.startsWith('因为你') && !openLooks(rh).has('redline') && !rh.looks.redline,
+            `别队改写冠军、我首发但未夺冠（${rc?.rw?.top ?? '无'}）：不误开「另一条世界线」`)
+        }
+        const savedHall = snap()
+        noteHall(unpackState(packState(R.state)), true)
+        check(snap() === savedHall, `定向${won ? '夺冠' : '未夺冠'}生涯读档再记：殿堂字节不变`)
+        console.log(`  定向 ${won ? '夺冠' : '未夺冠'}：${R.games} 场真实赛制结算，本人 ${R.minePlayed} 场首发，冠军 ${R.desiredChampion}`)
+      }
+    } finally {
+      if (hallBeforeControlled === undefined) delete mem[HALL_KEY]
+      else mem[HALL_KEY] = hallBeforeControlled
+    }
+    check(snap() === hallBeforeControlled, '定向殿堂夹具结束后恢复原有殿堂')
   }
 
   console.log('\n卡面不碰数值')

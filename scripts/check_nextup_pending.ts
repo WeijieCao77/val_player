@@ -1,42 +1,39 @@
 /** A later written tie must not hide an earlier round not yet on the schedule. */
 import assert from 'node:assert/strict'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { advanceTurn } from '../src/engine/me/week'
-import { autoResolve } from '../src/engine/me/auto'
-import { pop } from '../src/engine/me/pending'
-import { MeMatch } from '../src/engine/me/matchplay'
 import { nextUp } from '../src/engine/me/nextup'
-import { roundAheadOf } from '../src/engine/circuit'
-import type { GameState } from '../src/engine/types'
+import { eventOf, roundAheadOf } from '../src/engine/circuit'
+import { makeFixture } from '../src/engine/league'
 
 globalThis.fetch = async () => { throw new Error('offline regression: no network') }
 
-const state = createCareer({ name: 'Next-round regression', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 11, year: 2026 })
-const me = state.me!
-let snapshot: GameState | undefined
-let day = state.day
-Object.defineProperty(state, 'day', {
-  get: () => day,
-  set: (n: number) => {
-    if (state.year === 2027 && day === 78 && n === day + 1) snapshot = structuredClone(state)
-    day = n
-  }, enumerable: true, configurable: true,
-})
-let guard = 0
-while (!snapshot && !state.gameOver && me.phase !== 'retired' && guard++ < 5000) {
-  let pending = 0
-  while (me.pending.length && pending++ < 30) {
-    const it = me.pending[0]; autoResolve(state, it)
-    if (me.pending[0] === it) pop(state, it.kind, it.id)
-  }
-  const stop = advanceTurn(state)
-  if (stop.kind === 'match') new MeMatch(state, stop.fixture).runOut()
-}
-assert.ok(snapshot, 'reached 2027-03-20 seed 11 career')
-const game = snapshot
-const fixture = game.fixtures.filter(f => !f.played && !f.scrim && f.comp !== 'scrim' && (f.teamA === game.myTeam || f.teamB === game.myTeam)).sort((a, b) => a.day - b.day)[0]
-assert.ok(fixture)
-const comp = game.comps[fixture.comp]
+// A deterministic, partly materialized schedule from the real Spain Stage 1
+// round-robin graph. No career wins, roster transfers or random draws need to
+// land on a particular path to reach the condition this regression tests.
+// At the draw (day 9), seed 0 has round 1 (node 0, day 10) in the graph while
+// round 2 (node 6, day 11) is already a concrete fixture. Both opponents and
+// dates come from the production event, not a stub of roundAheadOf/nextUp.
+const game = createCareer({ name: 'Next-round regression', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', teamId: 'V21T8924', seed: 11, year: 2026 })
+const ev = eventOf('2792')!
+assert.ok(ev && ev.units[0]?.type === 'rr', 'fixture uses the real Spain Stage 1 round-robin graph')
+const comp = game.comps['ev:2792']
+assert.ok(comp?.circuit, 'real career contains Spain Stage 1')
+const first = ev.units[0].nodes![0], second = ev.units[0].nodes![6]
+assert.deepEqual([first.a, first.b, first.day], [['s', 0], ['s', 1], 10])
+assert.deepEqual([second.a, second.b, second.day], [['s', 7], ['s', 0], 11])
+const seeds = ev.seeds.map(id => `V21T${id}`)
+assert.ok(seeds.every(id => !!game.teams[id]), 'every event seed is a real team in the world')
+assert.equal(game.myTeam, seeds[0], 'the career really belongs to the tested seed')
+game.day = first.day - 1
+comp.circuit.mode = 'sim'
+comp.circuit.seeds = seeds
+const laterEvent = Object.values(game.comps).find(c => c.key !== comp.key && c.circuit && c.circuit.start > second.day)!
+assert.ok(laterEvent, 'retain a real second event for cross-event boundary checks')
+game.comps = { [comp.key]: comp, [laterEvent.key]: laterEvent }
+const fixture = makeFixture(game, second.day, comp.stage, comp.key, seeds[second.a[1]], seeds[second.b[1]], second.bo, second.round)
+fixture.node = 6
+game.fixtures = [fixture]
+assert.ok(!fixture.played && fixture.comp === comp.key && (fixture.teamA === game.myTeam || fixture.teamB === game.myTeam))
 // Diagnosis-only comparison reads a shallow view without future own fixtures;
 // the real assertion below always exercises the unmodified game and graph.
 const earlier = roundAheadOf({ ...game, fixtures: game.fixtures.filter(f => f.comp !== fixture.comp || f.played || (f.teamA !== game.myTeam && f.teamB !== game.myTeam)) }, comp, game.myTeam)

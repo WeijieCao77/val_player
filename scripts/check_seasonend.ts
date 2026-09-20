@@ -152,7 +152,7 @@ function campaigns(book: Map<string, Row>): Row[] {
   return [...out.values()]
 }
 
-/** Each morning: every international of the year, for the club I am at today — a row of its own per club. */
+/** Each morning: my current club plus event facts for clubs already observed this year. */
 function rowsOf(state: GameState, book: Map<string, Row>): void {
   const me = state.me
   const club = state.myTeam
@@ -175,6 +175,24 @@ function rowsOf(state: GameState, book: Map<string, Row>): void {
       drawn: was?.drawn ?? (seated && (!c || !!c.mode) ? state.day : undefined),
       playedAt: was?.playedAt ?? (fx.some((f) => f.played) ? state.day : undefined),
     })
+  }
+  // A card belongs to the club that qualified, even if the career moves before
+  // its first fixture is materialized. Keep observing that club's real event
+  // until year end; freezing its row on departure falsely records zero games.
+  // Only event facts continue: never add the old club's later games to 'mine'.
+  for (const row of book.values()) {
+    if (row.year !== state.year || row.club === club) continue
+    const comp = state.comps[row.key]
+    if (!comp) continue
+    const c = comp.circuit
+    const fx = state.fixtures.filter(f => f.comp === comp.key && (f.teamA === row.club || f.teamB === row.club))
+    row.sim = !c || c.mode === 'sim'
+    row.seated = comp.teams.includes(row.club) || !!c?.seeds.includes(row.club) || Object.values(c?.fill ?? {}).includes(row.club)
+    row.over = !!comp.champion || !!c?.done
+    row.fx = fx.length
+    row.fxPlayed = fx.filter(f => f.played).length
+    row.drawn ??= row.seated && (!c || !!c.mode) ? state.day : undefined
+    row.playedAt ??= fx.some(f => f.played) ? state.day : undefined
   }
 }
 

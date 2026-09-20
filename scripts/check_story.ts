@@ -18,7 +18,9 @@ const mem: Record<string, string> = {}
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { autoPlan, autoResolve, autoWeek } from '../src/engine/me/auto'
 import { EVENTS, eventOf, resolveEvent } from '../src/engine/me/events'
-import { openChain } from '../src/engine/me/storyweek'
+import { openChain, storyWeek } from '../src/engine/me/storyweek'
+import { declineDeal, joinClub, makeDeal } from '../src/engine/me/contract'
+import { declineInvite } from '../src/engine/me/tryout'
 import { CHAIN_CN, chainLine, plantSeed, storyTag } from '../src/engine/me/story'
 import { advanceWeek, doAction } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
@@ -181,6 +183,13 @@ function answer(s: any, strategy: 'rec' | 'ignore', cards: string[]) {
       const pick = strategy === 'rec' ? ev.rec : ignorePick(ev)
       cards.push(`${ev.id}「${ev.a[pick].t}」`)
       resolveEvent(s, ev.id, pick)
+    } else if (me.chain?.id === 'rift' && item.kind === 'deal' && me.deals.find((d: any) => d.id === item.id)?.kind === 'transfer') {
+      // This isolated case tests reconciling (or ignoring) a CURRENT team-mate,
+      // not accepting an unrelated transfer halfway through the task. Decline
+      // through the real UI action; natural-rate careers above keep autopilot.
+      declineDeal(s, item.id)
+    } else if (me.chain?.id === 'rift' && item.kind === 'invite') {
+      declineInvite(s, item.id)
     } else autoResolve(s, item)
   }
 }
@@ -229,6 +238,26 @@ for (const id of ['showcase', 'overseas', 'storm', 'rift']) {
     if (r.steps < 2) fail(`${CHAIN_CN[id]}·${strategy}：只答了 ${r.steps} 张就结束了`)
     if (strategy === 'rec' && id === 'overseas' && r.end === 'ok' && !r.dealt) fail('外区邀约说有了结果，但没有报价')
   }
+}
+// A real move is a DIFFERENT lifecycle: leaving the team must expire its rift,
+// even after the player answered the opening card. Keep this guard explicit
+// instead of letting a random mid-case transfer decide the rec/ignore outcome.
+{
+  const s = clone(warm)
+  prepareChain(s, 'rift')
+  if (!openChain(s, 'rift', new Rng(1234))) fail('rift departure case did not open')
+  const opener = eventOf(s.me.pendingEvent ?? '')
+  if (opener) resolveEvent(s, opener.id, opener.rec)
+  const oldTeam = s.myTeam, mate = s.me.chain?.mate
+  const target = Object.values(s.teams).find((t: any) => t.id !== oldTeam && t.tier === 2 && !t.dormant && t.roster.length >= 5) as any
+  if (!target) throw new Error('rift departure fixture needs an actual second club')
+  const done0 = (s.me.chainsDone ?? []).length
+  joinClub(s, makeDeal(s, target.id, 'transfer', 'B', new Rng(1234)))
+  if (s.myTeam === oldTeam || s.me.phase !== 'pro' || s.teams[s.myTeam].roster.includes(mate)) fail('rift departure case did not really change club')
+  storyWeek(s)
+  const end = (s.me.chainsDone ?? []).slice(done0)[0]
+  if (end?.id !== 'rift' || end.end !== 'expired' || end.steps !== 1) fail('leaving the team must expire the old team-mate rift after its opening answer')
+  console.log('  队内矛盾 · 已答首张后实际转会 → 不了了之（独立验证离队失效）')
 }
 // the chains a seed opens: the first card must be that seed's echo
 for (const [id, key, v, t, opener] of [
