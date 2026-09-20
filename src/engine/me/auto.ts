@@ -1,9 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
-import type { Attrs, GameState, Player } from '../types'
-import { squadOf } from '../roster'
-import { bondBetween } from '../bonds'
-import { hourValues } from './growth'
+import type { Attrs, GameState } from '../types'
+import { duoMate, hourValues } from './growth'
+export { duoMate }
 import { emptyTalents, talentsOf } from './career'
 import { ceilingOf, weightsFor } from '../player'
 import { chasing } from './bottleneck'
@@ -125,15 +124,6 @@ export function talentPick(state: GameState): keyof Attrs | null {
     if (at < acc) return k
   }
   return null
-}
-
-/** Who the talent's 双排 goes to: the team-mate at my club I get on worst with. */
-export function duoMate(state: GameState): Player | undefined {
-  const me = state.me!
-  if (me.phase !== 'pro' || !state.myTeam) return undefined
-  return squadOf(state, state.myTeam)
-    .filter((x) => x.id !== me.id)
-    .sort((a, b) => bondBetween(state, me.id, a.id) - bondBetween(state, me.id, b.id))[0]
 }
 
 /**

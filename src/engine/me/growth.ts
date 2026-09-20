@@ -4,7 +4,8 @@ import type { Attrs, GameState, Player, Team } from '../types'
 import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
-import { duoBonded } from '../bonds'
+import { bondBetween, duoBonded } from '../bonds'
+import { squadOf } from '../roster'
 import { ACTIONS, ACTION_BY_KEY } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
@@ -217,6 +218,21 @@ export function weekGain(state: GameState): number {
   return g
 }
 
+/**
+ * Who a 双排 goes to when nobody was picked: the team-mate at my club I get on
+ * worst with, which is who the steady plan picks too (me/auto.ts). An evening
+ * is played the moment it is clicked now, so a card clicked with the picker
+ * left empty has to go to somebody — and this is the somebody it is worth
+ * going to.
+ */
+export function duoMate(state: GameState): Player | undefined {
+  const me = state.me!
+  if (me.phase !== 'pro' || !state.myTeam) return undefined
+  return squadOf(state, state.myTeam)
+    .filter((x) => x.id !== me.id)
+    .sort((a, b) => bondBetween(state, me.id, a.id) - bondBetween(state, me.id, b.id))[0]
+}
+
 const ROSE_CN: Record<keyof Attrs, string> = {
   aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
   clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
@@ -296,6 +312,8 @@ export function runAction(state: GameState, key: MeAction): string {
       line = '跟队打了一次训练赛，教练看在眼里。'
       break
     case 'duo':
+      // nobody picked, or the man has left: the evening goes to whoever I get on worst with
+      if (!me.duoWith || state.players[me.duoWith]?.teamId !== state.myTeam) me.duoWith = duoMate(state)?.id
       if (me.duoWith && state.players[me.duoWith]?.teamId === state.myTeam) {
         duoBonded(state, me.id, me.duoWith, 3 * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.3))
         line = `和 ${state.players[me.duoWith].ign} 双排了一次，关系近了一点。`

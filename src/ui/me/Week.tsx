@@ -323,7 +323,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                             your mind once the evening has been played (2026-09-19) */}
                         {a.key === 'duo' && mates.length > 0 && (
                           <select value={me.duoWith ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { me.duoWith = e.target.value || undefined; commit() }}>
-                            <option value="">和谁双排…</option>
+                            <option value="">谁都行（挑关系最远的）</option>
                             {mates.map((m) => <option key={m.id} value={m.id}>{m.ign}</option>)}
                           </select>
                         )}
