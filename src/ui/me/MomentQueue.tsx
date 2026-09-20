@@ -170,7 +170,7 @@ function cardOf(g: GameState, m: MomentItem): Card {
       const tier = m.tier ?? ''
       const place = m.pos ? `${m.server ?? ''}第 ${m.pos.toLocaleString('en-US')} 名。` : ''
       const up = tier === '超凡入圣' ? '再往上是神话，名字会挂上服务器排行榜。'
-        : tier === '神话' ? '再往上是辐能战魂，只给服务器前 500 名。'
+        : tier === '神话' ? '再往上是辐能战魂：要排进服务器前 500 名，胜点也要够本服的门槛。'
           : '服务器前 500 名，名字挂在排行榜最上面那一段。'
       return {
         // the red band would swallow 神话's red: the emblem stands on the card instead

@@ -4,10 +4,13 @@
  * place, outside the 500 there are.
  *
  * - 辐能战魂 only inside the server's top 500 and over its RR floor, and always then
+ * - the tier a place reads agrees with the place: on every board but 巴西服's the
+ *   500th is over the floor in every year, so its top 500 is the 辐能战魂 and no
+ *   place inside it reads 神话 (reported 2026-09-19)
  * - a place shown from 神话 up, and never below
  * - up the score, up the ladder: division, RR and place never go backwards
- * - the rules of the day: no 超凡入圣 before Episode 5, one 神话 before 3.05,
- *   China on 亚服 until 国服 opened
+ * - the rules of the day: no 超凡入圣 before Episode 5 and none missing after, one
+ *   神话 before 3.05, the era's tier under 神话, China on 亚服 until 国服 opened
  * - the places 国服 was calibrated to, a board that wanders slowly and the same
  *   for the same save, the invitation line a 辐能战魂 on every server
  * - old saves: the 52–62 「辐能战魂」 is 神话 3 with a place; a broken score is mended
@@ -15,7 +18,8 @@
  *
  *   npx tsx scripts/check_rank.ts
  */
-import { RADIANT_SLOTS, SERVERS, boardPop, rankAt, rankFull, rankText, rulesAt, serverAt } from '../src/engine/me/rank'
+import { RADIANT_SLOTS, SERVERS, boardPop, rankAt, rankBar, rankFull, rankShort, rankText, rulesAt, serverAt } from '../src/engine/me/rank'
+import type { ServerKey } from '../src/engine/me/rank'
 import { INVITE_LADDER, ladderLabel } from '../src/engine/me/prepro'
 import { ACHIEVEMENTS } from '../src/engine/me/achievements'
 import { ORIGINS, originName } from '../src/engine/me/origins'
@@ -114,6 +118,106 @@ ok(t26(15.99) === '铂金 3' && t26(16) === '钻石 1' && t26(29.99) === '钻石
 const r2 = rankAt(at('China', 2026, 100, 50))
 ok(r2.tier === '神话' && r2.rr > 100 && r2.rr < 160, `a 神话 on 国服 carries RR past 100 (${rankFull(r2)})`)
 ok(rankAt(at('China', 2026, 100, 62)).rr >= SERVERS.CN.radiantRR, '国服 500th is over its floor')
+
+/* ---- the 500 places against the RR floor, per server and era (reported 2026-09-19) ---- */
+/**
+ * 辐能战魂 asks both at once — the server's top 500 AND the RR floor Riot gives that region (patch 2.04,
+ * 2021-03-02: 「Achieving Radiant now requires both being in the top 500 players in your region, as well as
+ * having a minimum amount of RR (region-based)」). So a place inside the 500 whose RR is under the floor reads
+ * 神话, and that is the real rule, not a slip.
+ *
+ * It may only read that way where the board is thin enough for the floor to bite before the 500th: 巴西服, whose
+ * 200 RR is high for its size. Every other board — the four big ones, 韩服, 拉美服 — is big enough that its
+ * 500th is over its own floor in every year the game runs, at either end of the week's wander, so its top 500
+ * is the 辐能战魂 and no place inside it ever reads 神话. That failed until 2026-09-19: at 2021's size 北美服's
+ * 500th stood at 277 RR and 亚服's at 285, both under 300, so on those boards every place from about the 400th
+ * down to the 500th read 神话, with the screen showing it inside the top 500 (me/rank.ts THETA).
+ */
+const SERVER_ROOM: [ServerKey, Region, number][] = [
+  ['CN', 'China', 2024], ['EU', 'Europe', 2021], ['AP', 'Japan', 2021], ['NA', 'North America', 2021],
+  ['KR', 'Korea', 2021], ['BR', 'Brazil', 2021], ['LATAM', 'LATAM', 2021],
+]
+/** the boards whose 500 辐能战魂 places fill above their own RR floor, every year (me/rank.ts Server.pop) */
+const FILLS = new Set<ServerKey>(['CN', 'EU', 'AP', 'NA', 'KR', 'LATAM'])
+/** the rank read at about `place` on that board: the lowest score that stands there or better */
+function atPlace(region: Region, year: number, day: number, seed: number, place: number) {
+  let lo = 42
+  let hi = 100
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2
+    if ((rankAt(at(region, year, day, mid, seed)).pos ?? Infinity) > place) lo = mid
+    else hi = mid
+  }
+  return rankAt(at(region, year, day, hi, seed))
+}
+{
+  const worst: string[] = []
+  for (const [key, region, from] of SERVER_ROOM) {
+    const floor = SERVERS[key].radiantRR
+    let low = Infinity
+    let lowWhere = ''
+    let deepest = 0
+    for (let year = from; year <= 2031; year++) {
+      for (const day of [5, 120, 250, 350]) {
+        for (const seed of [1, 2, 3, 5, 7, 11, 13, 17]) {
+          const where = `${SERVERS[key].name} ${year}d${day} seed ${seed}`
+          ok(serverAt(region, year, day).key === key, `${where} queues on ${SERVERS[key].name}`)
+          const r500 = atPlace(region, year, day, seed, RADIANT_SLOTS)
+          if (r500.rr < low) { low = r500.rr; lowWhere = `${where} → ${rankFull(r500)}` }
+          // the place the tier reads is the place the board gives: nobody inside the top 500 reads 神话 unless
+          // his RR is under the floor, and nobody outside it reads 辐能战魂
+          for (const place of [1, 10, 100, 200, 300, 400, 480, 500, 501, 800]) {
+            const r = atPlace(region, year, day, seed, place)
+            const p = r.pos ?? 0
+            ok(p <= place, `the score that stands at ${place} stands there: ${where} → ${rankFull(r)}`)
+            ok(r.radiant === (p <= RADIANT_SLOTS && r.rr >= floor), `辐能战魂 is the top ${RADIANT_SLOTS} over ${floor} RR, both: ${where} place ${place} → ${rankFull(r)}`)
+            if (FILLS.has(key)) ok(p > RADIANT_SLOTS || r.radiant, `nothing inside ${SERVERS[key].name}'s top ${RADIANT_SLOTS} reads 神话: ${where} place ${place} → ${rankFull(r)}`)
+            if (r.radiant) deepest = Math.max(deepest, p)
+          }
+          if (FILLS.has(key)) ok(r500.rr >= floor && r500.radiant, `${SERVERS[key].name}'s 500th is over its ${floor} RR floor: ${where} → ${rankFull(r500)}`)
+          else ok(r500.rr < floor && !r500.radiant, `${SERVERS[key].name}'s board is thin enough that its 500th is under ${floor} RR: ${where} → ${rankFull(r500)}`)
+        }
+      }
+    }
+    worst.push(`${SERVERS[key].name}（${floor} RR）最低一次第 500 名 ${low} RR，辐能战魂最远到第 ${deepest} 名`)
+    if (FILLS.has(key)) ok(low >= floor, `${SERVERS[key].name}'s thinnest week still fills its 500: ${lowWhere}`)
+    else ok(deepest >= 150 && deepest < RADIANT_SLOTS, `${SERVERS[key].name} keeps a 辐能战魂 worth having, short of the 500: ${deepest}`)
+  }
+  console.log(worst.join('\n'))
+}
+
+/* ---- 超凡入圣: none before Episode 5, none missing after, and the era's tier under 神话 ---- */
+{
+  const ERAS: [number, number, string][] = [
+    [2021, 5, '钻石'], [2021, 250, '钻石'], [2022, 171, '钻石'], [2022, 172, '超凡入圣'],
+    [2023, 192, '超凡入圣'], [2026, 200, '超凡入圣'], [2031, 300, '超凡入圣'],
+  ]
+  for (const [year, day, under] of ERAS) {
+    for (const region of REGIONS) {
+      const asc = rulesAt(year, day).ascendant
+      // the floor of the ladder, and the tier right under 神话: 钻石 3 before Episode 5, 超凡入圣 3 after
+      ok(rankAt(at(region, year, day, 0)).name === '铂金 1', `the ladder starts at 铂金 1: ${region} ${year}d${day}`)
+      ok(rankAt(at(region, year, day, 41.99)).name === `${under} 3`, `the tier under 神话 is ${under} 3: ${region} ${year}d${day} → ${rankAt(at(region, year, day, 41.99)).name}`)
+      ok(rankAt(at(region, year, day, 16)).name === '钻石 1', `钻石 1 at 16 in every era: ${region} ${year}d${day}`)
+      // every word the screens use, over the whole ladder
+      let sawAsc = false
+      for (let i = 0; i <= 1000; i++) {
+        const s = at(region, year, day, i / 10)
+        const r = rankAt(s)
+        const words = [rankText(r), rankFull(r), rankShort(r), ladderLabel(s), rankBar(s, i / 10)].join(' ')
+        if (words.includes('超凡入圣')) sawAsc = true
+        ok(asc || !words.includes('超凡入圣'), `no 超凡入圣 before Episode 5: ${region} ${year}d${day} l=${i / 10} → ${words}`)
+        ok(r.tier !== '超凡入圣' || asc, `no 超凡入圣 tier before Episode 5: ${region} ${year}d${day} l=${i / 10}`)
+      }
+      ok(sawAsc === asc, `超凡入圣 is there exactly when it should be: ${region} ${year}d${day} (${sawAsc})`)
+    }
+  }
+  // a career that crosses the day switches on the day, with nothing played
+  for (const region of REGIONS) {
+    ok(rankAt(at(region, 2022, 171, 35)).tier === '钻石' && rankAt(at(region, 2022, 172, 35)).tier === '超凡入圣',
+      `2022-06-22 is the day 超凡入圣 arrives: ${region}`)
+  }
+}
 
 /* ---- a board that wanders slowly, the same for the same save ---- */
 let worst = 0

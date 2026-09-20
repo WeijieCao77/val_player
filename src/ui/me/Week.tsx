@@ -548,7 +548,9 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                 </p>
               )}
               <p className="tiny faint" style={{ margin: '0 0 4px' }}>
-                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名{nums ? `、过 ${rankAt(game).server.radiantRR} RR ` : ''}才是辐能战魂。不打排位分数不掉；神话起别人还在打，名次会往后掉。
+                {/* 辐能战魂 asks the 500 and the RR floor at once (me/rank.ts rankAt); without the 数值 switch the
+                    floor used to go unsaid, and 「排进前 500 名才是辐能战魂」 read as the whole rule (reported 2026-09-19) */}
+                神话起上{rankAt(game).server.name}排行榜，排进前 {RADIANT_SLOTS} 名、{nums ? `胜点过 ${rankAt(game).server.radiantRR} RR` : '胜点也够本服的门槛'}才是辐能战魂。不打排位分数不掉；神话起别人还在打，名次会往后掉。
                 {/* 神话 was one rank from Episode 2 until patch 3.05 (me/rank.ts rulesAt); a player who knows today's
                     神话 1/2/3 asked why his had no number (2026-09-18) */}
                 {!rulesAt(game.year, game.day).immortalDivs ? '这时候的神话还不分 1、2、3，2021 年 9 月 8 日起才分。' : ''}

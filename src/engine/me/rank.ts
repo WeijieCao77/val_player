@@ -16,8 +16,13 @@ import type { GameState, Region } from '../types'
  * - A leaderboard per region since Episode 2 Act I, January 2021: every 神话 and
  *   辐能战魂 is on it, 辐能战魂 is the top 500, and for them the rank bar gives
  *   way to the leaderboard place ("VALORANT Episode 2 Act I Competitive Changes").
- * - 辐能战魂 also asks a floor in RR: 300 on NA, EU and AP, 200 on BR, 100 on KR
- *   and LATAM (the wiki). Patch 12.05 (2026-03-17) moved the 神话 2 / 神话 3 /
+ * - 辐能战魂 also asks a floor in RR, both at once: patch 2.04 (2021-03-02),
+ *   "Achieving Radiant now requires both being in the top 500 players in your
+ *   region, as well as having a minimum amount of RR (region-based)" — 300 on
+ *   NA, EU and AP, 200 on BR, 100 on KR and LATAM (the wiki). So a man inside
+ *   the top 500 whose RR is under his server's floor really does read 神话;
+ *   that is what the floor is for, and on a board as thin as 巴西服's it bites
+ *   before the 500th. Patch 12.05 (2026-03-17) moved the 神话 2 / 神话 3 /
  *   辐能战魂 floors "for parity" without printing them, so the wiki's stand.
  * - 神话 was one rank until patch 3.05 (2021-09-08); 超凡入圣 came with 5.0,
  *   Episode 5 Act I (2022-06-22). The China server opened 2023-07-12; before it
@@ -39,8 +44,10 @@ export interface Server {
   name: string
   /**
    * Ranked players in an act, roughly. Riot publishes none of these: KR, BR and
-   * LATAM follow the trackers' counts, the big four are set so that each fills
-   * its 500 辐能战魂 places above its RR floor, as their boards do.
+   * LATAM follow the trackers' counts, the big four are big enough that each
+   * fills its 500 辐能战魂 places above its RR floor, as their boards do — in
+   * every year the game runs, not only at the size it grew to (THETA below,
+   * which is what holds that; reported 2026-09-19).
    */
   pop: number
   /** the RR 辐能战魂 asks as well as the top 500 */
@@ -150,12 +157,28 @@ const DIVS_MODERN = divisions([['铂金', PLA], ['钻石', DIA], ['超凡入圣'
 const DIVS_OLD = divisions([['铂金', PLA], ['钻石', [0, 1, 2].map((k) => Math.exp(Math.log(DIA[0]) + (k / 3) * (Math.log(IMM) - Math.log(DIA[0]))))]])
 
 /**
- * RR per unit of log share above 神话 1's floor. 75 puts 国服's 500th at about
- * 330 RR, over its 300 floor, and a win at 神话 near +25 RR, as the client pays.
+ * RR per unit of log share above 神话 1's floor — the one place an absolute RR
+ * (a server's 辐能战魂 floor) meets the model's own, so it alone decides how far
+ * down a board the floor reaches. Every place, every 神话 division and every
+ * week of the board's climb is a ratio of two of these, so none of them moves
+ * with it.
+ *
+ * It was 75, set on 国服 alone — 「330 RR at its 500th, over its 300 floor」 — and
+ * 国服 is both the biggest board and one that only opens in 2023, when the game
+ * has finished growing (boardPop). On the boards that carry 2021 it was not
+ * enough: 北美服's 500th read 277 RR and 亚服's 285, both under the 300 floor, so
+ * the top 500 of those boards read 神话 while the screen said top 500. A player,
+ * 2026-09-19: 「在2021打进服务器400名但是显示还是神话」.
+ *
+ * 85 is set on 北美服 in the earliest week the game has — the smallest of the
+ * four big boards, at 2021's size and the low end of the week's wander — where
+ * it puts the 500th at 311 RR, over its 300 floor. The 500 fill on all four,
+ * every year. A win at 神话 pays near +30 RR, inside what the client pays, and
+ * 神话 2 lands almost exactly on the client's own 100.
  */
-const THETA = 75
+const THETA = 85
 const LN_IMM = Math.log(IMM)
-/** 神话 2 and 神话 3 on a big server, where the shares put them: about 88 and 140 RR */
+/** 神话 2 and 神话 3 on a big server, where the shares put them: about 100 and 158 RR */
 const RR_I2 = THETA * Math.log(IMM / (SHARE.神话[1] + SHARE.神话[2] + SHARE.辐能战魂))
 const RR_I3 = THETA * Math.log(IMM / (SHARE.神话[2] + SHARE.辐能战魂))
 
@@ -243,7 +266,7 @@ export function rankAt(state: GameState, l?: number, server: Server = serverOf(s
  * RR lower, and my RR and the division it holds stay as they are. A 辐能战魂 who stops slides down the board, and out
  * of the 500 reads the 神话 division of his RR, with that RR.
  *
- * - A week with no ranked, on the board: the board climbs BOARD_CLIMB RR past me — a place e^(12/75), about 17%,
+ * - A week with no ranked, on the board: the board climbs BOARD_CLIMB RR past me — a place e^0.16, about 17%,
  *   further down. On 国服 the 480th is out of the 500 after one week, the 300th after 4, the 100th after 11.
  * - Every week, BOARD_SETTLE of what it has climbed settles back: the ones who climbed stop and slide too, and there are
  *   no acts here to reset the board. A long break costs a little less each week, the climb never passes
@@ -262,7 +285,8 @@ export function rankAt(state: GameState, l?: number, server: Server = serverOf(s
  * week's events; the best reached keeps the place actually held (me/prepro.ts notePeak), and a tier's first card the
  * tier the screen showed (me/moments.ts noteRankPeak). scripts/check_ladder_idle.ts holds it.
  */
-export const BOARD_CLIMB = 12
+/** a week's climb, as a share of THETA: a fixed slice of the board (e^0.16 a week), whatever RR is worth */
+export const BOARD_CLIMB = THETA * 0.16
 export const BOARD_SETTLE = 0.015
 export const BOARD_RISE_MAX = BOARD_CLIMB / BOARD_SETTLE
 /** under this much climb left, the rest settles too */
