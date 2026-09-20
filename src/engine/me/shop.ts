@@ -4,6 +4,7 @@ import { pushLog } from './log'
 import { addMoney } from './money'
 import { injuryRelax } from './injury'
 import { cny } from './moneyfmt'
+import { sealWeek } from './undo'
 
 /**
  * Where the money goes. The rule from 破晓, and the author's: money does not buy
@@ -133,6 +134,7 @@ export function buyLifestyle(state: GameState, key: string): string | null {
   if (!x) return '没有这一项。'
   const why = lifestyleLocked(state, x)
   if (why) return `${why}。`
+  sealWeek(state)
   addMoney(state, 'life', -x.price)
   me.flags[lifeFlag(key)] = state.year
   if (key === 'home' && me.upkeep) me.upkeep = 0
@@ -151,6 +153,9 @@ export function buyGear(state: GameState, slot: string): string | null {
   if (cur >= 2) return `已经是${gearModel(slot, 2)}了。`
   const price = GEAR_PRICE[cur + 1]
   if (me.money < price) return `要 ${cny(price)}，钱不够。`
+  // A purchase stays made. Replaying earlier training must not refund its cost
+  // while leaving the gear (or courses, agent and treatment below) in place.
+  sealWeek(state)
   addMoney(state, 'gear', -price)
   me.gear[slot] = cur + 1
   const name = GEAR_SLOTS.find((s) => s.key === slot)?.name ?? slot
@@ -164,6 +169,7 @@ export function buyCourse(state: GameState, key: string): string | null {
   if (!c) return '没有这门课。'
   if (me.courses.includes(key)) return '已经上过了。'
   if (me.money < c.price) return `要 ${cny(c.price)}，钱不够。`
+  sealWeek(state)
   addMoney(state, 'course', -c.price)
   me.courses.push(key)
   if (key === 'lang') me.flags.lang = 1
@@ -179,6 +185,7 @@ export function buyRelax(state: GameState, key: string): string | null {
   if (r.once && me.flags[`relax_${key}`]) return '已经有了。'
   if (me.money < r.price) return `要 ${cny(r.price)}，钱不够。`
   if (!r.once && me.relaxUsed >= 2) return '这周已经放松过两次了。'
+  sealWeek(state)
   addMoney(state, 'relax', -r.price)
   if (r.once) me.flags[`relax_${key}`] = 1
   else {
@@ -204,6 +211,7 @@ export function hireAgent(state: GameState, tier: number): string | null {
   if (!a) return '没有这一档。'
   if (me.agentTier === tier) return '已经是这一档了。'
   if (tier > me.agentTier && me.money < a.fee) return `签约费 ${cny(a.fee)}，钱不够。`
+  sealWeek(state)
   if (tier > me.agentTier) addMoney(state, 'agent', -a.fee)
   me.agentTier = tier
   pushLog(state, 'money', tier ? `签了${a.name}（${cny(a.fee)}），以后抽你 ${Math.round(a.cut * 100)}% 的薪水。` : '和经纪人解约了。')

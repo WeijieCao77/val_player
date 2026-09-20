@@ -109,7 +109,7 @@ export const canUndo = (state: GameState, action: MeAction): boolean =>
 
 /**
  * The week is settled, or something happened in it that cannot be replayed (a
- * duel, which is three scenes the player sat through). From here the week's
+ * duel, purchase or other economic decision). From here the week's
  * 「−」 reaches back no further; what is already done stays done.
  */
 export function sealWeek(state: GameState): void {
@@ -130,6 +130,6 @@ export function markWeekStart(state: GameState): void {
 }
 
 /** 「这周做过的都能减掉，推进一周才定下来」 — the boundary, said where the cards are. */
-export const UNDO_EDGE_CN = '这周做过的都能用「−」退回去，推进一周才定下来。'
+export const UNDO_EDGE_CN = '本周行动可用「−」退回；推进、对位挑战或办成经济事项后，此前的行动定下来。'
 /** said once under the flow when taking one off moved the lines after it */
 export const REPLAY_CN = '退掉之后，后面几项按没做过这一项重算了。'

@@ -7,6 +7,7 @@ import { addHeat, fansCn } from './fans'
 import type { MeState } from './types'
 import { cny } from './moneyfmt'
 import { wageCny } from './paytable'
+import { sealWeek } from './undo'
 
 /**
  * 钱的出口，第二批. Reported 2026-09-12: 「能用钱的地方太少了，导致后来钱都花不完
@@ -106,6 +107,7 @@ export function setFamily(state: GameState, tier: number): string | null {
   if (!t) return '没有这一档。'
   const why = familyLocked(state, tier)
   if (why) return `${why}。`
+  sealWeek(state)
   book(state).family = tier
   pushLog(state, 'money', tier ? `以后每周往家里寄 ${usd(familyWeekly(state, tier))}（${t.name}，工资的 ${Math.round(t.share * 100)}%）。` : '不再每周往家里寄钱了。')
   return null
@@ -149,6 +151,7 @@ export function holdMeet(state: GameState, key: MeetKey): string | null {
   if (!m) return '没有这一档。'
   const why = meetLocked(state, m)
   if (why) return `${why}。`
+  sealWeek(state)
   const me = state.me!
   addMoney(state, 'public', -m.price)
   const tired = (state.players[me.id]?.fatigue ?? 0) >= MEET_TIRED
@@ -178,6 +181,7 @@ export function scholarLocked(state: GameState): string | null {
 export function fundScholar(state: GameState): string | null {
   const why = scholarLocked(state)
   if (why) return `${why}。`
+  sealWeek(state)
   const price = scholarPrice(state)
   addMoney(state, 'public', -price)
   book(state).scholar.push(state.year)
@@ -241,6 +245,7 @@ export function takeBreak(state: GameState, key: BreakKey): string | null {
   if (!b) return '没有这一项。'
   const why = breakLocked(state, b)
   if (why) return `${why}。`
+  sealWeek(state)
   const me = state.me!
   const price = breakPrice(state, b)
   if (price) addMoney(state, key === 'family' ? 'family' : 'relax', -price)
@@ -276,6 +281,7 @@ export function studioLocked(state: GameState): string | null {
 export function buyStudio(state: GameState): string | null {
   const why = studioLocked(state)
   if (why) return `${why}。`
+  sealWeek(state)
   const o = book(state)
   const next = STUDIO[o.studio + 1]
   addMoney(state, 'asset', -next.price)
@@ -303,6 +309,7 @@ export function cafeLocked(state: GameState): string | null {
 export function openCafe(state: GameState): string | null {
   const why = cafeLocked(state)
   if (why) return `${why}。`
+  sealWeek(state)
   addMoney(state, 'asset', -CAFE_PRICE)
   const o = book(state)
   o.cafe = { opened: state.year, open: true, times: (o.cafe?.times ?? 0) + 1, paid: o.cafe?.paid ?? 0 }

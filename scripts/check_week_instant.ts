@@ -23,6 +23,7 @@
  *
  *   npx tsx scripts/check_week_instant.ts
  */
+import './check_undo_economy'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { ACTIONS, ACTION_BY_KEY, DUELS_PER_WEEK } from '../src/engine/me/actions'
 import { actionBlock, advanceWeek, doAction, matchAhead, repeatLastWeek, settleWeek, staminaLeft, undoAction, undoWeek, weekMatches } from '../src/engine/me/week'

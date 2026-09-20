@@ -29,6 +29,7 @@ export default function EconomyScreen() {
           <p className="small" style={{ marginTop: 0 }}>
             {pay ? `年薪 ${moneyIn(pay.salary, pay.cur, game.year)}` : '没有薪水'}{me.upkeep ? ` · 每周固定支出 ${money(me.upkeep)}` : ''}
           </p>
+          <p className="tiny faint">购买、签约或办成其他经济事项后，此前的本周行动不再撤回；之后新做的行动仍可撤回。</p>
           <LedgerTable me={me} />
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>{pay && pay.cur !== 'CNY' ? `工资按${CUR_CN[pay.cur]}发，每周折成人民币到账。` : ''}{rateLine(game.year)}</p>
         </Panel>
