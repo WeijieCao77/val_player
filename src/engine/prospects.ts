@@ -47,7 +47,10 @@ interface ProspectFile {
 
 export const PROSPECTS = (RAW as unknown as ProspectFile).players ?? []
 
-/** Nationality → region, mirroring imports.ts so the import rule still works. */
+/**
+ * Nationality → region, mirroring imports.ts so the import rule still works — 港澳台算中国 there and here
+ * (the author, 2026-09-20): hk, mo and tw are the China region, this game's call rather than Riot's wording.
+ */
 const NAT_REGION: Record<string, Region> = {
   us: 'Americas', ca: 'Americas', br: 'Americas', ar: 'Americas',
   cl: 'Americas', mx: 'Americas', pe: 'Americas', co: 'Americas',

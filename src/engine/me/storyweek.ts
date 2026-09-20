@@ -1,7 +1,7 @@
 import { Rng, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
 import { BOND_TIGHT, bondBetween, duoBonded } from '../bonds'
-import { regionIn } from '../era'
+import { formatOf, regionIn } from '../era'
 import { hasPlace } from '../timeline'
 import type { EffectSpec, MeAction } from './types'
 import { eventOf, fireEvent } from './events'
@@ -135,16 +135,38 @@ const aged = (s: GameState, key: string, v: string[], weeks: number): boolean =>
   return !!r && s.me!.week - r.wk >= weeks
 }
 
-/** a club in another of the four, within reach, that could use me — a first-tier one, or any if I am second-tier */
+/**
+ * 外区 as the year has it, the way a call and an offer read it (me/prepro.ts abroadClub): from 2023 another VCT
+ * league, and in 2021–2022, where there were no leagues, another qualifying region. It used to be read at 2099
+ * whatever the year — so in 2021 a CIS player never heard from Europe or Türkiye, three separate circuits that
+ * year, while 「外区邀约」 could only come from across the world. Found 2026-09-20 with the report below.
+ */
+const awayLeague = (state: GameState, a: Team, b: Team): boolean =>
+  formatOf(state.year) === 'open' ? a.region !== b.region : regionIn(a.region, state.year) !== regionIn(b.region, state.year)
+
+/**
+ * 我在别的赛区打球: my club against the 赛区 I came from, the same rule. A move inside one VCT league — the author,
+ * 2026-09-20: 「在四大赛区内部进行转会比如 navi 去 tl，但是会算成去外赛区，这不合理」 — is not this. `me.abroad` is
+ * by country (me/contract.ts joinClub) and used to stand in here, so a man who crossed a border inside his own
+ * league never heard from another league again.
+ */
+export function playingAway(state: GameState): boolean {
+  const mine = state.teams[state.myTeam]
+  if (!mine) return false
+  return formatOf(state.year) === 'open'
+    ? mine.region !== state.me!.region
+    : regionIn(mine.region, state.year) !== regionIn(state.me!.region, state.year)
+}
+
+/** a club in another 赛区, within reach, that could use me — a first-tier one, or any if I am second-tier */
 function pickForeign(state: GameState, rng: Rng): Team | null {
   const me = state.me!
   const mine = state.teams[state.myTeam]
   const p = state.players[me.id]
   if (!mine || !p) return null
-  const home = regionIn(mine.region, 2099)
   const no = declinedNow(state)
   const pool = Object.values(state.teams).filter((t) => t.id !== mine.id && (t.tier === 1 || mine.tier === 2) && !t.dormant && hasPlace(state, t)
-    && regionIn(t.region, 2099) !== home && t.roster.length <= 7 && !no.has(t.id)
+    && awayLeague(state, t, mine) && t.roster.length <= 7 && !no.has(t.id)
     // a bar around my own level, read the way a tryout reads it — not my club's: a weak
     // player on a strong second-tier club is scouted as the player he is
     && expectOf(t) <= tryoutSkill(state) + 6 && expectOf(t) >= tryoutSkill(state) - 10)
@@ -174,7 +196,9 @@ const CHAINS: ChainDef[] = [
     id: 'overseas', max: 2,
     setup: (s, rng) => {
       const me = s.me!
-      if (!isPro(s) || me.abroad || me.tenure < 1) return null
+      // already playing in another 赛区 — by league, not by country (playingAway): a club of my own league from
+      // another country is not 外区, so crossing that border does not shut this chain (reported 2026-09-20)
+      if (!isPro(s) || playingAway(s) || me.tenure < 1) return null
       // the terms come at the next market day (me/window.ts MARKET_DAYS), once both clubs' windows are open
       const w = weeksToMarket(s)
       if (w < 5 || w > 16) return null
@@ -185,7 +209,7 @@ const CHAINS: ChainDef[] = [
     chance: (s, c) => (c.from ? (s.me!.seeds?.intlfriend?.v === 'yes' ? 0.3 : 0.15) : proPerf(s) >= 4 ? 0.04 : 0),
     opener: (_s, c) => (c.from ? 'ch_abroad_friend' : 'ch_abroad_open'),
     next: (_s, c, met) => (c.step === 1 ? (met ? 'ch_abroad_call' : 'ch_abroad_cold') : null),
-    valid: (s, c) => isPro(s) && !s.me!.abroad && !!c.club && !!s.teams[c.club] && s.myTeam !== c.club,
+    valid: (s, c) => isPro(s) && !playingAway(s) && !!c.club && !!s.teams[c.club] && s.myTeam !== c.club,
     gone: '「外区邀约」不了了之：你的处境变了，那边也没再来消息。',
   },
   {

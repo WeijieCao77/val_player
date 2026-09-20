@@ -51,7 +51,9 @@ export const ENDINGS_ME: EndingDef[] = [
   // tell one apart. So the trophy goes into the condition: 远征 is a career that
   // went out and brought something back. A spell abroad that won nothing is said
   // in the ending's own words instead (abroadLine), never in its verdict.
-  { key: 'abroad', title: '远征', text: '在外赛区打了两个赛季以上，奖杯柜也不空。语言、时差、想家——你都熬过了。',
+  // 出海 is by country, not by league (me/contract.ts joinClub `me.abroad`), so this says 国外 and not 外赛区: a move
+  // inside one VCT league — NAVI 到 Team Liquid, both EMEA — is 「国外俱乐部」 and never 外赛区 (reported 2026-09-20).
+  { key: 'abroad', title: '远征', text: '在国外打了两个赛季以上，奖杯柜也不空。语言、时差、想家——你都熬过了。',
     cond: (s) => (s.me!.flags.abroadSeasons ?? 0) >= 2 && s.me!.titles.some((t) => t.started) },
   // A player with one regional title used to fall through to 「没有冠军」,
   // which the career card contradicts on the same screen — it lists the trophy
@@ -94,7 +96,7 @@ const staffLines = (state: GameState): string[] => {
 const abroadLine = (state: GameState, key: string): string[] => {
   const n = state.me!.flags.abroadSeasons ?? 0
   if (n < 2 || (key !== 'journeyman' && key !== 'flash')) return []
-  return [`其中 ${n} 个赛季是在外赛区打的。语言、时差、想家你都熬过来了，只是没拿回奖杯。`]
+  return [`其中 ${n} 个赛季是在国外打的。语言、时差、想家你都熬过来了，只是没拿回奖杯。`]
 }
 
 /** Hang them up. What the money became off the stage (me/shop.ts LIFESTYLE, me/outlets.ts) is the ending's last words. */

@@ -161,7 +161,8 @@ export const MILESTONES: HallMilestone[] = [
     parts: (cs) => LEAGUES.map((r) => ({ label: REGION_CN[r], ok: cs.some((c) => leagueOf(c) === r && c.seasons > 0) })) },
   { key: 'lives', name: '两种人生', desc: '一局没有冠军，另一局首发捧起冠军赛奖杯',
     parts: (cs) => [{ label: '无冠', ok: cs.some(noTitle) }, { label: '冠军赛', ok: cs.some(champs) }] },
-  { key: 'stay_go', name: '去留', desc: '一局在一队待满五季，另一局在外赛区打满两季',
+  // 他乡两年 counts seasons abroad by country (me/achievements.ts abroad2), so this says 国外, not 外赛区
+  { key: 'stay_go', name: '去留', desc: '一局在一队待满五季，另一局在国外打满两季',
     parts: (cs) => [{ label: '一队五年', ok: cs.some(has('loyal5')) }, { label: '他乡两年', ok: cs.some(has('abroad2')) }],
     done: (cs) => apart(cs, has('loyal5'), has('abroad2')) },
 ]

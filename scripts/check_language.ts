@@ -47,6 +47,12 @@
  * 十一 a team-mate's line in the weekly report (me/chatter.ts): one to twelve characters, at most one a week, only at a
  *    club and only when something that week set it off — said by a real name off my roster, the same line for the same
  *    save and day, and never in the list 托管 hands back after a run
+ * 十二 a move inside one VCT league is never called 外赛区 and never costed as one (the author, 2026-09-20:
+ *    「我现在对于区服还是有点困惑，在四大赛区内部进行转会比如 navi 去 tl，但是会算成去外赛区，这不合理」). A career
+ *    that started in 2021 carries its club's own 赛区 — 'CIS', 'Europe' — into the league era, so CIS → Europe is
+ *    two 赛区 in 2021 and one VCT EMEA in 2024: the card, the signing line, the import list and the 「要人」 cost all
+ *    read the league. 出海 stays by country (「标签按联赛、出海按国家」), so every line that fires off `me.abroad`
+ *    says 国外 and not 外赛区
  *
  *   npx tsx scripts/check_language.ts [draws=120]
  */
@@ -61,11 +67,13 @@ import {
 } from '../src/engine/me/prepro'
 import { rollOffers } from '../src/engine/me/transfer'
 import { joinClub, makeDeal } from '../src/engine/me/contract'
+import { signOdds } from '../src/engine/me/clout'
+import { isImport, originOf } from '../src/engine/imports'
 import { COURSES } from '../src/engine/me/shop'
 import { clubOpen, inviteBlock, moveBlock, windowAt } from '../src/engine/me/window'
 import { recomputeOverall } from '../src/engine/player'
 import { regionIn } from '../src/engine/era'
-import { ATTR_KEYS } from '../src/engine/types'
+import { ATTR_KEYS, REGION_CN } from '../src/engine/types'
 import type { GameState, Region, Team } from '../src/engine/types'
 import type { Invite } from '../src/engine/me/types'
 import { Rng, hashStr } from '../src/engine/rng'
@@ -943,5 +951,111 @@ console.log('\n十一 周报里队友的一句：1–12 个字，一周最多一
   else pass(`一线队打了 ${c.weeks} 周：${c.said} 周有一句队友的话，没有一周超过一句，都在 ${CHATTER_MAX} 个字以内、是名单上的人说的；托管跑完一个赛段交回来的 ${left.notes.length} 句里没有`)
 }
 
-console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标；关键回合的句子不在句尾报结果，结果在旁边；周报里队友一周最多一句短话。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
+/* ---- 十二 a move inside one league is never 外赛区 ---- */
+console.log('\n十二 同一个联赛里的转会：不标「外赛区」，也不按「外赛区」收代价')
+{
+  // The author, 2026-09-20: 「在四大赛区内部进行转会比如 navi 去 tl，但是会算成去外赛区，这不合理」. A 2021 career keeps
+  // its clubs' own 赛区 ('CIS', 'Europe') for good, so the same two clubs are two 赛区 in 2021 and one VCT EMEA in 2024.
+  const s0 = createCareer({ name: 'League', region: 'CIS', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 7, year: 2021 })
+  const topOf = (s: GameState, region: Region): Team | undefined => Object.values(s.teams)
+    .filter((t) => t.region === region && t.tier === 1 && !t.dormant && t.roster.length >= 5 && t.id !== s.myTeam)
+    .sort((a, b) => b.rating - a.rating)[0]
+
+  for (const [year, word] of [[2021, '外赛区'], [2024, '国外俱乐部']] as [number, string][]) {
+    const s = structuredClone(s0) as GameState
+    s.year = year
+    const t = topOf(s, 'Europe')
+    if (!t) { fail(`${year} 年找不到欧洲的一线俱乐部`); continue }
+    const from = s.teams[s.myTeam]?.name ?? '我的俱乐部'
+    const card = awayWord(s, t)
+    const far = abroadClub(s, t)
+    const deal = makeDeal(s, t.id, 'transfer', 'B', new Rng(hashStr(`check:league:${year}`)))
+    joinClub(s, deal)
+    const line = s.me!.log.map((l) => l.text).filter((x) => x.startsWith('签约 ')).pop() ?? ''
+    const wantFar = year <= 2022
+    if (card !== word || far !== wantFar || !line.includes(`这是${word}`) || (!wantFar && line.includes('外赛区')) || !s.me!.abroad) {
+      fail(`${year} 年 ${from}（CIS）→ ${t.name}（Europe）：卡片「${card}」应为「${word}」，外赛区 ${far} 应为 ${wantFar}，出海 ${s.me!.abroad}，签约那一行「${line}」`)
+    } else {
+      pass(`${year} 年 ${from}（CIS）→ ${t.name}（Europe）：${wantFar ? '那年是两个赛区，标「外赛区」' : '同一个 VCT EMEA，标「国外俱乐部」，签约那一行一个「外赛区」也没有'}，仍然算出海`)
+    }
+  }
+
+  // the import list reads the league too: a 2021-built club carries 'Europe', a European carries 'EMEA'
+  {
+    const s = structuredClone(s0) as GameState
+    s.year = 2024
+    s.importLimit = true
+    const t = topOf(s, 'Europe')
+    const mates = t ? t.roster.map((id) => s.players[id]).filter((p) => !!p) : []
+    const wrong = t ? mates.filter((p) => isImport(p, t)) : []
+    const far = t ? Object.values(s.players).find((p) => regionIn(originOf(p), 2099) !== 'EMEA') : undefined
+    if (!t || !mates.length) fail('2024 年找不到欧洲的一线俱乐部，或它的名单是空的')
+    else if (wrong.length) fail(`${t.name}（${t.region}）自己的名单上有 ${wrong.length} 人被算成外援：${wrong.slice(0, 3).map((p) => `${p.ign}（${p.nat ?? '无国籍'}）`).join('、')}`)
+    else if (far && !isImport(far, t)) fail(`${far.ign} 是${REGION_CN[regionIn(originOf(far), 2099)]}赛区的人，去 ${t.name} 却不算外援`)
+    else pass(`外援名额按联赛算：${t.name}（${t.region}）名单上的 ${mates.length} 人一个外援也不是${far ? `，${REGION_CN[regionIn(originOf(far), 2099)]}赛区的 ${far.ign} 才是` : ''}`)
+  }
+
+  // 「要人」: the cost follows the word on the name (me/clout.ts signOdds awayFrom), not the club's country
+  {
+    const s = structuredClone(s0) as GameState
+    s.year = 2024
+    const mine = s.teams[s.myTeam]
+    // a man the club would actually listen to, and a name no stronger than my own five: then nothing but the
+    // 赛区 moves the number, and it sits clear of both ends of signOdds' clamp
+    s.me!.fans = 4000
+    s.me!.coachTrust = 100
+    s.me!.gmTrust = 100
+    const t = Object.values(s.teams).filter((x) => x.region === 'Europe' && !x.dormant && x.roster.length >= 5 && x.id !== s.myTeam)
+      .sort((a, b) => a.rating - b.rating)[0]
+    const target = t ? t.roster.map((id) => s.players[id]).filter((p) => !!p).sort((a, b) => a.overall - b.overall)[0] : undefined
+    if (!mine || !t || !target) fail('2024 年摆不出「要人」的局面')
+    else {
+      const at = (region: Region): number => { const was = t.region; t.region = region; const v = signOdds(s, target); t.region = was; return v }
+      const home = at(mine.region)
+      const mate = at('Europe')
+      const away = at('Korea')
+      const src = readFileSync(new URL('../src/engine/me/clout.ts', import.meta.url), 'utf8')
+      const byLeague = /awayFrom\(state, myTeam,/.test(src.slice(src.indexOf('export function signOdds')))
+      if (!byLeague || !(home > mate && mate > away)) {
+        fail(`「要人」还按俱乐部所在国家收代价：本国 ${home.toFixed(3)}、同联赛别国 ${mate.toFixed(3)}、外赛区 ${away.toFixed(3)}${byLeague ? '' : '，signOdds 没读 awayFrom'}`)
+      } else {
+        pass(`「要人」按联赛收代价：从本国的俱乐部挖人 ${home.toFixed(3)}，同联赛别国 ${mate.toFixed(3)}，外赛区 ${away.toFixed(3)}`)
+      }
+    }
+  }
+
+  // 出海 is by country, so every line it fires must say 国外, never 外赛区 (me/contract.ts joinClub `me.abroad`)
+  {
+    const chunk = (src: string, open: string, key: string): string => {
+      const i = src.indexOf(`${open}${key}'`)
+      if (i < 0) return ''
+      const j = src.indexOf(open, i + open.length)
+      return src.slice(i, j < 0 ? src.length : j)
+    }
+    const read = (p: string): string => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+    const spots: [string, string, string, string][] = [
+      ['src/engine/me/achievements.ts', "{ key: '", 'abroad', '成就「出海」'],
+      ['src/engine/me/achievements.ts', "{ key: '", 'abroad2', '成就「他乡两年」'],
+      ['src/engine/me/achievements.ts', "{ key: '", 'home_again', '成就「回到熟悉的服务器」'],
+      ['src/engine/me/endings.ts', "{ key: '", 'abroad', '结局「远征」'],
+      ['src/engine/me/events.ts', "{ id: '", 'abroad', '事件「出海第一周」'],
+      ['src/engine/me/hall.ts', "{ key: '", 'stay_go', '名人堂「去留」'],
+    ]
+    const bad: string[] = []
+    for (const [file, open, key, what] of spots) {
+      const c = chunk(read(file), open, key)
+      if (!c) bad.push(`${what}：在 ${file} 里找不到`)
+      // the note above an entry may still name 外赛区 to say why it does not; only the strings count
+      else if ((c.match(/'[^']*外赛区[^']*'/g) ?? []).length) bad.push(`${what}：还写着「外赛区」`)
+    }
+    const endings = read('src/engine/me/endings.ts')
+    if (/外赛区/.test(endings.slice(endings.indexOf('const abroadLine')))) bad.push('结局里那句「其中几个赛季」：还写着「外赛区」')
+    const auto = read('src/ui/me/AutoScreen.tsx')
+    if (/语言课/.test(auto) && /外赛区报语言课/.test(auto)) bad.push('托管「采购」的规矩：还写着在外赛区报语言课')
+    if (bad.length) fail(`出海按国家，这些地方却说「外赛区」：${bad.join('；')}`)
+    else pass('出海（按国家）说出来的每一处——成就「出海」「他乡两年」「回到熟悉的服务器」、结局「远征」和那句「其中几个赛季」、出国第一周的事件、名人堂「去留」、托管的采购规矩——都说「国外」，没有一处说「外赛区」')
+  }
+}
+
+console.log(fails ? `\n✗ ${fails} 项不对。` : `\n✓ 外语只加不减：本赛区的试训邀请和报价和不会外语时一份不少，外赛区的另外多来，一次最多一家；不会外语，外赛区的邀请不过半，本赛区的一份没少；2023 年起按联赛算，同联赛别国的俱乐部每家 ${MATE_SHARE} 份、本国俱乐部还是主要来源；卡片上的字按联赛，出海按国家；字面上引号括号成对、标点旁不留空格、不说别的项目的词，周报一条新闻一个图标；关键回合的句子不在句尾报结果，结果在旁边；周报里队友一周最多一句短话；同一个联赛里的转会不标也不按「外赛区」算，出海按国家的地方都说「国外」。（${((Date.now() - t0) / 1000).toFixed(0)} 秒）`)
 process.exit(fails ? 1 : 0)

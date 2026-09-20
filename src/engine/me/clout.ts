@@ -287,7 +287,12 @@ export function signOdds(state: GameState, target: Player): number {
   p += (cloutOf(state) - SIGN_GATE.clout) / 110
   p += (me.gmTrust - SIGN_GATE.gm) / 160
   p -= clamp((attrAvg(target) - teamAvg) / 18, 0, 0.3)
-  if (state.teams[target.teamId ?? '']?.region !== myTeam?.region) p -= 0.12
+  // buying from abroad is harder — but by the 赛区, the way the word on the name reads it (awayFrom). It used to
+  // read the club's own country, so Team Liquid prising a man off NAVI, both of them VCT EMEA, paid the whole
+  // 外赛区 penalty (the author, 2026-09-20: 「在四大赛区内部进行转会比如 navi 去 tl，但是会算成去外赛区，这不合理」).
+  // A club of my own league from another country pays half, the way such a club weighs half in a draw (me/prepro.ts MATE_SHARE).
+  const away = myTeam ? awayFrom(state, myTeam, state.teams[target.teamId ?? '']) : ''
+  p -= away === '外赛区' ? 0.12 : away === '国外俱乐部' ? 0.06 : 0
   return clamp(p, 0.1, 0.82)
 }
 

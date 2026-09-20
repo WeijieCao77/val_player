@@ -26,14 +26,20 @@ import type { GameState, Region } from './types'
 interface Ids { players: Record<string, string>; teams: Record<string, string | null> }
 const IDS = idsRaw as unknown as Ids
 
-/** A prospect's country, as the book places clubs (scripts/build_timeline.py COUNTRY_REGION). */
+/**
+ * A prospect's country, as the book places clubs (scripts/build_timeline.py COUNTRY_REGION) — with one departure
+ * from it: 港澳台算中国 (the author, 2026-09-20). A person from Hong Kong, Macau or Taiwan is of the China region
+ * here, the way the import rule already reads him (engine/imports.ts NAT_REGION); the book keeps placing CLUBS from
+ * those places in the region whose circuit they really played. This is the author's call for this game, not Riot's
+ * wording — Riot has such a player declare a main region instead.
+ */
 const NAT_REGION: Record<string, Region> = {}
 for (const [region, codes] of [
   ['North America', 'us ca'], ['Brazil', 'br'], ['LATAM', 'mx ar cl co pe uy py bo ec ve cr pa gt sv hn ni do pr cu'],
   ['Europe', 'gb uk de fr es it pt nl be se no dk fi pl cz sk at ch ie is ee lv lt hu ro bg gr hr rs si ba mk al me cy lu mt md xk il'],
   ['CIS', 'ru ua by kz uz kg am az ge mn tj tm'], ['Turkey', 'tr'], ['MENA', 'sa ae eg ma dz tn jo kw qa bh om iq lb sy ps ly ye ir'],
-  ['South Asia', 'in pk bd lk np'], ['Oceania', 'au nz'], ['Korea', 'kr'], ['Japan', 'jp'], ['China', 'cn'],
-  ['Hong Kong & Taiwan', 'tw hk mo'], ['Vietnam', 'vn'], ['Thailand', 'th'], ['Philippines', 'ph'], ['Indonesia', 'id'],
+  ['South Asia', 'in pk bd lk np'], ['Oceania', 'au nz'], ['Korea', 'kr'], ['Japan', 'jp'], ['China', 'cn tw hk mo'],
+  ['Vietnam', 'vn'], ['Thailand', 'th'], ['Philippines', 'ph'], ['Indonesia', 'id'],
   ['Malaysia & Singapore', 'my sg'], ['SEA', 'kh mm la bn'],
 ] as [Region, string][]) {
   for (const c of codes.split(' ')) NAT_REGION[c] = region
