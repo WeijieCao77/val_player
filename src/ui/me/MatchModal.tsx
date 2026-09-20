@@ -5,6 +5,7 @@ import { useGame } from './ctx'
 import { AgentIcon, Modal, MultiRadar, Roles, Crest } from './common'
 import RoundRibbon, { RibbonLegend } from './RoundRibbon'
 import { mapMvp, ratingOf } from '../../engine/match'
+import { mvpNote } from '../../engine/me/postmatch'
 import type { Fixture, MapLine, MapScore } from '../../engine/types'
 
 /**
@@ -154,6 +155,7 @@ export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onC
           // best — vlr's map pages do not carry the series award either.
           mvp={allMaps && perMap ? null : r.mvp}
           mapBest={allMaps && perMap ? mapMvp(map, r.lineups) : null}
+          maps={r.maps.length}
         />
       )}
 
@@ -321,7 +323,7 @@ function Performance({
 }
 
 function Scoreboard({
-  map, teamA, teamB, onPlayer, mvp, mapBest, lineups, standIns, agentsOf,
+  map, teamA, teamB, onPlayer, mvp, mapBest, maps, lineups, standIns, agentsOf,
 }: {
   map: MapScore; teamA: string; teamB: string
   onPlayer: (id: string) => void
@@ -329,6 +331,8 @@ function Scoreboard({
   mvp: string | null
   /** this map's own best, for per-map sheets of a multi-map match */
   mapBest: string | null
+  /** how many maps the series ran to, for what the label's note has to say */
+  maps: number
   lineups?: { a: string[]; b: string[] }
   /** who played from outside the side's registered roster (engine/standin.ts) */
   standIns?: { a: string[]; b: string[] }
@@ -378,11 +382,14 @@ function Scoreboard({
                       {(teamId === teamA ? standIns?.a : standIns?.b)?.includes(p.id) && (
                         <span className="tag" style={{ marginLeft: 6 }} title="不在这支队伍的注册名单上：青训队调来，或自由人临时顶替">临时</span>
                       )}
-                      {mvp === p.id && <span className="tag t1" style={{ marginLeft: 6 }}>MVP</span>}
+                      {mvp === p.id && (
+                        <span className="tag t1" style={{ marginLeft: 6 }} title={mvpNote(maps)}>MVP</span>
+                      )}
                       {mapBest === p.id && (
                         <span
                           className="tag"
                           style={{ marginLeft: 6, borderColor: 'var(--accent-line)', color: 'var(--accent)' }}
+                          title={mvpNote(1)}
                         >
                           本图最佳
                         </span>
@@ -425,6 +432,10 @@ function Scoreboard({
   return (
     <>
       <div className="nav-group" style={{ padding: '0 0 8px' }}>数据统计 · {mapCn(map.map)}</div>
+      {/* 表是按总回合算的，标签不是：一行小字说清楚，手机上碰不到 title（2026-09-20 玩家提问） */}
+      {(mvp || mapBest) && (
+        <p className="tiny faint" style={{ margin: '0 0 8px' }}>{mvp ? mvpNote(maps) : mvpNote(1)}</p>
+      )}
       {block(teamA)}
       {block(teamB)}
     </>

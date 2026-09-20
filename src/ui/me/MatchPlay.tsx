@@ -9,7 +9,7 @@ import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, SLOT_CN, gapVerdict, nodeReadout, stakeWords } from '../../engine/me/nodes'
-import { ledgerNotes } from '../../engine/me/postmatch'
+import { ledgerNotes, mvpNote } from '../../engine/me/postmatch'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
 import { sayDim, useNumbers } from './words'
@@ -294,6 +294,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               <p className="small" style={{ margin: 0 }}>
                 <b>{rec.kills}/{rec.deaths}/{rec.assists}</b> · 评分 <b>{rec.rating.toFixed(2)}</b> · 队内第 {rec.rank}{rec.mvp ? ' · MVP' : ''}{rec.carried ? ' · 输了比赛但你全队最高' : ''}
               </p>
+              {/* 队内名次按评分排，MVP 不是：同一行里两个数说不到一起去，就在这儿说清楚（2026-09-20 玩家提问） */}
+              {rec.mvp && <p className="tiny faint" style={{ margin: '6px 0 0' }}>{mvpNote(rec.maps)}</p>}
             </div>
           </div>
         ) : <p className="muted center">你没有出场。</p>}

@@ -1076,16 +1076,16 @@ export class MatchSim {
     const winnerIds = new Set(this.wonA === this.wonB ? [] :
       (this.wonA > this.wonB ? this.state.teams[this.aId] : this.state.teams[this.bId])?.roster ?? [],
     )
-    let mvp: string | null = null
-    let best = -1
-    for (const [pid, t] of Object.entries(totals)) {
-      if (!t.maps) continue
-      const s = t.acs / t.maps + (winnerIds.has(pid) ? 18 : 0)
-      if (s > best) {
-        best = s
-        mvp = pid
-      }
-    }
+    // the match award reads each map's own ACS and averages it over the maps he
+    // played, which is NOT the round-weighted ACS the scoreboard prints — a big
+    // map that ran short weighs as much as a long one. A player asked why the
+    // label went to a man below him in both columns (2026-09-20); the rule is
+    // the author's and stays, and the screens that show the label now say what
+    // it reads (me/postmatch.ts mvpNote).
+    const mvp = bestByAcs(
+      Object.entries(totals).filter(([, t]) => t.maps).map(([pid, t]) => [pid, t.acs / t.maps] as [string, number]),
+      winnerIds,
+    )
     const result: MatchResult = {
       mapsWonA: this.wonA, mapsWonB: this.wonB, maps: this.played,
       vetoLog: this.vetoLog, mvp, highlights: this.highlights,
@@ -1278,6 +1278,33 @@ export function applyMatchStats(state: GameState, result: MatchResult): void {
 export { ratingOf } from './player'
 
 /**
+ * How much the winning side is favoured. Real awards lean that way, and the
+ * match award and a map's own label lean by the same amount.
+ */
+export const MVP_WIN_NOD = 18
+
+/**
+ * Who gets the label: the highest ACS, with the winning side's nod on top,
+ * the first best keeping a tie.
+ *
+ * One function so the match award and the per-map label cannot drift apart
+ * again. All that differs between them is the ACS handed in — a map's own, or
+ * the average over the maps of a series — and who counts as the winning side.
+ */
+function bestByAcs(acs: Iterable<[string, number]>, winners: ReadonlySet<string>): string | null {
+  let best = -1
+  let mvp: string | null = null
+  for (const [pid, a] of acs) {
+    const s = a + (winners.has(pid) ? MVP_WIN_NOD : 0)
+    if (s > best) {
+      best = s
+      mvp = pid
+    }
+  }
+  return mvp
+}
+
+/**
  * The best performance on ONE map — the same scoring the match MVP uses (ACS
  * plus a winner's nod), judged against that map's own winner. The match MVP
  * tag used to sit on every per-map sheet, where a 1.56 on the map lost the
@@ -1287,14 +1314,5 @@ export function mapMvp(
   map: MapScore, lineups?: { a: string[]; b: string[] },
 ): string | null {
   const winners = new Set(map.scoreA > map.scoreB ? lineups?.a ?? [] : lineups?.b ?? [])
-  let best = -1
-  let mvp: string | null = null
-  for (const [pid, l] of Object.entries(map.lines)) {
-    const s = l.acs + (winners.has(pid) ? 18 : 0)
-    if (s > best) {
-      best = s
-      mvp = pid
-    }
-  }
-  return mvp
+  return bestByAcs(Object.entries(map.lines).map(([pid, l]) => [pid, l.acs] as [string, number]), winners)
 }
