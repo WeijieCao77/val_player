@@ -1,6 +1,7 @@
 import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Player, Team } from '../types'
-import { expectedSalary, ratingOf } from '../player'
+import { expectedSalary } from '../player'
+import { performanceRating } from '../performance'
 import { regionIn } from '../era'
 import { importBlock } from '../imports'
 import { pushLog } from './log'
@@ -172,7 +173,7 @@ export function vctStarterMedian(state: GameState, league: string): number {
 }
 
 /**
- * The best season line in his Challengers league, by rating or by ACS, among the league's players (me/nights.ts
+ * The best season line in his Challengers league, by contribution rating, among the league's players (me/nights.ts
  * leaguePool). A line counts once it has 60% of the median starter's maps — the awards night's bar, the one
  * table both read (me/nights.ts seasonBar).
  */
@@ -187,11 +188,10 @@ function bestInLeague(state: GameState, club: Team): boolean {
   const field = rows.filter((q) => q.season.maps >= need)
   const mine = field.find((q) => q.id === me.id)
   if (!mine || field.length < 6) return false
-  const acs = (q: Player) => q.season.damage / q.season.rounds
-  return field.every((q) => ratingOf(q.season) <= ratingOf(mine.season)) || field.every((q) => acs(q) <= acs(mine))
+  return field.every((q) => performanceRating(q.season) <= performanceRating(mine.season))
 }
 
-/** A title he started as one of his side's best two, by where his ACS ranked over the event's matches. */
+/** A title he started as one of his side's best two, using each match's recorded evaluation. */
 function keyStarter(state: GameState, title: string, year: number): boolean {
   const ms = state.me!.matches.filter((m) => !m.friendly && m.year === year && m.comp === title && m.started && m.rank > 0)
   return ms.length > 0 && ms.reduce((s, m) => s + m.rank, 0) / ms.length <= 2

@@ -5,6 +5,8 @@ import { EDGE_NEED } from '../../engine/me/coach'
 import type { DuelSceneLog } from '../../engine/me/types'
 import { attrWord, sayDim, useNumbers } from './words'
 import Face from './Face'
+import { roleCoreDims } from '../../engine/me/roleCore'
+import { ATTR_CN } from '../../engine/types'
 
 /** A scene's line in words: the same sentence the engine writes, without the numbers. */
 const wordsLine = (r: DuelSceneLog) =>
@@ -24,6 +26,7 @@ export default function DuelPlay({ onDone }: { onDone: () => void }) {
   const p = game.players[me.id]
   const him = game.players[live.himId]
   const scene = duelScene(game)
+  const coreNames = roleCoreDims(p.role).map(k => ATTR_CN[k])
 
   const pick = (i: number) => { duelPick(game, i); commit() }
   const close = () => { closeDuel(game); commit(); onDone() }
@@ -35,6 +38,8 @@ export default function DuelPlay({ onDone }: { onDone: () => void }) {
         <div className="s">{live.sc[0]} : {live.sc[1]}</div>
         <div className="t">{him && <Face id={him.id} name={him.ign} size={28} />}<Roles p={him} /><span>{him?.ign}</span><OvrBadge value={him?.overall ?? 0} /></div>
       </div>
+
+      <p className="tiny muted">{p.role}岗位专项：{coreNames.join('、')}。对位按岗位任务比较；其他属性仍影响综合实力和正式比赛。</p>
 
       {scene && !live.done ? (
         <div className="node-box">
@@ -77,10 +82,10 @@ export default function DuelPlay({ onDone }: { onDone: () => void }) {
                 ))}
               </div>
               {(() => {
-                const gaps = duelCompare(game).filter((r) => r.his > r.mine).sort((a, b) => (b.his - b.mine) - (a.his - a.mine))
+                const gaps = duelCompare(game).filter((r) => coreNames.includes(r.dim) && r.his > r.mine).sort((a, b) => (b.his - b.mine) - (a.his - a.mine))
                 return gaps.length
-                  ? <p className="tiny muted" style={{ margin: '8px 0 0' }}>他压你最多的是 <b>{gaps[0].dim}</b>{nums ? `（差 ${gaps[0].his - gaps[0].mine}）` : ''}——明天先练这个。</p>
-                  : <p className="tiny muted" style={{ margin: '8px 0 0' }}>八项你都不比他差，剩下的是教练的信任和上场的回合。</p>
+                  ? <p className="tiny muted" style={{ margin: '8px 0 0' }}>岗位专项差距最大的是 <b>{gaps[0].dim}</b>{nums ? `（差 ${gaps[0].his - gaps[0].mine}）` : ''}——可以优先补这一项，也别放弃基础枪法与其他短板。</p>
+                  : <p className="tiny muted" style={{ margin: '8px 0 0' }}>三项岗位专项都不比他差。继续兼顾其他短板、状态与教练信任，不代表正式比赛一定能赢。</p>
               })()}
             </div>
           </div>

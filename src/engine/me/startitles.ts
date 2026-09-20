@@ -1,4 +1,4 @@
-import { ratingOf } from '../player'
+import { performanceRating } from '../performance'
 import type { GameState, Player } from '../types'
 import { isQualifier } from './compclass'
 
@@ -109,7 +109,7 @@ function compute(state: GameState): Map<string, StarTitle> {
   // the numbers, against everyone else with a real sample
   if (pool.length < MIN_PEERS) return out
   const n = pool.length >= 60 ? 3 : 2
-  const rating = new Map(pool.map((p) => [p.id, ratingOf(p.career)]))
+  const rating = new Map(pool.map((p) => [p.id, performanceRating(p.career)]))
   const r = (p: Player) => rating.get(p.id) ?? 0
   /** the top n by a rate, pulled toward the pool's middle so a hot month cannot top a season */
   const leaders = (x: (p: Player) => number, per: (p: Player) => number, prior: number, ok: (p: Player) => boolean = () => true) => {

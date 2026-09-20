@@ -4,7 +4,7 @@ import { ATTR_CN, ATTR_KEYS, REGION_CN } from '../../engine/types'
 import type { Attrs, Region, Role } from '../../engine/types'
 // the screen's own numbers, apart from the world (me/talent.ts); what it reads off the world was worked out as the
 // site was built (me/startSheet.ts), so the page a new player opens on fetches no roster book (reported 2026-09-18)
-import { ceilingLines, ceilingPreview, startCnOf, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/talent'
+import { ceilingLines, ceilingPreview, startCnOf, TALENT_MAX, TALENT_POINTS, TALENT_PRESETS, ROLE_TALENT_PRESETS, TALENT_TEAM_HINT, talentShape, zeroTalents } from '../../engine/me/talent'
 import type { StartPoint } from '../../engine/me/talent'
 import type { CareerOpts } from '../../engine/me/career'
 import START_SHEET from 'virtual:start-sheet'
@@ -256,7 +256,9 @@ export default function NewCareer({
     setTalents(t)
   }
   const shape = talentShape(talents)
-  const presetOn = TALENT_PRESETS.find((x) => ATTR_KEYS.every((k) => x.t[k] === talents[k]))?.key
+  const presets = [ROLE_TALENT_PRESETS[role], ...Object.entries(ROLE_TALENT_PRESETS)
+    .filter(([r]) => r !== role).map(([, preset]) => preset), ...TALENT_PRESETS]
+  const presetOn = presets.find((x) => ATTR_KEYS.every((k) => x.t[k] === talents[k]))?.key
   const go = () => {
     if (blocked || starting) return
     const ign = name.trim() || 'Rookie'
@@ -379,11 +381,12 @@ export default function NewCareer({
 
       <Panel title={`天赋 · 还剩 ${left} 点`} actions={<span className="tag">{capLine.tag}</span>}>
         <p className="tiny faint" style={{ marginTop: 0 }}>{capLine.hint}</p>
+        <p className="tiny faint">首项是当前职位的20点参考构建，点击才会应用，之后可逐点微调。切换位置不会覆盖已有加点；旧的风格预设仍可选。</p>
         {/* a build to start from, then tuned point by point (破晓's 天赋预设) */}
         <div className="talent-presets">
-          {TALENT_PRESETS.map((x) => (
+          {presets.map((x) => (
             <button key={x.key} className={`start-card${presetOn === x.key ? ' on' : ''}`} aria-pressed={presetOn === x.key} onClick={() => setTalents({ ...x.t })}>
-              <b>{x.name}</b>
+              <b>{x.name}{x.key === ROLE_TALENT_PRESETS[role].key ? ' · 本位置参考' : ''}</b>
               <span>{x.blurb}</span>
             </button>
           ))}

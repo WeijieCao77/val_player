@@ -12,7 +12,7 @@ import { circuitBonus, circuitPaid, eventOf, pointsTables } from '../../engine/c
 import type { PointsBasis, PointsRow, PointsTable } from '../../engine/circuit'
 import { eventTables } from '../../engine/eventTable'
 import { qualification } from '../../engine/qualify'
-import { ratingOf } from '../../engine/match'
+import { performanceRating } from '../../engine/performance'
 import { statLine } from '../../engine/player'
 import { REGION_CN, REGIONS } from '../../engine/types'
 import type { Competition, Region } from '../../engine/types'
@@ -317,7 +317,7 @@ export default function Standings() {
 
   const leaders = Object.values(game.players)
     .filter((p) => p.season.maps >= 8 && p.teamId)
-    .sort((a, b) => ratingOf(b.season) - ratingOf(a.season))
+    .sort((a, b) => performanceRating(b.season) - performanceRating(a.season))
     .slice(0, 40)
   // where this stage leads, on my club's own tab only
   const qual = region === start ? qualification(game) : null
@@ -470,7 +470,7 @@ export default function Standings() {
               <thead>
                 <tr>
                   <th className="num">#</th><th>选手</th><th>战队</th><th className="num">能力</th>
-                  <th className="num">评分</th><th className="num">ACS</th><th className="num">K/D</th>
+                  <th className="num">贡献评分</th><th className="num">ACS</th><th className="num">K/D</th>
                   <th className="num">首杀差</th><th className="num">场次</th>
                 </tr>
               </thead>
@@ -487,7 +487,7 @@ export default function Standings() {
                       <td><b>{p.ign}</b></td>
                       <td className="small muted">{game.teams[p.teamId ?? '']?.name}</td>
                       <td className="num"><OvrBadge value={p.overall} /></td>
-                      <td className="num"><b>{ratingOf(p.season).toFixed(2)}</b></td>
+                      <td className="num"><b>{performanceRating(p.season).toFixed(2)}</b></td>
                       <td className="num mono">{s.acs.toFixed(0)}</td>
                       <td className="num mono">{s.kd.toFixed(2)}</td>
                       <td className={`num mono ${s.fkDiff >= 0 ? 'pos' : 'neg'}`}>

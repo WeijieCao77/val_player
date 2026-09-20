@@ -1,4 +1,5 @@
 import { ratingOf } from '../player'
+import { aggregateLines, performanceRating, usesPerformanceRating } from '../performance'
 import type { EdgeBreakdown, GameState, MapScore, Player } from '../types'
 import type { BoxRow, MeMatchRecord } from './types'
 
@@ -173,51 +174,36 @@ export function verdict(rec: MeMatchRecord, rows: EdgeRow[]): string {
  * played with.
  */
 export function boxScore(state: GameState, maps: MapScore[], mineIds: string[], theirIds: string[]): BoxRow[] {
-  const totals = new Map<string, { k: number; d: number; a: number; dmg: number; fk: number; cl: number; r: number }>()
-  for (const m of maps) {
-    for (const [pid, l] of Object.entries(m.lines)) {
-      const t = totals.get(pid) ?? { k: 0, d: 0, a: 0, dmg: 0, fk: 0, cl: 0, r: 0 }
-      t.k += l.kills; t.d += l.deaths; t.a += l.assists; t.dmg += l.damage
-      t.fk += l.firstKills; t.cl += l.clutches; t.r += l.rounds
-      totals.set(pid, t)
-    }
-  }
+  const totals = aggregateLines(maps)
+  const rate = usesPerformanceRating(maps) ? performanceRating : ratingOf
   const meId = state.me?.id
   const row = (pid: string, mine: boolean): BoxRow | null => {
-    const t = totals.get(pid)
+    const t = totals[pid]
     const p: Player | undefined = state.players[pid]
-    if (!t || !p || !t.r) return null
-    const acs = (t.dmg / t.r) * 1.45
+    if (!t || !p || !t.rounds) return null
     return {
       id: pid, ign: p.ign, role: p.role, mine, me: pid === meId,
-      k: t.k, d: t.d, a: t.a, acs: Math.round(acs),
-      rating: Math.round(ratingOf({ kills: t.k, deaths: t.d, assists: t.a, rounds: t.r }) * 100) / 100,
-      firstKills: t.fk, clutches: t.cl, rounds: t.r,
+      k: t.kills, d: t.deaths, a: t.assists, acs: Math.round(t.acs),
+      rating: Math.round(rate(t) * 100) / 100,
+      firstKills: t.firstKills, clutches: t.clutches, rounds: t.rounds,
     }
   }
   const out: BoxRow[] = []
   for (const id of mineIds) { const r = row(id, true); if (r) out.push(r) }
   for (const id of theirIds) { const r = row(id, false); if (r) out.push(r) }
-  return out.sort((x, y) => (x.mine === y.mine ? y.rating - x.rating : x.mine ? -1 : 1))
+  return out.sort((x, y) => (x.mine === y.mine ? y.rating - x.rating || y.acs - x.acs : x.mine ? -1 : 1))
 }
 
 /**
- * What the MVP label reads, said where the label is shown.
- *
- * Reported 2026-09-20: 「他 ACS 和评分都不如 NPC，但是最后 MVP 给到了他，这是为什么？」
- * Both columns are honest and so is the award; they are simply not the same
- * sum. The label takes each map's own ACS and averages it over the maps, plus
- * a nod to the winning side (engine/match.ts); the table adds the damage and
- * the rounds of the whole series up first, so a big map that ran short weighs
- * less there than it does in the average. Measured over five seasons of a
- * world, twice: in about 4% of matches the label does not sit on the highest
- * ACS of its own side, and in about 15% not on the highest 评分 — often enough
- * that a player will meet it, so the screens say it rather than leave him
- * counting. The author's decision, the same day: the rule stays as it is and
- * the screens explain it.
+ * Explain the rule that actually produced this record. The role-balance
+ * update switches NEW matches to contribution rating. Historical records
+ * retain their ACS-map-average award, their stored rating, and this original
+ * explanation; an update does not silently award or remove an old MVP.
  */
-export const mvpNote = (maps: number): string =>
-  maps > 1
+export const mvpNote = (maps: number, performanceVersion?: 1): string =>
+  performanceVersion === 1
+    ? `MVP 按${maps > 1 ? '全部地图累计回合的' : '本图的'}贡献评分：击杀、助攻、生存、首杀净贡献和残局；胜方轻微优先，不按位置直接加分。ACS 仍只表示伤害。`
+    : maps > 1
     ? 'MVP 看的是每张图的 ACS 平均，胜方优先；表里的 ACS 和评分是几张图合起来算的，所以 MVP 不一定是表里最高的那个。'
     : 'MVP 看的是这张图的 ACS，胜方优先，所以不一定是表里评分最高的那个。'
 

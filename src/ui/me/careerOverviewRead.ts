@@ -1,4 +1,5 @@
-import { ratingOf, statLine } from '../../engine/player'
+import { statLine } from '../../engine/player'
+import { performanceRating } from '../../engine/performance'
 import { isQualifier } from '../../engine/me/compclass'
 import type { GameState, Stats } from '../../engine/types'
 
@@ -15,7 +16,7 @@ export function careerOverview(state: GameState, scope: 'season' | 'career') {
   const currentTitles = me.titles.filter(t => t.year === state.year && !isQualifier(t.title))
   return {
     maps: stats.maps, starts, wins,
-    rating: hasRounds ? ratingOf(stats).toFixed(2) : '—',
+    rating: hasRounds ? performanceRating(stats).toFixed(2) : '—',
     acs: hasRounds ? line.acs.toFixed(0) : '—',
     kd: hasMaps && stats.deaths > 0 ? line.kd.toFixed(2) : '—',
     kda: hasMaps ? `${stats.kills}/${stats.deaths}/${stats.assists}` : '—',

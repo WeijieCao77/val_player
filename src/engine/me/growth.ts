@@ -110,6 +110,15 @@ const SPLIT: Partial<Record<MeAction, Partial<Record<keyof Attrs, number>>>> = {
   util: { utility: 0.5, teamwork: 0.3, communication: 0.2 },
 }
 
+/** The same session budget, spent on the job's practice. No extra XP, AP or
+ * ceiling is awarded merely for picking a role. Never reroute capped shares:
+ * their work belongs to the existing breakthrough system, not free growth. */
+export function practiceSplit(p: Pick<Player, 'role'>, key: 'aim' | 'vod' | 'util'): Partial<Record<keyof Attrs, number>> {
+  if (key === 'util' && (p.role === '先锋' || p.role === '控场')) return { utility: 0.6, teamwork: 0.25, communication: 0.15 }
+  if (key === 'vod' && p.role === '哨卫') return { awareness: 0.65, clutch: 0.35 }
+  return SPLIT[key]!
+}
+
 /** my extra hours are worth this much of a club training week, per point */
 const EXTRA = 0.55
 
@@ -148,10 +157,10 @@ export function hourValues(state: GameState): HourValue[] {
   const w = weightsFor(p)
   const open = (k: keyof Attrs) => p.attrs[k] < ceilingOf(p, k)
   // what an hour on k is worth: the role's weight, where the hours land (roomMul)
-  const worth = (k: keyof Attrs) => w[k] * (p.caps ? roomMul(p, k) : 1)
+  const worth = (k: keyof Attrs) => w[k] * (p.caps ? roomMul(p, k) : 1) * injuryTrainMul(state, k)
   const out: HourValue[] = []
   for (const key of ['aim', 'vod', 'util'] as const) {
-    const split = SPLIT[key]!
+    const split = practiceSplit(p, key)
     const mul = EXTRA * (pro ? 1 : 1.6)
     const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
     let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
@@ -180,7 +189,10 @@ export function primaryFocus(me: MeState, p: Player): keyof Attrs | 'rest' {
   let bestN = 0
   for (const a of ACTIONS) {
     const n = me.plan[a.key] ?? 0
-    const k = a.attrs?.find(open)
+    const split = a.key === 'aim' || a.key === 'vod' || a.key === 'util' ? practiceSplit(p, a.key) : undefined
+    const w = weightsFor(p)
+    const k = a.attrs?.filter(open).sort((x, y) =>
+      w[y] * (split?.[y] ?? 1) - w[x] * (split?.[x] ?? 1))[0]
     if (!k || !n) continue
     if (n > bestN) { bestN = n; best = k }
   }
@@ -276,7 +288,7 @@ export function runAction(state: GameState, key: MeAction): string {
   let line = ''
   switch (key) {
     case 'aim': case 'vod': case 'util': {
-      const split = SPLIT[key]!
+      const split = practiceSplit(p, key)
       // without a club the hours are mine alone: no team practice underneath them
       const alone = pro ? 1 : 1.6
       for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) bump(k, g * EXTRA * share * alone)

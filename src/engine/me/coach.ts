@@ -2,14 +2,13 @@ import { Rng, clamp, hashStr } from '../rng'
 import { ROLES, SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
-import { weightsFor } from '../player'
-import { ATTR_KEYS } from '../types'
 import type { MeMatchRecord } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
 import { fireEvent } from './events'
 import { roomEdge } from './room'
 import { myCall } from './igl'
+import { roleCoreDims } from './roleCore'
 
 /** duels won (net) before the coach agrees to a trial */
 export const EDGE_NEED = 3
@@ -321,15 +320,15 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
   const mine = state.players[me.id]
   const him = duelTarget(state)
   if (!him) return null
-  const w = weightsFor(mine)
-  const top = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a])[0]
-  const dims = [top, 'awareness', 'clutch'] as const
+  const dims = roleCoreDims(mine.role)
   const cn: Record<string, string> = {
     aim: '枪法', reaction: '反应', awareness: '意识', utility: '道具',
     clutch: '残局', teamwork: '协同', communication: '沟通', igl: '指挥',
   }
   const rounds: DuelRound[] = []
   let wins = 0
+  // The button path pays the same exertion when the scrim opens, before its first odds.
+  mine.fatigue = clamp(mine.fatigue + 7, 0, 100)
   for (const d of dims) {
     const a = mine.attrs[d]
     const b = him.attrs[d]
@@ -348,7 +347,6 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
   me.scrimRounds += 30
   me.coachTrust = clamp(me.coachTrust + (won ? 1.5 : 0.3), 0, 100)
   me.mental = clamp(me.mental + (won ? 0.4 : 0.2), 0, 100)
-  mine.fatigue = clamp(mine.fatigue + 7, 0, 100)
   me.duelsThisWeek++
 
   const team = state.teams[state.myTeam]
@@ -389,6 +387,9 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   const team = state.teams[state.myTeam]
   const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
   const calling = myCall(state)
+  // New box scores count utility and other real contributions. Being fifth in a good five
+  // is not itself a poor performance. Old records retain their original rank-only meaning.
+  const underperformed = rec.performanceVersion !== 1 || rec.rating < 0.95
 
   // one more of the club's matches against the contract's floor — played, or watched from
   // the bench: both are matches the club played. A cup or an exhibition is not one of them
@@ -408,7 +409,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     let d = rec.won ? 1.5 : -0.5
     if (!calling) {
       if (rec.rank === 1) d += 1.5
-      else if (rec.rank >= 5) d -= 2
+      else if (rec.rank >= 5 && underperformed) d -= 2
     }
     if (d > 0) d *= traitMul(me, 'trust')
     me.coachTrust = clamp(me.coachTrust + d, 0, 100)
@@ -419,7 +420,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   }
 
   if (me.trial && rec.started) {
-    const good = rec.won || rec.rank <= 2
+    const good = rec.won || rec.rank <= 2 || (rec.performanceVersion === 1 && rec.rating >= 1.10)
     if (good) {
       me.trial.left--
       if (me.trial.left <= 0) {
@@ -459,7 +460,7 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   if (rec.started && !calling) {
     // straight after a title won as a starter, a bad night is a bad night (coachAfterTitle)
     const grace = (me.graceMatches ?? 0) > 0
-    if (!rec.won && rec.rank >= 5 && !grace) me.badStreak++
+    if (!rec.won && rec.rank >= 5 && underperformed && !grace) me.badStreak++
     else me.badStreak = Math.max(0, me.badStreak - 1)
     if (me.badStreak >= 3) {
       me.badStreak = 0
@@ -474,8 +475,8 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
     // starts trying other fives to see who is dragging the team — but not with the
     // starter he has settled on and trusts, nor one who has just won him a title
     // (2026-09-14: 「拿了世界冠军fmvp但是一样被轮换」)
-    if (!rec.won && rec.rank >= 4) me.rotateHeat = (me.rotateHeat ?? 0) + 1
-    else if (rec.won) me.rotateHeat = 0
+    if (!rec.won && rec.rank >= 4 && underperformed) me.rotateHeat = (me.rotateHeat ?? 0) + 1
+    else if (rec.won || !underperformed) me.rotateHeat = 0
     if (grace || (me.proven && me.coachTrust >= PROVEN_TRUST)) me.rotateHeat = 0
     if ((me.rotateHeat ?? 0) >= 2 && !(me.benchLock && me.benchLock > state.day)) {
       const r = new Rng(hashStr(`rotate:${state.seed}:${state.year}:${state.day}`))
@@ -535,7 +536,7 @@ export function standingLine(state: GameState, where: 'week' | 'team'): string {
   const me = state.me
   const team = state.teams[state.myTeam]
   if (!me || !team) return ''
-  if (me.trial) return `试用期，还剩 ${me.trial.left} 场。赢下比赛或打出队内前二就算过。`
+  if (me.trial) return `试用期，还剩 ${me.trial.left} 场。赢下比赛、贡献队内前二，或新版贡献评分达到 1.10，就算过。`
   // while the contract is still what decides, that is where I stand — and the sentence
   // says when it stops deciding, so the day it does is not a surprise
   const seat = promiseSeat(state)

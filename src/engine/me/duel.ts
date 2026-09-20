@@ -1,5 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { ATTR_CN, ATTR_KEYS } from '../types'
+import { ATTR_CN, ATTR_KEYS, ROLES } from '../types'
 import type { Attrs, GameState, Player } from '../types'
 import { ACTION_BY_KEY, DUELS_PER_WEEK } from './actions'
 import { EDGE_NEED, PROMISE_HELD, TRIAL_MATCHES, coachStarters, duelTarget, promiseSeat } from './coach'
@@ -7,6 +7,7 @@ import { addXp } from './growth'
 import { pushLog } from './log'
 import { sealWeek } from './undo'
 import type { DuelSceneLog } from './types'
+import { roleCoreDims } from './roleCore'
 
 /**
  * The practice duel, played a scene at a time.
@@ -36,6 +37,28 @@ export const DUEL_SCENES: DuelScene[] = [
   { q: '局面焦灼，队友问这回合怎么打。', ctx: '训练赛里指挥权在他手上，不在你。',
     a: [{ t: '接过指挥，报点打', dim: 'igl', risk: 1.2 }, { t: '听队伍的，先打好自己', dim: 'mental', risk: 0.6 }, { t: '自己去做信息，找机会', dim: 'awareness', risk: 0.8 }] },
 ]
+
+// Append, never replace: a saved duel's pool contains indexes into the original six scenes.
+// New duels test all three distinct positional duties; no random gun-only paper for a support.
+const LEGACY_SCENE_COUNT = DUEL_SCENES.length
+const JOB: Record<keyof Attrs, string> = {
+  aim: '交火中把该补的枪补到位', reaction: '抓住先手窗口完成突破',
+  awareness: '读出转点与绕后，提前落位', utility: '把关键道具交在正确的时机',
+  clutch: '人数落后时处理残局', teamwork: '与队友同步，衔接进攻和补位',
+  communication: '把信息清楚地传给队友', igl: '根据场上信息调整战术',
+}
+for (const role of ROLES) {
+  for (const dim of roleCoreDims(role)) {
+    DUEL_SCENES.push({
+      q: `${role}专项：${JOB[dim]}。`,
+      ctx: `教练比较你和首发在同一项${ATTR_CN[dim]}任务上的执行，不只看击杀数。`,
+      a: [
+        { t: '按训练要求完成，不额外冒险', dim, risk: 0.8 },
+        { t: '挑战更紧窗口：成功率较低，成功且赢下对位时资本额外 +0.5', dim, risk: 1.2 },
+      ],
+    })
+  }
+}
 
 export const DIM_CN: Record<string, string> = { ...ATTR_CN, mental: '心态' }
 
@@ -81,9 +104,8 @@ export function startDuel(state: GameState): string | null {
   if (why) return why
   const me = state.me!
   const him = duelTarget(state)!
-  const rng = new Rng(hashStr(`duel:${state.seed}:${state.year}:${state.day}:${me.duelsThisWeek}`))
-  const idx = DUEL_SCENES.map((_, i) => i)
-  for (let i = idx.length - 1; i > 0; i--) { const j = rng.int(0, i); [idx[i], idx[j]] = [idx[j], idx[i]] }
+  const first = LEGACY_SCENE_COUNT + ROLES.indexOf(state.players[me.id].role) * 3
+  const idx = [first, first + 1, first + 2]
   me.ap -= ACTION_BY_KEY.duel.cost
   me.plan.duel = (me.plan.duel ?? 0) + 1
   ;(me.weekDone ??= []).push('duel')
@@ -91,7 +113,7 @@ export function startDuel(state: GameState): string | null {
   sealWeek(state)
   me.duelsThisWeek++
   state.players[me.id].fatigue = clamp(state.players[me.id].fatigue + 7, 0, 100)
-  me.duelLive = { himId: him.id, sc: [0, 0], round: 1, pool: idx.slice(0, 5), rounds: [], flash: 0, done: false }
+  me.duelLive = { himId: him.id, sc: [0, 0], round: 1, pool: idx, rounds: [], flash: 0, done: false }
   return null
 }
 

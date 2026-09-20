@@ -19,7 +19,7 @@ export default function CareerOverview() {
         <div className="career-overview-stats" aria-label={scope === 'career' ? '生涯累计数据' : '当季数据'}>
           <Stat k="出场地图" v={view.maps} />
           <Stat k="正式赛出场" v={`${view.starts} 场`} />
-          <Stat k="评分" v={view.rating} />
+          <Stat k="贡献评分" v={view.rating} />
           <Stat k="ACS" v={view.acs} />
           <Stat k="K/D" v={view.kd} />
           <Stat k="击杀 / 死亡 / 助攻" v={view.kda} small />
@@ -33,7 +33,7 @@ export default function CareerOverview() {
           <summary>统计口径</summary>
           <p>只读本人已结算的职业正式赛记录，不计训练赛、业余杯赛与表演赛。地图数按实际出场地图累计，场数按整场比赛；出场胜率为出场获胜场数 ÷ 正式赛出场场数。</p>
           <p>比赛 MVP 每场记一次，不是把 BO3 / BO5 各图的 MVP 相加。生涯累计不会随最近一年比赛明细清理而减少；没有比赛或分母为 0 时显示“—”。</p>
-          <p>评分、ACS 沿用游戏现有统计公式；旧存档未记录的数据不会反推补造。</p>
+          <p>累计贡献评分按已有击杀、助攻、死亡、首杀差和残局计算，ACS 仍表示伤害表现。已结算的历史比赛评分和奖项保留原样；旧档缺失的数据不补造。</p>
         </details>
         <div className="career-current-honors" aria-label="当季荣誉">
           <h3>{game.year} 当季荣誉</h3>

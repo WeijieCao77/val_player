@@ -1,6 +1,6 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS } from '../types'
-import type { Attrs, GameState } from '../types'
+import type { Attrs, GameState, Player, Role } from '../types'
 import { duoMate, hourValues } from './growth'
 export { duoMate }
 import { emptyTalents, talentsOf } from './career'
@@ -78,6 +78,26 @@ export function weekEndFatigue(state: GameState, load = matchLoad(state)): numbe
 
 /** A practice session of the steady plan: the three the role picks from, and 双排 for a talent in 沟通. */
 export type Practice = 'aim' | 'vod' | 'util' | 'duo'
+
+/** Fixed tail sessions follow the role, not a universal VOD + aim programme.
+ * The first slot still reacts to current room; talentSessions can replace one
+ * tail and practiceWithRoom still resolves ceilings at the moment of spending. */
+export const ROLE_PRACTICE: Record<Role, [Practice, Practice]> = {
+  决斗者: ['vod', 'aim'], 先锋: ['util', 'vod'], 控场: ['util', 'vod'],
+  哨卫: ['vod', 'util'], 自由人: ['vod', 'aim'],
+}
+
+/** Support specialists still need basic gunplay. At most one tail slot every
+ * four weeks catches up a large gap; no extra hours and no permanent gun slot.
+ * Ceilings, fatigue, talent choices and live breakthroughs keep their guards. */
+export function rolePractice(p: Player, week: number, preserveTail = false): [Practice, Practice] {
+  const tail: [Practice, Practice] = [...ROLE_PRACTICE[p.role]]
+  if (preserveTail || (p.role !== '先锋' && p.role !== '控场' && p.role !== '哨卫')) return tail
+  const gun = (p.attrs.aim + p.attrs.reaction) / 2
+  const craft = (p.attrs.awareness + p.attrs.utility) / 2
+  if (week % 4 === 3 && craft - gun >= 12 && (p.attrs.aim < ceilingOf(p, 'aim') || p.attrs.reaction < ceilingOf(p, 'reaction'))) tail[1] = 'aim'
+  return tail
+}
 
 /**
  * The practice that trains each attribute, for the talent's session: the week board's own (actions.ts), 复盘
@@ -169,14 +189,14 @@ export function talentPick(state: GameState): keyof Attrs | null {
  * carried, and over six seasons his arguments went from 7 to 27 and his average bond from 19 to 5, for 0.3 of
  * peak (probe_igl.ts, 3 seeds). So the pick reads the lean past 均衡型, and 均衡型 practises as it always has.
  */
-export function talentSessions(state: GameState, role: Practice[]): Practice[] {
+export function talentSessions(state: GameState, role: Practice[], preserve: readonly number[] = []): Practice[] {
   const k = talentPick(state)
   if (!k) return role
   const own: Practice = TALENT_PRACTICE[k] === 'duo' && !duoMate(state) ? 'util' : TALENT_PRACTICE[k]
   const worth = new Map<string, number>(hourValues(state).map((h) => [h.key, h.perPoint]))
   const room = role
     .map((s, i) => ({ s, i, v: worth.get(s) ?? 0 }))
-    .filter((x) => x.s !== own && (x.s === 'duo' || !chasing(state, FEEDS[x.s])))
+    .filter((x) => !preserve.includes(x.i) && x.s !== own && (x.s === 'duo' || !chasing(state, FEEDS[x.s])))
     .sort((a, b) => a.v - b.v || a.i - b.i)[0]
   if (!room) return role
   const out = [...role]
@@ -252,8 +272,14 @@ export function autoPlan(state: GameState, talent = true): string {
     .sort((a, b) => p.attrs[a] / w[a] - p.attrs[b] / w[b])[0]
   const first: Practice = weakest === 'aim' || weakest === 'reaction' ? 'aim'
     : weakest === 'awareness' || weakest === 'clutch' ? 'vod' : 'util'
-  const role: Practice[] = [first, 'vod', 'aim']
-  const sessions = talent ? talentSessions(state, role) : role
+  const tail = ROLE_PRACTICE[p.role][1]
+  const preserveTail = tail !== 'duo' && chasing(state, FEEDS[tail])
+  const tailPlan = rolePractice(p, me.week, preserveTail)
+  const role: Practice[] = [first, ...tailPlan]
+  // A craft-heavy talent must not immediately replace its scheduled, bounded
+  // catch-up with a third craft session. Its other two slots remain available.
+  const catchUp = tail !== 'aim' && tailPlan[1] === 'aim'
+  const sessions = talent ? talentSessions(state, role, catchUp ? [2] : []) : role
   const session = (s: Practice): void => {
     if (s !== 'duo') {
       const useful = practiceWithRoom(state, s)

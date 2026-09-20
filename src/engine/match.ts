@@ -8,6 +8,7 @@ import { callerOf, coachOr } from './roster'
 import { NEUTRAL, squadHarmony } from './bonds'
 import { deskOf, managedClub } from './desk'
 import { STANDIN_COST, callupPool } from './standin'
+import { aggregateLines, performanceRating, usesPerformanceRating } from './performance'
 import type {
   EdgeBreakdown, GameState, MapLine, MapScore, MatchResult, Player, Role, RoundLog, StageKey, Team,
 } from './types'
@@ -55,9 +56,6 @@ const KILL_WEIGHT: Record<Role, number> = {
 // and an entry player dies for it: 1.28, from 1.25, for the same reason
 const DEATH_WEIGHT: Record<Role, number> = {
   决斗者: 1.28, 先锋: 1.08, 自由人: 1.0, 控场: 0.9, 哨卫: 0.88,
-}
-const ENTRY_WEIGHT: Record<Role, number> = {
-  决斗者: 2.0, 先锋: 1.3, 自由人: 1.0, 哨卫: 0.6, 控场: 0.5,
 }
 
 export interface Lineup {
@@ -528,6 +526,7 @@ function allocateRound(
   focusId?: string,
 ): void {
   const roundKills: Record<string, number> = {}
+  const roundDeaths = new Set<string>()
   const kill = (killers: Player[], victims: Player[], count: number, firstOf: boolean) => {
     // a club fielding fewer than five still has to play; never divide by nobody
     if (!killers.length) return
@@ -546,6 +545,9 @@ function allocateRound(
       const dw = vPool.map(
         (p) => (120 - p.attrs.awareness * 0.35 - p.attrs.clutch * 0.2) * DEATH_WEIGHT[p.role],
       )
+      // The opening duel belongs to its actual killer/victim, not two other
+      // independent players who might finish the round with zero kills/deaths.
+      const opening = firstOf && i === 0
       const killer = rng.weighted(killers, kw)
       const victim = rng.weighted(vPool, dw)
       const kl = ctx.lines[killer.id]
@@ -555,17 +557,18 @@ function allocateRound(
       // a kill is often the finish on someone a teammate already damaged
       kl.damage += 120 + rng.range(0, 55)
       vl.deaths++
-      if (firstOf && i === 0) {
-        const entryK = rng.weighted(killers, killers.map((p) => ENTRY_WEIGHT[p.role] * (p.attrs.aim / 60)))
-        const entryV = rng.weighted(vPool, vPool.map((p) => ENTRY_WEIGHT[p.role]))
-        ctx.lines[entryK.id].firstKills++
-        ctx.lines[entryV.id].firstDeaths++
+      roundDeaths.add(victim.id)
+      if (opening) {
+        kl.firstKills++
+        vl.firstDeaths++
       }
       // assist from a utility-heavy teammate
       if (rng.chance(0.42)) {
         const mates = killers.filter((p) => p.id !== killer.id)
         if (mates.length) {
-          const aw = mates.map((p) => p.attrs.utility * 0.7 + p.attrs.communication * 0.3)
+          // The assist pool remains fixed, but drilled utility/timing earns a
+          // meaningful share. This is actual ability, never a free role bonus.
+          const aw = mates.map((p) => Math.pow((p.attrs.utility * 0.7 + p.attrs.communication * 0.3) / 65, 2))
           ctx.lines[rng.weighted(mates, aw).id].assists++
         }
       }
@@ -596,11 +599,9 @@ function allocateRound(
   // a 1vX hold when the winning side was down to its last player. The survivor
   // is whoever was most likely to still be standing, and the X is how many they
   // actually took down — not the whole enemy side, which was the old bug.
-  if (winnersLost === 4) {
-    const hero = rng.weighted(
-      winners,
-      winners.map((p) => p.attrs.clutch * 0.6 + p.attrs.awareness * 0.4),
-    )
+  const survivors = winners.filter((p) => !roundDeaths.has(p.id))
+  if (winners.length === 5 && winnersLost === 4 && survivors.length === 1) {
+    const hero = survivors[0]
     ctx.lines[hero.id].clutches++
     const took = Math.max(1, Math.min(roundKills[hero.id] ?? 1, losersLost))
     if (room() && (took >= 3 || rng.chance(0.4))) ctx.highlights.push(HL.clutch(hero.ign, took))
@@ -962,6 +963,7 @@ export class MapSim {
     }
     return {
       score: {
+        performanceVersion: 1,
         map: this.map, scoreA: this.a, scoreB: this.b,
         edge: { a: this.A.edge, b: this.B.edge },
         lines: this.ctx.lines, rounds: this.ctx.rounds,
@@ -1077,27 +1079,10 @@ export class MatchSim {
   }
 
   finish(): MatchResult {
-    const totals: Record<string, { acs: number; maps: number }> = {}
-    for (const ms of this.played) {
-      for (const [pid, l] of Object.entries(ms.lines)) {
-        const t = (totals[pid] ??= { acs: 0, maps: 0 })
-        t.acs += l.acs
-        t.maps++
-      }
-    }
-    const winnerIds = new Set(this.wonA === this.wonB ? [] :
-      (this.wonA > this.wonB ? this.state.teams[this.aId] : this.state.teams[this.bId])?.roster ?? [],
-    )
-    // the match award reads each map's own ACS and averages it over the maps he
-    // played, which is NOT the round-weighted ACS the scoreboard prints — a big
-    // map that ran short weighs as much as a long one. A player asked why the
-    // label went to a man below him in both columns (2026-09-20); the rule is
-    // the author's and stays, and the screens that show the label now say what
-    // it reads (me/postmatch.ts mvpNote).
-    const mvp = bestByAcs(
-      Object.entries(totals).filter(([, t]) => t.maps).map(([pid, t]) => [pid, t.acs / t.maps] as [string, number]),
-      winnerIds,
-    )
+    // Actual participants include emergency stand-ins; roster membership alone
+    // used to deny those players the winning-side nod.
+    const winnerIds = new Set(this.wonA === this.wonB ? [] : this.wonA > this.wonB ? this.seenA : this.seenB)
+    const mvp = seriesMvp(this.played, winnerIds)
     const result: MatchResult = {
       mapsWonA: this.wonA, mapsWonB: this.wonB, maps: this.played,
       vetoLog: this.vetoLog, mvp, highlights: this.highlights,
@@ -1290,17 +1275,17 @@ export function applyMatchStats(state: GameState, result: MatchResult): void {
 export { ratingOf } from './player'
 
 /**
- * How much the winning side is favoured. Real awards lean that way, and the
- * match award and a map's own label lean by the same amount.
+ * Historical ACS award preference, retained only when reading old matches.
  */
 export const MVP_WIN_NOD = 18
+/** New rating's units, deliberately only a modest preference for victory. */
+export const PERFORMANCE_WIN_NOD = 0.08
 
 /**
  * Who gets the label: the highest ACS, with the winning side's nod on top,
  * the first best keeping a tie.
  *
- * One function so the match award and the per-map label cannot drift apart
- * again. All that differs between them is the ACS handed in — a map's own, or
+ * Legacy reader. All that differs is the ACS handed in — a map's own, or
  * the average over the maps of a series — and who counts as the winning side.
  */
 function bestByAcs(acs: Iterable<[string, number]>, winners: ReadonlySet<string>): string | null {
@@ -1316,15 +1301,39 @@ function bestByAcs(acs: Iterable<[string, number]>, winners: ReadonlySet<string>
   return mvp
 }
 
+function bestByPerformance(lines: Record<string, MapLine>, winners: ReadonlySet<string>): string | null {
+  let best = -1
+  let mvp: string | null = null
+  for (const [pid, line] of Object.entries(lines)) {
+    if (!(line.rounds > 0)) continue
+    const score = performanceRating(line) + (winners.has(pid) ? PERFORMANCE_WIN_NOD : 0)
+    if (score > best) { best = score; mvp = pid }
+  }
+  return mvp
+}
+
+/** Fresh series use total actual contributions / rounds; historical maps keep
+ * their map-average ACS rule. Never retroactively rewrite a stored award. */
+export function seriesMvp(maps: readonly MapScore[], winners: ReadonlySet<string>): string | null {
+  if (usesPerformanceRating(maps)) return bestByPerformance(aggregateLines(maps), winners)
+  const totals: Record<string, { acs: number; maps: number }> = {}
+  for (const map of maps) for (const [pid, line] of Object.entries(map.lines)) {
+    const t = totals[pid] ??= { acs: 0, maps: 0 }
+    t.acs += line.acs; t.maps++
+  }
+  return bestByAcs(Object.entries(totals).map(([pid, t]) => [pid, t.acs / t.maps]), winners)
+}
+
 /**
- * The best performance on ONE map — the same scoring the match MVP uses (ACS
- * plus a winner's nod), judged against that map's own winner. The match MVP
+ * The best performance on ONE map — contribution rating for new maps, legacy
+ * ACS for old maps — judged against that map's own winner. The match MVP
  * tag used to sit on every per-map sheet, where a 1.56 on the map lost the
  * label to whoever had averaged best across the series.
  */
 export function mapMvp(
   map: MapScore, lineups?: { a: string[]; b: string[] },
 ): string | null {
-  const winners = new Set(map.scoreA > map.scoreB ? lineups?.a ?? [] : lineups?.b ?? [])
+  const winners = new Set(map.performanceVersion === 1 && map.scoreA === map.scoreB ? [] : map.scoreA > map.scoreB ? lineups?.a ?? [] : lineups?.b ?? [])
+  if (map.performanceVersion === 1) return bestByPerformance(map.lines, winners)
   return bestByAcs(Object.entries(map.lines).map(([pid, l]) => [pid, l.acs] as [string, number]), winners)
 }

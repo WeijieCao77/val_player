@@ -192,6 +192,8 @@ export interface DuelLive {
 }
 
 export interface MeMatchRecord {
+  /** Absent on historical records, which retain their original evaluation. */
+  performanceVersion?: 1
   fixtureId: string
   day: number
   year: number
@@ -425,6 +427,8 @@ export interface PitchBook {
 export interface TryoutDayLog { day: number; pick: string; dim: string; p: number; ok: boolean }
 
 export interface Tryout {
+  /** Role-specific assessment; absent keeps an already-started old tryout. */
+  assessmentVersion?: 1
   inviteId: string
   teamId: string
   startDay: number

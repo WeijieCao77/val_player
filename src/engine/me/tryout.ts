@@ -8,6 +8,8 @@ import { DIM_CN } from './nodes'
 import { makeDeal } from './contract'
 import { tryoutNight } from './nights'
 import { countOffer } from './telemetry'
+import { roleCoreDims } from './roleCore'
+import { ATTR_CN } from '../types'
 
 export interface TryoutOpt {
   t: string
@@ -94,7 +96,21 @@ export const GRADE_TEXT: Record<string, string> = {
  */
 export function tryoutDays(state: GameState): TryoutDay[] {
   const me = state.me!
-  return me.pre.wasPro || me.phase === 'pro' ? TRYOUT_DAYS.slice(1) : TRYOUT_DAYS
+  if (me.pre.wasPro || me.phase === 'pro') return TRYOUT_DAYS.slice(1)
+  // An already-open paper without the marker remains the paper the player accepted.
+  if (me.tryout && me.tryout.assessmentVersion !== 1) return TRYOUT_DAYS
+  const p = state.players[me.id]
+  const [core, second] = roleCoreDims(p.role)
+  const first: TryoutDay = {
+    name: `第一天 · ${p.role}岗位考核`, rec: 0,
+    desc: `教练先看${ATTR_CN[core]}与${ATTR_CN[second]}能否完成岗位任务；也保留基础对枪考核。综合实力门槛不变。`,
+    opts: [
+      { t: `按岗位要求展示${ATTR_CN[core]}`, dim: core, risk: 0.6, why: '把本职工作做好，教练会把它写进试训评价。' },
+      { t: `用${ATTR_CN[second]}挑战更难的配合窗口`, dim: second, risk: 1.3, why: '赌专项发挥。成功很亮眼，失误也会被记住。' },
+      { t: '接受基础对枪考核，稳稳打完', dim: 'aim', risk: 0.4, why: '枪法仍是基础；这项比较稳妥，对总评价的影响较小。' },
+    ],
+  }
+  return [first, ...TRYOUT_DAYS.slice(1)]
 }
 
 const tryoutRng = (state: GameState, step: number) =>
@@ -118,7 +134,7 @@ export function startTryout(state: GameState, inviteId: string): string | null {
     pushLog(state, 'deal', `${state.teams[inv.teamId]?.name} 免了试训，直接给了合同。`)
     return null
   }
-  me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [] }
+  me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [], assessmentVersion: 1 }
   // the first hour at the base is a night of its own (me/nights.ts), on screen before day one
   tryoutNight(state)
   // in the invitation's place: another club's invitation behind it waits until this tryout is over (me/pending.ts pushFront)

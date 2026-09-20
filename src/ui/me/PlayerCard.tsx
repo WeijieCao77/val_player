@@ -4,7 +4,7 @@ import { payOf } from '../../engine/me/paytable'
 import { leagueCurOf } from '../../engine/me/currency'
 import { useGame } from './ctx'
 import { callerOf } from '../../engine/roster'
-import { ratingOf } from '../../engine/match'
+import { performanceRating } from '../../engine/performance'
 import { statLine } from '../../engine/player'
 import { ATTR_CN, ATTR_KEYS } from '../../engine/types'
 import type { Stats } from '../../engine/types'
@@ -170,7 +170,7 @@ function StatBlock({ title, s }: { title: string; s: Stats }) {
       <div className="panel-head"><h2>{title}</h2></div>
       <div className="panel-body">
         <div className="grid c4" style={{ gap: 10 }}>
-          <div className="stat"><span className="k">评分</span><span className="v sm">{ratingOf(s).toFixed(2)}</span></div>
+          <div className="stat"><span className="k">贡献评分</span><span className="v sm">{performanceRating(s).toFixed(2)}</span></div>
           <div className="stat"><span className="k">ACS</span><span className="v sm">{l.acs.toFixed(0)}</span></div>
           <div className="stat"><span className="k">K/D</span><span className="v sm">{l.kd.toFixed(2)}</span></div>
           <div className="stat"><span className="k">ADR</span><span className="v sm">{l.adr.toFixed(0)}</span></div>

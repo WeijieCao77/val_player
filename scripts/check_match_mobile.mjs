@@ -30,6 +30,7 @@ const compiled = await build({
     game.myTeam=teamA;
     const bo=new URLSearchParams(location.search).get('bo')==='1'?1:3;
     const result=simulateMatch(game,teamA,teamB,bo,new Rng(703));
+    if (new URLSearchParams(location.search).get('legacy') === '1') for (const map of result.maps) delete map.performanceVersion;
     const fixture={id:'local-layout',comp:'本地记分板验收',teamA,teamB,bo,label:'决赛',result};
     const noop=()=>{};
     const value={game,commit:noop,toast:noop,openPlayer:(id)=>{document.body.dataset.opened=id},openMatch:noop,go:noop,startTutorial:noop};
@@ -68,12 +69,12 @@ try {
     page.on('pageerror', e => errors.push(e.message))
     await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort())
     await page.addInitScript(() => localStorage.setItem('valplayer.music', JSON.stringify({vol:0,muted:true,off:true,open:false})))
-    for (const bo of [1, 3]) {
-      await page.goto(`${origin}/?bo=${bo}`)
-      const note = page.locator('p').filter({ hasText: 'MVP 看的是' })
+    for (const legacy of [false, true]) for (const bo of [1, 3]) {
+      await page.goto(`${origin}/?bo=${bo}&legacy=${legacy ? 1 : 0}`)
+      const note = page.locator('p').filter({ hasText: legacy ? 'MVP 看的是' : 'MVP 按' })
       await note.waitFor()
       assert.equal(await note.count(), 1)
-      assert.match(await note.innerText(), bo === 3 ? /每张图的 ACS 平均/ : /这张图的 ACS/)
+      assert.match(await note.innerText(), legacy ? (bo === 3 ? /每张图的 ACS 平均/ : /这张图的 ACS/) : (bo === 3 ? /全部地图累计回合的.*贡献评分/ : /本图的.*贡献评分/))
       await note.scrollIntoViewIfNeeded()
       const dimensions = await note.evaluate(el => {
         const rect = el.getBoundingClientRect(), modal = document.querySelector('.modal')
@@ -83,7 +84,7 @@ try {
       })
       assert.ok(dimensions.left >= -1 && dimensions.right <= width + 1, JSON.stringify(dimensions))
       assert.ok(!dimensions.inTable && dimensions.font >= 12 && dimensions.overflow <= 1 && dimensions.pageOverflow <= 1, JSON.stringify(dimensions))
-      await page.screenshot({ path: resolve(output, `${width}-bo${bo}.png`) })
+      await page.screenshot({ path: resolve(output, `${width}-bo${bo}-${legacy ? 'legacy' : 'contribution'}.png`) })
       // Scrolling the stats table must not move the explanatory paragraph.
       const table = page.locator('.panel .table-wrap').last()
       await table.evaluate(el => { el.scrollLeft = el.scrollWidth })
@@ -91,14 +92,14 @@ try {
       if (bo === 3) {
         const mapTabs = page.locator('.seg').filter({ has: page.getByRole('button', {name:'全部地图',exact:true}) })
         await mapTabs.getByRole('button').nth(1).click()
-        assert.match(await note.innerText(), /这张图的 ACS/)
+        assert.match(await note.innerText(), legacy ? /这张图的 ACS/ : /本图的.*贡献评分/)
         await mapTabs.getByRole('button', {name:'全部地图',exact:true}).click()
-        assert.match(await note.innerText(), /每张图的 ACS 平均/)
+        assert.match(await note.innerText(), legacy ? /每张图的 ACS 平均/ : /全部地图累计回合的.*贡献评分/)
       }
       await page.getByRole('button', {name:'关闭 ✕',exact:true}).click()
       assert.equal(await page.locator('body').getAttribute('data-closed'), 'yes')
-      measurements.push({ width, bo, ...dimensions })
-      console.log(`PASS ${width}px BO${bo}: MVP explanation readable; map tabs and close work`)
+      measurements.push({ width, bo, legacy, ...dimensions })
+      console.log(`PASS ${width}px BO${bo} ${legacy ? 'legacy' : 'contribution'}: MVP explanation readable; map tabs and close work`)
     }
     assert.deepEqual(errors, [])
     await page.close()

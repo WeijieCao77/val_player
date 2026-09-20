@@ -5,6 +5,7 @@ import { useGame } from './ctx'
 import { AgentIcon, Modal, MultiRadar, Roles, Crest } from './common'
 import RoundRibbon, { RibbonLegend } from './RoundRibbon'
 import { mapMvp, ratingOf } from '../../engine/match'
+import { mapPerformanceRating, performanceRating } from '../../engine/performance'
 import { mvpNote } from '../../engine/me/postmatch'
 import type { Fixture, MapLine, MapScore } from '../../engine/types'
 
@@ -44,7 +45,8 @@ export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onC
     for (const l of Object.values(lines)) {
       l.acs = l.rounds ? Math.round((l.damage / l.rounds) * 1.45) : 0
     }
-    return { map: '全部地图', scoreA: r.mapsWonA, scoreB: r.mapsWonB, lines }
+    return { map: '全部地图', scoreA: r.mapsWonA, scoreB: r.mapsWonB, lines,
+      performanceVersion: r.maps.every((m) => m.performanceVersion === 1) ? 1 : undefined }
   })() : null
 
   const perMap = allMaps ? tab > 0 : true
@@ -299,8 +301,8 @@ function Performance({
                   const p = game.players[pid]
                   const l = map.lines[pid]
                   if (!p || !l) return null
-                  const now = ratingOf({ ...l, rounds: l.rounds })
-                  const base = p.season.maps ? ratingOf(p.season) : now
+                  const now = mapPerformanceRating(map, l)
+                  const base = p.season.maps ? (map.performanceVersion === 1 ? performanceRating(p.season) : ratingOf(p.season)) : now
                   const d = now - base
                   return (
                     <tr key={pid} className="clickable" onClick={() => { setMode('player'); toggle(pid) }}>
@@ -352,7 +354,9 @@ function Scoreboard({
     return ids
       .map((pid) => ({ p: game.players[pid], l: map.lines[pid] }))
       .filter((x) => x.p && x.l)
-      .sort((x, y) => y.l.acs - x.l.acs)
+      .sort((x, y) => map.performanceVersion === 1
+        ? Math.round(mapPerformanceRating(map, y.l) * 100) - Math.round(mapPerformanceRating(map, x.l) * 100) || y.l.acs - x.l.acs
+        : y.l.acs - x.l.acs)
   }
 
   const block = (teamId: string) => {
@@ -367,14 +371,14 @@ function Scoreboard({
           <table>
             <thead>
               <tr>
-                <th>选手</th><th>特工</th><th>位置</th><th className="num">评分</th><th className="num">ACS</th>
+                <th>选手</th><th>特工</th><th>位置</th><th className="num">{map.performanceVersion === 1 ? '贡献评分' : '评分'}</th><th className="num">ACS</th>
                 <th className="num">K</th><th className="num">D</th><th className="num">A</th>
                 <th className="num">ADR</th><th className="num">首杀</th><th className="num">残局</th>
               </tr>
             </thead>
             <tbody>
               {list.map(({ p, l }) => {
-                const rat = ratingOf({ ...l, rounds: l.rounds })
+                const rat = mapPerformanceRating(map, l)
                 return (
                   <tr key={p.id} className="clickable" onClick={() => onPlayer(p.id)}>
                     <td>
@@ -383,13 +387,13 @@ function Scoreboard({
                         <span className="tag" style={{ marginLeft: 6 }} title="不在这支队伍的注册名单上：青训队调来，或自由人临时顶替">临时</span>
                       )}
                       {mvp === p.id && (
-                        <span className="tag t1" style={{ marginLeft: 6 }} title={mvpNote(maps)}>MVP</span>
+                        <span className="tag t1" style={{ marginLeft: 6 }} title={mvpNote(maps, map.performanceVersion)}>MVP</span>
                       )}
                       {mapBest === p.id && (
                         <span
                           className="tag"
                           style={{ marginLeft: 6, borderColor: 'var(--accent-line)', color: 'var(--accent)' }}
-                          title={mvpNote(1)}
+                          title={mvpNote(1, map.performanceVersion)}
                         >
                           本图最佳
                         </span>
@@ -434,7 +438,7 @@ function Scoreboard({
       <div className="nav-group" style={{ padding: '0 0 8px' }}>数据统计 · {mapCn(map.map)}</div>
       {/* 表是按总回合算的，标签不是：一行小字说清楚，手机上碰不到 title（2026-09-20 玩家提问） */}
       {(mvp || mapBest) && (
-        <p className="tiny faint" style={{ margin: '0 0 8px' }}>{mvp ? mvpNote(maps) : mvpNote(1)}</p>
+        <p className="tiny faint" style={{ margin: '0 0 8px' }}>{mvpNote(mvp ? maps : 1, map.performanceVersion)}</p>
       )}
       {block(teamA)}
       {block(teamB)}

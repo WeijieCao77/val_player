@@ -180,7 +180,7 @@ export default function MeScreen() {
                       <td className="num" style={{ color: m.rating >= 1.1 ? 'var(--win)' : m.rating > 0 && m.rating < 0.85 ? 'var(--loss)' : undefined }}>{m.started ? m.rating.toFixed(2) : '—'}</td>
                       <td className="badge">
                         {/* 这一行左边就是评分，两个数说不到一起去时，标签自己说（2026-09-20 玩家提问） */}
-                        {m.mvp ? <span className="tag win" title={mvpNote(m.maps)}>MVP</span>
+                        {m.mvp ? <span className="tag win" title={mvpNote(m.maps, m.performanceVersion)}>MVP</span>
                           : m.carried ? <span className="tag" title="输了这场，但你是全队评分最高的">全队最高</span> : null}
                       </td>
                     </tr>

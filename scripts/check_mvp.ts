@@ -1,5 +1,8 @@
 /**
  * The MVP label reads what the screens now say it reads.
+ * Updated for role-balance: the old ACS rule described in the historical
+ * context below applies only to unversioned saves; NEW matches are checked
+ * against the independent round-weighted contribution oracle below.
  *
  * A player asked, 2026-09-20: 「他 ACS 和评分都不如 NPC，但是最后 MVP 给到了他，这是为什么？」
  * Both numbers are honest and so is the award — they are just not the same sum.
@@ -25,10 +28,22 @@
  *   npx tsx scripts/check_mvp.ts [series=400] [seed=7]
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { MVP_WIN_NOD, mapMvp, simulateMatch } from '../src/engine/match'
+import { MVP_WIN_NOD, PERFORMANCE_WIN_NOD, mapMvp, simulateMatch } from '../src/engine/match'
 import { mvpNote } from '../src/engine/me/postmatch'
 import { Rng } from '../src/engine/rng'
-import type { GameState, MapScore, MatchResult } from '../src/engine/types'
+import type { GameState, MapLine, MapScore, MatchResult } from '../src/engine/types'
+
+// 2026-09-20 role-balance intentionally replaces the old ACS promise for NEW
+// matches. This oracle is independent of performance.ts; legacy cases remain
+// pinned in check_role_performance.ts rather than silently deleting coverage.
+function contribution(l: MapLine): number {
+  if (!l.rounds) return 0
+  const r = l.rounds
+  return Math.max(0, Math.min(3, .55 + .80 * Math.min(5, l.kills / r)
+    + .80 * Math.min(1.5, l.assists / r) - .48 * Math.min(1, l.deaths / r)
+    + .25 * (Math.min(1, l.firstKills / r) - Math.min(1, l.firstDeaths / r))
+    + 1.00 * Math.min(1, l.clutches / r)))
+}
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -51,23 +66,22 @@ const check = (ok: boolean, what: string): void => {
 }
 
 /** the rule in words, written out again here from the per-map lines alone */
-function awardByHand(state: GameState, r: MatchResult, aId: string, bId: string): string | null {
-  const sum = new Map<string, { acs: number; maps: number }>()
+function awardByHand(_state: GameState, r: MatchResult, aId: string, bId: string): string | null {
+  const sum = new Map<string, MapLine>()
   for (const m of r.maps) {
     for (const [pid, l] of Object.entries(m.lines)) {
-      const t = sum.get(pid) ?? { acs: 0, maps: 0 }
-      t.acs += l.acs
-      t.maps++
+      const t = sum.get(pid) ?? { kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0, clutches: 0, rounds: 0, acs: 0 }
+      for (const key of ['kills', 'deaths', 'assists', 'damage', 'firstKills', 'firstDeaths', 'clutches', 'rounds'] as const) t[key] += l[key]
       sum.set(pid, t)
     }
   }
   const winner = r.mapsWonA === r.mapsWonB ? null : (r.mapsWonA > r.mapsWonB ? aId : bId)
-  const nod = new Set(winner ? state.teams[winner]?.roster ?? [] : [])
+  const nod = new Set(winner ? winner === aId ? r.lineups?.a : r.lineups?.b : [])
   let best = -1
   let who: string | null = null
   for (const [pid, t] of sum) {
-    if (!t.maps) continue
-    const s = t.acs / t.maps + (nod.has(pid) ? MVP_WIN_NOD : 0)
+    if (!t.rounds) continue
+    const s = contribution(t) + (nod.has(pid) ? PERFORMANCE_WIN_NOD : 0)
     if (s > best) { best = s; who = pid }
   }
   return who
@@ -75,11 +89,12 @@ function awardByHand(state: GameState, r: MatchResult, aId: string, bId: string)
 
 /** the same rule on one map's own ACS, judged against that map's own winner */
 function mapBestByHand(map: MapScore, lineups?: { a: string[]; b: string[] }): string | null {
-  const winners = new Set(map.scoreA > map.scoreB ? lineups?.a ?? [] : lineups?.b ?? [])
+  const winners = new Set(map.scoreA === map.scoreB ? [] : map.scoreA > map.scoreB ? lineups?.a ?? [] : lineups?.b ?? [])
   let best = -1
   let who: string | null = null
   for (const [pid, l] of Object.entries(map.lines)) {
-    const s = l.acs + (winners.has(pid) ? MVP_WIN_NOD : 0)
+    if (!l.rounds) continue
+    const s = contribution(l) + (winners.has(pid) ? PERFORMANCE_WIN_NOD : 0)
     if (s > best) { best = s; who = pid }
   }
   return who
@@ -151,20 +166,21 @@ for (let i = 0; i < series; i++) {
   lines.push(`${i}|${bo}|${r.mapsWonA}-${r.mapsWonB}|${r.mvp ?? '-'}|${r.maps.map((m) => mapMvp(m, r.lineups) ?? '-').join(',')}`)
 }
 
-console.log(`\n一、比赛 MVP 就是「每张图 ACS 的平均 + 胜方的加成」里最高的那个（${counted} 场，其中多图 ${multi} 场）：`)
+console.log(`\n一、新比赛 MVP = 累计回合贡献评分 + 胜方轻微加成（${counted} 场，其中多图 ${multi} 场）：`)
 check(awardWrong === 0, `每一场都对得上手算的${awardWrong ? `（${awardWrong} 场对不上）` : ''}`)
 
-console.log('\n二、本图最佳是同一条规则，只看这张图自己的 ACS 和这张图的胜方：')
+console.log('\n二、本图最佳是同一贡献规则，只看本图实际数据与胜方：')
 check(mapWrong === 0, `每张图都对得上手算的${mapWrong ? `（${mapWrong} 张对不上）` : ''}`)
 
 console.log('\n三、两处用的是同一个加成：')
-check(MVP_WIN_NOD === 18, `胜方加成 ${MVP_WIN_NOD}，比赛 MVP 和本图最佳共用`)
+check(PERFORMANCE_WIN_NOD === .08 && MVP_WIN_NOD === 18, `新胜方加成 ${PERFORMANCE_WIN_NOD}；旧存档保留 ${MVP_WIN_NOD}`)
 
 console.log('\n四、屏幕上那行小字和规则一致：')
-check(/每张图/.test(mvpNote(3)) && /平均/.test(mvpNote(3)) && /胜方/.test(mvpNote(3)),
-  `多图的说法提到了「每张图」「平均」「胜方」：${mvpNote(3)}`)
-check(!/每张图/.test(mvpNote(1)) && /胜方/.test(mvpNote(1)),
-  `单图的说法不提平均：${mvpNote(1)}`)
+check(/累计回合/.test(mvpNote(3, 1)) && /助攻/.test(mvpNote(3, 1)) && /胜方/.test(mvpNote(3, 1)),
+  `新版多图说明与贡献规则一致：${mvpNote(3, 1)}`)
+check(/本图/.test(mvpNote(1, 1)) && !/累计回合/.test(mvpNote(1, 1)),
+  `新版单图说明：${mvpNote(1, 1)}`)
+check(/每张图/.test(mvpNote(3)) && /ACS 平均/.test(mvpNote(3)) && !/每张图/.test(mvpNote(1)), '旧说明保留原ACS规则')
 check(notTopSeriesAcs > 0,
   `这批里有 ${notTopSeriesAcs} 场（${((notTopSeriesAcs / Math.max(1, counted)) * 100).toFixed(1)}%）MVP 不是本方盘面 ACS 最高的——小字说的就是这种场面，不是空话`)
 
@@ -177,5 +193,5 @@ if (bad) {
   console.log(`\n✗ MVP 判定有 ${bad} 处不对。`)
   process.exit(1)
 }
-console.log('\n✓ MVP：比赛的按每张图 ACS 的平均加胜方加成评，本图最佳按这张图自己的 ACS 评，两处同一个加成；'
+console.log('\n✓ MVP：新版按累计回合贡献评分，本图同规则；旧记录保留ACS解释；'
   + '屏幕上的小字和规则说的是同一件事。')

@@ -5,6 +5,7 @@ import { useGame } from './ctx'
 import { AgentIcon, Modal, MultiRadar, OvrBadge, Roles, Crest } from './common'
 import RoundRibbon, { RibbonLegend } from './RoundRibbon'
 import { mapMvp, ratingOf } from '../engine/match'
+import { mapPerformanceRating, performanceRating, usesPerformanceRating } from '../engine/performance'
 import type { Fixture, MapLine, MapScore } from '../engine/types'
 
 export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onClose: () => void }) {
@@ -41,7 +42,7 @@ export default function MatchModal({ fixture, onClose }: { fixture: Fixture; onC
       l.acs = l.rounds ? Math.round((l.damage / l.rounds) * 1.45) : 0
     }
     void rounds
-    return { map: '全部地图', scoreA: r.mapsWonA, scoreB: r.mapsWonB, lines }
+    return { map: '全部地图', scoreA: r.mapsWonA, scoreB: r.mapsWonB, lines, performanceVersion: usesPerformanceRating(r.maps) ? 1 : undefined }
   })() : null
 
   const perMap = allMaps ? tab > 0 : true
@@ -296,8 +297,8 @@ function Performance({
                   const p = game.players[pid]
                   const l = map.lines[pid]
                   if (!p || !l) return null
-                  const now = ratingOf({ ...l, rounds: l.rounds })
-                  const base = p.season.maps ? ratingOf(p.season) : now
+                  const now = mapPerformanceRating(map, l)
+                  const base = p.season.maps ? (map.performanceVersion === 1 ? performanceRating(p.season) : ratingOf(p.season)) : now
                   const d = now - base
                   return (
                     <tr key={pid} className="clickable" onClick={() => { setMode('player'); toggle(pid) }}>
@@ -350,7 +351,9 @@ function Scoreboard({
     return ids
       .map((pid) => ({ p: game.players[pid], l: map.lines[pid] }))
       .filter((x) => x.p && x.l)
-      .sort((x, y) => y.l.acs - x.l.acs)
+      .sort((x, y) => map.performanceVersion === 1
+        ? Math.round(mapPerformanceRating(map, y.l) * 100) - Math.round(mapPerformanceRating(map, x.l) * 100) || y.l.acs - x.l.acs
+        : y.l.acs - x.l.acs)
   }
 
   const block = (teamId: string) => {
@@ -372,7 +375,7 @@ function Scoreboard({
             </thead>
             <tbody>
               {list.map(({ p, l }) => {
-                const rat = ratingOf({ ...l, rounds: l.rounds })
+                const rat = mapPerformanceRating(map, l)
                 return (
                   <tr key={p.id} className="clickable" onClick={() => onPlayer(p.id)}>
                     <td>

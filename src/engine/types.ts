@@ -687,6 +687,8 @@ export interface EdgeBreakdown {
 }
 
 export interface MapScore {
+  /** New contribution-rating rule; absent means the historical ACS award. */
+  performanceVersion?: 1
   map: string
   scoreA: number
   scoreB: number

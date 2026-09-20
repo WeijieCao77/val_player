@@ -77,6 +77,15 @@ export const TALENT_PRESETS: { key: string; name: string; blurb: string; t: Reco
   { key: 'even', name: '均衡型', blurb: '哪一项都不短，也没有一项特别突出', t: emptyTalents() },
 ]
 
+/** Optional starting points, not a migration: changing role never applies a build automatically. */
+export const ROLE_TALENT_PRESETS: Record<Role, typeof TALENT_PRESETS[number]> = {
+  决斗者: { key: 'role-duelist', name: '决斗者 · 突破', blurb: '枪法、反应为主，保留配合基础；适合负责突破', t: { aim: 6, reaction: 5, awareness: 2, utility: 1, clutch: 2, teamwork: 2, communication: 2, igl: 0 } },
+  先锋: { key: 'role-initiator', name: '先锋 · 开路', blurb: '道具、意识与协同，为队友创造进场机会', t: { aim: 2, reaction: 1, awareness: 5, utility: 6, clutch: 1, teamwork: 3, communication: 2, igl: 0 } },
+  控场: { key: 'role-controller', name: '控场 · 配合', blurb: '道具与意识为核心，兼顾协同和报点', t: { aim: 2, reaction: 1, awareness: 4, utility: 6, clutch: 1, teamwork: 4, communication: 2, igl: 0 } },
+  哨卫: { key: 'role-sentinel', name: '哨卫 · 守点', blurb: '意识、残局和道具，兼顾守点对枪与团队配合', t: { aim: 3, reaction: 1, awareness: 5, utility: 4, clutch: 3, teamwork: 2, communication: 2, igl: 0 } },
+  自由人: { key: 'role-flex', name: '自由人 · 补位', blurb: '枪法、意识与道具兼顾，保留团队属性', t: { aim: 4, reaction: 2, awareness: 4, utility: 4, clutch: 2, teamwork: 2, communication: 2, igl: 0 } },
+}
+
 /**
  * What a spread of talent means, in the screen's words (破晓's 「当前加点路线」):
  * judged by the share of the points spent that sit in the two biggest. Only
@@ -103,9 +112,9 @@ export function talentShape(talents: Record<keyof Attrs, number>): { label: stri
       : social >= 10 ? '协同、沟通点得多：和队友的关系稳，少起争执，状态好，能力接近时教练先用你' : '',
   ].filter(Boolean)
   const tail = notes.map((n) => `；${n}`).join('')
-  if (share >= 0.7) return { label: '高度专精', line: `综合冲得最快；但关键回合和对位练习赛里，用到短板那一项的选项很难成功${tail}。` }
-  if (share >= 0.45) return { label: '有侧重', line: `长项撑住综合，短板也不至于太短，关键回合里多数选项都能用${tail}。` }
-  return { label: '很均衡', line: `哪一项都不拖后腿，关键回合里哪个选项都能用；代价是综合比专精的路线低一些${tail}。` }
+  if (share >= 0.7) return { label: '高度专精', line: `集中在本位置重视的属性，才能有效提高综合；关键回合和对位练习赛仍要避开短板${tail}。` }
+  if (share >= 0.45) return { label: '有侧重', line: `长项能否撑住综合，要看是否匹配位置；临场优先选择自己擅长的项目${tail}。` }
+  return { label: '很均衡', line: `加点覆盖较广，但不等于每种临场选项都擅长；本位置的核心属性值得优先培养${tail}。` }
 }
 
 /** The talent panel's line on the three that 综合 hardly counts, in what the engine does with them. */

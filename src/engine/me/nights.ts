@@ -1,6 +1,6 @@
 import { clamp } from '../rng'
 import { AGENT_ROLE, MAP_META, agentCn, mapCn } from '../content'
-import { ratingOf } from '../player'
+import { performanceRating } from '../performance'
 import { REGION_CN } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
 import type { CerDef, CerPick } from './ceremony'
@@ -140,7 +140,7 @@ export function computeAwards(state: GameState): AwardsResult | null {
     if (!p || !p.season.rounds) continue
     rows.push({
       id, ign: p.ign, team: p.teamId ? state.teams[p.teamId]?.name ?? '' : '', role: p.role,
-      maps: p.season.maps, rating: ratingOf(p.season), acs: (p.season.damage / p.season.rounds) * 1.45,
+      maps: p.season.maps, rating: performanceRating(p.season), acs: (p.season.damage / p.season.rounds) * 1.45,
       rookie: id === me.id ? firstPro : p.age <= 21 && priorRounds(p) < 600,
     })
   }
