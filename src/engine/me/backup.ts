@@ -1,5 +1,6 @@
 import { hashStr } from '../rng'
-import { AUTOSAVE, OLD_AUTOSAVE, OWNER, adoptOldSave } from './saveInfo'
+import { adoptOldSave } from './saveInfo'
+import { OWNER, readSaveText } from './saveStore'
 import { PACKED, canPack, packStored, readStored } from './saveCodec'
 import { cleanHall, readHall } from './hall'
 import type { Hall } from './hall'
@@ -98,22 +99,9 @@ interface Peek { year?: unknown; day?: unknown; me?: { id?: unknown; saveId?: un
  * record compared before and after, so a save another page wrote meanwhile is
  * read again — and decoded once to be sure it is a career, and to name it.
  */
-export async function exportBackup(now: Date = new Date()): Promise<ExportResult> {
-  adoptOldSave()
-  let raw: string | null = null
+async function backupFromStored(raw: string, now: Date): Promise<ExportResult> {
   let peek: Peek | null = null
-  for (let tries = 0; ; tries++) {
-    let mark: string
-    try {
-      mark = localStorage.getItem(OWNER) ?? ''
-      raw = localStorage.getItem(AUTOSAVE) ?? localStorage.getItem(OLD_AUTOSAVE)
-    } catch { return { ok: false, why: 'unreadable' } }
-    if (!raw) return { ok: false, why: 'none' }
-    try { peek = JSON.parse(await readStored(raw)) as Peek } catch { return { ok: false, why: 'unreadable' } }
-    let after = mark
-    try { after = localStorage.getItem(OWNER) ?? '' } catch { /* read as unchanged */ }
-    if (after === mark || tries >= 3) break
-  }
+  try { peek = JSON.parse(await readStored(raw)) as Peek } catch { return { ok: false, why: 'unreadable' } }
   const me = peek?.me
   if (!peek || typeof peek !== 'object' || !me || typeof me !== 'object' || typeof peek.year !== 'number' || typeof peek.day !== 'number') {
     return { ok: false, why: 'unreadable' }
@@ -142,6 +130,33 @@ export async function exportBackup(now: Date = new Date()): Promise<ExportResult
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   const name = `val_player-${fileSafe(ign) || saveId || 'career'}-${today}.json`
   return { ok: true, text, name, bytes: new Blob([text]).size, backup }
+}
+
+/**
+ * The latest career still open on screen, even when its latest autosave did
+ * not fit. The caller takes the GameState as JSON before awaiting this, so the
+ * file is one exact moment rather than a later mutation of the same object.
+ */
+export async function exportBackupFromStored(stored: string, now: Date = new Date()): Promise<ExportResult> {
+  return backupFromStored(stored, now)
+}
+
+export async function exportBackup(now: Date = new Date()): Promise<ExportResult> {
+  adoptOldSave()
+  for (let tries = 0; ; tries++) {
+    let mark: string
+    let raw: string | null
+    try {
+      mark = localStorage.getItem(OWNER) ?? ''
+      raw = await readSaveText()
+    } catch { return { ok: false, why: 'unreadable' } }
+    if (!raw) return { ok: false, why: 'none' }
+    const out = await backupFromStored(raw, now)
+    if (!out.ok) return out
+    let after = mark
+    try { after = localStorage.getItem(OWNER) ?? '' } catch { /* read as unchanged */ }
+    if (after === mark || tries >= 3) return out
+  }
 }
 
 const obj = (x: unknown): Record<string, unknown> | null => (x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : null)
@@ -210,7 +225,7 @@ export async function readBackupFile(f: Blob): Promise<{ ok: true; text: string 
 export type BackupTake = 'ok' | 'full' | 'unopened'
 
 export const BACKUP_TAKE: Record<Exclude<BackupTake, 'ok'>, string> = {
-  full: '这个浏览器存不下这个存档（网站存储满了）。这台设备上原来的存档没动。',
+  full: '这个浏览器没能写入这个存档（可能禁用了网站存储，或给网站的额度不足）。这台设备上原来的存档没动。',
   unopened: '存档已经导进来了，但没能打开。刷新页面，再点「继续」。',
 }
 

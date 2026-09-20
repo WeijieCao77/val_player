@@ -19,8 +19,13 @@ import { ConfirmCard, SaveCard, playedAt } from './SaveCard'
 const inWeChat = (): boolean => typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
 const size = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
 
-/** 导出存档, opened under the save card. */
-export function ExportBox({ onClose }: { onClose: () => void }) {
+/** 导出存档, opened under the save card or as the escape hatch beside a failed autosave. */
+export function ExportBox({ onClose, source = exportBackup, rescue = false }: {
+  onClose: () => void
+  /** defaults to the save on disk; a failed autosave passes the career still in memory */
+  source?: () => Promise<ExportResult>
+  rescue?: boolean
+}) {
   const [out, setOut] = useState<ExportResult | null>(null)
   const [note, setNote] = useState('')
   // the clipboard was refused: the code in a box, to copy by hand
@@ -29,9 +34,9 @@ export function ExportBox({ onClose }: { onClose: () => void }) {
   const wechat = inWeChat()
   useEffect(() => {
     let live = true
-    exportBackup().then((r) => { if (live) setOut(r) }, () => { if (live) setOut({ ok: false, why: 'unreadable' }) })
+    source().then((r) => { if (live) setOut(r) }, () => { if (live) setOut({ ok: false, why: 'unreadable' }) })
     return () => { live = false }
-  }, [])
+  }, [source])
   useEffect(() => {
     if (!byHand || !box.current) return
     box.current.focus()
@@ -69,12 +74,14 @@ export function ExportBox({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <section className="backup-box" aria-label="导出存档">
+    <section className="backup-box" aria-label={rescue ? '导出当前进度' : '导出存档'}>
       <div className="backup-head">
-        <b>导出存档</b>
+        <b>{rescue ? '导出当前进度' : '导出存档'}</b>
         <button className="sm ghost" onClick={onClose}>收起</button>
       </div>
-      <p className="tiny muted">存档只在这个浏览器里。导出成一个文件，成就殿堂也在里面：换设备、换浏览器或者清了网站数据，在首页点「导入存档」就能接着玩。</p>
+      <p className="tiny muted">{rescue
+        ? '这里导出的是页面里还没丢的当前进度，不是浏览器里较早的那份。先把文件存好，再处理空间或刷新页面。'
+        : '存档只在这个浏览器里。导出成一个文件，成就殿堂也在里面：换设备、换浏览器或者清了网站数据，在首页点「导入存档」就能接着玩。'}</p>
       {wechat && <p className="tiny backup-warn">微信里下载不了文件：用「复制存档码」，或者点右上角在浏览器里打开再下载。</p>}
       {out && !out.ok && <p className="small backup-warn" role="alert">{out.why === 'none' ? '这台设备上没有存档。' : '这个存档读不了，导不出来。'}</p>}
       <div className="row backup-acts">

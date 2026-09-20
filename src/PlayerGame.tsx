@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
-import { autosave, checkSaveHeld, claimAutosave, flushAutosave, flushAutosaveNow, onSaveStorage } from './engine/me/save'
+import { autosave, checkSaveHeld, claimAutosave, exportCurrentBackup, flushAutosave, flushAutosaveNow, onSaveStorage } from './engine/me/save'
 import { setSaveNamespace } from './engine/save'
 import { dateLabel } from './engine/season'
 import { formatOf, onTimeline, stageNameIn } from './engine/era'
@@ -162,6 +162,12 @@ export default function Career({ opened, onHome }: {
     commit()
     return flushAutosave()
   }, [commit])
+
+  /** The escape hatch after a failed write: capture this page's career, not the older autosave on disk. */
+  const exportNow = useCallback(async () => {
+    const g = gameRef.current
+    return g ? exportCurrentBackup(g) : { ok: false as const, why: 'none' as const }
+  }, [])
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg)
@@ -604,7 +610,7 @@ export default function Career({ opened, onHome }: {
         {/* what just unlocked waits for the match, the run's summary and those cards, and goes before any card (unlocks above) */}
         {!live && !summary && !moments && <AchPop />}
         {/* the latest progress did not go into this browser: said until a save lands, with 再试一次 (ui/me/SaveNotice.tsx) */}
-        {trouble && !lost && <SaveNotice trouble={trouble} onRetry={saveNow} />}
+        {trouble && !lost && <SaveNotice trouble={trouble} onRetry={saveNow} onExport={exportNow} />}
         {/* another page took the save: nothing more is written from here, said until a career is opened here again (ui/me/SaveNotice.tsx) */}
         {lost && <SaveTakenNotice onLoad={openSave} />}
         {/* a build that went live under this tab: the page saves and takes it by itself (ui/me/UpdateNudge.tsx). A match being

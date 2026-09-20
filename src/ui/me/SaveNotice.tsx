@@ -11,6 +11,8 @@
 import { useState, useSyncExternalStore } from 'react'
 import { onSaveTrouble, saveLost, saveTrouble } from '../../engine/me/save'
 import type { SaveTrouble } from '../../engine/me/save'
+import { ExportBox } from './Backup'
+import type { ExportResult } from '../../engine/me/backup'
 
 /** The save's trouble, or null while the latest progress is on disk. */
 export const useSaveTrouble = (): SaveTrouble | null => useSyncExternalStore(onSaveTrouble, saveTrouble, saveTrouble)
@@ -63,14 +65,17 @@ export function SaveTakenNotice({ onLoad }: {
   )
 }
 
-export default function SaveNotice({ trouble, onRetry }: {
+export default function SaveNotice({ trouble, onRetry, onExport }: {
   trouble: SaveTrouble
   /** save the career now and wait for the write: true when it went in */
   onRetry: () => Promise<boolean>
+  /** build a backup from the career still on screen, never from the older disk save */
+  onExport: () => Promise<ExportResult>
 }) {
   const [trying, setTrying] = useState(false)
   const [again, setAgain] = useState(false)
   const [folded, setFolded] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const retry = async () => {
     setTrying(true)
@@ -87,7 +92,7 @@ export default function SaveNotice({ trouble, onRetry }: {
       </button>
     )
   }
-  const text = `${again ? '刚才又试了一次，还是没存进去。' : ''}可以接着玩，但现在刷新或关掉页面，会回到${trouble.kept ? ` ${trouble.kept} ` : '上一次存上'}的进度。别用无痕（隐私）窗口；手机或电脑的存储空间快满了，先清出一点；然后点「再试一次」。`
+  const text = `${again ? '刚才又试了一次，还是没存进去。' : ''}可以接着玩，但现在刷新或关掉页面，会回到${trouble.kept ? ` ${trouble.kept} ` : '上一次存上'}的进度。先点「导出当前进度」留一份；再检查浏览器有没有禁用网站存储，允许后点「再试一次」。`
   return (
     <div className="update-nudge save-nudge" role="alert">
       <div className="update-body">
@@ -95,9 +100,11 @@ export default function SaveNotice({ trouble, onRetry }: {
         <span>{text}</span>
       </div>
       <div className="update-acts">
-        <button className="primary sm" onClick={retry} disabled={trying}>{trying ? '正在存…' : '再试一次'}</button>
+        <button className="primary sm" onClick={() => setExporting(true)}>导出当前进度</button>
+        <button className="sm" onClick={retry} disabled={trying}>{trying ? '正在存…' : '再试一次'}</button>
         <button className="sm ghost" onClick={() => setFolded(true)}>收起</button>
       </div>
+      {exporting && <ExportBox source={onExport} rescue onClose={() => setExporting(false)} />}
     </div>
   )
 }

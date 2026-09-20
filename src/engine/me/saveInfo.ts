@@ -1,5 +1,6 @@
 import { readSaveMeta } from './saveMeta'
 import type { SaveMeta } from './saveMeta'
+import { AUTOSAVE, OLD_AUTOSAVE, OLD_OWNER, OWNER, hasSaveText, saveInIdb } from './saveStore'
 
 /**
  * Where a career's save is kept, and what the home page can say about it
@@ -11,17 +12,16 @@ import type { SaveMeta } from './saveMeta'
  * before any career was opened). Nothing here reads the save itself.
  */
 
-export const AUTOSAVE = 'val_player:save:autosave'
-export const OWNER = `${AUTOSAVE}:owner`
-/** where a career used to be kept, in the manager game's namespace; left in place as a backup */
-export const OLD_AUTOSAVE = 'valmanager:player:save:autosave'
-export const OLD_OWNER = `${OLD_AUTOSAVE}:owner`
+export { AUTOSAVE, OLD_AUTOSAVE, OLD_OWNER, OWNER } from './saveStore'
 /** the keys, for scripts/check_save_size.ts and scripts/check_save_tabs.ts */
 export const SAVE_KEYS = { autosave: AUTOSAVE, owner: OWNER, oldAutosave: OLD_AUTOSAVE, oldOwner: OLD_OWNER } as const
 
 /** Once: a career saved before the player game had its own keys is copied across. The old copy stays. */
 export function adoptOldSave(): void {
   try {
+    // Once the body moved to IndexedDB, recreating the old multi-megabyte
+    // localStorage copy would put the quota problem straight back.
+    if (saveInIdb()) return
     if (localStorage.getItem(AUTOSAVE) !== null) return
     const old = localStorage.getItem(OLD_AUTOSAVE)
     if (old === null) return
@@ -34,9 +34,7 @@ export function adoptOldSave(): void {
 /** Is there a career to continue? */
 export function hasAutosave(): boolean {
   adoptOldSave()
-  try {
-    return localStorage.getItem(AUTOSAVE) !== null || localStorage.getItem(OLD_AUTOSAVE) !== null
-  } catch { return false }
+  return hasSaveText()
 }
 
 /**

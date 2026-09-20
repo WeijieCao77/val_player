@@ -3,6 +3,7 @@ import { setCurrentRuleset } from './engine/ruleset'
 import type { GameState } from './engine/types'
 import type { CareerOpts } from './engine/me/career'
 import { autosaveInfo } from './engine/me/saveInfo'
+import { readSaveText } from './engine/me/saveStore'
 import NewCareer from './ui/me/NewCareer'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
@@ -41,6 +42,7 @@ export default function App() {
   const seq = useRef(0)
   // the game's files did not arrive when a career was opened: offline, or a new build went live and this page's are gone
   const [unloaded, setUnloaded] = useState(false)
+  const [, redraw] = useReducer((x: number) => x + 1, 0)
 
   const fetchGame = useCallback(async (): Promise<Game | null> => {
     try {
@@ -69,13 +71,24 @@ export default function App() {
   // where they were instead of on the cover, which would read as the game throwing them out (asked 2026-09-20). The
   // marker is taken once and gone: a save that will not open, or a plain reload after this one, lands here as usual.
   useEffect(() => {
-    if (!takeReopen(window.sessionStorage) || !autosaveInfo()) return
-    void continueCareer()
+    let live = true
+    const reopen = takeReopen(window.sessionStorage)
+    void (async () => {
+      let info = autosaveInfo()
+      // localStorage can be cleared while IndexedDB survives. The cover stays
+      // light and synchronous, then asks the database once and redraws the card.
+      if (!info && await readSaveText()) {
+        if (!live) return
+        redraw()
+        info = autosaveInfo()
+      }
+      if (live && reopen && info) void continueCareer()
+    })()
+    return () => { live = false }
   }, [continueCareer])
 
   // Another page of the game wrote the save or took it (reported 2026-09-18, an outside audit): the card is drawn
   // again, so it shows what is there now. A career open here hears the same event itself (PlayerGame.tsx).
-  const [, redraw] = useReducer((x: number) => x + 1, 0)
   useEffect(() => {
     if (open) return
     const heard = (e: StorageEvent) => { if (!e.storageArea || e.storageArea === window.localStorage) redraw() }

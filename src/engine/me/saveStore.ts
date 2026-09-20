@@ -1,24 +1,4 @@
 /**
- * NOT WIRED IN YET (2026-09-20). Nothing imports this module: the game still
- * saves exactly as it did, through me/save.ts put() into localStorage. It is
- * the draft of the move to IndexedDB, written after the measurements below and
- * left here so the next hand starts from it rather than from nothing. What is
- * still to do, in order:
- *
- *   1. me/save.ts: put() → writeSaveText(), loadAutosave()/installSave() read
- *      through readSaveText(), flushAutosaveNow() → writeSaveTextNow(), and the
- *      keys imported from here rather than declared in me/saveInfo.ts
- *   2. me/saveInfo.ts: hasAutosave() → hasSaveText(); adoptOldSave() must not
- *      run once saveInIdb() is true, or it makes the big localStorage copy again
- *   3. me/backup.ts exportBackup(): read through readSaveText()
- *   4. src/App.tsx: when autosaveInfo() is null, ask IndexedDB once and redraw —
- *      so a browser whose localStorage was cleared still finds the career
- *   5. a check (check_save_room) with a fake IndexedDB: a write that does not
- *      fit leaves a readable career on disk and tells the player; an
- *      interrupted move across leaves one too. check_save_size's own
- *      assertions run with no IndexedDB at all (node has none), so they keep
- *      testing the localStorage path unchanged.
- *
  * Where a career's save is actually kept: IndexedDB, with localStorage behind it.
  *
  * Reported 2026-09-20: 「手机内存有限，会出现无法保存的情况。」 A phone runs out
@@ -87,10 +67,10 @@ function marker(): 'idb' | 'ls' {
 
 /** Say where the save is. false when even this much cannot be written: then this page remembers it and the other store is left alone. */
 function mark(w: 'idb' | 'ls'): boolean {
-  here = w
   try {
     if (w === 'idb') localStorage.setItem(WHERE_KEY, 'idb')
     else localStorage.removeItem(WHERE_KEY)
+    here = w
     return true
   } catch { return false }
 }
@@ -226,6 +206,16 @@ function putLocal(stored: string): boolean {
   return false
 }
 
+/** The verified IDB copy replaces both localStorage bodies; the small current owner record stays for tab locking. */
+function dropLocalBodies(): boolean {
+  try {
+    localStorage.removeItem(AUTOSAVE)
+    localStorage.removeItem(OLD_AUTOSAVE)
+    localStorage.removeItem(OLD_OWNER)
+    return localStorage.getItem(AUTOSAVE) === null && localStorage.getItem(OLD_AUTOSAVE) === null
+  } catch { return false }
+}
+
 /* ------------------------------------------------------------------ */
 /*  the save                                                            */
 /* ------------------------------------------------------------------ */
@@ -274,13 +264,28 @@ export async function readSaveText(): Promise<string | null> {
  */
 export async function writeSaveText(text: string): Promise<boolean> {
   if (await idbPut(text)) {
-    if (marker() === 'idb') return true
+    if (marker() === 'idb') { dropLocalBodies(); return true }
     // the move across: read it back before anything is removed
     if (await idbGet() === text) {
-      if (mark('idb')) {
-        try { localStorage.removeItem(AUTOSAVE) } catch { /* it stays; the marker says which is the save */ }
+      // Usually the marker fits beside the old body. A completely full
+      // localStorage can refuse even this tiny write: after the IDB copy has
+      // been read back whole, free the old body and try the marker again. A
+      // crash between those two synchronous operations is still recoverable —
+      // readSaveText finds IDB whenever no local body remains.
+      if (mark('idb')) { dropLocalBodies(); return true }
+      // With no local body, a fresh page's asynchronous probe finds IDB even
+      // when localStorage is blocked so completely that the marker still will
+      // not fit. If a stale local body cannot be removed, it would hide the
+      // newer IDB row on the next page: keep the old readable save and report
+      // this write as failed instead of claiming a success that will vanish.
+      if (dropLocalBodies()) {
+        here = 'idb'
+        mark('idb')
+        return true
       }
-      return true
+      await idbDel()
+      here = null
+      return false
     }
     // it did not come back the way it went in: leave the save where it is
     await idbDel()

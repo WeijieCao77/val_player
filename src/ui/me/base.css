@@ -2489,8 +2489,12 @@ tr.other td .club span { color: var(--faint); }
    muted grey), up until a save lands. 收起 folds it into a chip at the top
    centre, where the top bar has nothing to cover (the wordmark is at its left
    end, 回到首页 at its right). */
-.save-nudge { border-color: var(--warn); border-left-color: var(--warn); }
+.save-nudge { border-color: var(--warn); border-left-color: var(--warn); flex-wrap: wrap; }
 .save-nudge .update-body b { color: var(--warn); }
+.save-nudge .backup-box {
+  flex: 1 0 100%; width: 100%; max-height: min(58vh, 430px); overflow: auto;
+  margin: 0; box-sizing: border-box;
+}
 .save-chip {
   position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 85;
   min-height: 32px; padding: 4px 12px; white-space: nowrap;

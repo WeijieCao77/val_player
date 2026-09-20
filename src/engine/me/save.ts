@@ -3,7 +3,8 @@ import { resumeCup } from './cups'
 import { refundStalePlan } from './week'
 import type { GameState } from '../types'
 import { buildSaveMeta, writeSaveMeta } from './saveMeta'
-import { AUTOSAVE, OLD_AUTOSAVE, OLD_OWNER, OWNER, adoptOldSave } from './saveInfo'
+import { adoptOldSave } from './saveInfo'
+import { OWNER, readSaveText, writeSaveText, writeSaveTextNow } from './saveStore'
 import { migrateRuler } from './rulerMigrate'
 import { migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
@@ -13,6 +14,8 @@ import { BOARD_RISE_MAX, riseOf, standingOf } from './rank'
 import { normalizePitch } from './pitchbook'
 import { track } from './telemetry'
 import { PACKED, canPack, packStored, readStored } from './saveCodec'
+import { exportBackupFromStored } from './backup'
+import type { ExportResult } from './backup'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -263,6 +266,17 @@ export const saveLost = (): boolean => lost
 export { PACKED, canPack, packStored, readStored } from './saveCodec'
 
 /**
+ * Rescue the career exactly as it exists in memory. This deliberately does
+ * not read the autosave: when the latest write failed, the autosave is the old
+ * progress the player is trying not to lose.
+ */
+export async function exportCurrentBackup(state: GameState, now: Date = new Date()): Promise<ExportResult> {
+  let json: string
+  try { json = packState(state) } catch { return { ok: false, why: 'unreadable' } }
+  return exportBackupFromStored(json, now)
+}
+
+/**
  * The career to continue, read and brought forward; null when there is none, or it cannot be read.
  *
  * Reading a packed save takes a moment (the gunzip). Another page that still
@@ -280,7 +294,7 @@ export async function loadAutosave(): Promise<GameState | null> {
     let mark: string
     try {
       mark = ownerMark()
-      raw = localStorage.getItem(AUTOSAVE) ?? localStorage.getItem(OLD_AUTOSAVE)
+      raw = await readSaveText()
     } catch { return null }
     if (!raw) return null
     let state: GameState
@@ -344,7 +358,7 @@ export async function installSave(stored: string, state: GameState): Promise<boo
   const wasLost = lost
   claimAutosave(state)
   const mine = ownerMark()
-  if (put(text)) {
+  if (await writeSaveText(text)) {
     // the home page's card for it, so it says whose career this is at once
     writeSaveMeta(buildSaveMeta(state))
     return true
@@ -472,7 +486,7 @@ async function writeSnapshot(snap: Snapshot): Promise<AutosaveResult> {
     // snapshot taken before that must not land after it. Checked again right here, with nothing in between to wait on.
     const now = holds(snap.career)
     if (now !== 'ok') return settle(snap, now === 'old' ? 'stale' : 'taken')
-    return settle(snap, put(stored) ? 'saved' : 'failed')
+    return settle(snap, await writeSaveText(stored) ? 'saved' : 'failed')
   } catch {
     return settle(snap, 'failed')
   }
@@ -497,48 +511,6 @@ function settle(snap: Snapshot, result: AutosaveResult): AutosaveResult {
     setTrouble({ year: snap.year, day: snap.day, kept: keptDate })
   }
   return result
-}
-
-/**
- * Into localStorage. A write that does not fit gets one more try, with the
- * room the old manager-namespace copy of a career (adoptOldSave) was holding:
- * it counts against the same site quota, and a 2021 career's copy can be most
- * of Safari's 5 MB by itself.
- *
- * When the career is already adopted under the new key, that copy is only the
- * backup adoptOldSave left behind, so it is removed for good. When it is not
- * (Safari could not fit the copy beside the original, so the career has been
- * read from the old key all along), the old key is the only save on disk: it is
- * removed for the retry and put back if the retry fails too, so a failed write
- * never leaves the browser with no save at all.
- */
-function put(stored: string): boolean {
-  try {
-    localStorage.setItem(AUTOSAVE, stored)
-    return true
-  } catch { /* full, or blocked */ }
-  let old: string | null
-  let oldOwner: string | null
-  let adopted: boolean
-  try {
-    old = localStorage.getItem(OLD_AUTOSAVE)
-    if (old === null) return false
-    oldOwner = localStorage.getItem(OLD_OWNER)
-    adopted = localStorage.getItem(AUTOSAVE) !== null
-    localStorage.removeItem(OLD_AUTOSAVE)
-    localStorage.removeItem(OLD_OWNER)
-  } catch { return false }
-  try {
-    localStorage.setItem(AUTOSAVE, stored)
-    return true
-  } catch { /* no room even so */ }
-  if (!adopted) {
-    try {
-      localStorage.setItem(OLD_AUTOSAVE, old)
-      if (oldOwner !== null) localStorage.setItem(OLD_OWNER, oldOwner)
-    } catch { /* the room was just freed: this does not happen short of another tab filling it meanwhile */ }
-  }
-  return false
 }
 
 /**
@@ -567,8 +539,6 @@ export function flushAutosaveNow(): void {
   // only while this page still holds the save (holds): a page going out of sight writes nothing over another's
   const may = holds(snap.career)
   if (may !== 'ok') { if (may === 'taken') settle(snap, 'taken'); return }
-  try {
-    localStorage.setItem(AUTOSAVE, snap.json)
-  } catch { return }
+  if (!writeSaveTextNow(snap.json)) return
   settle(snap, 'saved')
 }
