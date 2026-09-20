@@ -1,3 +1,5 @@
+@import './ui/me/bracket.css';
+@import './ui/me/career-overview.css';
 /* ---- player-career layer: the bits the manager stylesheet has no word for ---- */
 
 .pinbar {

@@ -1,7 +1,6 @@
 import { useGame } from './ctx'
 import { Bar, Panel, Stat, money } from './common'
 import { ATTR_CN, ATTR_KEYS } from '../../engine/types'
-import { ratingOf, statLine } from '../../engine/player'
 import { trustLabel } from './words'
 import { AXIS_CN, TRAIT_NEED, traitOf } from '../../engine/me/traits'
 import { fanTier } from '../../engine/me/fans'
@@ -16,6 +15,7 @@ import { TAC_MAX } from '../../engine/me/prepro'
 import RivalsPanel from './Rivals'
 import { wornTitle } from '../../engine/me/achievements'
 import { CareerRewrites } from './Worldline'
+import CareerOverview from './CareerOverview'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -41,8 +41,6 @@ export default function MeScreen() {
   const me = game.me!
   const p = game.players[me.id]
   const team = me.phase === 'pro' ? game.teams[game.myTeam] : null
-  const s = statLine(p.season)
-  const c = statLine(p.career)
   const recent = me.matches.slice(-5).reverse()
   const origin = originOf(me.originKey)
   const caps = ceilingsOf(p)
@@ -51,9 +49,12 @@ export default function MeScreen() {
   const worn = wornTitle(me)
 
   return (
+    <>
+    <CareerOverview />
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
         <Panel
+          id="my-abilities"
           title={`能力 · ${originName(origin, serverAt(me.region, me.entryYear ?? me.seasons[0]?.year ?? game.year, 0))}`}
           actions={(
             <>
@@ -162,16 +163,6 @@ export default function MeScreen() {
         </Panel>
       </div>
       <div>
-        <Panel title="本赛季数据" actions={<span className="tiny faint">{p.season.maps} 张图</span>}>
-          <div className="row wrap" style={{ gap: 18 }}>
-            <Stat k="评分" v={ratingOf(p.season).toFixed(2)} />
-            <Stat k="ACS" v={s.acs.toFixed(0)} />
-            <Stat k="K/D" v={s.kd.toFixed(2)} />
-            <Stat k="首杀差" v={s.fkDiff} />
-            <Stat k="MVP" v={p.season.mvps} />
-          </div>
-          <p className="tiny faint" style={{ margin: '10px 0 0' }}>生涯 {p.career.maps} 张图 · K/D {c.kd.toFixed(2)} · MVP {p.career.mvps}</p>
-        </Panel>
         <RivalsPanel />
         <Panel title="最近的比赛" flush>
           {recent.length === 0 ? <p className="muted" style={{ padding: 12, margin: 0 }}>还没打过比赛。</p> : (
@@ -216,7 +207,7 @@ export default function MeScreen() {
           </Panel>
         )}
         {me.seasons.length > 0 && (
-          <Panel title="生涯" flush>
+          <Panel title="历年赛季" flush>
             <div className="table-wrap">
             <table>
               <thead><tr><th>年</th><th>队伍</th><th>出场</th><th>综合</th><th>荣誉</th></tr></thead>
@@ -244,5 +235,6 @@ export default function MeScreen() {
         )}
       </div>
     </div>
+    </>
   )
 }

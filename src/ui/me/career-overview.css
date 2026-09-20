@@ -1,0 +1,26 @@
+.career-overview { min-width: 0; }
+.career-overview .panel-head { flex-wrap: wrap; gap: 8px; }
+.career-overview-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.career-overview-tabs button { min-height: 40px; }
+.career-overview-tabs button.active { border-color: var(--accent); color: var(--accent); }
+.career-overview-note, .career-overview-empty { font-size: 12px; line-height: 1.65; color: var(--muted); margin: 10px 0; overflow-wrap: anywhere; }
+.career-overview-empty { color: var(--text); }
+.career-overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.career-overview-stats .stat { min-width: 0; }
+.career-overview-stats .k { white-space: normal; }
+.career-overview-stats .v { overflow-wrap: anywhere; }
+.career-overview-rules { font-size: 12px; line-height: 1.65; color: var(--muted); }
+.career-overview-rules summary { cursor: pointer; padding: 7px 0; }
+.career-overview-rules p { margin: 6px 0; }
+.career-current-honors { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.career-current-honors h3 { margin: 0; font-size: 15px; }
+.career-current-honors ul { list-style: none; margin: 10px 0; padding: 0; }
+.career-current-honors li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; font-size: 13px; }
+.career-current-honors li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.career-current-honors .tag { white-space: normal; }
+@media (max-width: 720px) {
+  .career-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
+  .career-overview button { min-height: 44px; }
+  .career-overview-stats .v { font-size: 22px; }
+  .career-overview-stats .v.sm { font-size: 17px; }
+}

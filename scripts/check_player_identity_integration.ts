@@ -10,8 +10,8 @@ import { playerLocation } from '../src/engine/me/playerLocation'
 for (const year of [2021, 2026] as const) {
   // Normalize existing unrelated save migrations (legacy trust removal and
   // potentialRevisions default) before isolating identity-repair effects.
-  const state = migratePlayerSave(createCareer({ name: '身份回归', region: 'China', role: 'duelist',
-    talents: emptyTalents(), originKey: 'net', start: 'pre', year, seed: 79 }))
+  const state = migratePlayerSave(createCareer({ name: '身份回归', region: 'China', role: '决斗者',
+    talents: emptyTalents(), originKey: 'netcafe', start: 'pre', year, seed: 79 }))
   const meBefore = structuredClone(state.players[state.me!.id])
   const fixture = state.players.V3520
   assert.ok(fixture, 'ZmjjKK exists in both historical starts')

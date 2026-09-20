@@ -92,7 +92,7 @@ export default function SaveNotice({ trouble, onRetry, onExport }: {
       </button>
     )
   }
-  const text = `${again ? '刚才又试了一次，还是没存进去。' : ''}可以接着玩，但现在刷新或关掉页面，会回到${trouble.kept ? ` ${trouble.kept} ` : '上一次存上'}的进度。先点「导出当前进度」留一份；再检查浏览器有没有禁用网站存储，允许后点「再试一次」。`
+  const text = `${again ? '刚才又试了一次，还是没存进去。' : ''}可以接着玩，但现在刷新或关掉页面，会回到${trouble.kept ? ` ${trouble.kept} ` : '上一次存上'}的进度。先点「导出当前进度」留一份，不要清除网站数据。电脑有空余内存，也可能受浏览器存储限制；检查浏览器有没有禁用网站存储，允许后点「再试一次」。`
   return (
     <div className="update-nudge save-nudge" role="alert">
       <div className="update-body">

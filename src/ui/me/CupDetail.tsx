@@ -15,8 +15,7 @@ import { fansCn } from '../../engine/me/fans'
  * what a run does after it — and, once played, each round as it went.
  *
  * A cup is one match a round against a five made up for it, so there is no
- * bracket to draw: the rounds are a ladder, as 破晓 draws its 城市争霸赛
- * (「赛程阶梯」).
+ * complete field to draw. Show the recorded personal path, never fabricated opponents.
  */
 export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose: () => void }) {
   const { game } = useGame()
@@ -117,20 +116,25 @@ export default function CupDetail({ cupKey, onClose }: { cupKey: string; onClose
           <dt>赛制</dt>
           <dd>
             {n > 1 ? '单败淘汰：每轮一场，输了就出局，对手一轮比一轮强。' : '只打一场。'}
-            <ol className="cup-ladder" aria-label="轮次">
+            <p className="small muted">你的晋级路线 · 左右滑动查看。杯赛只记录你的比赛，不保存其他队伍的完整签表。</p>
+            <div className="career-bracket-scroll" tabIndex={0} role="region" aria-label="杯赛个人晋级路线，可横向滚动">
+            <ol className="career-cup-route" aria-label="轮次">
               {c.rounds.map((r, i) => {
                 const s = stepOf(i)
                 const win = c.prize[i + 1] ?? 0
                 return (
-                  <li key={i} className={`cup-step ${s.cls}`}>
+                  <li key={i} className={s.cls}>
                     <b>{r.label}</b>
                     <span className="bo">BO{r.bo}</span>
+                    <span>{s.cls === 'off' ? '未晋级 · 未出场' : s.cls === 'win' || s.cls === 'lost'
+                      ? '你的队伍 vs 本轮对手（未记录队名）' : i === 0 || s.cls === 'now' ? '你的队伍 vs 对手待定' : '晋级后 · 对手待定'}</span>
                     {s.text && <span className="st">{s.text}</span>}
                     <span className="pz">{win ? `${i === n - 1 ? '夺冠' : '赢下'} ${money(win)}` : ''}</span>
                   </li>
                 )
               })}
             </ol>
+            </div>
             <span className="tiny faint">比赛日弹卡开打；打不了可以弃权{n > 1 ? '，奖金按已赢的轮次给' : ''}。</span>
           </dd>
 

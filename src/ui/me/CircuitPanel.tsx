@@ -1,4 +1,5 @@
 import { useGame } from './ctx'
+import Bracket from './Bracket'
 import { eventAnchor } from './eventFocus'
 import { Crest, Panel, fmtDay } from './common'
 import { eventOf, realPlacesOf, realResultOf } from '../../engine/circuit'
@@ -121,6 +122,7 @@ export default function CircuitPanel({ comp }: { comp: Competition }) {
         )}
       </div>
       {tables.length > 0 && <EventBody comp={comp} tables={tables} />}
+      <Bracket comp={comp} />
       {comp.champion && !tables.some((t) => t.kind === 'bracket') && <FinalPlaces comp={comp} />}
       {comp.champion && c.mode === 'sim' && realChamp && realChamp !== champName && (
         <p className="tiny faint" style={{ margin: 0, padding: '0 13px 9px' }}>真实历史里的冠军是 {realChamp}。在你的世界线里，是 {champName}。</p>

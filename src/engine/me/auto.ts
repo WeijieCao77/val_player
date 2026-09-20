@@ -93,6 +93,29 @@ export const TALENT_STEP = (Math.sqrt(5) - 1) / 2
 /** the attribute whose break counts a session (me/bottleneck.ts breakCount, and 枪法's two a week): while it is live the session stays */
 const FEEDS: Record<Exclude<Practice, 'duo'>, keyof Attrs> = { aim: 'aim', vod: 'awareness', util: 'utility' }
 
+/** Resolve a personal-practice slot without spending anything. A fixed tail
+ * session must still have something to do: room in ANY attribute it trains
+ * (including vod's IGL study), a live breakthrough, or a non-attribute reward.
+ * Recheck immediately before each session: an earlier one may fill its bar.
+ * The role/talent's choice wins whenever useful; only an empty slot changes.
+ */
+export function practiceWithRoom(state: GameState, preferred: Exclude<Practice, 'duo'>): Exclude<Practice, 'duo'> | null {
+  const me = state.me!
+  const values = hourValues(state)
+  const useful = (key: Exclude<Practice, 'duo'>): boolean =>
+    values.some((h) => h.key === key && h.attrs.length > 0)
+    // Two aim sessions are all this week's grind asks for; capped extras bank no XP.
+    || (chasing(state, FEEDS[key]) && (key !== 'aim' || (me.plan.aim ?? 0) < 2))
+    || me.quests.some((q) => q.kind === 'train' && q.done < q.need)
+    || (key === 'vod' && me.courses.includes('review') && me.tilt > 0)
+  if (useful(preferred)) return preferred
+  // Existing hourValues is a pure, deterministic estimate. It includes mixed
+  // practice and IGL, unlike testing only the action's first attribute.
+  for (const h of values) if (h.key === 'aim' || h.key === 'vod' || h.key === 'util') return h.key
+  for (const key of ['aim', 'vod', 'util'] as const) if (useful(key)) return key
+  return null
+}
+
 /** points past 均衡型 at which the talent has its session every week; a smaller lean has it that share of the weeks */
 export const LEAN_FULL = 6
 
@@ -232,15 +255,23 @@ export function autoPlan(state: GameState, talent = true): string {
   const role: Practice[] = [first, 'vod', 'aim']
   const sessions = talent ? talentSessions(state, role) : role
   const session = (s: Practice): void => {
-    if (s !== 'duo') { want(s); return }
+    if (s !== 'duo') {
+      const useful = practiceWithRoom(state, s)
+      if (useful) want(useful)
+      return
+    }
     const mate = duoMate(state)
-    if (!mate) { want('util'); return }
+    if (!mate) {
+      const useful = practiceWithRoom(state, 'util')
+      if (useful) want(useful)
+      return
+    }
     me.duoWith = mate.id
     want('duo')
     want('duo')
   }
   session(sessions[0])
-  if (chasing(state, 'aim')) want('aim')
+  if (chasing(state, 'aim') && (me.plan.aim ?? 0) < 2) want('aim')
   if (pro && me.ap >= 3 && !starter) want('scrim')
   if (!pro) { want('ranked'); want('ranked') }
   session(sessions[1])

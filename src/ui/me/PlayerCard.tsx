@@ -11,6 +11,7 @@ import type { Stats } from '../../engine/types'
 import { agentCn } from '../../engine/content'
 import { StarTitleTag } from './Rivals'
 import Face from './Face'
+import { playerDisplayName } from './playerDisplayName'
 
 /**
  * Another player's card, as a player sees it: who he is and where he plays,
@@ -26,6 +27,7 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
   const { game } = useGame()
   const p = game.players[playerId]
   if (!p) return null
+  const displayName = playerDisplayName(p.realName)
   const team = p.teamId ? game.teams[p.teamId] : null
   const location = playerLocation(p, team ?? null, game.year)
   // the club's named caller, and the IGLs by trade who back him up
@@ -60,9 +62,9 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
         <div>
           <div className="row" style={{ gap: 10, marginBottom: 8 }}>
             <Face id={p.id} name={p.ign} size={56} />
-            {p.realName && (
+            {displayName && (
               <div className="small muted">
-                {p.realName}
+                {displayName}
               </div>
             )}
           </div>

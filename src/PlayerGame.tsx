@@ -54,7 +54,7 @@ import { openSavedCareer, turnShape } from './engine/me/opening'
 
 const SCREENS: { key: string; label: string; pro?: boolean; sep?: boolean }[] = [
   { key: 'week', label: '本周' },
-  { key: 'me', label: '我的' },
+  { key: 'me', label: '我的·生涯' },
   { key: 'team', label: '队伍', pro: true },
   { key: 'transfer', label: '转会' },
   { key: 'economy', label: '经济' },
