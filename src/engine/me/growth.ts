@@ -42,8 +42,12 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
     (p.caps ? 1 : clamp(headroom / 12, 0.25, 1.6))
 }
 
-/** room under a ceiling at which an hour is worth a full hour, in points */
-const ROOM_SCALE = 10
+/** Room under a ceiling at which an hour is worth a full hour, in points.
+ * Player-only pacing: soften the middle of the slowdown, without changing
+ * ceilings, the final two-point floor, or the 1.3 maximum. Club/NPC training
+ * has its own formula. This constant is read on each action, not saved.
+ */
+const ROOM_SCALE = 8
 /** and the most an attribute far under its ceiling makes of one */
 const ROOM_TOP = 1.3
 

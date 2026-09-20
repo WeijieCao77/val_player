@@ -352,7 +352,15 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       while (me.tryout && guard++ < 6) tryoutChoose(state, tryoutDays(state)[me.tryout.step].rec)
       const team = state.teams[inv.teamId]
       const cur = me.phase === 'pro' ? state.teams[state.myTeam] : null
-      if (cur && team.rating < cur.rating + 2) { declineInvite(state, inv.id); return `回绝了 ${team.name}` }
+      if (!team || team.dormant || team.id === cur?.id) {
+        me.pre.invites = me.pre.invites.filter((i) => i.id !== inv.id)
+        pop(state, 'invite', inv.id)
+        return '这家俱乐部的邀请已经不适用了。'
+      }
+      // A real step up a tier is worth trying even from a strong Challengers club, just as it is in the deal
+      // branch below. This only accepts the trial: the skill check, trial result and registration lock still apply.
+      const upgrade = cur?.tier === 2 && team.tier === 1
+      if (cur && !upgrade && team.rating < cur.rating + 2) { declineInvite(state, inv.id); return `回绝了 ${team.name}` }
       if (tryoutSkill(state) < expectOf(team) - 6) { declineInvite(state, inv.id); return `差太远，回绝了 ${team.name}` }
       const why = startTryout(state, inv.id)
       // refused all the same: off the list, and the invite runs out on its own

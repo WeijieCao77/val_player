@@ -1,6 +1,6 @@
 import { Rng, hashStr } from '../rng'
 import type { GameState, Team } from '../types'
-import { BOND_TIGHT, bondBetween, duoBonded } from '../bonds'
+import { BOND_GOOD, BOND_TIGHT, bondBetween, duoBonded } from '../bonds'
 import { formatOf, regionIn } from '../era'
 import { hasPlace } from '../timeline'
 import type { EffectSpec, MeAction } from './types'
@@ -121,11 +121,12 @@ export const CHAIN_GAP = 14
 /**
  * 队内矛盾 flaring up costs the pair (decided 2026-09-16, 「队伍界面显示和队友关系很铁但还是会爆发矛盾」).
  *
- * The chain opens with a team-mate the screen does not call 很铁 (engine/bonds.ts BOND_TIGHT), but
- * the weeks between its cards can warm the pair back up — my own answers are worth +5 and +8, and a
- * winning run pulls everyone together. The row coming to a head anyway was then a card about two men
- * who were not falling out any more. Now the escalation itself is what it says it is: the pair drops
- * at least RIFT_FLARE, and always under the 很铁 line, before its card is on screen, and the week says so.
+ * A spontaneous chain opens only below BOND_GOOD; a merely ordinary team-mate should not produce a palace
+ * drama. An explicit earlier fight may echo at the old below-BOND_TIGHT line. The weeks between cards can
+ * warm the pair back up — my own answers are worth +5 and +8, and a winning run pulls everyone together.
+ * The row coming to a head anyway was then a card about two men who were not falling out any more. Now the
+ * escalation itself is what it says it is: the pair drops at least RIFT_FLARE, and always under the 很铁
+ * line, before its card is on screen, and the week says so.
  */
 export const RIFT_FLARE = 8
 const RIFT_ROWS = ['ch_rift_boil', 'ch_rift_bad']
@@ -234,13 +235,16 @@ const CHAINS: ChainDef[] = [
       const team = s.teams[s.myTeam]
       const mates = (team?.roster ?? []).filter((id) => id !== me.id && s.players[id])
       if (mates.length < 4) return null
-      // one of the two I get on worst with — and never a man the team screen calls 很铁
-      // (engine/bonds.ts BOND_TIGHT): two who would follow each other anywhere do not stop
-      // speaking over one round of a practice match. A whole room that close has no rift in it.
+      const fromFight = aged(s, 'blame', ['fight'], 1)
+      // A spontaneous row needs an actually weak relationship (below BOND_GOOD),
+      // not an ordinary team-mate at 44 whom the screen still calls 不错. An
+      // explicit earlier fight is already a narrative cause, so its echo keeps
+      // the old under-BOND_TIGHT gate.
+      const line = fromFight ? BOND_TIGHT : BOND_GOOD
       const sorted = mates.sort((a, b) => bondBetween(s, me.id, a) - bondBetween(s, me.id, b))
-        .filter((id) => bondBetween(s, me.id, id) < BOND_TIGHT)
+        .filter((id) => bondBetween(s, me.id, id) < line)
       if (!sorted.length) return null
-      return { mate: sorted[rng.int(0, Math.min(1, sorted.length - 1))], from: aged(s, 'blame', ['fight'], 1) ? 'blame' : undefined }
+      return { mate: sorted[rng.int(0, Math.min(1, sorted.length - 1))], from: fromFight ? 'blame' : undefined }
     },
     chance: (_s, c) => (c.from ? 0.3 : 0.025),
     opener: () => 'ch_rift_open',

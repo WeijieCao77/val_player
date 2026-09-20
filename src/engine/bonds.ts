@@ -257,6 +257,17 @@ export function applyMatchBonds(
     .filter((x): x is { p: Player; r: number } => !!x)
   if (rated.length < 2) return
   const avg = rated.reduce((s, x) => s + x.r, 0) / rated.length
+  // A career report has room for one confrontation from a match. All pair
+  // bonds still move below; this only keeps one lopsided defeat from charging
+  // the same player four separate morale penalties. Manager saves keep the
+  // old per-pair path (liveEase is null there) byte for byte.
+  let careerArgument: {
+    carrier: { p: Player; r: number }
+    passenger: { p: Player; r: number }
+    damage: number
+    key: string
+    today: number
+  } | null = null
 
   for (let i = 0; i < rated.length; i++) {
     for (let j = i + 1; j < rated.length; j++) {
@@ -305,8 +316,13 @@ export function applyMatchBonds(
         const last = live != null ? state.argueSaid?.[k] : undefined
         if (last != null && today - last < ARGUE_GAP) continue
         if (live != null) {
-          const kept = Object.entries(state.argueSaid ?? {}).filter(([, d]) => today - d < ARGUE_GAP)
-          state.argueSaid = { ...Object.fromEntries(kept), [k]: today }
+          // Keep the worst eligible confrontation and say it after every pair
+          // has taken its relationship damage. Unselected pairs are not put on
+          // cooldown: they did not become a separate incident in this report.
+          if (!careerArgument || damage > careerArgument.damage) {
+            careerArgument = { carrier, passenger, damage, key: k, today }
+          }
+          continue
         }
         notes.push(
           `💢 ${carrier.p.ign} 和 ${passenger.p.ign} 在赛后起了争执（${carrier.p.ign} ${carrier.r.toFixed(2)} / ${passenger.p.ign} ${passenger.r.toFixed(2)}）。`,
@@ -315,6 +331,17 @@ export function applyMatchBonds(
         passenger.p.morale = clamp(passenger.p.morale - 9, 0, 100)
       }
     }
+  }
+
+  if (careerArgument) {
+    const { carrier, passenger, key: k, today } = careerArgument
+    const kept = Object.entries(state.argueSaid ?? {}).filter(([, d]) => today - d < ARGUE_GAP)
+    state.argueSaid = { ...Object.fromEntries(kept), [k]: today }
+    notes.push(
+      `💢 ${carrier.p.ign} 和 ${passenger.p.ign} 在赛后起了争执（${carrier.p.ign} ${carrier.r.toFixed(2)} / ${passenger.p.ign} ${passenger.r.toFixed(2)}）。`,
+    )
+    carrier.p.morale = clamp(carrier.p.morale - 5, 0, 100)
+    passenger.p.morale = clamp(passenger.p.morale - 9, 0, 100)
   }
 }
 
@@ -331,9 +358,11 @@ export function applyMatchBonds(
  *
  * Now the same two are not said twice too soon. After an argument they do not argue again for ARGUE_GAP days
  * (the defeat still costs their bond), and a pair past the line is reminded at most once every FEUD_GAP days
- * while it stays there — at once again if it gets back above the line and sinks under it anew. How a bond moves
- * is what it was (the EASE_* terms), so an awkward pair still cools faster, argues sooner and shows its feud
- * sooner, and what the room does to form and the coach's eye (me/room.ts) is untouched.
+ * while it stays there — at once again if it gets back above the line and sinks under it anew. A career report
+ * also has a budget: one confrontation per match and one club-level 18% feud roll per week, however many pairs
+ * are cold. Every bond still moves. The manager game keeps its old pair-by-pair incidents and RNG order.
+ * How a bond moves is what it was (the EASE_* terms), so an awkward pair still cools faster, argues sooner and
+ * shows its feud sooner, and what the room does to form and the coach's eye (me/room.ts) is untouched.
  *
  * On the same careers: 25.0 → 14.7 (arguments 6.7 → 5.7, reminders 18.3 → 9.0). Halving the match terms as well
  * went to 8.3, where it was before the room was live. The count is heavy-tailed: seed 13 spirals under every rule
@@ -376,25 +405,57 @@ export function weeklyBonds(state: GameState, rng: Rng, notes: string[]): void {
   // where the room is live, a feud is said at most once every FEUD_GAP days; a pair back above the line drops out of the book
   const today = state.year * 400 + state.day
   const said = state.feudSaid ?? {}
+
+  // The manager game keeps its original pair-by-pair rolls and their RNG order.
+  // The capped report below is only for the career player's own club.
+  const careerRoom = !!state.me && state.players[state.me.id]?.teamId === state.myTeam
+  if (!careerRoom) {
+    const still: Record<string, number> = {}
+    let live0 = false
+    for (const { a, b, value } of notableBonds(state, state.myTeam)) {
+      // two awkward men start to show it sooner, two easy ones later
+      const live = liveEase(state, a, b)
+      if (live != null) live0 = true
+      if (value > -40 + (live == null ? 0 : clamp(-live, -15, 15))) continue
+      const k = key(a.id, b.id)
+      const last = live != null ? said[k] : undefined
+      if (last != null) still[k] = last
+      if (last != null && today - last < FEUD_GAP) continue
+      if (!rng.chance(0.18)) continue
+      a.morale = clamp(a.morale - 3, 0, 100)
+      b.morale = clamp(b.morale - 3, 0, 100)
+      a.grievance = clamp((a.grievance ?? 0) + 4, 0, 100)
+      if (live != null) still[k] = today
+      notes.push(`💢 ${a.ign} 与 ${b.ign} 的关系还没缓和，队内氛围受到影响。`)
+    }
+    if (live0 || state.feudSaid) state.feudSaid = Object.keys(still).length ? still : undefined
+    return
+  }
+
   const still: Record<string, number> = {}
-  let live0 = false
+  const eligible: { a: Player; b: Player; key: string }[] = []
   for (const { a, b, value } of notableBonds(state, state.myTeam)) {
     // two awkward men start to show it sooner, two easy ones later
     const live = liveEase(state, a, b)
-    if (live != null) live0 = true
     if (value > -40 + (live == null ? 0 : clamp(-live, -15, 15))) continue
     const k = key(a.id, b.id)
-    const last = live != null ? said[k] : undefined
+    const last = said[k]
     if (last != null) still[k] = last
     if (last != null && today - last < FEUD_GAP) continue
-    if (!rng.chance(0.18)) continue
+    eligible.push({ a, b, key: k })
+  }
+
+  // One club-level roll, then the worst eligible pair (notableBonds is sorted
+  // coldest first). A room with ten bad pairs is no longer ten lottery tickets.
+  if (eligible.length && rng.chance(0.18)) {
+    const { a, b, key: k } = eligible[0]
     a.morale = clamp(a.morale - 3, 0, 100)
     b.morale = clamp(b.morale - 3, 0, 100)
     a.grievance = clamp((a.grievance ?? 0) + 4, 0, 100)
-    if (live != null) still[k] = today
+    still[k] = today
     notes.push(`💢 ${a.ign} 与 ${b.ign} 的关系还没缓和，队内氛围受到影响。`)
   }
-  if (live0 || state.feudSaid) state.feudSaid = Object.keys(still).length ? still : undefined
+  state.feudSaid = Object.keys(still).length ? still : undefined
 }
 
 /** Pair work is the direct way to fix a relationship. */

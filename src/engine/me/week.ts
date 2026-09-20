@@ -256,6 +256,11 @@ export function staminaLeft(state: GameState): number {
 export function refundStalePlan(state: GameState): void {
   const me = state.me
   if (!me) return
+  // Since the instant board, plan counts completed sessions. A matching completed
+  // non-duel action is evidence of that format, not work still owed. weekStart
+  // alone is insufficient (and a purchase/duel can seal it away); an empty
+  // weekDone or the old board's already-played duel must not hide a stale plan.
+  if (me.weekDone?.some((k) => k !== 'duel' && !!ACTION_BY_KEY[k] && (me.plan[k] ?? 0) > 0)) return
   let back = 0
   for (const a of ACTIONS) {
     // 对位挑战 was played on the day it was called, so its count is not a plan
