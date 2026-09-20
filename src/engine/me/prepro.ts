@@ -15,8 +15,21 @@ import { countOffer } from './telemetry'
 import { firstPlayBy } from './nextup'
 
 export const AP_PRE = 12
-/** the earliest a club will pick up the phone, in weeks of the first year */
-export const PRE_EARLIEST = 12
+/**
+ * The earliest a club will pick up the phone, in weeks of the first year.
+ *
+ * Twelve until 2026-09-20, when the author asked for the stretch before the first contract to come down:
+ * 「天梯签约前 18 周要不要缩短…改一下，最好能缩短到 14-16 周」. Measured the same week
+ * (scripts/measure_first_hour.ts, 托管, 30 seeds × China, Europe, North America, Korea × both entry years): the
+ * first contract came at a median week 18, and a home club was already within reach of a call on day one in
+ * almost every career — the wait was the calls' own rules, not the climb.
+ *
+ * Nine, not zero: the first cup opens in week 6 and its rounds are played from week 7, so the door opens on a
+ * player who has been seen somewhere, and the first two months are still the cups' alone — the 「挑战」 door is
+ * the same door, only three weeks less of it. The bar itself has not moved: who may call, and what he must
+ * clear to be called, are exactly as they were.
+ */
+export const PRE_EARLIEST = 9
 export const INVITE_DAYS = 21
 
 /** Where a player of this rating settles on the ladder, 0-100. */
@@ -84,6 +97,7 @@ function notePeak(state: GameState): void {
 export function ladderWeekly(state: GameState, played: boolean): void {
   boardWeek(state, played)
   notePeak(state)
+  noteWatched(state)
 }
 
 /**
@@ -524,6 +538,42 @@ export const INVITE_LADDER_T1 = 88
 export const INVITE_FANS = 120
 export const INVITE_FANS_T1 = 400
 
+/**
+ * 有人盯了你几周 — a scout's notebook, so the ladder's call is not the same coin every week.
+ *
+ * Until 2026-09-20 the ladder channel rolled 2% a week at its line, and the same 2% in the tenth week over it as
+ * in the first: a player who had been standing above the line for two months was no likelier to hear a phone
+ * than one who had just got there. Measured that week (scripts/measure_first_hour.ts): a ladder start reached
+ * the line at a median week 10–12 and heard his first call at a median week 16–20.
+ *
+ * Now the weeks over the line count. Every week without a club (ladderWeekly) the notebook fills by one while I
+ * stand at or over INVITE_LADDER and empties by one while I am under it — a week's dip costs a week of it, not
+ * all of it — up to SCOUT_WEEKS_MAX; the weekly chance takes SCOUT_STEP for every week past the first. The
+ * first week over the line is exactly the 2% it always was, and nothing about who may call has moved: the
+ * line, the bar every club asks (expectOf), the draw and every 赛区 rule over it are as they were. The
+ * notebook fills before PRE_EARLIEST too — a man who climbed there in week 5 is not made to start again when
+ * the door opens.
+ *
+ * Measured over the same 240 ladder careers as the survey (30 seeds × four regions × both entry years): with
+ * PRE_EARLIEST at 9 the first contract came at a median week 16.1 (2021) and 16.3 (2026), against 18.0 and 19.0
+ * before. The step was tried at 0.03 and 0.05 on the same seeds: the median is the same either way — past the
+ * line the wait is a home club with an open window, not the roll — but 0.05 pulls the slow quarter in, q3 26.3
+ * and 23.3 weeks → 22.0 and 22.0, so that is the one kept.
+ */
+export const SCOUT_WEEKS_MAX = 6
+export const SCOUT_STEP = 0.05
+
+/** The notebook, a week at a time. Returns what the ladder's call reads this week. */
+export function noteWatched(state: GameState): number {
+  const pre = state.me!.pre
+  // absent in a save from before: nobody has been watching yet
+  pre.scoutWeeks = clamp((pre.scoutWeeks ?? 0) + (standingOf(state) >= INVITE_LADDER ? 1 : -1), 0, SCOUT_WEEKS_MAX)
+  return pre.scoutWeeks
+}
+
+/** How much the weeks already watched add to the ladder's weekly chance (noteWatched): nothing in the first week over the line. */
+export const watchedBonus = (state: GameState): number => Math.max(0, (state.me!.pre.scoutWeeks ?? 0) - 1) * SCOUT_STEP
+
 /** The weekly channels: the ladder, the following, and being a known free agent. */
 export function rollInvites(state: GameState, rng: Rng): void {
   const me = state.me!
@@ -539,7 +589,8 @@ export function rollInvites(state: GameState, rng: Rng): void {
   // 国服's ladder (me/rank.ts sets its places on it; a smaller server shows the same score further up the
   // board, and the week's page says the line on his own), 「有固定观众」 on the stream. Measured 2026-09-11 before this: a player in the top 500
   // with 120 fans got no call in a year, in every region — the channels began at ladder 74 and 180 fans.
-  if (l >= INVITE_LADDER && rng.chance(0.02 + (l - INVITE_LADDER) * 0.005)) {
+  // how far over the line, and how long I have been over it (noteWatched)
+  if (l >= INVITE_LADDER && rng.chance(0.02 + (l - INVITE_LADDER) * 0.005 + watchedBonus(state))) {
     const prefer = l >= INVITE_LADDER_T1 ? 1 : 2
     const team = pickClub(state, rng, prefer)
     if (team) { callFrom(state, team, 'rank', rng, prefer); return }
