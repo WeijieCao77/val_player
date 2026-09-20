@@ -7,7 +7,7 @@ import NewCareer from './ui/me/NewCareer'
 import Changelog from './ui/me/Changelog'
 import UpdateNudge from './ui/me/UpdateNudge'
 import MusicPlayer from './ui/me/MusicPlayer'
-import Support from './ui/Support'
+import Support from './ui/me/Support'
 
 /**
  * The site is the player career and nothing else. The manager game and the
