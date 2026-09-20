@@ -129,21 +129,39 @@ async function idbGet(): Promise<string | null> {
   })
 }
 
-/** true only once the transaction has committed: a write that did not fit fails here, as a full localStorage does. */
-async function idbPut(text: string): Promise<boolean> {
+export type SaveWriteResult = 'saved' | 'failed' | 'taken'
+
+/** Check ownership only once this readwrite transaction actually owns the store. */
+async function idbPut(text: string, mayWrite: () => boolean): Promise<SaveWriteResult> {
   const d = await db()
-  if (!d) return false
-  return new Promise<boolean>((resolve) => {
+  if (!mayWrite()) return 'taken'
+  if (!d) return 'failed'
+  return idbPutOpen(d, text, mayWrite)
+}
+
+function idbPutOpen(d: IDBDatabase, text: string, mayWrite: () => boolean): Promise<SaveWriteResult> {
+  return new Promise<SaveWriteResult>((resolve) => {
     let tx: IDBTransaction
-    try { tx = d.transaction(STORE, 'readwrite') } catch { resolve(false); return }
-    tx.oncomplete = () => resolve(true)
-    tx.onerror = () => resolve(false)
-    tx.onabort = () => resolve(false)
-    try { tx.objectStore(STORE).put(text, ROW) } catch { resolve(false) }
+    let taken = false
+    let put = false
+    try { tx = d.transaction(STORE, 'readwrite') } catch { resolve('failed'); return }
+    tx.oncomplete = () => resolve(taken ? 'taken' : put ? 'saved' : 'failed')
+    tx.onerror = () => resolve(taken ? 'taken' : 'failed')
+    tx.onabort = () => resolve(taken ? 'taken' : 'failed')
+    try {
+      const store = tx.objectStore(STORE)
+      // Merely creating a transaction does not acquire its lock: another tab's
+      // write may still precede it. The request callback runs after that writer.
+      const ready = store.get(ROW)
+      ready.onsuccess = () => {
+        if (!mayWrite()) { taken = true; tx.abort(); return }
+        try { store.put(text, ROW); put = true } catch { tx.abort() }
+      }
+    } catch { try { tx.abort() } catch { resolve('failed') } }
   })
 }
 
-async function idbDel(): Promise<void> {
+async function idbDel(mayWrite: () => boolean = () => true): Promise<void> {
   const d = await db()
   if (!d) return
   await new Promise<void>((resolve) => {
@@ -152,7 +170,14 @@ async function idbDel(): Promise<void> {
     tx.oncomplete = () => resolve()
     tx.onerror = () => resolve()
     tx.onabort = () => resolve()
-    try { tx.objectStore(STORE).delete(ROW) } catch { resolve() }
+    try {
+      const store = tx.objectStore(STORE)
+      const ready = store.get(ROW)
+      ready.onsuccess = () => {
+        if (!mayWrite()) { tx.abort(); return }
+        try { store.delete(ROW) } catch { tx.abort() }
+      }
+    } catch { resolve() }
   })
 }
 
@@ -206,7 +231,7 @@ function putLocal(stored: string): boolean {
   return false
 }
 
-/** The verified IDB copy replaces both localStorage bodies; the small current owner record stays for tab locking. */
+/** The committed IDB copy replaces both localStorage bodies; the small current owner record stays for tab locking. */
 function dropLocalBodies(): boolean {
   try {
     localStorage.removeItem(AUTOSAVE)
@@ -253,50 +278,53 @@ export async function readSaveText(): Promise<string | null> {
 }
 
 /**
- * The save written. IndexedDB first, and the first time it lands there the save
- * is read back whole before the localStorage copy is let go — an interrupted
+ * The save written. IndexedDB first, and its transaction must commit before
+ * the localStorage copy is let go — an interrupted
  * move leaves both, and the marker still naming the one that is certainly a
  * career.
  *
- * false when neither store would take it: then nothing on disk was touched, and
+ * 'failed' when neither store would take it: then the readable save stays, and
  * the career on screen is the only copy of the latest progress (me/save.ts says
  * so, and offers 导出存档).
  */
-export async function writeSaveText(text: string): Promise<boolean> {
-  if (await idbPut(text)) {
-    if (marker() === 'idb') { dropLocalBodies(); return true }
-    // the move across: read it back before anything is removed
-    if (await idbGet() === text) {
-      // Usually the marker fits beside the old body. A completely full
-      // localStorage can refuse even this tiny write: after the IDB copy has
-      // been read back whole, free the old body and try the marker again. A
-      // crash between those two synchronous operations is still recoverable —
-      // readSaveText finds IDB whenever no local body remains.
-      if (mark('idb')) { dropLocalBodies(); return true }
-      // With no local body, a fresh page's asynchronous probe finds IDB even
-      // when localStorage is blocked so completely that the marker still will
-      // not fit. If a stale local body cannot be removed, it would hide the
-      // newer IDB row on the next page: keep the old readable save and report
-      // this write as failed instead of claiming a success that will vanish.
-      if (dropLocalBodies()) {
-        here = 'idb'
-        mark('idb')
-        return true
-      }
-      await idbDel()
-      here = null
-      return false
+export async function writeSaveTextGuarded(text: string, mayWrite: () => boolean): Promise<SaveWriteResult> {
+  const result = await idbPut(text, mayWrite)
+  // A new owner may have claimed while the transaction committed. Never let
+  // this page change its marker, clear its stores, or fall back over its save.
+  if (result === 'taken' || !mayWrite()) return 'taken'
+  if (result === 'saved') {
+    if (marker() === 'idb') { dropLocalBodies(); return 'saved' }
+    // oncomplete proves the whole body committed. A second read in a separate
+    // transaction could see a newer tab's save; deleting that mismatch lost it.
+    // A full localStorage can refuse even the marker: after IDB commits,
+    // free the old body and retry. With no local body the async reader also
+    // finds IDB if the page stops before its marker is written.
+    if (mark('idb')) { dropLocalBodies(); return 'saved' }
+    // A stale local body that cannot be removed would hide the newer IDB row.
+    if (dropLocalBodies()) {
+      here = 'idb'
+      mark('idb')
+      return 'saved'
     }
-    // it did not come back the way it went in: leave the save where it is
-    await idbDel()
+    await idbDel(mayWrite)
+    if (!mayWrite()) return 'taken'
+    here = null
+    return 'failed'
   }
+  if (!mayWrite()) return 'taken'
   const ok = putLocal(text)
   // the database held the save and will not any more: the marker moves first, then the copy there goes
   if (ok && marker() === 'idb') {
     mark('ls')
-    await idbDel()
+    await idbDel(mayWrite)
   }
-  return ok
+  if (!mayWrite()) return 'taken'
+  return ok ? 'saved' : 'failed'
+}
+
+/** Unguarded storage-only callers (migration checks); careers use the guarded form. */
+export async function writeSaveText(text: string): Promise<boolean> {
+  return await writeSaveTextGuarded(text, () => true) === 'saved'
 }
 
 /**
@@ -305,18 +333,22 @@ export async function writeSaveText(text: string): Promise<boolean> {
  * handed to the store this page already has open, and the browser commits it if
  * it can. false when there was nothing to hand it to.
  */
-export function writeSaveTextNow(text: string): boolean {
+export function writeSaveTextNowGuarded(text: string, mayWrite: () => boolean, settled: (result: SaveWriteResult) => void): boolean {
+  if (!mayWrite()) { settled('taken'); return false }
   if (marker() === 'idb') {
     if (!open) return false
-    try {
-      open.transaction(STORE, 'readwrite').objectStore(STORE).put(text, ROW)
-      return true
-    } catch { return false }
+    void idbPutOpen(open, text, mayWrite).then(result => settled(mayWrite() ? result : 'taken'))
+    return true
   }
   try {
     localStorage.setItem(AUTOSAVE, text)
+    settled('saved')
     return true
   } catch { return false }
+}
+
+export function writeSaveTextNow(text: string): boolean {
+  return writeSaveTextNowGuarded(text, () => true, () => {})
 }
 
 /** For the checks: this page forgets which store it decided on, the way a fresh page would. */

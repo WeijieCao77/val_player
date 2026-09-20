@@ -4,7 +4,7 @@ import { refundStalePlan } from './week'
 import type { GameState } from '../types'
 import { buildSaveMeta, writeSaveMeta } from './saveMeta'
 import { adoptOldSave } from './saveInfo'
-import { OWNER, readSaveText, writeSaveText, writeSaveTextNow } from './saveStore'
+import { OWNER, readSaveText, writeSaveTextGuarded, writeSaveTextNowGuarded } from './saveStore'
 import { migrateRuler } from './rulerMigrate'
 import { migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
@@ -211,6 +211,8 @@ function newSaveId(): string {
 
 /** The save this page holds: its career, and the count the record had when this page last wrote it. null until a career is opened. */
 let held: { career: string; rev: number } | null = null
+/** Distinguishes reopening even the same career in this page while I/O is pending. */
+let claims = 0
 /** Another page has taken the save from this one: nothing is written from here until a career is opened again. */
 let lost = false
 
@@ -316,6 +318,7 @@ export async function loadAutosave(): Promise<GameState | null> {
  * other page holding the save that it no longer does.
  */
 export function claimAutosave(state: GameState): void {
+  claims++
   const career = state.me ? (state.me.saveId ||= newSaveId()) : newSaveId()
   const rev = revOf(readOwner()) + 1
   held = { career, rev }
@@ -357,11 +360,18 @@ export async function installSave(stored: string, state: GameState): Promise<boo
   const had = held
   const wasLost = lost
   claimAutosave(state)
+  const claim = claims
   const mine = ownerMark()
-  if (await writeSaveText(text)) {
+  const career = held!.career
+  const result = await writeSaveTextGuarded(text, () => claims === claim && holds(career) === 'ok')
+  if (result === 'saved' && claims === claim && holds(career) === 'ok') {
     // the home page's card for it, so it says whose career this is at once
     writeSaveMeta(buildSaveMeta(state))
     return true
+  }
+  if (result === 'taken' || claims !== claim || holds(career) !== 'ok') {
+    checkSaveHeld()
+    return false
   }
   if (ownerMark() === mine) {
     try {
@@ -422,7 +432,9 @@ function noteSaveFail(what: 'pack' | 'write', year: number, day: number, kb: num
 export type AutosaveResult = 'saved' | 'taken' | 'failed' | 'stale'
 
 /** A career as it stood at one commit: which career, its JSON, where it was, and the home page's card for it. */
-interface Snapshot { seq: number; career: string; json: string; year: number; day: number; meta: SaveMeta | null }
+interface Snapshot { seq: number; claim: number; career: string; json: string; year: number; day: number; meta: SaveMeta | null }
+
+const holdsSnapshot = (snap: Snapshot): 'ok' | 'old' | 'taken' => snap.claim === claims ? holds(snap.career) : 'old'
 
 let taken = 0
 /** the newest snapshot on disk */
@@ -447,7 +459,7 @@ export function autosave(state: GameState): void {
   if (lost) return
   let snap: Snapshot
   try {
-    snap = { seq: ++taken, career: state.me?.saveId ?? '', json: packState(state), year: state.year, day: state.day, meta: buildSaveMeta(state) }
+    snap = { seq: ++taken, claim: claims, career: state.me?.saveId ?? '', json: packState(state), year: state.year, day: state.day, meta: buildSaveMeta(state) }
   } catch {
     noteSaveFail('pack', state.year, state.day, 0)
     setTrouble({ year: state.year, day: state.day, kept: keptDate })
@@ -474,7 +486,7 @@ async function drain(): Promise<void> {
 
 async function writeSnapshot(snap: Snapshot): Promise<AutosaveResult> {
   try {
-    const before = holds(snap.career)
+    const before = holdsSnapshot(snap)
     if (before !== 'ok') return settle(snap, before === 'old' ? 'stale' : 'taken')
     let stored = snap.json
     if (canPack()) {
@@ -483,10 +495,14 @@ async function writeSnapshot(snap: Snapshot): Promise<AutosaveResult> {
     // the page went out of sight while this was packed and a newer one was written at once (flushAutosaveNow)
     if (snap.seq < landed) return 'stale'
     // ...or the save changed hands while this was packed: another page opened a career into it or wrote it, and a
-    // snapshot taken before that must not land after it. Checked again right here, with nothing in between to wait on.
-    const now = holds(snap.career)
+    // snapshot taken before that must not land after it. The store checks again
+    // once its readwrite transaction actually acquires the IndexedDB store.
+    const now = holdsSnapshot(snap)
     if (now !== 'ok') return settle(snap, now === 'old' ? 'stale' : 'taken')
-    return settle(snap, await writeSaveText(stored) ? 'saved' : 'failed')
+    const result = await writeSaveTextGuarded(stored, () => snap.seq >= landed && holdsSnapshot(snap) === 'ok')
+    if (snap.seq < landed) return 'stale'
+    const after = holdsSnapshot(snap)
+    return settle(snap, after !== 'ok' ? (after === 'old' ? 'stale' : 'taken') : result)
   } catch {
     return settle(snap, 'failed')
   }
@@ -526,19 +542,21 @@ export async function flushAutosave(): Promise<boolean> {
 
 /**
  * The page is going out of sight or away (pagehide, visibilitychange), and it
- * may be frozen or gone before a gzip finishes. Best effort, synchronously: the
- * newest snapshot not yet on disk is written raw. Where the browser takes that
- * (a desktop browser, or a save still small), the latest progress is in; where
- * it does not (Safari past 5 MB), nothing on disk is touched. Either way the
- * packed write carries on if the page lives, and an older snapshot still being
- * packed is dropped rather than landing over the newer one.
+ * may be frozen or gone before a gzip finishes. Best effort: hand the newest
+ * snapshot to the already-open store without waiting for compression. IDB must
+ * still acquire its transaction lock and commit before this counts as saved.
+ * The packed write carries on if the page lives; an older snapshot cannot
+ * land over a newer snapshot that already committed.
  */
 export function flushAutosaveNow(): void {
   const snap = waiting ?? writing
   if (!snap || snap.seq <= landed) return
   // only while this page still holds the save (holds): a page going out of sight writes nothing over another's
-  const may = holds(snap.career)
+  const may = holdsSnapshot(snap)
   if (may !== 'ok') { if (may === 'taken') settle(snap, 'taken'); return }
-  if (!writeSaveTextNow(snap.json)) return
-  settle(snap, 'saved')
+  writeSaveTextNowGuarded(snap.json, () => snap.seq >= landed && holdsSnapshot(snap) === 'ok', (result) => {
+    if (snap.seq < landed) return
+    const after = holdsSnapshot(snap)
+    settle(snap, after !== 'ok' ? (after === 'old' ? 'stale' : 'taken') : result)
+  })
 }

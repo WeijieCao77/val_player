@@ -133,7 +133,7 @@ store.setItem(AUTOSAVE, '旧进度')
 store.setItem(OLD_AUTOSAVE, '更旧的经理命名空间副本')
 check(await writeSaveText('新进度'), 'IndexedDB 接住新进度')
 check(factory.db.value === '新进度' && store.getItem(AUTOSAVE) === null && store.getItem(OLD_AUTOSAVE) === null && store.getItem(WHERE_KEY) === 'idb',
-  '整份读回验证后才移动标记、删除 localStorage 里的两份大正文')
+  '正文事务提交后才移动标记、删除 localStorage 里的两份大正文')
 check(hasSaveText() && await readSaveText() === '新进度', '首页同步看得到存档，继续能读出同一份')
 check(writeSaveTextNow('切后台时的进度'), '切后台时能把最新快照交给已经打开的 IndexedDB')
 await Promise.resolve()
@@ -152,7 +152,7 @@ fresh(AUTOSAVE.length + 100)
 store.setItem(AUTOSAVE, '旧'.repeat(100))
 check(await writeSaveText('配额满时的新进度'), 'localStorage 满到位置标记也写不下时，IndexedDB 仍能接住')
 check(store.getItem(AUTOSAVE) === null && store.getItem(WHERE_KEY) === 'idb' && await readSaveText() === '配额满时的新进度',
-  '验证新正文后腾掉旧正文，再写位置标记；新页面不会被旧副本遮住')
+  '新正文提交后腾掉旧正文，再写位置标记；新页面不会被旧副本遮住')
 
 fresh(AUTOSAVE.length + 100)
 store.setItem(AUTOSAVE, '旧'.repeat(100))

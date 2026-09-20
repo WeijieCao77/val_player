@@ -31,6 +31,7 @@
  *
  *   npx tsx scripts/check_save_tabs.ts
  */
+import './check_save_idb_tabs'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { CareerOpts } from '../src/engine/me/career'
 import { autoWeek } from '../src/engine/me/auto'
