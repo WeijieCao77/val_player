@@ -130,7 +130,7 @@ const f = n => finite(n) ? n.toFixed(2) : 'NA'
 const milestone = (x, censored) => x ? `${x.year}/D${x.day}${x.week != null ? `/W${x.week}` : x.observedWeek != null ? `/观测W${x.observedWeek}` : ''}` : censored ? '截尾前未观察到' : '8年未达到'
 const incidence = (numerator, denominator) => `${numerator}/${denominator}职业周 = ${denominator ? f(100 * numerator / denominator) : 'NA'}/100职业周`
 function titleCounts(row) {
-  return kinds.map(k => {
+  return kinds.filter(k => k !== 'qual').map(k => {
     const xs = row.titles.filter(t => t.cls === k && !t.qualifier)
     return `${k}:${xs.length}(赛事首发${xs.filter(t => t.started).length}/决赛首发${xs.filter(t => t.finalStarted).length})`
   }).join(' ')
@@ -153,7 +153,7 @@ export function render(result) {
       for (const [key, label] of [['argue', '争执'], ['unresolved', '宿怨提醒']]) lines.push(
         `    ${label}：玩家 ${incidence(row.roomCounts[key].player, w.proSamples)}；全队 ${incidence(row.roomCounts[key].all, w.proSamples)}`)
       lines.push(`    ${row.censored ? '截尾时综合（不是8年终值）' : '8年综合'} ${row.final.overall}；首次80 ${milestone(row.firstReached[80], row.censored)}；85 ${milestone(row.firstReached[85], row.censored)}；90 ${milestone(row.firstReached[90], row.censored)}`,
-        `    冠军 ${titleCounts(row)}；资格赛条目${row.titles.filter(t => t.qualifier).length}另列、不算冠军`)
+        `    冠军 ${titleCounts(row)}；资格/晋级类奖杯${row.titles.filter(t => t.qualifier || t.cls === 'qual').length}另列、不算国际或联赛冠军`)
     }
     lines.push(baseline.censored || candidate.censored ? '  配对8年终值差：NA（至少一侧截尾）' : `  配对8年综合差 candidate-baseline：${candidate.final.overall - baseline.final.overall}`,
       '')

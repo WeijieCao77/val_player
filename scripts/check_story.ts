@@ -23,6 +23,7 @@ import { CHAIN_CN, chainLine, plantSeed, storyTag } from '../src/engine/me/story
 import { advanceWeek, doAction } from '../src/engine/me/week'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { Rng } from '../src/engine/rng'
+import { BOND_GOOD, bondBetween, duoBonded } from '../src/engine/bonds'
 
 const seasons = Number(process.argv[2] ?? 3)
 let bad = 0
@@ -140,7 +141,27 @@ const prep: Record<string, (s: any) => void> = {
   showcase: (s) => { s.players[s.me.id].contractYears = 1; s.me.flags.showYear = 0; s.me.flags.renewPending = 0 },
   overseas: (s) => { s.me.tenure = 1; s.me.abroad = false },
   storm: (s) => { s.me.stream.total = 5; s.me.fans = Math.max(s.me.fans, 120) },
-  rift: () => {},
+  rift: (s) => {
+    // A spontaneous row now needs a genuinely weak pair (< BOND_GOOD), not
+    // whichever normal team-mate happens to have the lowest bond after warm-up.
+    const mate = s.teams[s.myTeam]?.roster.find((id: string) => id !== s.me.id && s.players[id])
+    if (!mate) throw new Error('rift lifecycle fixture needs a real team-mate')
+    duoBonded(s, s.me.id, mate, BOND_GOOD - 1 - bondBetween(s, s.me.id, mate))
+  },
+}
+/** Independent lifecycle cases: warm-up supplies the career, not a prior run
+ * of the chain being tested. In seed 31 storm naturally opens on day 63;
+ * opening it again on day 70 would correctly fail the card's 56-day cooldown.
+ * Clear only this forced chain's card history; the natural-rate runs above
+ * retain all real cooldowns, limits, relationships and seeds.
+ */
+function prepareChain(s: any, id: string): void {
+  for (const ev of EVENTS.filter((e) => e.chain === id)) {
+    delete s.me.eventCounts[ev.id]
+    delete s.me.flags[`ev_${ev.id}`]
+  }
+  s.me.flags[`chain_${id}`] = 0
+  prep[id](s)
 }
 const PLAN_TRACKS = ['scrim', 'vod', 'duo', 'stream', 'quiet']
 /** leaving it alone: take an answer that sets a task, then do not do the task */
@@ -166,7 +187,7 @@ function answer(s: any, strategy: 'rec' | 'ignore', cards: string[]) {
 function drive(id: string, strategy: 'rec' | 'ignore') {
   const s = clone(warm)
   const me = s.me
-  prep[id](s)
+  prepareChain(s, id)
   if (!openChain(s, id, new Rng(1234))) return null
   const cards: string[] = []
   const lines: string[] = []
@@ -216,7 +237,10 @@ for (const [id, key, v, t, opener] of [
   ['rift', 'blame', 'fight', '当场怼回去', 'ch_rift_open'],
 ] as const) {
   const s = clone(warm)
-  prep[id](s)
+  prepareChain(s, id)
+  // plantSeed intentionally preserves a same-value seed, including its echoed
+  // marker. This case needs a fresh, unconsumed seed rather than warm-up history.
+  if (s.me.seeds) delete s.me.seeds[key]
   plantSeed(s, key, v, t)
   s.me.seeds[key].wk -= 20
   const ok = openChain(s, id, new Rng(99), undefined)

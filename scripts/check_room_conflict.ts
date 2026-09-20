@@ -12,6 +12,7 @@
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { openChain } from '../src/engine/me/storyweek'
 import { squadOf } from '../src/engine/roster'
+import { selectLineup } from '../src/engine/match'
 import { ARGUE_GAP, FEUD_GAP, applyMatchBonds, bondBetween, duoBonded, weeklyBonds } from '../src/engine/bonds'
 import { Rng } from '../src/engine/rng'
 import type { GameState, MatchResult, Player } from '../src/engine/types'
@@ -211,6 +212,80 @@ console.log('四、经理模式仍走逐对旧规则')
     ok(t.argueSaid === undefined, '非己方俱乐部写入了玩家俱乐部专用冷却')
     console.log('  非己方俱乐部同样保留旧逐对规则与RNG路径')
   }
+}
+
+console.log('五、真实伤缺临时替补也使用本队单场预算与同对冷却')
+{
+  const s = fresh()
+  const team = s.teams[s.myTeam]
+  const fit = new Set([s.me!.id, ...team.roster.filter((id) => id !== s.me!.id)].slice(0, 4))
+  for (const id of team.roster) s.players[id].injuredUntil = fit.has(id) ? 0 : s.day + 30
+  const selected = selectLineup(s, team.id)
+  const outsider = selected.find((p) => p.teamId !== team.id)
+  if (!outsider || selected.length !== 5) throw new Error('真实伤缺阵容没有调用临时替补')
+  const five = [outsider, ...selected.filter((p) => p.id !== outsider.id)]
+  setAllBonds(s, five, -60)
+  five.forEach((p) => { p.morale = 100 })
+  const pristine = structuredClone(s)
+  const result = lopsidedLoss(five)
+  result.standIns = { a: [outsider.id], b: [] }
+  const notes: string[] = []
+  applyMatchBonds(s, result, team.id, true, new Rng(1), notes)
+  ok(notes.length === 1, `临时替补单场仍有 ${notes.length} 条争执`)
+  ok(outsider.morale === 95, `临时替补重复扣士气，100 → ${outsider.morale}`)
+  const keys = Object.keys(s.argueSaid ?? {})
+  ok(keys.length === 1 && keys[0].split('|').includes(outsider.id), '临时替补争执没有唯一同对冷却')
+
+  // Same career lineup/Rng(1), frozen from clean review-batch@3addd0f by
+  // .cache/check_standin_baseline.mjs. Manager pair formulas intentionally
+  // differ (liveEase=null), so the comparison must use the career baseline.
+  const originalCareerBonds = [
+    -100, -100, -100, -100,
+    -61.069480047567325, -61.715153406516464, -61.92814117493229,
+    -61.45470784787554, -61.07597702324586, -60.7442800418213,
+  ]
+  const afterBonds = five.flatMap((a, i) => five.slice(i + 1).map((b) => bondBetween(s, a.id, b.id)))
+  ok(JSON.stringify(afterBonds) === JSON.stringify(originalCareerBonds), '临时替补阵容的 10 对关系偏离原版逐对数值')
+
+  // The manager and non-player-club paths retain their old incident policy.
+  const manager = structuredClone(pristine)
+  manager.me = undefined
+  const oldNotes: string[] = []
+  applyMatchBonds(manager, result, team.id, true, new Rng(1), oldNotes)
+  ok(oldNotes.length === 4 && manager.players[outsider.id].morale === 80,
+    '经理模式的真实临时替补没有保留旧逐对事件/士气')
+  ok(manager.argueSaid === undefined, '经理模式的临时替补写入了生涯冷却')
+  const other = structuredClone(pristine)
+  // Watch the same match from another club: pair ownership does not define
+  // incident scope, and a non-player-club match must retain the old path.
+  other.myTeam = Object.keys(other.teams).find((id) => id !== team.id)!
+  const otherNotes: string[] = []
+  applyMatchBonds(other, result, team.id, true, new Rng(1), otherNotes)
+  ok(otherNotes.length === 4 && other.players[outsider.id].morale === 80,
+    '非己方比赛的真实临时替补没有保留旧逐对事件/士气')
+  ok(other.argueSaid === undefined, '非己方比赛的临时替补写入了生涯冷却')
+
+  if (keys.length === 1) {
+    const first = keys[0]
+    const today = s.year * 400 + s.day
+    s.day += ARGUE_GAP - 1
+    // Other pairs were said yesterday in their own matches; isolate the
+    // originally selected pair without replacing the real five-man lineup.
+    for (let i = 0; i < five.length; i++) for (let j = i + 1; j < five.length; j++) {
+      const k = pairKey(five[i].id, five[j].id)
+      if (k !== first) s.argueSaid![k] = s.year * 400 + s.day
+    }
+    setAllBonds(s, five, -60)
+    const blocked: string[] = []
+    applyMatchBonds(s, result, team.id, true, new Rng(1), blocked)
+    ok(blocked.length === 0 && s.argueSaid![first] === today, '临时替补同对未满 28 天再次争执')
+    s.day++
+    setAllBonds(s, five, -60)
+    const ready: string[] = []
+    applyMatchBonds(s, result, team.id, true, new Rng(1), ready)
+    ok(ready.length === 1 && s.argueSaid![first] === today + ARGUE_GAP, '临时替补同对满 28 天没有恢复资格')
+  }
+  console.log(`  ${outsider.ign}（teamId=${outsider.teamId}）：1 条争执，10 对关系不变，同对 27 天不重复/28 天可再触发；经理和非己方仍 4 条`)
 }
 
 if (fails) {

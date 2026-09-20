@@ -260,7 +260,9 @@ export function applyMatchBonds(
   // A career report has room for one confrontation from a match. All pair
   // bonds still move below; this only keeps one lopsided defeat from charging
   // the same player four separate morale penalties. Manager saves keep the
-  // old per-pair path (liveEase is null there) byte for byte.
+  // old per-pair path byte for byte. Emergency stand-ins retain their original
+  // teamId: incident scope follows this match's club, not a pair's liveEase.
+  const careerMatch = !!state.me && !!state.players[state.me.id] && teamId === state.myTeam
   let careerArgument: {
     carrier: { p: Player; r: number }
     passenger: { p: Player; r: number }
@@ -313,9 +315,9 @@ export function applyMatchBonds(
         // where the room is live, the same two do not argue again inside ARGUE_GAP days; the defeat above still cost the bond
         const today = state.year * 400 + state.day
         const k = key(x.p.id, y.p.id)
-        const last = live != null ? state.argueSaid?.[k] : undefined
+        const last = careerMatch ? state.argueSaid?.[k] : undefined
         if (last != null && today - last < ARGUE_GAP) continue
-        if (live != null) {
+        if (careerMatch) {
           // Keep the worst eligible confrontation and say it after every pair
           // has taken its relationship damage. Unselected pairs are not put on
           // cooldown: they did not become a separate incident in this report.
