@@ -2818,14 +2818,21 @@ export interface RoundAhead {
  * graph and writes nothing: a walkover settles the way playOn settles it, and an
  * open qualifier's places count as known before its last day. Failing a round
  * that is surely the club's, the first round fed by a phase the club is still
- * playing (`waiting`). Null once the club is out, or while a tie of its own in
- * the event is written and unplayed.
+ * playing (`waiting`). Null once the club is out, or when a written unplayed
+ * tie of its own is no later than the round. A later written tie must not hide
+ * an earlier round whose opponents have not both been placed in the schedule.
  */
 export function roundAheadOf(state: GameState, comp: Competition, teamId: string): RoundAhead | null {
   const c = comp.circuit
   const ev = c && eventOf(c.id)
   if (!c || !ev || c.mode !== 'sim' || comp.champion || c.done) return null
-  if (state.fixtures.some((f) => f.comp === comp.key && !f.played && (f.teamA === teamId || f.teamB === teamId))) return null
+  let writtenDay = Infinity
+  for (const f of state.fixtures) {
+    if (f.comp === comp.key && !f.played && (f.teamA === teamId || f.teamB === teamId)) writtenDay = Math.min(writtenDay, f.day)
+  }
+  // A round preview starts tomorrow at the earliest; an already scheduled tie
+  // today/tomorrow necessarily wins, without needing to walk the graph.
+  if (writtenDay <= state.day + 1) return null
   const g = graphOf(state, comp, ev, true)
   const { base } = flat(ev)
   const waitOf = (s: Slot): RoundAhead['wait'] =>
@@ -2852,7 +2859,9 @@ export function roundAheadOf(state: GameState, comp: Competition, teamId: string
       best = { day, round: n.round, bo: tieBo(ev.units[n.unit], n), opponent, wait: opponent ? 'match' : waitOf(a === teamId ? n.b : n.a) }
     }
   }
-  if (best) return best
+  if (best) return best.day < writtenDay ? best : null
+  // A speculative next phase never replaces a concrete scheduled match.
+  if (writtenDay < Infinity) return null
   // A phase the club is still in, being played: the first round its places feed —
   // while the club can still finish high enough for one of those places. Read as
   // rankPhase reads a phase, and only what cannot change: in a round robin every
