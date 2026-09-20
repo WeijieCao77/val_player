@@ -1,7 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
-import { ROLES, SQUAD_ROLE_CN } from '../types'
+import { SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
+import { bestFive, placeFor, standInFor } from '../five'
 import { weightsFor } from '../player'
 import { ATTR_KEYS } from '../types'
 import type { MeMatchRecord } from './types'
@@ -149,38 +150,25 @@ export function promiseHolds(state: GameState): boolean {
 /**
  * The five the coach names this week — world.ts autoStarters, read through
  * coachView, with the trial rule on top: a man on trial plays.
+ *
+ * The four jobs are the constraint and the coach's eye picks inside it
+ * (engine/five.ts bestFive, and the author's rule quoted there). It used to be
+ * the other way round — the best man of each main role seated before anyone was
+ * weighed — which is what put a career sentinel into Paper Rex's five over men
+ * far better than him and squeezed out the second duelist (reported 2026-09-20:
+ * 「玩家反映他选的哨卫，但是去 PRX 替换掉的是 something 而不是 d4v41」).
  */
 export function coachStarters(state: GameState, room = true): string[] {
   const team = state.teams[state.myTeam]
   const me = state.me
-  const squadAll = team.roster
+  const squad = team.roster
     .map((id) => state.players[id])
     .filter((p): p is Player => !!p)
   // read once: the room term reads every bond in the squad
-  const view = new Map(squadAll.map((p) => [p.id, coachView(state, p, room)]))
+  const view = new Map(squad.map((p) => [p.id, coachView(state, p, room)]))
   const cv = (p: Player) => view.get(p.id) ?? coachView(state, p, room)
-  const squad = squadAll.sort((a, b) => {
-    const fit = (x: Player) => (x.injuredUntil > state.day ? 1 : 0)
-    return fit(a) - fit(b) || cv(b) - cv(a)
-  })
-
-  const chosen: Player[] = []
-  const core = ROLES.filter((r) => r !== '自由人')
-  for (const role of core) {
-    const p = squad.find((x) => x.role === role && !chosen.includes(x))
-    if (p) chosen.push(p)
-  }
-  for (const role of core) {
-    if (chosen.length >= 5) break
-    if (chosen.some((x) => (x.roles ?? [x.role]).includes(role))) continue
-    const p = squad.find((x) => !chosen.includes(x) && (x.roles ?? [x.role]).includes(role))
-    if (p) chosen.push(p)
-  }
-  for (const p of squad) {
-    if (chosen.length >= 5) break
-    if (!chosen.includes(p)) chosen.push(p)
-  }
-  const five = chosen.slice(0, 5)
+  // the treatment room goes to the back of the queue, and is still eligible
+  const score = (p: Player) => cv(p) - (p.injuredUntil > state.day ? 1000 : 0)
 
   // The caller goes out with the team: the loudest flagged man — or me, once
   // the coach has named me his caller (me/igl.ts), over a louder deputy.
@@ -188,25 +176,7 @@ export function coachStarters(state: GameState, room = true): string[] {
   const igl = mine?.isIgl && mine.iglSource === 'appointed'
     ? mine
     : squad.filter((p) => p.isIgl).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
-  if (igl && !five.includes(igl)) {
-    const covered = (without: Player) => {
-      const rest = five.filter((x) => x !== without).concat(igl)
-      const have = new Set(rest.flatMap((p) => p.roles ?? [p.role]))
-      return core.every((r) => have.has(r))
-    }
-    const drop = five.slice().sort((a, b) => cv(a) - cv(b)).find(covered)
-    if (drop) five[five.indexOf(drop)] = igl
-  }
 
-  // on trial: I play, in place of the man I beat in practice
-  if (me?.trial) {
-    const mine = state.players[me.id]
-    if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
-      const out = five.find((p) => p.id === me.trial!.displaced)
-        ?? five.filter((p) => !p.isIgl).sort((a, b) => cv(a) - cv(b))[0]
-      if (out) five[five.indexOf(out)] = mine
-    }
-  }
   // What the contract promised, for as long as it is still a promise (PROMISE_FLOOR): a
   // starting place written into it is kept — every Challengers signing, and 「承诺首发」
   // bought at the table — unless the coach has just benched me for my form or to try
@@ -214,10 +184,21 @@ export function coachStarters(state: GameState, room = true): string[] {
   // starter sat on the bench from day one; until 2026-09-17 it read it for the whole
   // contract, and the place could not be lost.
   const seat = me && !me.trial ? promiseSeat(state) : null
-  if (seat === 'start' && mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
-    const sameRole = five.filter((p) => !p.isIgl && (p.roles ?? [p.role]).includes(mine.role))
-    const out = (sameRole.length ? sameRole : five.filter((p) => !p.isIgl))
-      .sort((a, b) => cv(a) - cv(b))[0]
+  // A place I am given rather than one I won — a trial, or a starting contract still
+  // inside its floor — is somebody's place, and the rule the report asked for says
+  // whose (engine/five.ts placeFor): the man who plays my job sits down, not the
+  // second duelist. So the coach names his five out of the rest and I go into it,
+  // instead of being weighed against them and the fifth-best man falling out. Once
+  // the floor is spent the five is his own reading again, mine included.
+  const given = !!mine && mine.injuredUntil <= state.day && (!!me?.trial || seat === 'start')
+  const pool = given && squad.length > 5 ? squad.filter((p) => p.id !== mine!.id) : squad
+  const five = bestFive(pool, score, igl)
+  if (given && mine && !five.includes(mine)) {
+    // read through `score`, so a man in the treatment room is the one who steps
+    // aside before a fit team-mate does — unless the four jobs need him there
+    const out = (me?.trial && five.find((p) => p.id === me.trial!.displaced))
+      || placeFor(five, mine, score, (p) => p.isIgl)
+      || placeFor(five, mine, score)
     if (out) five[five.indexOf(out)] = mine
   }
   // And the same promise the other way round: signed as a substitute, I am one for as
@@ -226,8 +207,7 @@ export function coachStarters(state: GameState, room = true): string[] {
   // team whatever his contract says.
   if (seat === 'bench' && mine && five.includes(mine) && !(mine.isIgl && mine.iglSource === 'appointed')) {
     const spare = squad.filter((p) => !five.includes(p) && p.injuredUntil <= state.day)
-    const sameRole = spare.filter((p) => (p.roles ?? [p.role]).includes(mine.role))
-    const inst = (sameRole.length ? sameRole : spare).sort((a, b) => cv(b) - cv(a))[0]
+    const inst = standInFor(five, mine, spare, cv)
     if (inst) five[five.indexOf(mine)] = inst
   }
   return five.map((p) => p.id)
@@ -254,7 +234,14 @@ export function roomCall(state: GameState): string | null {
     : `你和 ${who} 能力差不多，教练用了跟队伍更合得来的 ${who}。协同、沟通、跟队友处得怎么样，都算数。`
 }
 
-/** The starter I am competing with: same role, lowest in the coach's eyes. */
+/**
+ * The starter I am competing with — the man whose place I would take.
+ *
+ * One answer, shared with the coach's own five (engine/five.ts placeFor) and
+ * with the 转会 page's reading of a club (me/selfpitch.ts needOf), because
+ * three different answers is what the report was about: my job first, never a
+ * swap that leaves one of the four jobs open, and never the man who calls.
+ */
 export function duelTarget(state: GameState): Player | null {
   const me = state.me
   if (!me) return null
@@ -265,10 +252,8 @@ export function duelTarget(state: GameState): Player | null {
     .map((id) => state.players[id])
     .filter((p): p is Player => !!p)
   if (!starters.length) return null
-  const sameRole = starters.filter((p) => (p.roles ?? [p.role]).includes(mine.role) && !p.isIgl)
-  const pool = sameRole.length ? sameRole : starters.filter((p) => !p.isIgl)
-  if (!pool.length) return null
-  return pool.sort((a, b) => coachView(state, a) - coachView(state, b))[0]
+  const cv = (p: Player) => coachView(state, p)
+  return placeFor(starters, mine, cv, (p) => p.isIgl) ?? placeFor(starters, mine, cv)
 }
 
 /** Name this week's five and tell me if my place changed — and, when the room settled it, why. */

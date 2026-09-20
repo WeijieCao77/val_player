@@ -3,6 +3,8 @@ import type { GameState, Player, Team } from '../types'
 import { expectedSalary, ratingOf } from '../player'
 import { regionIn } from '../era'
 import { importBlock } from '../imports'
+import { placeFor, roleGaps } from '../five'
+import { coachView } from './coach'
 import { pushLog } from './log'
 import { push } from './pending'
 import { ROLE_PAY, buyoutDue, makeDeal, leaveClub, salaryFloor } from './contract'
@@ -254,9 +256,12 @@ export function vctNeeds(state: GameState, league: string): VctNeed[] {
     if (skill < expectOf(team) - 6) continue
     // a buyout still owed comes out of the buyer's budget; nothing is owed on a deal that runs out this winter
     if (fee > 0 && team.budget < fee) continue
-    const mate = team.starters.map((id) => state.players[id])
-      .filter((q): q is Player => !!q && q.id !== me.id && (q.roles ?? [q.role]).includes(p.role))
-      .sort((a, b) => a.overall - b.overall)[0]
+    // the job a club is short of, and the man whose place I would take, on the
+    // one rule the coach's five and 对位挑战 also read (engine/five.ts)
+    const five = team.starters.map((id) => state.players[id]).filter((q): q is Player => !!q)
+    if (five.length < 5 || roleGaps(five).includes(p.role)) { out.push({ team, kind: 'hole', fee }); continue }
+    const mate = placeFor(five, p, (q) => coachView(state, q), (q) => q.isIgl)
+      ?? placeFor(five, p, (q) => coachView(state, q))
     if (!mate) { out.push({ team, kind: 'hole', fee }); continue }
     if (p.overall > mate.overall) { out.push({ team, kind: 'beat', mate, fee }); continue }
     // what that club would write into a rotation contract, in the world's dollars its budget is kept in

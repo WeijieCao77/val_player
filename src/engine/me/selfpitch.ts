@@ -1,6 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
 import type { GameState, Player, Team } from '../types'
 import { importBlock } from '../imports'
+import { placeFor, roleGaps } from '../five'
+import { coachView } from './coach'
 import { hasPlace } from '../timeline'
 import { formatOf, regionIn } from '../era'
 import { readDraws } from '../circuit'
@@ -154,13 +156,25 @@ export interface PitchNeed {
   mate?: Player
 }
 
-/** What the club is short of, as a VCT club that comes for a man reads it (me/transfer.ts vctNeeds). */
+/**
+ * What the club is short of, as a VCT club that comes for a man reads it (me/transfer.ts vctNeeds).
+ *
+ * 缺 X reads off the same rule the coach names his five by (engine/five.ts): a
+ * job is open when the club's five cannot put a man on it — not merely when
+ * nobody writes it on his card. One man who plays both smoke and sentinel takes
+ * one of them in a match, so a five that reads 「有控场也有哨卫」 through him alone
+ * is short of one of the two, and that is the job the club shops for.
+ *
+ * And the man named in 「比首发 X 强」 is the same man 对位挑战 would put me
+ * against if I signed (me/coach.ts duelTarget): whose place I would take.
+ */
 export function needOf(state: GameState, team: Team): PitchNeed {
   const me = state.me!
   const p = state.players[me.id]
-  const mate = team.starters.map((id) => state.players[id])
-    .filter((q): q is Player => !!q && q.id !== me.id && (q.roles ?? [q.role]).includes(p.role))
-    .sort((a, b) => a.overall - b.overall)[0]
+  const five = team.starters.map((id) => state.players[id]).filter((q): q is Player => !!q)
+  if (five.length < 5 || roleGaps(five).includes(p.role)) return { kind: 'hole' }
+  const mate = placeFor(five, p, (q) => coachView(state, q), (q) => q.isIgl)
+    ?? placeFor(five, p, (q) => coachView(state, q))
   if (!mate) return { kind: 'hole' }
   if (p.overall > mate.overall) return { kind: 'beat', mate }
   if (team.roster.length < PITCH_SQUAD) return { kind: 'place', mate }

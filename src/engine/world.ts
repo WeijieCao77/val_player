@@ -4,12 +4,13 @@ import raw2021 from '../data/world_2021.json'
 import { dossierOf } from './dossier'
 import { Rng, clamp, hashStr } from './rng'
 import { AGENTS, MAPS, SPONSOR_NAMES } from './content'
-import { defaultTactics, emptyStats, ROLES } from './types'
+import { defaultTactics, emptyStats } from './types'
 import type { Attrs, GameState, Player, Role, Sponsor, Team, WorldState } from './types'
 import { freeAgentPool } from './prospects'
 import { dateOf, offPool, offPoolOn } from './staffStints'
 import { WORLD_TEAMS, type RawTeam } from './teams'
 import { squadOf, callerOf } from './roster'
+import { bestFive } from './five'
 import { currentRuleset } from './ruleset'
 import { historyNames } from './names'
 import { deskOf, managedClub } from './desk'
@@ -63,7 +64,6 @@ function pickAgents(role: Role, rng: Rng): string[] {
   return rng.shuffle(pool.slice()).slice(0, n)
 }
 
-/** Choose a sensible starting five: one per role where possible, then best available. */
 /** Ability, discounted while the sample behind it is thin. */
 export const confidentRating = (p: Player): number =>
   p.overall - Math.round(14 * (1 - (p.rounds ?? 0) / ((p.rounds ?? 0) + 900)))
@@ -73,65 +73,32 @@ export function autoStarters(state: GameState, teamId: string): string[] {
   const squad = team.roster
     .map((id) => state.players[id])
     .filter((p): p is Player => !!p)
-    // An unproven player rates at the league average because we have not seen
-    // him, not because he is average. Sharks came out ahead of Lysoar on 119
-    // rounds against 8031, and was picked to start over him. Thin samples are
-    // discounted for selection.
-    //
-    // A man in the treatment room goes to the back of the queue whatever he
-    // rates: "已自动排出最佳首发" used to hand back a five with three injured
-    // men in it, and the same screen then warned the caller was unavailable.
-    // He is still eligible — a squad with nobody fit must field somebody.
-    .sort((a, b) => {
-      const fit = (x: Player) => (x.injuredUntil > state.day ? 1 : 0)
-      return fit(a) - fit(b) || confidentRating(b) - confidentRating(a)
-    })
 
-  const chosen: Player[] = []
-  // 自由人 is "covers anything", not a slot to fill — treating it as one forced
-  // the squad's only flex player into the five ahead of better options
-  const core = ROLES.filter((r) => r !== '自由人')
-  for (const role of core) {
-    const p = squad.find((x) => x.role === role && !chosen.includes(x))
-    if (p) chosen.push(p)
-  }
-  // Then close any gap with someone who covers it as a second role. Filling
-  // slots by main role alone left Fire Flux fielding no sentinel while the one
-  // player who can hold a site sat on the bench, because sentinel is his
-  // second job — a -5 the squad never had to take.
-  for (const role of core) {
-    if (chosen.length >= 5) break
-    if (chosen.some((x) => (x.roles ?? [x.role]).includes(role))) continue
-    const p = squad.find((x) => !chosen.includes(x) && (x.roles ?? [x.role]).includes(role))
-    if (p) chosen.push(p)
-  }
-  for (const p of squad) {
-    if (chosen.length >= 5) break
-    if (!chosen.includes(p)) chosen.push(p)
-  }
-  const five = chosen.slice(0, 5)
+  // An unproven player rates at the league average because we have not seen
+  // him, not because he is average. Sharks came out ahead of Lysoar on 119
+  // rounds against 8031, and was picked to start over him. Thin samples are
+  // discounted for selection.
+  //
+  // A man in the treatment room goes to the back of the queue whatever he
+  // rates: "已自动排出最佳首发" used to hand back a five with three injured
+  // men in it, and the same screen then warned the caller was unavailable.
+  // He is still eligible — a squad with nobody fit must field somebody — so
+  // the treatment room is a term in the reading, not a filter on the squad.
+  const score = (p: Player) => confidentRating(p) - (p.injuredUntil > state.day ? 1000 : 0)
 
+  // The five is the strongest one that still carries the four jobs, with the
+  // caller in it (engine/five.ts bestFive, and the author's rule quoted there).
+  // It used to be built the other way round — the best man of each main role
+  // seated first, whatever his level, and the rest filled on rating — which let
+  // a squad's only nominal sentinel walk into the five over men ten points
+  // better, and left the world with fives of three and four controllers.
+  //
   // The caller goes out with the team. Picking purely on rating left FNATIC,
   // Gen.G and three others starting without one, because an IGL is often the
   // worst fragger on the roster — Boaster rates 61 in a squad of high 80s. The
-  // sim already prices that at -4 to both sides and -3 mid-round, which is more
-  // than any single role gap costs, so a lineup that drops him is simply a
-  // worse lineup. He replaces the lowest-rated starter whose roles someone
-  // else still covers.
+  // sim already prices that at -4 to both sides and -3 mid-round.
   const igl = squad.filter((p) => p.isIgl).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
-  if (igl && !five.includes(igl)) {
-    const covered = (without: Player) => {
-      const rest = five.filter((x) => x !== without).concat(igl)
-      const have = new Set(rest.flatMap((p) => p.roles ?? [p.role]))
-      return ROLES.filter((r) => r !== '自由人').every((r) => have.has(r))
-    }
-    const drop = five
-      .slice()
-      .sort((a, b) => confidentRating(a) - confidentRating(b))
-      .find(covered)
-    if (drop) five[five.indexOf(drop)] = igl
-  }
-  return five.map((p) => p.id)
+  return bestFive(squad, score, igl).map((p) => p.id)
 }
 
 

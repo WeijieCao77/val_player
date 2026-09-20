@@ -5,6 +5,7 @@ import { callerOf, squadOf } from '../../engine/roster'
 import { attrWord, trustLabel, useNumbers } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, roomCall, standingLine } from '../../engine/me/coach'
+import { jobsOf, mainJobs } from '../../engine/five'
 import { IGL_TRUST_LOST, SKID_OF, SKID_WINS, clubCaller, iglBlock, iglGates, myCall } from '../../engine/me/igl'
 import { roomView } from '../../engine/me/room'
 import { mateMark } from '../../engine/me/hurtplay'
@@ -100,9 +101,13 @@ export default function TeamScreen() {
         <Panel title="首发之争">
           {/* the people I am actually racing: same slot, on this roster */}
           {(() => {
+            // read off the engine's own rule (engine/five.ts jobsOf), so the list and the
+            // coach's five never disagree about who plays this job
             const rivals = team.roster
               .map((id) => game.players[id])
-              .filter((x) => x && x.id !== me.id && (x.roles ?? [x.role]).includes(p.role))
+              .filter((x) => x && x.id !== me.id && jobsOf(x).includes(p.role))
+              .sort((a, b) => Number(jobsOf(b).includes(p.role) && mainJobs(b).includes(p.role))
+                - Number(mainJobs(a).includes(p.role)) || b.overall - a.overall)
             return rivals.length ? (
               <div style={{ marginBottom: 8 }}>
                 <p className="tiny muted" style={{ margin: '0 0 4px' }}>和你抢 {p.role} 位置的：</p>
@@ -111,7 +116,7 @@ export default function TeamScreen() {
                   return (
                     <p key={r.id} className="small" style={{ margin: '0 0 3px' }}>
                       <b>{r.ign}</b> · {rs ? '首发' : '替补'}
-                      <span className="muted">{r.overall > p.overall ? ' · 综合压着你' : r.overall < p.overall ? ' · 你压着他' : ' · 综合持平'}</span>
+                      <span className="muted">{mainJobs(r).includes(p.role) ? '' : ' · 兼位'}{r.overall > p.overall ? ' · 综合压着你' : r.overall < p.overall ? ' · 你压着他' : ' · 综合持平'}</span>
                     </p>
                   )
                 })}

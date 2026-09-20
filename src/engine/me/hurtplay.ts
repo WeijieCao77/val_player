@@ -1,6 +1,7 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { selectLineup } from '../match'
 import { recomputeOverall } from '../player'
+import { jobsOf } from '../five'
 import type { Fixture, GameState } from '../types'
 import type { MeMatchRecord } from './types'
 import { pushLog } from './log'
@@ -203,7 +204,8 @@ function coverNight(state: GameState, rec: MeMatchRecord): void {
     pushLog(state, 'team', '顶上首发的这场，打出来了。对位挑战的资本记了一笔。')
     return
   }
-  const him = out.find((q) => (q.roles ?? [q.role]).includes(mine.role)) ?? out[0]
+  // the man I covered for, on the one rule (engine/five.ts jobsOf): my own job first
+  const him = out.find((q) => jobsOf(q).includes(mine.role)) ?? out[0]
   me.trial = { left: TRIAL_MATCHES, displaced: him.id, forgiven: false }
   me.edge = 0
   team.starters = coachStarters(state)
