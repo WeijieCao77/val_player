@@ -291,15 +291,15 @@ export interface BreakCount {
   /** counted at the settlements so far — the number the break is judged on */
   have: number
   need: number
-  /** what this week's settlement will add: the plan on the board, the clutches and maps played since the last one */
+  /** what this week's settlement will add: what has already been done this week, the clutches and maps played since the last one */
   week: number
 }
 
 /**
  * A counted path's count: the one number the attribute card, the week board's
  * note and the settlement all read. The card used to show only what earlier
- * settlements had counted, so the six reviews a player had just put on the
- * board read 「4/6」 until the settlement that broke it read 「0/6」 (reported
+ * settlements had counted, so the six reviews a player had just done read
+ * 「4/6」 until the settlement that broke it read 「0/6」 (reported
  * 2026-09-14); the week's share is said beside it now. Null for the paths that
  * count nothing: 枪法's streak and 沟通's company.
  */
@@ -321,7 +321,7 @@ export function breakCount(state: GameState, k: K): BreakCount | null {
 
 const counted = (s: GameState, k: K) => s.me!.bottleneck?.count[k] ?? 0
 const upTo = (n: number, need: number) => `${Math.min(n, need)}/${need}`
-/** 「已复盘 4/6 次 · 本周还安排了 2 次复盘，周结算时算进去」 */
+/** 「已复盘 4/6 次 · 这周又复盘了 2 次，周结算时算进去」 —— the hours are done the moment they are clicked (me/week.ts doAction); it is the count that is judged at the settlement, with 枪法's weeks in a row */
 function tally(s: GameState, k: K, head: string, unit: string, soon: string): string {
   const c = breakCount(s, k)!
   const more = c.week > 0 && chasing(s, k) ? ` · ${soon.replace('#', String(c.week))}，周结算时算进去` : ''
@@ -360,19 +360,19 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
   reaction: {
     how: `卡在瓶颈上以后，打满 ${NEED.reaction} 次排位`, value: BREAK_VALUE.grind,
     reason: '又是一晚上的对枪。',
-    prog: (s) => tally(s, 'reaction', '已打', '次', '本周还安排了 # 次排位'),
+    prog: (s) => tally(s, 'reaction', '已打', '次', '这周又打了 # 次排位'),
     done: (s) => counted(s, 'reaction') >= NEED.reaction!,
   },
   awareness: {
     how: `卡在瓶颈上以后，复盘满 ${NEED.awareness} 次`, value: BREAK_VALUE.grind,
     reason: '录像看到第几遍，已经数不清了。',
-    prog: (s) => tally(s, 'awareness', '已复盘', '次', '本周还安排了 # 次复盘'),
+    prog: (s) => tally(s, 'awareness', '已复盘', '次', '这周又复盘了 # 次'),
     done: (s) => counted(s, 'awareness') >= NEED.awareness!,
   },
   utility: {
     how: `卡在瓶颈上以后，练满 ${NEED.utility} 次道具与跑图`, value: BREAK_VALUE.grind,
     reason: '每个点位的道具都丢过上百遍，现在闭着眼也知道落在哪。',
-    prog: (s) => tally(s, 'utility', '已练', '次', '本周还安排了 # 次道具与跑图'),
+    prog: (s) => tally(s, 'utility', '已练', '次', '这周又练了 # 次道具与跑图'),
     done: (s) => counted(s, 'utility') >= NEED.utility!,
   },
   clutch: {
@@ -384,7 +384,7 @@ export const BREAK_PATHS: Record<K, BreakPath> = {
   teamwork: {
     how: `卡在瓶颈上以后，打满 ${NEED.teamwork} 次跟队训练赛`, value: BREAK_VALUE.grind, pro: true,
     reason: '训练赛打到后来，报点只要报一半。',
-    prog: (s) => tally(s, 'teamwork', '已打', '次', '本周还安排了 # 次训练赛'),
+    prog: (s) => tally(s, 'teamwork', '已打', '次', '这周又打了 # 次训练赛'),
     done: (s) => counted(s, 'teamwork') >= NEED.teamwork!,
   },
   communication: {

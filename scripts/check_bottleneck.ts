@@ -109,13 +109,13 @@ if (JSON.stringify([p, me.bottleneck, me.log]) !== JSON.stringify([b.players[b.m
 }
 
 // every practice path on every role, from a fresh pool at 80, until its card says it is finished
-interface Path { k: K; act: MeAction; need: number; adds: number; have: (s: GameState) => number }
+interface Path { k: K; act: MeAction; need: number; adds: number; have: (s: GameState) => number; soon?: string }
 const PATHS: Path[] = [
   { k: 'aim', act: 'aim', need: 3, adds: 1, have: (s) => s.me!.bottleneck!.aimStreak },
-  { k: 'awareness', act: 'vod', need: 6, adds: 2, have: (s) => breakCount(s, 'awareness')!.have },
-  { k: 'utility', act: 'util', need: 6, adds: 2, have: (s) => breakCount(s, 'utility')!.have },
-  { k: 'reaction', act: 'ranked', need: 12, adds: 2, have: (s) => breakCount(s, 'reaction')!.have },
-  { k: 'teamwork', act: 'scrim', need: 4, adds: 2, have: (s) => breakCount(s, 'teamwork')!.have },
+  { k: 'awareness', act: 'vod', need: 6, adds: 2, have: (s) => breakCount(s, 'awareness')!.have, soon: '这周又复盘了 2 次' },
+  { k: 'utility', act: 'util', need: 6, adds: 2, have: (s) => breakCount(s, 'utility')!.have, soon: '这周又练了 2 次道具与跑图' },
+  { k: 'reaction', act: 'ranked', need: 12, adds: 2, have: (s) => breakCount(s, 'reaction')!.have, soon: '这周又打了 2 次排位' },
+  { k: 'teamwork', act: 'scrim', need: 4, adds: 2, have: (s) => breakCount(s, 'teamwork')!.have, soon: '这周又打了 2 次训练赛' },
 ]
 const ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 for (const role of ROLES) {
@@ -151,7 +151,7 @@ for (const role of ROLES) {
       const note = ceilingNote(r, act) ?? ''
       const shown = k === 'aim' ? `已连续 ${Math.min(have, need)}/${need} 周` : `${Math.min(have, need)}/${need}`
       if (!info.prog.includes(shown) || !note.includes(shown)) fail(`${role} ${ATTR_CN[k]}：卡片「${info.prog}」、周计划「${note}」和引擎的计数 ${have}/${need} 对不上`)
-      if (k !== 'aim' && !info.prog.includes('本周还安排了 2 次')) fail(`${role} ${ATTR_CN[k]}：卡片没说这周安排的 2 次（${info.prog}）`)
+      if (path.soon && !(info.prog.includes(path.soon) && info.prog.includes('周结算时算进去'))) fail(`${role} ${ATTR_CN[k]}：卡片没说这周做过的 2 次（要「${path.soon}，周结算时算进去」，实际「${info.prog}」）`)
       const cap0 = rp.caps![k]
       const m = markOf(r)
       bottleneckWeek(r)
