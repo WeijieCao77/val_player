@@ -1,5 +1,5 @@
 import type { GameState } from '../types'
-import { REGIONAL_RULER, lastRegionalRulerShift, rulerOn, shiftPlayer } from '../ruler'
+import { REGIONAL_RULER, regionalRulerShiftForSample, rulerOn, shiftPlayer } from '../ruler'
 import { refreshValue } from '../player'
 import { pushLog } from './log'
 
@@ -9,7 +9,8 @@ import { pushLog } from './log'
  * New worlds stamp at creation because timeline reads already include this delta.
  * Old v1 worlds first complete their existing v2/player-rank migration, then this
  * NPC-only step. Later winters keep the ordinary global holdScale, without a
- * second fixed regional deduction every January.
+ * second fixed regional deduction every January. Saved VLR sample fingerprints
+ * identify the actual source year; absent/ambiguous evidence is left unchanged.
  */
 export function migrateRegionalRuler(state: GameState): number {
   const me = state.me
@@ -18,7 +19,7 @@ export function migrateRegionalRuler(state: GameState): number {
   let moved = 0
   for (const p of Object.values(state.players)) {
     if (p.id === me.id || !/^V\d+$/.test(p.id)) continue
-    const d = lastRegionalRulerShift(state.year, p.id.slice(1))
+    const d = regionalRulerShiftForSample(state.year, p.id.slice(1), p.vlr)
     if (!d) continue
     shiftPlayer(p, d)
     refreshValue(p)

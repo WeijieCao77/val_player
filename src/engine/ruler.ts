@@ -65,7 +65,7 @@ export const K_SUB = K_TOP / SUB_RATIO ** 2
 /** the rounds of a full season at a club that plays its league through: what a winter past the book counts as */
 export const FULL_SEASON = 1500
 
-interface TRating { o: number; n: number }
+interface TRating { o: number; n: number; v: [number | null, number | null] }
 interface TClub { k: 1 | 2; d: number; r: string }
 interface TYear { clubs: Record<string, TClub>; rosters: Record<string, string[]>; ratings: Record<string, TRating> }
 const BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
@@ -251,6 +251,26 @@ export function regionalCalibration(year: number): RegionalCalibration {
 
 /** The added delta alone: used by a separate one-time migration, never the whole ruler twice. */
 export const regionalRulerShift = (year: number, vlr: string): number => regionalCalibration(year).shifts.get(vlr) ?? 0
+
+/** Match the sample actually saved on an NPC, not the current calendar year.
+ * Protected teammates and recently released players may retain an older line.
+ * Missing or ambiguous evidence must never guess a new deduction.
+ */
+export function regionalRulerShiftForSample(year: number, vlr: string, sample: Player['vlr']): number {
+  if (!sample || !Number.isFinite(sample.rounds) || sample.rounds < 0
+    || !(sample.rating === null || Number.isFinite(sample.rating))
+    || !(sample.acs === null || Number.isFinite(sample.acs))) return 0
+  const matches: number[] = []
+  for (const [key, book] of Object.entries(BOOK.years)) {
+    const sourceYear = Number(key)
+    if (sourceYear > year) continue
+    const r = book.ratings[vlr]
+    if (r && r.v[0] === sample.rating && r.v[1] === sample.acs && r.n === sample.rounds) {
+      matches.push(regionalRulerShift(sourceYear, vlr))
+    }
+  }
+  return matches.length && matches.every(d => d === matches[0]) ? matches[0] : 0
+}
 
 export function lastRegionalRulerShift(year: number, vlr: string): number {
   for (let y = Math.min(year, 2026); y >= 2022; y--) {
