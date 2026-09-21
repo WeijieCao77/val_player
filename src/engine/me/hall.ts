@@ -7,6 +7,8 @@ import { compClass, isQualifier } from './compclass'
 import type { CompClass } from './compclass'
 import { becauseOfMe as becauseOfRow, careerLine, careerRewrites, retitledLine } from './rewrites'
 import type { MeState } from './types'
+import { cleanCareerMarks } from './careerMarks'
+import type { CareerMark } from './careerMarks'
 
 /**
  * 成就殿堂: what every career on this device has done, kept outside the save.
@@ -86,7 +88,7 @@ export interface HallCard {
   best?: { year: number; team: string; titles: number; acs: number }
   /** the best season ACS over a real sample */
   acs?: { year: number; value: number }
-  ending: { key: string; title: string }
+  ending: { key: string; title: string; marks?: CareerMark[] }
   peak: number
   mvps: number
   /** achievement keys held at the end */
@@ -353,7 +355,7 @@ function cleanCard(x: unknown): HallCard | null {
     }).slice(0, 80),
     best: best ? { year: int(best.year), team: str(best.team, 48), titles: int(best.titles), acs: int(best.acs) } : undefined,
     acs: acs ? { year: int(acs.year), value: int(acs.value) } : undefined,
-    ending: { key: str(e.key, 24), title: str(e.title, 16) },
+    ending: { key: str(e.key, 24), title: str(e.title, 16), ...(cleanCareerMarks(e.marks).length ? { marks: cleanCareerMarks(e.marks) } : {}) },
     peak: int(o.peak), mvps: Math.max(0, int(o.mvps)),
     ach: [...new Set(list(o.ach).filter((k): k is string => typeof k === 'string' && !!ACH_BY_KEY[k]))],
     at: DAY.test(at) ? at : '',
@@ -477,7 +479,7 @@ function cardOf(state: GameState, id: string): HallCard {
     titles: me.titles.map((t) => ({ year: t.year, name: t.title, cls: compClass(t.title), started: t.started })),
     best: best ? { year: best.year, team: best.team, titles: best.titles.length, acs: best.acs } : undefined,
     acs: acs?.acs ? { year: acs.year, value: acs.acs } : undefined,
-    ending: { key: me.ending?.key ?? '', title: me.ending?.title ?? '' },
+    ending: { key: me.ending?.key ?? '', title: me.ending?.title ?? '', ...(me.ending?.marks?.length ? { marks: cleanCareerMarks(me.ending.marks) } : {}) },
     peak: Math.max(p?.overall ?? 0, ...me.seasons.map((x) => x.overallTo)),
     mvps: p?.career?.mvps ?? 0,
     ach: me.achievements.filter((k) => !!ACH_BY_KEY[k]),
@@ -555,7 +557,14 @@ export function mergeHall(into: Hall, from: Hall): Hall {
     r.n = Math.max(r.n, f.n, ids.length)
     r.ids = ids.slice(-IDS_CAP)
   }
-  for (const c of from.cards) if (!into.cards.some((x) => x.id === c.id)) into.cards.push(c)
+  for (const c of from.cards) {
+    const existing = into.cards.find((x) => x.id === c.id)
+    if (!existing) into.cards.push(c)
+    else {
+      const marks = cleanCareerMarks([...(existing.ending.marks ?? []), ...(c.ending.marks ?? [])])
+      if (marks.length) existing.ending.marks = marks
+    }
+  }
   into.cards.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
   into.cards = into.cards.slice(-CARDS_CAP)
   for (const [key, m] of Object.entries(from.hx)) {

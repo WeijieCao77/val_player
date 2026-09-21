@@ -1,6 +1,7 @@
 import type { Attrs, Region, SquadRole } from '../types'
 import type { CompClass } from './compclass'
 import type { Cur } from './currency'
+import type { CareerEventState } from './eventState'
 
 /** What a week's action points can be spent on. */
 export type MeAction =
@@ -841,6 +842,8 @@ export interface MeState {
   awards?: MeAward[]
   /** the lay-off I am in, by kind - see me/injury.ts; absent when healthy and in saves from before it */
   injury?: MeInjury
+  /** Major life events retain facts separately from temporary absence and old event flags. */
+  careerEvents?: CareerEventState
   /** team-mates out hurt when the week last opened, so a lay-off is said when it starts and when it ends */
   mateHurt?: { club: string; ids: string[] }
   /** every dollar in and out, by stage — see me/money.ts, written only by addMoney() */
@@ -932,7 +935,7 @@ export interface MeState {
   titles: { year: number; title: string; started: boolean }[]
   /** qualifiers won — 出线, not titles (me/compclass.ts isQualifier); absent in older saves */
   quals?: { year: number; title: string; started: boolean }[]
-  ending?: { key: string; title: string; text: string; year: number }
+  ending?: { key: string; title: string; text: string; year: number; marks?: import('./careerMarks').CareerMark[] }
   retireAsk?: boolean
   flags: Record<string, number>
 }

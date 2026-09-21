@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { activeAbsence, absenceBlock } from './absence'
 import { defaultTactics, emptyStats, ROLES } from '../types'
 import type { GameState, Player, Region, Role, Team } from '../types'
 import { MAPS } from '../content'
@@ -134,6 +135,8 @@ export const TEMP_OPP = 'CUP_OPP'
 
 /** Stand up both fives in the world for one match, and take them down after. */
 export function mountCupMatch(state: GameState, cup: CupDef, round: number, rng: Rng): { bo: 1 | 3; label: string; opp: string } {
+  const leave = absenceBlock(state)
+  if (leave) throw new Error(leave)
   const me = state.me!
   dropTempTeams(state)
   const mates = me.pre.cup!.mates
@@ -246,6 +249,8 @@ export function cupStatus(state: GameState, key: string): CupStatus {
 
 /** Why the 报名 button is greyed today, or null: a run still going, the fee, the invitation — as enterCup refuses. */
 export function cupEntryBlock(state: GameState, key: string): string | null {
+  const leave = absenceBlock(state)
+  if (leave) return leave
   const me = state.me!
   const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事'
@@ -320,6 +325,8 @@ export function cupRoundToday(state: GameState): boolean {
  * (reported 2026-09-11).
  */
 export function enterCup(state: GameState, key: string, rng: Rng): string | null {
+  const leave = absenceBlock(state)
+  if (leave) return leave
   const me = state.me!
   const cup = cupFor(state, key)
   if (!cup) return '没有这项赛事。'
@@ -443,6 +450,11 @@ export function resumeCup(state: GameState): void {
   const me = state.me
   const run = me?.pre.cup
   if (!me || !run) return
+  if (activeAbsence(state) && (run.next == null || run.year !== state.year || run.next <= state.day)) {
+    pushLog(state, 'cup', `${activeAbsence(state)!.label}期间无法参加杯赛，本轮弃权。`)
+    forfeitCup(state, cupRng(state, 'leave'))
+    return
+  }
   if (me.phase === 'retired' || (me.phase === 'pro' && run.club !== state.myTeam)) {
     dropTempTeams(state)
     me.pre.cup = undefined

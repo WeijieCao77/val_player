@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { activeAbsence, absenceActionBlock, absenceTick } from './absence'
 import { advanceDay } from '../season'
 import { clubWeek, clubWinter } from './club'
 import { marketTurn, marketWindow } from './market'
@@ -65,12 +66,13 @@ export type WeekStop =
 export function apFor(state: GameState): number {
   const me = state.me!
   const p = state.players[me.id]
-  if (p && p.injuredUntil > state.day) return AP_HURT
+  if (activeAbsence(state) || (p && p.injuredUntil > state.day)) return AP_HURT
   return me.phase === 'pro' ? AP_SEASON : AP_PRE
 }
 
 /** The week opens: the coach names his five, the duel count resets. */
 export function beginWeek(state: GameState): void {
+  absenceTick(state)
   const me = state.me!
   me.duelsThisWeek = 0
   me.relaxUsed = 0
@@ -224,6 +226,8 @@ export function repeatLastWeek(state: GameState): string {
  * signpost — hide it and the player never learns it exists.
  */
 export function actionBlock(state: GameState, action: MeAction): string | null {
+  const leave = absenceActionBlock(state, action)
+  if (leave) return leave
   const me = state.me!
   const def = ACTION_BY_KEY[action]
   if (action === 'duel') return null
@@ -465,6 +469,7 @@ export function advanceTurn(state: GameState): WeekStop {
 
 /** Up to `days` more of the week; `turn` stops the run on the day it becomes a week of days. */
 function runDays(state: GameState, days: number, turn: boolean): WeekStop {
+  absenceTick(state)
   const me = state.me!
   const p = state.players[me.id]
   // the clock moving settles what the week has done: a card's 「−」 reaches back no further (me/undo.ts)
@@ -513,6 +518,7 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     const beforeSeasonEnd = (s: GameState) => { ledger = seasonLedger(s) }
     // one match of mine a day: a second due the same day is mine tomorrow, not the engine's today
     const r = advanceDay(state, { deferMine: pro, holdMine: pro, autoScrims: true, autoResolveDrawDecisions: true, beforeSeasonEnd })
+    absenceTick(state)
     me.weekDay++
     for (const n of r.notes) if (keep(n)) me.weekNotes.push(n)
     const rng = new Rng(hashStr(`me:day:${state.seed}:${state.year}:${state.day}`))
@@ -551,7 +557,7 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // and the next run plays it (dueToday).
     const today = r.pendingMine && pro ? r.pendingMine : undefined
     if (today) {
-      ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
+      if (!activeAbsence(state)) ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
       // hurt on a day the coach would start me: play through it or sit it out (me/hurtplay.ts)
       hurtBeforeMatch(state, today)
     }
@@ -726,7 +732,7 @@ export function settleWeek(state: GameState): void {
   streamTick(state)
   questWeek(state)
   injuryTick(state)
-  ceremonyTick(state)
+  if (!activeAbsence(state)) ceremonyTick(state)
   if (!pro) {
     ladderWeekly(state, (me.plan.ranked ?? 0) > 0)
     rollInvites(state, rng)
@@ -737,10 +743,10 @@ export function settleWeek(state: GameState): void {
     // the coach's regard settles back toward neutral; a substitute he never sees drifts down
     me.coachTrust = clamp(me.coachTrust + (60 - me.coachTrust) * (me.coachTrust < 60 ? TRUST_UP : TRUST_DOWN), 0, 100)
     const starter = state.teams[state.myTeam].starters.includes(me.id)
-    if (!starter && !(me.plan.scrim ?? 0) && !(me.plan.duel ?? 0)) me.coachTrust = clamp(me.coachTrust - 1, 0, 100)
+    if (!activeAbsence(state) && !starter && !(me.plan.scrim ?? 0) && !(me.plan.duel ?? 0)) me.coachTrust = clamp(me.coachTrust - 1, 0, 100)
     if (me.benchLock && me.benchLock <= state.day) me.benchLock = undefined
-    if (p.form >= 84) fireEvent(state, 'hot_week')
-    else if (p.form <= 56) fireEvent(state, 'cold_week')
+    if (!activeAbsence(state) && p.form >= 84) fireEvent(state, 'hot_week')
+    else if (!activeAbsence(state) && p.form <= 56) fireEvent(state, 'cold_week')
     // from the winter market on, the club renews whoever it still uses, before the deals run out (me/club.ts)
     clubWeek(state, rng, state.day >= WINTER_RENEWALS)
     // the calls: the clock at the club, the coach's offer, the calls taken back (me/igl.ts)
@@ -754,7 +760,13 @@ export function settleWeek(state: GameState): void {
     if (cup && !clubCupBlock(state, cup.key)) offerCup(state, cup.key)
   }
   // a chain's next card, a seed coming back, or a new chain — before the draw, which steps aside for it
-  storyWeek(state)
+  // On approved leave there are no training-room scenes to act out. Existing chains wait.
+  if (!activeAbsence(state)) {
+    storyWeek(state)
+  } else if (me.chain) {
+    me.chain.wk++
+    me.chain.due++
+  }
   tryRandomEvent(state, rng)
   checkAchievements(state)
   // who took my place, which losses ended a run, and the cooling (me/rivals.ts)

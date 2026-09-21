@@ -18,6 +18,7 @@ import { exportBackupFromStored } from './backup'
 import type { ExportResult } from './backup'
 import { repairPlayerCountries, repairPlayerTeamNames } from './playerDataRepair'
 import { repairPlayerBios } from './playerBioRepair'
+import { normalizeCareerEvents } from './eventMigrate'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -92,6 +93,7 @@ const DESK_PLAYER_FIELDS = ['listed', 'listedOn', 'payAskedOn', 'rumourOn', 'per
  * the ladder or between clubs, forgets the club it was "watching".
  */
 export function migratePlayerSave(state: GameState): GameState {
+  normalizeCareerEvents(state)
   migrateWorld(state)
   if (state.me) {
     repairPlayerCountries(state)

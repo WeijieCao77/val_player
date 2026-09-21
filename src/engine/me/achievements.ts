@@ -14,6 +14,7 @@ import { careerStarts, tallyOf } from './detail'
 import { rankAt } from './rank'
 import { cny } from './moneyfmt'
 import { wageCny } from './paytable'
+import { CAREER_MARKS } from './careerMarks'
 
 /**
  * Achievements, laid out along the roads a career actually takes.
@@ -168,6 +169,12 @@ function skidTitle(s: GameState): boolean {
 /* ------------------------------------------------------------------ */
 
 export const ACHIEVEMENTS: AchDef[] = [
+  // Life-event records are separate from ordinary injury and transfer counters.
+  ...CAREER_MARKS.map((m): AchDef => ({ key: `arc_${m.id}`, route: 'life', secret: true, name: m.title, desc: m.text, reward: { title: m.title }, cond: m.cond })),
+  { key: 'arc_return', route: 'back', name: '漫长休养之后', desc: '完成一次长期医疗休养', reward: { title: '归来者' }, cond: (s) => (M(s).careerEvents?.returns ?? 0) >= 1 },
+  { key: 'arc_family_return', route: 'life', name: '安顿好再出发', desc: '处理完家庭事务后归队', reward: { title: '有人等你' }, cond: (s) => (M(s).careerEvents?.familyReturns ?? 0) >= 1 },
+  { key: 'arc_reconcile', route: 'bond', name: '把话说开', desc: '与队内核心化解一次争执', reward: { title: '握手言和' }, cond: (s) => (M(s).careerEvents?.reconciliations ?? 0) >= 1 },
+  { key: 'arc_support', route: 'life', name: '你不是一个人', desc: '在事件中支持队友三次', reward: { title: '可靠的肩膀' }, cond: (s) => (M(s).careerEvents?.supportChoices ?? 0) >= 3 },
   // ---- 天梯与杯赛
   // the place on my own server's board at my best, as the ladder page shows it (me/rank.ts): on 国服 the same score as before
   { key: 'ladder_100', route: 'ladder', name: '前一百', desc: '天梯打进辐能战魂前 100', reward: { fans: 20 }, cond: (s) => { const r = rankAt(s, M(s).pre.ladderPeak); return r.radiant && (r.pos ?? Infinity) <= 100 } },

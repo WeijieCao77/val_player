@@ -37,6 +37,7 @@ import { LookPicker } from './looks'
 import CeremonyModal from './Ceremony'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
+import { absenceBlock } from '../../engine/me/absence'
 import { Scene, type SceneKey } from './art/scenes'
 import { SCENE_CN, sceneOfEvent } from './art/sceneOf'
 import { holdCard } from './hold'
@@ -50,7 +51,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'tryout': return <TryoutModal onDone={onDone} />
     case 'deal': return <DealModal dealId={item.id!} onDone={onDone} />
     case 'stream': return <StreamModal onDone={onDone} />
-    case 'event': return <EventModal eventId={item.id!} onDone={onDone} />
+    case 'event': return <EventModal key={item.id!} eventId={item.id!} onDone={onDone} />
     case 'trait': return <TraitModal traitKey={item.id!} onDone={onDone} />
     case 'season': return <SeasonModal year={item.id!} onDone={onDone} />
     case 'released': return <ReleasedModal why={item.id} onDone={onDone} />
@@ -114,6 +115,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
   const [quit, setQuit] = useState(false)
   const run = me.pre.cup
   const inj = injuryStatus(game)
+  const absent = absenceBlock(game)
   if (live) {
     return <MatchPlay mm={live} onDone={() => {
       const rec = live.record!
@@ -137,7 +139,8 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
         {run.results.length > 0 && <p className="small">{run.results.join(' · ')}</p>}
         <p className="small">今天是比赛日：第 {run.round + 1}/{cup.rounds.length} 轮，BO{r.bo}。对手一轮比一轮强。</p>
         <p className="small">体力 <b>{Math.round(100 - p.fatigue)}</b>{nums ? `，这一轮大约耗 ${Math.round((r.bo === 1 ? 1 : 2.5) * FRIENDLY_MAP_FATIGUE)}` : ''}{p.fatigue >= 60 ? '。累着上，发挥要打折扣。' : '。'}</p>
-        {inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
+        {absent ? <p className="small" style={{ color: 'var(--loss)' }}>{absent}可以选择弃权结束本轮。</p>
+          : inj && <p className="small" style={{ color: 'var(--loss)' }}>你带着伤：{inj.line}。硬打发挥打折扣，伤可能加重。</p>}
         {quit ? (
           <>
             <p className="small" style={{ color: 'var(--loss)' }}>弃权就是这一轮不上场：{cup.name}到此为止，奖金按已经赢下的 {run.round} 轮算{prize ? `（${money(prize)}）` : '，没有奖金'}。</p>
@@ -148,7 +151,7 @@ function CupModal({ cupKey, onDone }: { cupKey: string; onDone: () => void }) {
           </>
         ) : (
           <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
-            <button className="primary" onClick={() => {
+            <button className="primary" disabled={!!absent} onClick={() => {
               countCup('round')
               const m = mountCupMatch(game, cup, run.round, cupRng(game, `r${run.round}`))
               setLive(new MeMatch(game, { aId: TEMP_MINE, bId: TEMP_OPP, bo: m.bo, comp: cup.name, label: m.label }))
@@ -250,7 +253,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: (aside?: 
       <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 10 }}>
         {/* refused, it says why and the way on: this card's 去试训 with another club's tryout under way did nothing and
             said nothing (found 2026-09-18, a save from before the tryout took the invitation's place: me/pending.ts pushFront) */}
-        <button className="primary" onClick={() => {
+        <button className="primary" disabled={!!absenceBlock(game)} onClick={() => {
           const why = startTryout(game, inv.id)
           commit()
           onDone()
@@ -258,6 +261,7 @@ function InviteModal({ inviteId, onDone }: { inviteId: string; onDone: (aside?: 
         }}>{inv.direct ? '看合同' : '去试训'}</button>
         <button onClick={() => { declineInvite(game, inv.id); commit(); onDone() }}>回绝</button>
       </div>
+      {absenceBlock(game) && <p className="small muted">{absenceBlock(game)}可以先关闭卡片，留意邀请有效期。</p>}
     </Modal>
   )
 }
@@ -418,6 +422,7 @@ function StreamModal({ onDone }: { onDone: () => void }) {
 // ------------------------------------------------------------------ event
 function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }) {
   const { game, commit } = useGame()
+  const [confirmChoice, setConfirmChoice] = useState<number | null>(null)
   // what the card echoes and which chain step it is, read once: the answer moves the chain on
   const [tags] = useState(() => { const e = eventOf(eventId); return e ? storyTag(game, e) : [] })
   const ev = eventOf(eventId)
@@ -443,12 +448,19 @@ function EventModal({ eventId, onDone }: { eventId: string; onDone: () => void }
       <p className="muted small" style={{ margin: '0 0 12px' }}>{ev.ctxOf?.(game) ?? ev.ctx}</p>
       <div className="node-opt">
         {ev.a.map((o, i) => (
-          <button key={i} onClick={() => choose(i)}>
+          <button key={i} onClick={() => o.confirm ? setConfirmChoice(i) : choose(i)}>
             <span>{o.t}</span>
             <span className="m">{[describeEffect(o.e, game), storyHint(o)].filter(Boolean).join(' · ') || '看情况'} · {AXIS_CN[o.g]}{i === ev.rec ? ' · 按推荐' : ''}</span>
           </button>
         ))}
       </div>
+      {confirmChoice !== null && <section className="node-line bad" role="alert" aria-label="重大选择确认" style={{ marginTop: 12, overflowWrap: 'anywhere' }}>
+        <p>{ev.a[confirmChoice].confirm}</p>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <button className="primary" onClick={() => setConfirmChoice(null)}>返回重新考虑</button>
+          <button onClick={() => choose(confirmChoice)}>确认：{ev.a[confirmChoice].t}</button>
+        </div>
+      </section>}
     </Modal>
   )
 }

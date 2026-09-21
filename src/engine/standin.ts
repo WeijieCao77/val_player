@@ -2,6 +2,7 @@ import type { Fixture, GameState, MatchResult, Player, Region, Role, StageKey, T
 import { regionIn } from './era'
 import { inVctLeague } from './timeline'
 import { dateOf, offPool } from './staffStints'
+import { absentPlayer } from './me/absence'
 
 /**
  * Who takes the floor when a club cannot put five fit men of its own on it.
@@ -42,7 +43,7 @@ const STICKY_DAYS = 21
 /** 「T1 Academy」「Gen.G Global Academy」「EDward Gaming Youth」 — and not 「OverPowered Youths」 or 「FUTURE ACADEMY TEAM」. */
 const ACADEMY = /\s+(?:global\s+)?(?:academy|youth)$/i
 
-const fitOn = (state: GameState, p: Player | undefined): p is Player => !!p && p.injuredUntil <= state.day
+const fitOn = (state: GameState, p: Player | undefined): p is Player => !!p && p.injuredUntil <= state.day && !absentPlayer(state, p.id)
 const plays = (f: Fixture, teamId: string) => f.teamA === teamId || f.teamB === teamId
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 

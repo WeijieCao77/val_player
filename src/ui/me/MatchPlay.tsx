@@ -17,6 +17,7 @@ import { RivalNode, RivalPost, RivalPre } from './Rivals'
 import Face, { Mug } from './Face'
 import { playsHurt } from '../../engine/me/hurtplay'
 import { injuryStatus } from '../../engine/me/injury'
+import { activeAbsence } from '../../engine/me/absence'
 import { compClass } from '../../engine/me/compclass'
 import { countMatch } from '../../engine/me/telemetry'
 
@@ -264,7 +265,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         <p className="tiny faint center" style={{ margin: '8px 0 0' }}>
           {starterNow
             ? '每张图三个关键回合要你拿主意，打进加时再加一个；每一个都直接定那一回合。快进也会按教练的选法替你做，只是你不在椅子上，成功率低一截。'
-            : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果。' : '你在替补席，这场看结果。'}
+            : activeAbsence(game) ? `你因${activeAbsence(game)!.label}缺席，这场看结果。` : mm.friendly ? '车队赛，你当然上。' : injuryStatus(game) ? '你在养伤，这场看结果。' : '你在替补席，这场看结果。'}
         </p>
         <div className="row" style={{ gap: 10, justifyContent: 'center', marginTop: 16 }}>
           <button className="primary" onClick={() => { startedAt.current = Date.now(); setPhase('live') }}>逐回合观战</button>

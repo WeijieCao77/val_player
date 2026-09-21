@@ -11,6 +11,7 @@ import { actionBlock, doAction, matchAhead, repeatLastWeek, staminaLeft, undoAct
 import { REPLAY_CN, UNDO_EDGE_CN, canUndo, undoDepth } from '../../engine/me/undo'
 import { duelBlock, startDuel } from '../../engine/me/duel'
 import { injuryStatus } from '../../engine/me/injury'
+import { activeAbsence } from '../../engine/me/absence'
 import DuelPlay from './DuelPlay'
 import type { AdvanceUntil } from '../../engine/me/auto'
 import { EDGE_NEED, duelTarget, standingLine } from '../../engine/me/coach'
@@ -254,6 +255,13 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           })()}
           {/* hurt: say what it is and how long, not just fewer action points */}
           {(() => {
+            const a = activeAbsence(game)
+            return a ? <div className="node-line bad" role="status" style={{ marginBottom: 10, overflowWrap: 'anywhere' }}>
+              <b>{a.label}</b> · 缺席至 {a.until.year} 赛季第 {a.until.day + 1} 天
+              <div className="tiny muted">暂停比赛、试训和高强度训练；可休息及每周一次轻量复盘。不会因未参加训练赛扣教练信任，普通康复操作不会提前结束本次缺席。</div>
+            </div> : null
+          })()}
+          {(() => {
             const inj = injuryStatus(game)
             return inj ? (
               <div className="node-line bad" style={{ marginBottom: 10 }}>
@@ -262,6 +270,12 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
               </div>
             ) : null
           })()}
+          {!!me.careerEvents?.records.length && <details style={{ margin: '0 0 10px', overflowWrap: 'anywhere' }}>
+            <summary className="small">最近的生涯经历</summary>
+            {me.careerEvents.records.slice(-5).reverse().map(r => <p className="tiny muted" key={r.id}>
+              {r.year} 赛季第 {r.day + 1} 天 · {r.text}
+            </p>)}
+          </details>}
           {/* the other budget, and it is spent as the cards are clicked: the number itself, never a forecast */}
           {(() => {
             const left = staminaLeft(game)

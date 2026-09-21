@@ -13,6 +13,10 @@ import type { ChainOp } from './story'
 import { MORE_EVENTS } from './events_more'
 import { cnySigned } from './moneyfmt'
 import { PUT_OFF_CN, onBoard, standingOf } from './rank'
+import { CAREER_EVENTS } from './events_career'
+import { sealWeek } from './undo'
+import { checkAchievements } from './achievements'
+import { activeAbsence } from './absence'
 
 export interface EventOpt {
   t: string
@@ -22,6 +26,8 @@ export interface EventOpt {
   seed?: string
   /** what this answer does to the chain the card belongs to */
   ch?: ChainOp
+  /** Irreversible decisions require a second explicit click; autopilot never picks these. */
+  confirm?: string
 }
 export interface EventDef {
   id: string
@@ -41,6 +47,12 @@ export interface EventDef {
   echo?: string
   /** the chain this card is a step of */
   chain?: string
+  /** Snapshot the people/facts behind a story when the card is drawn. */
+  onFire?: (s: GameState) => void
+  /** Structured consequences, only callable for the actual outstanding card. */
+  onResolve?: (s: GameState, choice: number) => string[]
+  /** Only quiet, off-field stories may be drawn while a long leave is in force. */
+  allowDuringAbsence?: boolean
 }
 
 /** how often the dice roll at all; the content pool decides the rest */
@@ -188,6 +200,7 @@ export const EVENTS: EventDef[] = [
     a: [{ t: '录下来发出去', g: 'show', e: { heat: 35, mental: -1 } }, { t: '打完这把，不理', g: 'grind', e: { ladder: 1 } }, { t: '私聊问他要不要一起排', g: 'warm', e: { scoutSeen: 1 } }] },
   // ---- by phase and region, the echoes and the chains (me/events_more.ts)
   ...MORE_EVENTS,
+  ...CAREER_EVENTS,
 ]
 
 export const eventOf = (id: string) => EVENTS.find((e) => e.id === id)
@@ -197,6 +210,7 @@ const EVENT_COOLDOWN_DAYS = 56
 
 function canFire(state: GameState, ev: EventDef): boolean {
   const me = state.me!
+  if (activeAbsence(state) && !ev.allowDuringAbsence) return false
   if ((me.eventCounts[ev.id] ?? 0) >= ev.max) return false
   const last = me.flags[`ev_${ev.id}`]
   if (last != null && state.day - last >= 0 && state.day - last < EVENT_COOLDOWN_DAYS) return false
@@ -273,6 +287,7 @@ export function fireEvent(state: GameState, id: string): boolean {
   me.flags[`ev_${id}`] = state.day
   me.pendingEvent = id
   me.eventCounts[id] = (me.eventCounts[id] ?? 0) + 1
+  ev.onFire?.(state)
   push(state, { kind: 'event', id })
   return true
 }
@@ -282,7 +297,10 @@ export function resolveEvent(state: GameState, id: string, choice: number): stri
   const me = state.me!
   const ev = eventOf(id)
   if (!ev) return []
-  const opt = ev.a[choice] ?? ev.a[ev.rec]
+  if (ev.onResolve && (me.pendingEvent !== id || !me.pending.some(x => x.kind === 'event' && x.id === id))) return []
+  if (ev.onResolve) sealWeek(state)
+  const index = Number.isInteger(choice) && choice >= 0 && choice < ev.a.length ? choice : ev.rec
+  const opt = ev.a[index]
   const rng = new Rng(hashStr(`event:${state.seed}:${state.year}:${state.day}:${id}`))
   const lines = applyEffect(state, opt.e, rng)
   if (opt.e.quest) addQuest(state, opt.e.quest)
@@ -292,6 +310,11 @@ export function resolveEvent(state: GameState, id: string, choice: number): stri
   me.eventsSeen++
   me.pendingEvent = undefined
   pop(state, 'event', id)
+  // Consume the old card first: callbacks may open a follow-up or a retirement card.
+  if (ev.onResolve) {
+    lines.push(...ev.onResolve(state, index))
+    checkAchievements(state)
+  }
   pushLog(state, 'event', `${ev.q} → ${opt.t}${lines.length ? `（${lines.join('，')}）` : ''}`)
   if (trait) lines.push(`你成了「${trait}」`)
   return lines

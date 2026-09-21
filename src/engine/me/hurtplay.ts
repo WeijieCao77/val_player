@@ -1,4 +1,6 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { activeAbsence } from './absence'
+import { prepareMedicalFinal } from './absenceFinal'
 import { selectLineup } from '../match'
 import { recomputeOverall } from '../player'
 import type { Fixture, GameState } from '../types'
@@ -67,7 +69,7 @@ export function asFit<T>(state: GameState, fn: () => T, onFloor = false): T {
 /** Am I on the floor hurt in this one: I told the coach I would play through it, or it is a cup I entered. */
 export function playsHurt(state: GameState, fixtureId: string, friendly = false): boolean {
   const me = state.me
-  if (!me || !injuryStatus(state)) return false
+  if (!me || activeAbsence(state) || !injuryStatus(state)) return false
   return friendly || me.injury?.play === fixtureId
 }
 
@@ -91,8 +93,16 @@ export function hurtBook<T>(state: GameState, fixtureId: string, fn: () => T): T
 export function hurtBeforeMatch(state: GameState, f: Fixture): void {
   const me = state.me!
   if (me.phase !== 'pro') return
+  const leave = activeAbsence(state)
+  if (leave) {
+    if (leave.reason !== 'family' && leave.wasStarter && leave.clubId === state.myTeam) {
+      prepareMedicalFinal(state, f, leave.reason)
+    }
+    return
+  }
   const cur = injuryStatus(state)
   const inj = cur ? ensureInjury(state) : undefined
+  if (cur && inj && asFit(state, () => coachStarters(state)).includes(me.id)) prepareMedicalFinal(state, f, 'injury')
   if (!cur || !inj || inj.sit || inj.play === f.id || me.pending.some((x) => x.kind === 'hurt')) return
   if (!asFit(state, () => coachStarters(state)).includes(me.id)) return
   const team = state.teams[state.myTeam]
@@ -130,6 +140,7 @@ export function hurtAsk(state: GameState, fixtureId: string): { line: string; vs
 /** Play through it, or sit out until it heals. */
 export function answerHurt(state: GameState, fixtureId: string, play: boolean): void {
   pop(state, 'hurt', fixtureId)
+  if (activeAbsence(state)) return
   const cur = injuryStatus(state)
   const inj = ensureInjury(state)
   if (!cur || !inj) return
@@ -145,6 +156,7 @@ export function answerHurt(state: GameState, fixtureId: string, play: boolean): 
 
 /** The autopilot does not play on anything serious, nor on anything that can leave a mark (me/auto.ts). */
 export function autoSitsOut(state: GameState): boolean {
+  if (activeAbsence(state)) return true
   const cur = injuryStatus(state)
   return !!cur && (cur.serious || !INJURY_KINDS[cur.kind].autoPlays)
 }

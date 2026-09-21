@@ -83,6 +83,7 @@ export default function Poster() {
           {kick && <span className="pm-kick">{kick}</span>}
           <h1 className="pm-verdict">{me.ending?.title ?? '生涯'}</h1>
           {me.ending?.text && <p className="pm-story">{me.ending.text}</p>}
+          {me.ending?.marks?.map((mark) => <p key={mark.id} className="pm-story" style={{ overflowWrap: 'anywhere' }}><b>生涯印记 · {mark.title}</b><br />{mark.text}</p>)}
         </div>
 
         <p className="pm-id">

@@ -11,6 +11,7 @@ import { lifeLines } from './shop'
 import { outletLines } from './outlets'
 import { track } from './telemetry'
 import { queueEndingFeedback } from './endingFeedback'
+import { careerMarksFor } from './careerMarks'
 
 export interface EndingDef { key: string; title: string; text: string; cond: (s: GameState) => boolean }
 
@@ -108,6 +109,8 @@ export function retire(state: GameState, why: string, kind: RetireWhy = 'other')
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
   me.ending = { key: e.key, title: e.title, text: `${e.text}${abroadLine(state, e.key).join('')}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
+  const marks = careerMarksFor(state)
+  if (marks.length) me.ending.marks = marks
   queueEndingFeedback(state)
   state.gameOver = `${why}——${e.title}`
   state.finished = true

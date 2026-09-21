@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { absenceActionBlock } from './absence'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
 import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
@@ -173,7 +174,7 @@ export function hourValues(state: GameState): HourValue[] {
     const both = (['teamwork', 'communication'] as const).filter(open)
     out.push({ key: 'scrim', perPoint: SCRIM_SHARE * both.reduce((s, k) => s + worth(k), 0) / 3, attrs: [...both] })
   }
-  return out.filter((h) => h.perPoint > 0).sort((a, b) => b.perPoint - a.perPoint)
+  return out.filter((h) => h.perPoint > 0 && !absenceActionBlock(state, h.key)).sort((a, b) => b.perPoint - a.perPoint)
 }
 
 /**
@@ -271,6 +272,8 @@ const ROSE_CN: Record<keyof Attrs, string> = {
  * 同样的操作，结果一样」).
  */
 export function runAction(state: GameState, key: MeAction): string {
+  const leave = absenceActionBlock(state, key, true)
+  if (leave) return leave
   const me = state.me!
   const p = state.players[me.id]
   const def = ACTION_BY_KEY[key]

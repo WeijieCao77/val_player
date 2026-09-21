@@ -1,4 +1,5 @@
 import { Rng, clamp } from './rng'
+import { absentPlayer } from './me/absence'
 import { MAPS, HIGHLIGHT_TEMPLATES as HL, mapCn } from './content'
 import { mapAvailableOn, mapsAvailableOn } from './me/mapEra'
 import { agentMod, autoAgents, normalizeAgents } from './agents'
@@ -106,7 +107,7 @@ function fiveFor(state: GameState, teamId: string, lookAcross: boolean): Player[
   const team = state.teams[teamId]
   const all = team.roster
     .map((id) => state.players[id])
-    .filter((p): p is Player => !!p && p.injuredUntil <= state.day)
+    .filter((p): p is Player => !!p && p.injuredUntil <= state.day && !absentPlayer(state, p.id))
 
   const chosen: Player[] = []
   for (const id of team.starters) {
@@ -131,7 +132,7 @@ function fiveFor(state: GameState, teamId: string, lookAcross: boolean): Player[
   if (chosen.length < 5) {
     const emergency = team.roster
       .map((id) => state.players[id])
-      .filter((p): p is Player => !!p && !chosen.includes(p))
+      .filter((p): p is Player => !!p && !chosen.includes(p) && !absentPlayer(state, p.id))
       .sort((a, b) => b.overall - a.overall)
     for (const p of emergency) {
       if (chosen.length >= 5) break

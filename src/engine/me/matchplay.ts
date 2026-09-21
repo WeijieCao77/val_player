@@ -18,6 +18,8 @@ import { landCall, roundBranches } from './keyround'
 import type { BranchKey, RoundBranch } from './keyround'
 import { cerMatchEdge } from './ceremony'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
+import { finishMedicalFinal } from './absenceFinal'
+import { activeAbsence } from './absence'
 
 const clamp01 = (v: number) => Math.max(0.03, Math.min(0.97, v))
 import type { KeySlot, NodeCtx, NodeDef } from './nodes'
@@ -492,6 +494,7 @@ export class MeMatch {
       highlights: this.myHighlights(result.highlights),
       mapLog: this.mapLog.slice(),
     }
+    if (!this.friendly) finishMedicalFinal(state, f, rec)
     // why it went that way — the engine already added these terms up when it
     // decided the round win rate; until now nothing read them back out
     rec.edge = seriesEdgeRows(result.maps, this.mineIsA)
@@ -542,7 +545,7 @@ export class MeMatch {
       }
       me.heat += started ? (won ? 7 : -2.5) : (won ? 3 : -1)
       // a match is the most tiring thing in the week; a map on the floor costs more than a map on the bench
-      this.me.fatigue = clamp(this.me.fatigue + (started ? 5 : 1.5) * result.maps.length, 0, 100)
+      this.me.fatigue = clamp(this.me.fatigue + (started ? 5 : activeAbsence(state) ? 0 : 1.5) * result.maps.length, 0, 100)
       if (started && won) questProgress(state, 'win', 1)
       if (started) {
         // 运动心理 takes a fifth off what a loss leaves behind (me/shop.ts)
@@ -552,7 +555,7 @@ export class MeMatch {
       }
       const line = started
         ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输了比赛但你全队最高' : ''}`
-        : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— 你在替补席看完了这场。`
+        : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— ${activeAbsence(state) ? `你因${activeAbsence(state)!.label}缺席了这场。` : '你在替补席看完了这场。'}`
       pushLog(state, 'match', line)
       afterMyMatch(state, rec)
       // a map called is a lesson in calling (me/igl.ts)

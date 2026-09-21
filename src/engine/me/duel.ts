@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { activeAbsence, absenceBlock } from './absence'
 import { ATTR_CN, ATTR_KEYS, ROLES } from '../types'
 import type { Attrs, GameState, Player } from '../types'
 import { ACTION_BY_KEY, DUELS_PER_WEEK } from './actions'
@@ -64,6 +65,8 @@ export const DIM_CN: Record<string, string> = { ...ATTR_CN, mental: '心态' }
 
 /** Why a duel cannot start right now, or null. */
 export function duelBlock(state: GameState): string | null {
+  const leave = absenceBlock(state)
+  if (leave) return leave
   const me = state.me!
   if (me.phase !== 'pro') return '没有队伍，没有可以挑战的人。'
   const team = state.teams[state.myTeam]
@@ -125,6 +128,7 @@ export function duelScene(state: GameState): DuelScene | null {
 
 /** Answer the current scene. */
 export function duelPick(state: GameState, i: number): DuelSceneLog | null {
+  if (activeAbsence(state)) return null
   const me = state.me!
   const live = me.duelLive
   const scene = duelScene(state)

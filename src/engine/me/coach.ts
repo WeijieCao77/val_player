@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { absentPlayer, activeAbsence } from './absence'
 import { ROLES, SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
@@ -154,7 +155,7 @@ export function coachStarters(state: GameState, room = true): string[] {
   const me = state.me
   const squadAll = team.roster
     .map((id) => state.players[id])
-    .filter((p): p is Player => !!p)
+    .filter((p): p is Player => !!p && !absentPlayer(state, p.id))
   // read once: the room term reads every bond in the squad
   const view = new Map(squadAll.map((p) => [p.id, coachView(state, p, room)]))
   const cv = (p: Player) => view.get(p.id) ?? coachView(state, p, room)
@@ -200,7 +201,7 @@ export function coachStarters(state: GameState, room = true): string[] {
   // on trial: I play, in place of the man I beat in practice
   if (me?.trial) {
     const mine = state.players[me.id]
-    if (mine && !five.includes(mine) && mine.injuredUntil <= state.day) {
+    if (mine && !five.includes(mine) && mine.injuredUntil <= state.day && !absentPlayer(state, mine.id)) {
       const out = five.find((p) => p.id === me.trial!.displaced)
         ?? five.filter((p) => !p.isIgl).sort((a, b) => cv(a) - cv(b))[0]
       if (out) five[five.indexOf(out)] = mine
@@ -316,7 +317,7 @@ export interface DuelResult {
  */
 export function runDuel(state: GameState, rng: Rng): DuelResult | null {
   const me = state.me
-  if (!me) return null
+  if (!me || activeAbsence(state)) return null
   const mine = state.players[me.id]
   const him = duelTarget(state)
   if (!him) return null
@@ -384,6 +385,8 @@ export function runDuel(state: GameState, rng: Rng): DuelResult | null {
 export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   const me = state.me
   if (!me) return
+  // Approved leave is not a failed trial or a consumed promise opportunity.
+  if (activeAbsence(state) && !rec.started) return
   const team = state.teams[state.myTeam]
   const opp = Object.values(state.teams).find((t) => t.tag === rec.oppTag)
   const calling = myCall(state)

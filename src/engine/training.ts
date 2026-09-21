@@ -1,4 +1,5 @@
 import { Rng, clamp, dayStream } from './rng'
+import { absentPlayer } from './me/absence'
 import { INJURIES } from './content'
 import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
 import { coachOr } from './roster'
@@ -164,6 +165,10 @@ export function weeklyTick(state: GameState, rng: Rng, grumbling: Player[] = [])
       const p = state.players[pid]
       if (!p) continue
 
+      if (absentPlayer(state, p.id)) {
+        p.fatigue = clamp(p.fatigue - 15, 0, 100)
+        continue
+      }
       if (p.injuredUntil > state.day) {
         // an injured player is resting properly — send him back recovered, or
         // he returns at the same fatigue that got him hurt and goes straight

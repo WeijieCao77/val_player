@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { activeAbsence, absenceBlock } from './absence'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Role } from '../types'
 import { duoMate, hourValues } from './growth'
@@ -230,6 +231,11 @@ export function autoPlan(state: GameState, talent = true): string {
   const rest = ACTION_BY_KEY.rest
   const was = { ap: me.ap, plan: { ...me.plan }, stamina: Math.round(100 - p.fatigue) }
   const said = () => autoLine(state, was)
+  if (activeAbsence(state)) {
+    spend('vod')
+    while (me.ap > 0 && spend('rest')) { /* approved leave */ }
+    return said()
+  }
   // hurt: the week goes on rest, which is what heals it (me/injury.ts) — a signed stream minimum aside
   if (injuryStatus(state)) {
     if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage) spend('stream')
@@ -394,6 +400,11 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       return `去 ${team.name} 试训`
     }
     case 'tryout': {
+      if (activeAbsence(state)) {
+        me.tryout = undefined
+        pop(state, 'tryout', item.id)
+        return absenceBlock(state)!
+      }
       let guard = 0
       while (me.tryout && guard++ < 6) tryoutChoose(state, tryoutDays(state)[me.tryout.step].rec)
       // a tryout's card whose tryout is gone (signed elsewhere meanwhile) comes off the list instead of being answered for ever
@@ -424,7 +435,10 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       if (!ev) { pop(state, 'event', item.id); me.pendingEvent = undefined; return '' }
       let pick = ev.rec
       const opt = ev.a[pick]
-      if (opt?.e.money && opt.e.money < 0 && me.money + opt.e.money < 0) pick = ev.a.findIndex((o) => !o.e.money || o.e.money >= 0)
+      if (opt?.confirm || (opt?.e.money && opt.e.money < 0 && me.money + opt.e.money < 0)) {
+        pick = ev.a.findIndex((o) => !o.confirm && (!o.e.money || o.e.money >= 0))
+      }
+      if (pick < 0) return '这件事需要你亲自决定。'
       resolveEvent(state, ev.id, Math.max(0, pick))
       return `${ev.q.slice(0, 18)}… → ${ev.a[Math.max(0, pick)].t}`
     }

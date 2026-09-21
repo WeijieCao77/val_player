@@ -2,6 +2,7 @@ import { useGame } from './ctx'
 import { Panel } from './common'
 import { ACHIEVEMENTS, ACH_ROUTES, earnedTitles, rewardText, wearTitle, wornTitle } from '../../engine/me/achievements'
 import { ENDINGS_ME } from '../../engine/me/endings'
+import { careerMarksFor } from '../../engine/me/careerMarks'
 import TrophyCase from './TrophyCase'
 
 export default function AchievementsScreen() {
@@ -11,6 +12,7 @@ export default function AchievementsScreen() {
   const got = ACHIEVEMENTS.filter((a) => has.has(a.key)).length
   const worn = wornTitle(me)
   const titles = earnedTitles(me)
+  const marks = me.ending?.marks ?? careerMarksFor(game)
   // a phone gets one column: the list first, the endings under it
   const narrow = typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 720px)').matches
   return (
@@ -62,6 +64,9 @@ export default function AchievementsScreen() {
             <b>{e.title}</b>{me.ending?.key === e.key ? <span className="tag win" style={{ marginLeft: 6 }}>你的结局</span> : null}
           </div>
         ))}
+        <h3>生涯印记</h3>
+        <p className="tiny faint">特殊经历会留下额外印记，不替代冠军、王朝等主结局，也不提供数值奖励。</p>
+        {marks.length ? marks.map((mark) => <div key={mark.id} className="small" style={{ padding: '6px 0', overflowWrap: 'anywhere' }}><b>{mark.title}</b><p className="tiny muted" style={{ margin: '4px 0' }}>{mark.text}</p></div>) : <p className="tiny muted">尚无特殊生涯印记。</p>}
       </Panel>
     </div>
     </>

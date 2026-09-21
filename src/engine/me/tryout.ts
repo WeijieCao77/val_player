@@ -1,4 +1,5 @@
 import { Rng, clamp, hashStr } from '../rng'
+import { absenceBlock } from './absence'
 import type { GameState } from '../types'
 import type { NodeDim, TryoutDayLog } from './types'
 import { pushLog } from './log'
@@ -118,6 +119,8 @@ const tryoutRng = (state: GameState, step: number) =>
 
 /** Accept the invitation: four days start now (they do not move the calendar). */
 export function startTryout(state: GameState, inviteId: string): string | null {
+  const leave = absenceBlock(state)
+  if (leave) return leave
   const me = state.me!
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   if (!inv) return '这份邀请已经不在了。'
@@ -160,6 +163,8 @@ export const tryoutFatiguePenalty = (state: GameState, day: number): number =>
   day * Math.max(0, 52 - state.me!.body) * 0.055
 
 export function tryoutChoose(state: GameState, i: number): TryoutDayLog {
+  const leave = absenceBlock(state)
+  if (leave) return { day: state.me?.tryout?.step ?? 0, pick: leave, dim: '休养', p: 0, ok: false }
   const me = state.me!
   const t = me.tryout!
   const days = tryoutDays(state)
