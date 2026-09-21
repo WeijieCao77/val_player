@@ -1,5 +1,6 @@
 import type { GameState } from '../types'
 import type { MeAction, MeState, WeekStart } from './types'
+import { ensureGrowthWeek } from './growthWeek'
 
 /**
  * 加一次、减一次: a card's + does the session now, its − takes that one back.
@@ -124,6 +125,7 @@ export function sealWeek(state: GameState): void {
 export function markWeekStart(state: GameState): void {
   const me = state.me
   if (!me) return
+  ensureGrowthWeek(state)
   if (me.weekStart && me.weekStart.week === me.week) return
   me.weekStart = weekStartSnap(state)
   me.undoFrom = (me.weekDone ?? []).length || undefined

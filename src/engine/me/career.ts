@@ -1,4 +1,5 @@
 import RAW from '../../data/world.json'
+import { avatarData } from './avatar'
 import RAW_2021 from '../../data/world_2021.json'
 import { autoStarters, createWorld } from '../world'
 import { RULER, REGIONAL_RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
@@ -56,6 +57,7 @@ export const NAT_DEFAULT: Record<Region, string> = {
 }
 
 export interface CareerOpts {
+  avatar?: string
   name: string
   region: Region
   role: Role
@@ -342,6 +344,8 @@ export function createCareer(o: CareerOpts): GameState {
     auto: { buy: false, biz: false, daily: false, career: false }, autoNotes: [],
     achievements: [], titles: [], flags: { ...(origin.flags ?? {}) }, entryYear: year,
   }
+  const avatar = avatarData(o.avatar)
+  if (avatar) me.avatar = avatar
   if (origin.trainMul) me.flags.trainMul = origin.trainMul
   // the ladder start, remembered: a few achievements are about having come that way (me/achievements.ts)
   if (o.start === 'pre') me.flags.fromLadder = 1

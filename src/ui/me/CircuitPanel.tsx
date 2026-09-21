@@ -2,6 +2,7 @@ import { useGame } from './ctx'
 import Bracket from './Bracket'
 import { eventAnchor } from './eventFocus'
 import { Crest, Panel, fmtDay } from './common'
+import TeamPeekButton from './TeamPeek'
 import { eventOf, realPlacesOf, realResultOf } from '../../engine/circuit'
 import { eventTables, onwardSets, roundCn } from '../../engine/eventTable'
 import type { Band, EventTable, GroupTable, Line, OnwardSet, PlaceRow, PlaceTable } from '../../engine/eventTable'
@@ -66,7 +67,7 @@ function Club({ id, name }: { id: string; name?: string }) {
   const label = team?.name ?? name ?? id
   return (
     <span className="club" title={label}>
-      {team && <Crest id={id} />}<span>{label}</span>
+      {team && <Crest id={id} />}<TeamPeekButton id={id} label={label} />
     </span>
   )
 }

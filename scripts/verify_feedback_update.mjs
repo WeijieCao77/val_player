@@ -17,7 +17,7 @@ const expand = name => pkg.scripts[name].split(/\s*&&\s*/).flatMap(c => {
   const m = /^npm run (\S+)$/.exec(c)
   return m ? expand(m[1]) : [c]
 })
-const suite = [...new Set([...expand('check:me'), ...expand('check:events'), ...expand('check:maintenance')])]
+const suite = [...new Set([...expand('check:me'), ...expand('check:events'), ...expand('check:maintenance'), ...(pkg.scripts['check:feedback-next'] ? expand('check:feedback-next') : [])])]
 const commands = suite.filter(c => c !== 'tsc -b --noEmit')
 const testPaths = [...suite.map(c => c.split(/\s+/).find(p => p.startsWith('scripts/'))).filter(Boolean), 'scripts/verify_feedback_update.mjs']
 const paths = () => [...new Set([...execFileSync('git', ['ls-files','-co','--exclude-standard','--','src','package.json','package-lock.json'], { cwd: root, encoding:'utf8' }).trim().split('\n'), ...testPaths])].sort()

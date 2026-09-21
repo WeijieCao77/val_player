@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import WeeklyGrowth from './WeeklyGrowth'
 import { useGame } from './ctx'
 import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
@@ -244,6 +245,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         <Panel
           title={`本周行动 · 剩 ${me.ap} 点`}
         >
+          <WeeklyGrowth />
           {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan — on the 下一步 card while it is up */}
           {(() => {
             const line = card ? null : hourLine(game)

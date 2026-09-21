@@ -55,6 +55,7 @@ import { iglWeek } from './igl'
 import { roomWeek } from './room'
 import { pitchDay } from './selfpitch'
 import { trimDetail } from './detail'
+import { ensureGrowthWeek, finishGrowthWeek } from './growthWeek'
 
 export type WeekStop =
   | { kind: 'match'; fixture: Fixture }
@@ -73,6 +74,7 @@ export function apFor(state: GameState): number {
 
 /** The week opens: the coach names his five, the duel count resets. */
 export function beginWeek(state: GameState): void {
+  ensureGrowthWeek(state, true)
   absenceTick(state)
   const me = state.me!
   me.duelsThisWeek = 0
@@ -783,6 +785,7 @@ export function settleWeek(state: GameState): void {
   // man can play November's 全明星表演赛 now (me/cups.ts clubCupBlock), and the one of the year before stayed on past
   // its year until his club's next match, months later (scripts/check_detail.ts, found 2026-09-18)
   trimDetail(me, state.year, state.day)
+  finishGrowthWeek(state)
   me.week++
   me.weekDay = 0
   me.plan = {}

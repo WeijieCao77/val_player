@@ -21,6 +21,9 @@ import { repairPlayerCountries, repairPlayerTeamNames } from './playerDataRepair
 import { repairPlayerBios } from './playerBioRepair'
 import { normalizeCareerEvents } from './eventMigrate'
 import { rememberFMVPs } from './fmvp'
+import { avatarData } from './avatar'
+import { pruneClubDepartures } from './clubDepartures'
+import { ensureGrowthWeek } from './growthWeek'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -99,6 +102,10 @@ export function migratePlayerSave(state: GameState): GameState {
   migrateWorld(state)
   rememberFMVPs(state)
   if (state.me) {
+    const avatar = avatarData(state.me.avatar)
+    if (avatar) state.me.avatar = avatar
+    else delete state.me.avatar
+    pruneClubDepartures(state)
     repairPlayerCountries(state)
     repairPlayerBios(state)
     repairPlayerTeamNames(state)
@@ -143,6 +150,8 @@ export function migratePlayerSave(state: GameState): GameState {
   // records, however far back they went. What has to outlive a year is read off them once —
   // which is all that save could see anyway — and then the older detail is let go.
   if (state.me) settleDetail(state.me, state.year, state.day)
+  // An old save cannot prove its whole-week baseline; start observing here without inventing gains.
+  ensureGrowthWeek(state)
   return state
 }
 

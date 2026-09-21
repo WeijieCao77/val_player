@@ -1,0 +1,22 @@
+.team-peek-trigger {
+  background: none; border: none; color: inherit; cursor: pointer; padding: 0;
+  font: inherit; text-align: left; text-decoration: underline dotted;
+  min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+}
+.team-peek-trigger:hover { color: var(--accent); }
+.team-peek-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.team-peek-title > span { min-width: 0; }
+.team-peek-body { display: flex; flex-direction: column; gap: 12px; }
+.team-peek-meta, .team-peek-dormant, .team-peek-notice { margin: 0; font-size: var(--t-small); overflow-wrap: anywhere; }
+.team-peek-meta { color: var(--muted); }
+.team-peek-dormant { color: var(--warn); }
+.team-peek-notice { color: var(--faint); border-left: 3px solid var(--line); padding-left: 8px; }
+.team-peek-section h4 { margin: 0 0 6px; font-size: var(--t-small); }
+.team-peek-roster { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.team-peek-roster li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; font-size: var(--t-small); }
+.team-peek-name { min-width: 0; overflow-wrap: anywhere; }
+.team-peek-role { color: var(--muted); white-space: nowrap; }
+.team-peek-ability { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.team-search { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.team-search label { flex-basis: 100%; }
+.team-search input { min-width: 0; flex: 1 1 130px; width: 100%; }

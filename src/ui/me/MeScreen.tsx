@@ -16,6 +16,7 @@ import RivalsPanel from './Rivals'
 import { wornTitle } from '../../engine/me/achievements'
 import { CareerRewrites } from './Worldline'
 import CareerOverview from './CareerOverview'
+import AvatarEditor from './AvatarEditor'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -36,7 +37,7 @@ function AttrTrack({ value, cap, next }: { value: number; cap: number; next: num
 }
 
 export default function MeScreen() {
-  const { game } = useGame()
+  const { game, commit } = useGame()
   const [nums] = useNumbers()
   const me = game.me!
   const p = game.players[me.id]
@@ -51,6 +52,13 @@ export default function MeScreen() {
   return (
     <>
     <CareerOverview />
+    <Panel title="我的头像">
+      <AvatarEditor value={me.avatar} onChange={(value) => {
+        if (value) me.avatar = value
+        else delete me.avatar
+        commit()
+      }} />
+    </Panel>
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
         <Panel

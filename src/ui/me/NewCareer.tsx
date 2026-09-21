@@ -22,6 +22,7 @@ import type { EntryYear } from '../../engine/era'
 import { Panel } from './common'
 import { attrWord, useNumbers } from './words'
 import { track } from '../../engine/me/telemetry'
+import AvatarEditor from './AvatarEditor'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
@@ -86,6 +87,8 @@ export default function NewCareer({
   const [starting, setStarting] = useState(false)
   const [year, setYear] = useState<EntryYear>(2026)
   const [name, setName] = useState('')
+  const [avatar, setAvatar] = useState<string>()
+  const [avatarBusy, setAvatarBusy] = useState(false)
   const [region, setRegion] = useState<Region>('China')
   const [role, setRole] = useState<Role>('决斗者')
   const [start, setStart] = useState<StartPoint>('pre')
@@ -218,7 +221,8 @@ export default function NewCareer({
         : academies ? `这里有 ${pool} 支一线队的二队，开局进其中一支。`
           : `这里有 ${pool} 支${clubWord}俱乐部，开局进其中一支，弱队更愿意赌新人。`)
   // what is still missing, said on the button, in the order the page asks (破晓's 建档 button, main.ts viewCreate)
-  const blocked = gate ? gate
+  const blocked = avatarBusy ? '等待头像处理完成'
+    : gate ? gate
     : !originKey ? '先选一个出身'
       : left !== 0 ? `还需分配 ${left} 点天赋`
         : ''
@@ -265,7 +269,7 @@ export default function NewCareer({
     setStarting(true)
     // a frame for 「载入中…」 to show: the career, and the world it is made in, arrive with this press (App.tsx)
     window.setTimeout(() => {
-      onStart({ name: ign, region, role, talents, originKey, start, year }).then((ok) => {
+      onStart({ name: ign, region, role, talents, originKey, start, year, avatar }).then((ok) => {
         if (!ok) { setStarting(false); return }
         // What was chosen on this screen, and nothing that was typed into it: the
         // IGN is the one free-text field in the whole game and it never leaves
@@ -328,6 +332,7 @@ export default function NewCareer({
       </Panel>
 
       <Panel title="你是谁">
+        <AvatarEditor value={avatar} onChange={setAvatar} disabled={starting} onBusyChange={setAvatarBusy} />
         <div className="row wrap" style={{ gap: 14 }}>
           <label className="row" style={{ gap: 8 }}>
             <span className="muted">游戏 ID</span>

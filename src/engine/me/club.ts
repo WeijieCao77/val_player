@@ -9,6 +9,7 @@ import { dateOf, offPool } from '../staffStints'
 import { autoStarters, ensureCaller } from '../world'
 import { coachStarters } from './coach'
 import { pushLog } from './log'
+import { isRecentClubDeparture, markClubDeparture, pruneClubDepartures } from './clubDepartures'
 
 /**
  * The club around a player: who comes in, who goes, and the five on the floor.
@@ -81,8 +82,9 @@ export function joinRoster(state: GameState, p: Player, team: Team, rng: Rng): v
 }
 
 /** Off his club: a free agent. */
-export function leaveRoster(state: GameState, p: Player): void {
+export function leaveRoster(state: GameState, p: Player, deliberate = false): void {
   const from = p.teamId ? state.teams[p.teamId] : undefined
+  if (deliberate && from) markClubDeparture(state, from.id, p.id)
   releaseForHistory(state, p)
   p.expiredYear = undefined
   if (from) repick(state, from)
@@ -102,7 +104,7 @@ export function makeRoom(state: GameState, team: Team): void {
     const bench = squad.filter((p) => !team.starters.includes(p.id))
     const out = (bench.length ? bench : squad).sort((a, b) => a.overall - b.overall)[0]
     if (!out) return
-    leaveRoster(state, out)
+    leaveRoster(state, out, true)
     state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `${team.name} 和 ${out.ign} 解约，给你腾出名单位置。`)
   }
@@ -124,8 +126,22 @@ function fillSquad(state: GameState, team: Team, rng: Rng): void {
     if (!free.length) break
     const score = (p: Player) =>
       p.overall + (p.region === team.region ? 6 : 0) + (jobsOf(p).some((r) => missing.includes(r)) ? 12 : 0)
-    const target = free.sort((a, b) => score(b) - score(a))[0]
+    const eligible = free.filter(p => !isRecentClubDeparture(state, team.id, p.id))
+    // Five still field a legal side. Do not undo the author's successful request
+    // just to refill the sixth seat; below five use an explicit emergency exception.
+    const emergency = !eligible.length && team.roster.length < 5
+    if (!eligible.length && !emergency) {
+      const notice = `${team.id}:${free.map(p => p.id).sort().join(',')}`
+      if (me.clubDepartureWait !== notice) {
+        pushLog(state, 'team', `${team.name} 暂以五人名单参赛；目前可签人选刚被本队放走，八周内不自动签回，等待其他人选。`)
+        me.clubDepartureWait = notice
+      }
+      break
+    }
+    delete me.clubDepartureWait
+    const target = (emergency ? free : eligible).sort((a, b) => score(b) - score(a))[0]
     joinRoster(state, target, team, rng)
+    if (emergency) pushLog(state, 'team', `紧急补人：名单不足五人且没有其他合规人选，${team.name} 重新签下 ${target.ign} 以恢复参赛人数。`)
     const line = `俱乐部签下自由人 ${target.ign}（${target.role}）补进名单。`
     state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}。` })
     pushLog(state, 'team', line)
@@ -145,6 +161,7 @@ export function clubWeek(state: GameState, rng: Rng, winter = false): void {
   const me = state.me!
   const team = state.teams[state.myTeam]
   if (!team || me.phase !== 'pro') return
+  pruneClubDepartures(state)
   fillSquad(state, team, rng)
   if (winter) clubRenewals(state, team, rng)
   if (team.starters.length < 5 || !team.starters.every((id) => team.roster.includes(id))) {
@@ -212,6 +229,7 @@ export function clubWindow(state: GameState, rng: Rng): void {
   const target = Object.values(state.players)
     .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && p.role === role
       && p.overall >= need!.strength + UPGRADE && expectedSalary(p, team.tier) < Math.max(40000, room * 0.25)
+      && !isRecentClubDeparture(state, team.id, p.id)
       && !importBlock(state, team.id, p)
       // an upgrade is a player, not a man who has gone to a staff (engine/staffStints.ts)
       && !offPool(p.id, today))
@@ -222,7 +240,7 @@ export function clubWindow(state: GameState, rng: Rng): void {
       .filter((p) => p.id !== me.id && jobsOf(p).includes(role))
       .sort((a, b) => a.overall - b.overall)[0]
     if (!out || floorBlock(state, team.id)) return
-    leaveRoster(state, out)
+    leaveRoster(state, out, true)
     state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `俱乐部放走了 ${out.ign}，给新人腾出位置。`)
   }
@@ -243,7 +261,7 @@ export function clubWinter(state: GameState): void {
     .filter((p): p is Player => !!p)
   const worst = bench.sort((a, b) => a.overall - b.overall)[0]
   if (worst && worst.overall < team.rating - SURPLUS && !floorBlock(state, team.id)) {
-    leaveRoster(state, worst)
+    leaveRoster(state, worst, true)
     state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${worst.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `俱乐部放走了 ${worst.ign}。`)
   }

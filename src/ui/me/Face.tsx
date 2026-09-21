@@ -1,8 +1,9 @@
-import { useContext, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
 import { GameCtx } from './ctx'
 import { AgentIcon } from './common'
 import { dossierOf } from '../../engine/dossier'
 import { AGENT_CN, canonAgent } from '../../engine/content'
+import { avatarData } from '../../engine/me/avatar'
 import './media.css'
 
 const BASE = typeof import.meta.env !== 'undefined' ? import.meta.env.BASE_URL : './'
@@ -23,15 +24,22 @@ const EN_OF_CN = new Map(Object.entries(AGENT_CN).map(([en, cn]) => [cn, en]))
  * about a tenth of the bytes; a missing thumbnail falls back to the full photo,
  * a missing photo to the first letter of the handle.
  *
- * The protagonist is nobody real and never gets a face: a plain silhouette.
+ * The protagonist may use a bounded, local avatar; otherwise a plain silhouette.
  */
 export default function Face({ id, name, size = 22 }: { id: string; name?: string; size?: number }) {
   const ctx = useContext(GameCtx)
   const [fail, setFail] = useState<{ id: string; n: number }>({ id, n: 0 })
   const tries = fail.id === id ? fail.n : 0
   const box = { width: size, height: size }
+  const rawAvatar = ctx?.game?.me?.avatar
+  const avatar = useMemo(() => avatarData(rawAvatar), [rawAvatar])
+  const [failedAvatar, setFailedAvatar] = useState<string>()
 
   if (id === ME || ctx?.game?.me?.id === id) {
+    if (avatar && avatar !== failedAvatar) return (
+      <img className="face" src={avatar} alt="" aria-hidden="true" width={size} height={size}
+        style={{ ...box, objectPosition: 'center' }} onError={() => setFailedAvatar(avatar)} />
+    )
     return (
       <span className="face face-me" style={box} aria-hidden="true">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4.4" /><path d="M3 24c.6-5.4 4.3-8.6 9-8.6s8.4 3.2 9 8.6z" /></svg>

@@ -196,7 +196,7 @@ export function doList(state: GameState, targetId: string): string {
     me.cloutCd.list = 0
     return floor
   }
-  leaveRoster(state, target)
+  leaveRoster(state, target, true)
   state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true, text: `${team.name} 与 ${target.ign} 解约，该选手成为自由人。` })
   me.coachTrust = clamp(me.coachTrust - 4, 0, 100)
   for (const id of team.roster) if (id !== me.id) duoBonded(state, me.id, id, -6)

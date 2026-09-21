@@ -726,7 +726,31 @@ export interface WeekStart {
   noBonds?: true
 }
 
+export interface GrowthWeek {
+  week: number
+  year: number
+  day: number
+  complete: boolean
+  attrs: Attrs
+  xp: Partial<Attrs>
+}
+export interface GrowthWeekResult {
+  week: number
+  year: number
+  complete: boolean
+  changes: Record<keyof Attrs, { points: number; progress: number; capped: boolean }>
+}
+
 export interface MeState {
+  /** Small normalized local JPEG; no upload or original image is stored. */
+  avatar?: string
+  /** Personal weekly growth baseline, independent from action undo checkpoints. */
+  growthWeek?: GrowthWeek
+  lastGrowthWeek?: GrowthWeekResult
+  /** Recent deliberate same-club departures; dates use the 364-day simulation calendar. */
+  clubDepartures?: { teamId: string; playerId: string; until: number }[]
+  /** Suppress repeated notices while waiting on the same blocked free-agent pool. */
+  clubDepartureWait?: string
   /**
    * This career's own id in the save (me/save.ts claimAutosave): made the first time the career is opened into the
    * save, so two careers are never taken for one — the record beside the save names it, and a page holding another

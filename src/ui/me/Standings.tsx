@@ -16,6 +16,7 @@ import { performanceRating } from '../../engine/performance'
 import { statLine } from '../../engine/player'
 import { REGION_CN, REGIONS } from '../../engine/types'
 import type { Competition, Region } from '../../engine/types'
+import TeamPeekButton from './TeamPeek'
 
 /**
  * The leagues, the brackets and the season's player table. The career's own
@@ -73,7 +74,7 @@ function Table({ comp, members, cut: cutOverride }: { comp: Competition; members
                 </td>
                 <td style={{ borderLeft: !comp.champion && i < cut ? '2px solid var(--accent)' : '2px solid transparent' }}>
                   <span className="club" title={game.teams[id]?.name}>
-                    <Crest id={id} /><span>{game.teams[id]?.tag}</span>
+                    <Crest id={id} /><TeamPeekButton id={id} label={game.teams[id]?.tag} />
                   </span>
                 </td>
                 <td className="num mono">{r.w}-{r.l}</td>
@@ -175,7 +176,7 @@ export function PointsPanel({ table }: { table: PointsTable }) {
       <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''} data-team={r.team} data-mark={r.mark ?? ''}>
         <td className="num muted">{i + 1}</td>
         <td>
-          <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><span>{game.teams[r.team]?.name}</span></span>
+          <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><TeamPeekButton id={r.team} /></span>
         </td>
         <td className="num mono"><b>{r.points}</b></td>
         {live && <td className="num mono muted">{running.get(r.team) ? `+${running.get(r.team)}` : ''}</td>}
@@ -449,7 +450,7 @@ export default function Standings() {
                           <tr key={id} className={id === game.myTeam ? 'me' : ''}>
                             <td className="num muted">{i + 1}{c.champion === id && ' 🏆'}</td>
                             <td><span className="club" title={game.teams[id]?.name}>
-                              <Crest id={id} /><span>{game.teams[id]?.tag}</span>
+                              <Crest id={id} /><TeamPeekButton id={id} label={game.teams[id]?.tag} />
                             </span></td>
                             <td className="small muted">{REGION_CN[game.teams[id]?.region]}</td>
                           </tr>
@@ -485,7 +486,7 @@ export default function Standings() {
                     >
                       <td className="num muted">{i + 1}</td>
                       <td><b>{p.ign}</b></td>
-                      <td className="small muted">{game.teams[p.teamId ?? '']?.name}</td>
+                      <td className="small muted"><TeamPeekButton id={p.teamId ?? ''} /></td>
                       <td className="num"><OvrBadge value={p.overall} /></td>
                       <td className="num"><b>{performanceRating(p.season).toFixed(2)}</b></td>
                       <td className="num mono">{s.acs.toFixed(0)}</td>

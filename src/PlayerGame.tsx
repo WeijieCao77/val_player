@@ -46,6 +46,7 @@ import PlayerCard from './ui/me/PlayerCard'
 import ThemeToggle from './ui/me/ThemeToggle'
 import SoundToggle from './ui/me/SoundToggle'
 import { attrWord, useNumbers } from './ui/me/words'
+import QuickAttrs from './ui/me/QuickAttrs'
 import { ceilingsOf } from './engine/me/bottleneck'
 import HelpScreen from './ui/me/HelpScreen'
 import { MailboxScreen } from './ui/me/Mailbox'
@@ -99,6 +100,7 @@ export default function Career({ opened, onHome }: {
   const [summary, setSummary] = useState<{ until: AdvanceUntil; weeks: number; notes: string[]; ended: boolean; why?: string; aside?: boolean; card?: boolean } | null>(null)
   // numbers or words (世界级 · 顶级 · 一流) on every attribute; remembered per browser, see ui/me/words.ts
   const [nums, setNums] = useNumbers()
+  const [attrsOpen, setAttrsOpen] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   // a phone's 更多: the screens that are not on its tab bar, opened over it (me.css)
   const [more, setMore] = useState(false)
@@ -493,10 +495,11 @@ export default function Career({ opened, onHome }: {
               </>
             )}
           </div>
-          {screen !== 'me' && <button className="sm ghost to-me" onClick={() => goScreen('me')}>看八项属性 →</button>}
+          <button className="sm ghost attr-toggle" onClick={() => setAttrsOpen(!attrsOpen)} aria-expanded={attrsOpen} aria-controls="quick-eight-attrs">八项属性 {attrsOpen ? '收起' : '展开'}</button>
           <button className={`sm ghost num-switch${nums ? ' on' : ''}`} onClick={() => setNums(!nums)} title={nums ? '切回文字描述：世界级、顶级、一流……' : '显示具体数值'} aria-pressed={nums}>
             数值 {nums ? '开' : '关'}
           </button>
+          {attrsOpen && <QuickAttrs player={p} nums={nums} />}
         </div>
 
         <div className="body">

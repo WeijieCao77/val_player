@@ -18,6 +18,8 @@ import {
 import type { PitchGroup, PitchRow } from '../../engine/me/selfpitch'
 import { pitchBook } from '../../engine/me/pitchbook'
 import { attrWord, gapWord, useNumbers } from './words'
+import TeamPeekButton, { TeamSearch } from './TeamPeek'
+import { teamMatchesQuery } from './teamRead'
 
 /**
  * 转会: the contract, how the market reads me, what is on the table, every
@@ -35,6 +37,7 @@ import { attrWord, gapWord, useNumbers } from './words'
 export default function TransferScreen() {
   const { game, commit, toast } = useGame()
   const [nums] = useNumbers()
+  const [clubQuery, setClubQuery] = useState('')
   const me = game.me!
   const p = game.players[me.id]
   const pro = me.phase === 'pro'
@@ -97,7 +100,7 @@ export default function TransferScreen() {
             <div key={d.id} className="tr-row">
               <Crest id={d.teamId} size={22} />
               <span className="tr-main">
-                <b>{game.teams[d.teamId]?.name ?? '俱乐部'}</b>
+                <b><TeamPeekButton id={d.teamId} /></b>
                 <small>
                   {d.kind === 'renew' ? '续约' : d.kind === 'transfer' ? '转会' : '签约'}{d.via === 'contact' ? '（你主动接触的）' : ''} · {ROLE_CN[d.role]} · {moneyIn(d.salary, d.cur, game.year)} × {d.years} 年 ·{' '}
                   <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>
@@ -129,7 +132,7 @@ export default function TransferScreen() {
             <div key={i.id} className="tr-row">
               <Crest id={i.teamId} size={22} />
               <span className="tr-main">
-                <b>{game.teams[i.teamId]?.name ?? '俱乐部'}</b>
+                <b><TeamPeekButton id={i.teamId} /></b>
                 <small>
                   {i.via === 'self' ? '回复了你的自荐 · ' : ''}{i.direct ? '免试训，直接给合同' : '请你去试训'} ·{' '}
                   {onTryout ? '试训进行中' : <span className={left <= 1 ? 'warn' : undefined}>{withinCn(left)}答复{left <= 0 ? '，明天过期' : ''}</span>}
@@ -249,6 +252,7 @@ export default function TransferScreen() {
           </p>
         </Panel>
       <Panel title="门槛 · 各档俱乐部要什么水平" flush>
+        <div style={{ padding: '8px 12px 0' }}><TeamSearch value={clubQuery} onChange={setClubQuery} label="搜索门槛俱乐部" /></div>
         <p className="tiny faint" style={{ padding: '8px 12px 0' }}>
           绿色是够得着的。「差」比的是他们眼里的你{nums ? ` ${read.shown}（${skillReadCn(read)}）` : `（${SKILL_READ_CN}）`}。
         </p>
@@ -256,14 +260,14 @@ export default function TransferScreen() {
         <table>
           <thead><tr><th>俱乐部</th><th>档</th>{nums && <><th>实力</th><th>要求</th></>}<th>差</th></tr></thead>
           <tbody>
-            {clubs.map((t) => {
+            {clubs.filter((t) => teamMatchesQuery(t, clubQuery)).map((t) => {
               const e = expectOf(t)
               const d = skill - e
               // the word the cards put on a club: 「外赛区」 by league, 「国外俱乐部」 by country (engine/me/prepro.ts awayWord)
               const word = awayWord(game, t)
               return (
                 <tr key={t.id} style={{ opacity: reach.has(t.id) ? 1 : 0.55 }}>
-                  <td><span className="club"><Crest id={t.id} size={18} />{t.tag}</span></td>
+                  <td><span className="club"><Crest id={t.id} size={18} /><TeamPeekButton id={t.id} label={t.tag} /></span></td>
                   <td className="tiny">{CLUB_TIER_CN(t)}{word ? ` · ${word}` : ''}</td>
                   {nums && <><td className="num">{t.rating}</td><td className="num">{Math.round(e)}</td></>}
                   <td className="num" style={{ color: d >= 0 ? 'var(--win)' : d >= -6 ? 'var(--warn)' : 'var(--loss)' }}>{nums ? `${d >= 0 ? '+' : ''}${Math.round(d)}` : gapWord(-d)}</td>
@@ -273,6 +277,7 @@ export default function TransferScreen() {
           </tbody>
         </table>
         </div>
+        {!clubs.some((t) => teamMatchesQuery(t, clubQuery)) && <p className="empty">没有匹配的俱乐部。搜索只筛选当前可见名单，不会解锁外赛区。</p>}
       </Panel>
       </div>
     </div>
@@ -301,13 +306,15 @@ function PitchSent() {
 function PitchList({ contract }: { contract: boolean }) {
   const { game, commit, toast } = useGame()
   const [nums] = useNumbers()
+  const [query, setQuery] = useState('')
   const me = game.me!
   const role = game.players[me.id].role
   const book = pitchBook(game)
   const block = pitchBlock(game)
   const { rows, abroadShut } = pitchTargets(game)
-  const home = rows.filter((r) => !r.abroad)
-  const far = rows.filter((r) => r.abroad)
+  const filtered = rows.filter((r) => teamMatchesQuery(r.team, query))
+  const home = filtered.filter((r) => !r.abroad)
+  const far = filtered.filter((r) => r.abroad)
   const best = home.filter((r) => !r.why).sort((a, b) => b.odds.pct - a.odds.pct)[0]
   const send = (id: string) => {
     const why = sendPitch(game, id)
@@ -330,7 +337,7 @@ function PitchList({ contract }: { contract: boolean }) {
       <div key={r.team.id} className={`sp-row${off ? ' off' : ''}`}>
         <Crest id={r.team.id} size={22} />
         <span className="tr-main">
-          <b>{r.team.name}</b>
+          <b><TeamPeekButton id={r.team.id} /></b>
           <small>
             {groupCn(game, r.group)}{awayWord(game, r.team) ? ` · ${awayWord(game, r.team)}` : ''} · 名单 {r.team.roster.length}/{ROSTER_FULL}{need(r)} · {nums ? `要 ${o.expect}，你 ${o.skill}` : gapWord(-o.gap)}
             {contract && o.fee > 0 ? (o.short ? ' · 预算付不起你的违约金' : ' · 付得起你的违约金') : ''}
@@ -352,19 +359,21 @@ function PitchList({ contract }: { contract: boolean }) {
   }
   return (
     <>
+      <TeamSearch value={query} onChange={setQuery} label={contract ? '搜索接触俱乐部' : '搜索自荐俱乐部'} />
+      {filtered.length === 0 && <p className="small muted">没有匹配的俱乐部。试试队名或缩写；搜索不改变外语、转会窗口和名单限制。</p>}
       {GROUPS.map((g) => {
         const list = home.filter((r) => r.group === g)
         if (!list.length) return null
         const top = list.find((r) => !r.why)
         return (
-          <details key={g} className="sp-group" open={best?.group === g}>
+          <details key={g} className="sp-group" open={!!query.trim() || best?.group === g}>
             <summary>{groupCn(game, g)} · {list.length} 家{top ? ` · 最好的一家${nums ? ` ${top.odds.pct}%` : oddsWord(top.odds.pct)}` : ' · 现在都投不了'}</summary>
             {list.map(row)}
           </details>
         )
       })}
       {far.length > 0 && (
-        <details className="sp-group">
+        <details className="sp-group" open={query.trim() ? true : undefined}>
           <summary>外赛区（你会外语）· {far.length} 家</summary>
           {far.map(row)}
         </details>
