@@ -99,7 +99,7 @@ export function buildSaveMeta(state: GameState): SaveMeta | null {
     year: state.year,
     day: state.day,
     ign: p.ign,
-    role: p.roles?.[0] ?? p.role,
+    role: p.role,
     age: p.age,
     phase: me.phase,
     club: t ? {

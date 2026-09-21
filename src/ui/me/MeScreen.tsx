@@ -17,6 +17,7 @@ import { wornTitle } from '../../engine/me/achievements'
 import { CareerRewrites } from './Worldline'
 import CareerOverview from './CareerOverview'
 import AvatarEditor from './AvatarEditor'
+import SecondaryRole from './SecondaryRole'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -61,6 +62,7 @@ export default function MeScreen() {
     </Panel>
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
       <div>
+        <SecondaryRole />
         <Panel
           id="my-abilities"
           title={`能力 · ${originName(origin, serverAt(me.region, me.entryYear ?? me.seasons[0]?.year ?? game.year, 0))}`}

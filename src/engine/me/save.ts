@@ -24,6 +24,7 @@ import { rememberFMVPs } from './fmvp'
 import { avatarData } from './avatar'
 import { pruneClubDepartures } from './clubDepartures'
 import { ensureGrowthWeek } from './growthWeek'
+import { normalizePositionTraining } from './secondaryRole'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -152,6 +153,7 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me) settleDetail(state.me, state.year, state.day)
   // An old save cannot prove its whole-week baseline; start observing here without inventing gains.
   ensureGrowthWeek(state)
+  normalizePositionTraining(state)
   return state
 }
 

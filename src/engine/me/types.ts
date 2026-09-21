@@ -1,4 +1,4 @@
-import type { Attrs, Region, SquadRole } from '../types'
+import type { Attrs, Region, Role, SquadRole } from '../types'
 import type { CompClass } from './compclass'
 import type { Cur } from './currency'
 import type { CareerEventState } from './eventState'
@@ -193,6 +193,8 @@ export interface DuelLive {
 }
 
 export interface MeMatchRecord {
+  /** Active evaluation role when this match opened; absent for historical records. */
+  role?: Role
   /** Absent on historical records, which retain their original evaluation. */
   performanceVersion?: 1
   fixtureId: string
@@ -742,6 +744,8 @@ export interface GrowthWeekResult {
 }
 
 export interface MeState {
+  /** One secondary position, independently trained; only the protagonist uses this metadata. */
+  positionTraining?: import('./secondaryRole').PositionTraining
   /** Small normalized local JPEG; no upload or original image is stored. */
   avatar?: string
   /** Personal weekly growth baseline, independent from action undo checkpoints. */

@@ -1,5 +1,6 @@
 import RAW from '../../data/world.json'
 import { avatarData } from './avatar'
+import { normalizePositionTraining } from './secondaryRole'
 import RAW_2021 from '../../data/world_2021.json'
 import { autoStarters, createWorld } from '../world'
 import { RULER, REGIONAL_RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
@@ -387,6 +388,7 @@ export function createCareer(o: CareerOpts): GameState {
     // the career opens at the club: no signing card on the first screen (me/moments.ts)
     joinClub(state, deal, { quiet: true })
   }
+  normalizePositionTraining(state)
   beginWeek(state)
   return state
 }

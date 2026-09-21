@@ -169,6 +169,10 @@ function skidTitle(s: GameState): boolean {
 /* ------------------------------------------------------------------ */
 
 export const ACHIEVEMENTS: AchDef[] = [
+  { key: 'secondary_certified', route: 'break', name: '第二张名片', desc: '将一个副位置练到熟练度 100', reward: { title: '双位置选手' }, cond: (s) => {
+    const me = s.me, role = me?.positionTraining?.secondary, p = me && s.players[me.id]
+    return !!role && !!p && (p.rolePro?.[role] ?? 0) >= 100
+  } },
   // Life-event records are separate from ordinary injury and transfer counters.
   ...CAREER_MARKS.map((m): AchDef => ({ key: `arc_${m.id}`, route: 'life', secret: true, name: m.title, desc: m.text, reward: { title: m.title }, cond: m.cond })),
   { key: 'arc_return', route: 'back', name: '漫长休养之后', desc: '完成一次长期医疗休养', reward: { title: '归来者' }, cond: (s) => (M(s).careerEvents?.returns ?? 0) >= 1 },

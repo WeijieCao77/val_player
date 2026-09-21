@@ -5,7 +5,7 @@ import { commitFixture, fixtureRng } from '../season'
 import { agentCn } from '../content'
 import { ratingOf } from '../player'
 import { aggregateLines, performanceRating, usesPerformanceRating } from '../performance'
-import type { Fixture, GameState, MapLine, Player } from '../types'
+import type { Fixture, GameState, MapLine, Player, Role } from '../types'
 import { deskLine } from './press'
 import {
   CALL_TRUST_MISS, CALL_TRUST_OK, HINT_EDGE, KEY_MOMENTUM, WEAK_MISS_MUL, WEAK_SHARE,
@@ -121,12 +121,14 @@ export class MeMatch {
   private slots: Record<KeySlot, boolean> = { half1: false, half2: false, point: false, ot: false }
   private nodeRng: Rng
   private finished: MeMatchRecord | null = null
+  private readonly startedRole: Role
   private mapStarted = false
   /** 快进 or 托管 has taken over: the calls are still made, the coach's way, with nobody in the chair */
   private auto = false
 
   constructor(state: GameState, src: Fixture | Friendly) {
     this.state = state
+    this.startedRole = state.players[state.me!.id].role
     if ('aId' in src) {
       this.friendly = src
       // a cup round's label had the cup's name in front of it until 2026-09-14 (me/cups.ts mountCupMatch); the id
@@ -481,6 +483,7 @@ export class MeMatch {
     const comp = state.comps[f.comp]
     const score = this.mineIsA ? `${result.mapsWonA}-${result.mapsWonB}` : `${result.mapsWonB}-${result.mapsWonA}`
     const rec: MeMatchRecord = {
+      role: this.startedRole,
       performanceVersion: modern ? 1 : undefined,
       fixtureId: f.id, day: state.day, year: state.year,
       comp: this.friendly ? this.friendly.comp : (comp?.name ?? f.comp), label: f.label.replace(/^(KO|SW):\d+:/, ''),

@@ -43,7 +43,8 @@ export function RoleTag({ role }: { role: Role }) {
 
 /** Primary role plus any second role the player actually covers. */
 export function Roles({ p }: { p: Player }) {
-  const list = p.roles?.length ? p.roles : [p.role]
+  // Render active role first, without reordering stored coverage (which also identifies Hall careers).
+  const list = [p.role, ...(p.roles ?? []).filter(r => r !== p.role)]
   return (
     <span className="row" style={{ gap: 3 }}>
       <RoleTag role={list[0]} />
