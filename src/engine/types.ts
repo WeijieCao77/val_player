@@ -851,6 +851,8 @@ export interface Competition {
 }
 
 export interface NewsItem {
+  /** Absent only in legacy saves: never guess an undated item's year for a weekly digest. */
+  year?: number
   day: number
   kind: 'match' | 'transfer' | 'league' | 'club' | 'player' | 'system'
   text: string
@@ -948,6 +950,8 @@ export interface WorldState {
   rulesetId?: 'vct-2025' | 'vct-2026'
   /** the ruler the world's real players are measured on — see engine/ruler.ts; absent is the builders' own scale */
   ruler?: number
+  /** independent, one-time source-league upper-tail calibration; never re-runs the full ruler */
+  regionalRuler?: number
   /** every draw held in this career — see engine/draw.ts */
   draws?: import('./draw').DrawEvent[]
   /** a draw the manager has to hold — reveal or skip, or pick — before the clock moves */

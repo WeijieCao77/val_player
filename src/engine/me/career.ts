@@ -1,7 +1,7 @@
 import RAW from '../../data/world.json'
 import RAW_2021 from '../../data/world_2021.json'
 import { autoStarters, createWorld } from '../world'
-import { RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
+import { RULER, REGIONAL_RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
 import { bookClubsAt, openWorldAt } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
@@ -206,6 +206,7 @@ function createWorldAt(teamId: string, seed: number, year: number): GameState {
  */
 function ruleOpening(state: GameState): GameState {
   state.ruler = RULER
+  state.regionalRuler = REGIONAL_RULER
   for (const p of Object.values(state.players)) {
     if (!/^V\d+$/.test(p.id)) continue
     shiftPlayer(p, rulerShift(2021, p.id.slice(1)))

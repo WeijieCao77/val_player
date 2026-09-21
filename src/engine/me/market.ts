@@ -272,10 +272,10 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
   if (!lines.length) return
   const ordered = [...lines.filter((l) => l.mine), ...lines.filter((l) => !l.mine)]
   for (const l of ordered.slice(0, NEWS_LINES)) {
-    state.news.push({ day: state.day, kind: 'transfer', important: l.mine, text: l.text })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: l.mine, text: l.text })
   }
   if (lines.length > NEWS_LINES) {
-    state.news.push({ day: state.day, kind: 'transfer', text: `转会窗里另有 ${lines.length - NEWS_LINES} 笔一换一的交易。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `转会窗里另有 ${lines.length - NEWS_LINES} 笔一换一的交易。` })
   }
 }
 
@@ -313,7 +313,7 @@ export function marketTurn(state: GameState, rng: Rng): void {
     }
   }
   if (signed.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'transfer',
       text: `新赛季自由市场：VCT 俱乐部签下 ${signed.slice(0, 8).join('、')}${signed.length > 8 ? ` 等 ${signed.length} 人` : ''}。`,
     })

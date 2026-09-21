@@ -227,13 +227,13 @@ export function newcomersTurn(state: GameState): { born: number; placed: number;
   out.gone = gone.length
 
   if (out.born) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'player',
       text: `🌱 ${year} 赛季有 ${out.born} 名新人进入职业圈（虚构选手，名字不对应真实的人），其中 ${out.placed} 人签进了 Challengers 俱乐部。`,
     })
   }
   if (gone.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'player',
       text: `👋 两个赛季没有队伍，离开职业圈：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 人` : ''}。`,
     })

@@ -16,6 +16,7 @@ import { attrWord, useNumbers } from './words'
 import { CareerRewrites } from './Worldline'
 import { useLook } from './looks'
 import type { LookKey } from '../../engine/me/hall'
+import { fmvpTotals } from '../../engine/me/fmvpRead'
 
 /**
  * The career on one card: the last thing a save ever shows.
@@ -120,6 +121,7 @@ export default function Poster() {
       {benchOnly && (
         <p className="pm-note">这些奖杯你都在替补席上。名单上有你的名字，场上没有。</p>
       )}
+      {!!fmvpTotals(me.titles).confirmed && <p className="pm-note">决赛 MVP（FMVP） · {fmvpTotals(me.titles).confirmed} 次已确认</p>}
 
       {/* 大师赛 / 冠军赛 the club played and did not win — a deep run is the record too */}
       {runs.length > 0 && (

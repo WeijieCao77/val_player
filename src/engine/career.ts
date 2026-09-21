@@ -109,7 +109,7 @@ export function resolveApplications(state: GameState, rng: Rng): string[] {
       notes.push(`❌ ${team.name} 婉拒了你的执教申请：${a.reason}`)
     } else {
       notes.push(`✅ ${team.name} 接受了你的执教申请，你可以随时上任。`)
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'club', important: true,
         text: `📩 ${team.name} 同意与你签约，等待你确认。`,
       })
@@ -150,7 +150,7 @@ export function renegotiate(state: GameState, salary: number, years: number): st
       : '董事会拒绝了这个数字，先拿出成绩再谈。'
   }
   state.managerContract = { salary, years, since: state.year }
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club', important: false,
     text: `${team.name} 与经理续约 ${years} 年。`,
   })
@@ -209,7 +209,7 @@ export function offerJobs(state: GameState, notes: string[]): void {
         : `${t.name} 想请你来重建队伍。`,
     })
     notes.push(`📩 ${t.name} 向你发出了执教邀请。`)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club', important: true,
       text: `📩 ${t.name} 向你发出执教邀请（声望 ${t.reputation}）。`,
     })
@@ -279,7 +279,7 @@ export function moveToClub(state: GameState, teamId: string): string {
   for (const pid of to.roster) state.training[pid] = 'rest'
 
   state.managerContract = defaultContract(state)
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club', important: true,
     text: `你离开 ${from?.name} 出任 ${to.name} 的经理。`,
   })

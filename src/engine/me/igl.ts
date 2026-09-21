@@ -313,7 +313,7 @@ export function takeIgl(state: GameState): string[] {
     n: 0, w: 0,
   }
   b.lastYear = state.year
-  state.news.push({ day: state.day, kind: 'club', important: true, text: `${p.ign} 出任 ${team.name} 主指挥${prev ? `，${prev.ign} 转为副指挥` : ''}。` })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: `${p.ign} 出任 ${team.name} 主指挥${prev ? `，${prev.ign} 转为副指挥` : ''}。` })
   pushLog(state, 'good', `教练把指挥交给了你${prev ? `，${prev.ign} 转为副指挥` : ''}。从下一场起，全队按你的指挥来打。`)
   return lines
 }

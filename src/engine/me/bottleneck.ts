@@ -731,11 +731,10 @@ export function startedIn(state: GameState, title: string, year: number): boolea
   return state.me!.matches.some((m) => !m.friendly && m.year === year && m.comp === title && m.started)
 }
 
-/** The final's MVP: my last match of the event, started, won, and the MVP mine. */
+/** The title's actual final MVP, shared by rewards, the moment card and permanent honors. */
 export function finalMvp(state: GameState, title: string, year: number): boolean {
-  const mine = state.me!.matches.filter((m) => !m.friendly && m.year === year && m.comp === title)
-  const last = mine[mine.length - 1]
-  return !!last && last.started && last.won && last.mvp
+  const held = state.me!.titles.find(t => t.year === year && t.title === title)
+  return !!held?.started && held.fmvp === true
 }
 
 const isIntlClass = (title: string): boolean => {

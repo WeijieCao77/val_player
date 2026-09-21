@@ -1,4 +1,5 @@
 import type { GameState } from '../types'
+import { SEASON_DAYS } from '../calendar'
 import { mateLine } from './chatter'
 
 /**
@@ -50,20 +51,28 @@ const marked = (icon: string, text: string): string => (OWN_ICON.test(text) ? te
  */
 export function weekReport(state: GameState): string[] {
   const me = state.me!
-  const from = state.day - 7
+  const now = state.year * SEASON_DAYS + state.day
   const out: string[] = []
-  const inWeek = (day: number) => day > from && day <= state.day
+  // The simulation has 364-day seasons. A day number alone would replay last
+  // year's news, while a Gregorian date would drop days at the season boundary.
+  const inWeek = (year: number | undefined, day: number) => {
+    if (!Number.isInteger(year) || year! > state.year || !Number.isInteger(day) || day < 0 || day > SEASON_DAYS) return false
+    const at = year! * SEASON_DAYS + day
+    return at > now - 7 && at <= now
+  }
 
   // mine first
   const MINE = new Set(['match', 'cup', 'deal', 'team', 'good', 'bad', 'season'])
-  for (const l of me.log.filter((l) => inWeek(l.day) && MINE.has(l.kind)).slice(-4)) out.push(l.text)
+  for (const l of me.log.filter((l) => inWeek(l.year, l.day) && MINE.has(l.kind)).slice(-4)) out.push(l.text)
   // and one of the five saying something about it, when something happened (me/chatter.ts)
   const said = mateLine(state)
   if (said) out.push(said)
 
   // roster moves: who left, who was signed — my club's first, then the big ones
   const myTeam = me.phase === 'pro' ? state.teams[state.myTeam] : null
-  const news = state.news.filter((n) => inWeek(n.day) && !DESK_NEWS.test(n.text))
+  // Old news lacking a year stays in the saved history, but is not evidence
+  // of something happening this week. Every new writer now records its year.
+  const news = state.news.filter((n) => inWeek(n.year, n.day) && !DESK_NEWS.test(n.text))
   const moves = news.filter((n) => n.kind === 'transfer' || n.kind === 'player')
   const ranked = [
     ...moves.filter((n) => myTeam && n.text.includes(myTeam.name)),

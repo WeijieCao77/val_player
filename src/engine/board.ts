@@ -78,7 +78,7 @@ export function setObjective(state: GameState, notes: string[]): void {
           : `董事会目标：本赛段不低于第 ${target} 名。`
   state.objective = { stage: state.stage, placeAtLeast: target, text }
   notes.push(text)
-  state.news.push({ day: state.day, kind: 'club', important: true, text })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text })
 }
 
 /** Judge the stage that just ended, and move board confidence accordingly. */
@@ -119,7 +119,7 @@ export function settleObjective(state: GameState, endedStage: StageKey, notes: s
     ? `✅ 赛段目标达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会满意。`
     : `❌ 赛段目标未达成：第 ${place} 名（要求前 ${obj.placeAtLeast}）。董事会不满。`
   notes.push(msg)
-  state.news.push({ day: state.day, kind: 'club', important: true, text: msg })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: msg })
 
   judgeTenure(state, place, obj.met, notes)
 }
@@ -196,7 +196,7 @@ export function judgeTenure(
       : `被警告之后又交了一个不合格的赛段（本赛段第 ${place} 名），信任度只剩 ${conf}%。`
     state.gameOver = `${club} 董事会决定解除你的职务。${why}`
     notes.push(`🚪 ${state.gameOver}`)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: state.gameOver })
     return
   }
 
@@ -206,7 +206,7 @@ export function judgeTenure(
     const warn = `⚠ 董事会正式警告：再有一个赛段交不出成绩，就会换人。`
       + `（当前信任度 ${Math.round(state.boardConfidence)}%——${noticeHint(state)}）`
     notes.push(warn)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: warn })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: warn })
     return
   }
 
@@ -216,7 +216,7 @@ export function judgeTenure(
     state.onNotice = false
     const ok = `董事会撤回了此前的警告（第 ${place} 名，达成目标；信任度 ${Math.round(state.boardConfidence)}%），你坐稳了位置。`
     notes.push(ok)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: ok })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: ok })
   }
 }
 
@@ -262,7 +262,7 @@ export function seasonEnding(state: GameState, notes: string[]): boolean {
       ? `十年任期结束——${earned[0].title}`
       : '十年任期结束。'
     notes.push(`🏁 ${state.gameOver}`)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: state.gameOver })
     return true
   }
   return false
@@ -284,7 +284,7 @@ export function settleAtFive(state: GameState): void {
   state.gameOver = earned[0]
     ? `${tenureCn(state.year)}年之约到期，你选择功成身退——${earned[0].title}`
     : `${tenureCn(state.year)}年之约到期，你选择功成身退。`
-  state.news.push({ day: state.day, kind: 'club', important: true, text: state.gameOver })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: state.gameOver })
 }
 
 /** Decline the settlement and play on: 2036 stays the hard end of the story. */
@@ -292,7 +292,7 @@ export function continuePastFive(state: GameState): void {
   if (!state.midReview) return
   state.midReview = false
   state.midReviewDone = true
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club', important: true,
     text: '你谢绝了功成身退的机会——这份工作干到 2036 年为止。',
   })

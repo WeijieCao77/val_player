@@ -932,7 +932,7 @@ export interface MeState {
   achievements: string[]
   /** achievement rewards already paid (by key), how far the unlock card has shown, the 称号 picked — me/achievements.ts; absent in older saves */
   achState?: { paid: string[]; seen: number; worn?: string }
-  titles: { year: number; title: string; started: boolean }[]
+  titles: { year: number; title: string; started: boolean; fmvp?: boolean }[]
   /** qualifiers won — 出线, not titles (me/compclass.ts isQualifier); absent in older saves */
   quals?: { year: number; title: string; started: boolean }[]
   ending?: { key: string; title: string; text: string; year: number; marks?: import('./careerMarks').CareerMark[] }

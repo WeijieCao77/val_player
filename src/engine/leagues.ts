@@ -157,7 +157,7 @@ function announce(state: GameState, s: VctSeason, notes: string[]): void {
   const leagues = LEAGUES.map((L) => `${REGION_CN[L]} ${s.partners[L].map((id) => nameOf(state, id)).join('、')}`).join('；')
   const rule = !s.reselected ? '合作名单两年一选，这一年不变'
     : `按 ${s.year - 2}–${s.year - 1} 两年成绩取前 8${s.year > FIRST_AHEAD ? `，每个联赛最多换进 ${MAX_NEW_PARTNERS} 支新队` : ''}`
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: true,
     text: `🏛️ ${s.year} 赛季合作战队${s.reselected ? '公布' : '不变'}（暂定规则：${rule}）：${leagues}。`
       + `中国访客：${s.visitors.map((id) => nameOf(state, id)).join('、') || '—'}。`,
@@ -260,14 +260,14 @@ export function turnLeagues(state: GameState, notes: string[]): void {
   }
 
   const q = LEAGUES.map((L) => `${REGION_CN[L]} ${(s.qualified?.[L] ?? []).map((id) => nameOf(state, id)).join('、') || '—'}`).join('；')
-  state.news.push({ day: state.day, kind: 'league', important: true, text: `🎟️ ${year} 揭幕赛公开资格赛出线：${q}。` })
+  state.news.push({ year: state.year, day: state.day, kind: 'league', important: true, text: `🎟️ ${year} 揭幕赛公开资格赛出线：${q}。` })
   if (up.length || down.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'league',
       text: `🏛️ ${year} 赛季${up.length ? `进入联赛：${up.join('、')}` : ''}${up.length && down.length ? '；' : ''}${down.length ? `离开联赛：${down.join('、')}` : ''}。`,
     })
   }
-  for (const line of lost) state.news.push({ day: state.day, kind: 'league', text: line })
+  for (const line of lost) state.news.push({ year: state.year, day: state.day, kind: 'league', text: line })
   const club = playerClub(state)
   if (club && Object.values(s.qualified).some((ids) => ids.includes(club))) {
     notes.push(`🎟️ ${nameOf(state, club)} 从公开资格赛打进了 ${year} 揭幕赛。`)

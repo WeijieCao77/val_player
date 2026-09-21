@@ -6,6 +6,7 @@ import { buildSaveMeta, writeSaveMeta } from './saveMeta'
 import { adoptOldSave } from './saveInfo'
 import { OWNER, readSaveText, writeSaveTextGuarded, writeSaveTextNowGuarded } from './saveStore'
 import { migrateRuler } from './rulerMigrate'
+import { migrateRegionalRuler } from './regionalRulerMigrate'
 import { migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
 import type { SaveMeta } from './saveMeta'
@@ -19,6 +20,7 @@ import type { ExportResult } from './backup'
 import { repairPlayerCountries, repairPlayerTeamNames } from './playerDataRepair'
 import { repairPlayerBios } from './playerBioRepair'
 import { normalizeCareerEvents } from './eventMigrate'
+import { rememberFMVPs } from './fmvp'
 
 /**
  * Where a player's career is kept: under the player game's own keys.
@@ -95,6 +97,7 @@ const DESK_PLAYER_FIELDS = ['listed', 'listedOn', 'payAskedOn', 'rumourOn', 'per
 export function migratePlayerSave(state: GameState): GameState {
   normalizeCareerEvents(state)
   migrateWorld(state)
+  rememberFMVPs(state)
   if (state.me) {
     repairPlayerCountries(state)
     repairPlayerBios(state)
@@ -130,6 +133,7 @@ export function migratePlayerSave(state: GameState): GameState {
   if (state.me) migrateStaff(state)
   // a career from before the rating ruler is read onto it once, the player by his rank (me/rulerMigrate.ts)
   if (state.me) migrateRuler(state)
+  if (state.me) migrateRegionalRuler(state)
   // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
   if (state.me) resumeCup(state)
   // a week planned under the old board, where the hours settled on the seventh day: nothing of it is run,

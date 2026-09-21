@@ -9,6 +9,7 @@ import { becauseOfMe as becauseOfRow, careerLine, careerRewrites, retitledLine }
 import type { MeState } from './types'
 import { cleanCareerMarks } from './careerMarks'
 import type { CareerMark } from './careerMarks'
+import { hasFMVP } from './fmvpRead'
 
 /**
  * 成就殿堂: what every career on this device has done, kept outside the save.
@@ -65,7 +66,7 @@ export interface HallAch {
   ids: string[]
 }
 
-export interface HallTrophy { year: number; name: string; cls: CompClass; started: boolean }
+export interface HallTrophy { year: number; name: string; cls: CompClass; started: boolean; fmvp?: boolean }
 
 /** One finished career, as the hall keeps it. */
 export interface HallCard {
@@ -351,7 +352,7 @@ function cleanCard(x: unknown): HallCard | null {
       const r = obj(t)
       const name = str(r?.name, 60)
       // a card noted before 2026-09-12 may list a qualifier won: 出线, not a title, so it counts for nothing here
-      return r && name && !isQualifier(name) ? [{ year: int(r.year), name, cls: compClass(name), started: !!r.started }] : []
+      return r && name && !isQualifier(name) ? [{ year: int(r.year), name, cls: compClass(name), started: !!r.started, ...(typeof r.fmvp === 'boolean' ? { fmvp: r.started === true && r.fmvp } : {}) }] : []
     }).slice(0, 80),
     best: best ? { year: int(best.year), team: str(best.team, 48), titles: int(best.titles), acs: int(best.acs) } : undefined,
     acs: acs ? { year: int(acs.year), value: int(acs.value) } : undefined,
@@ -476,7 +477,7 @@ function cardOf(state: GameState, id: string): HallCard {
   return {
     id, name: p?.ign ?? '', role: roleOf(state), entry, start: startOf(state), origin: me.originKey, home: me.region,
     from: entry, to: me.ending?.year ?? state.year, seasons: pro.length, clubs,
-    titles: me.titles.map((t) => ({ year: t.year, name: t.title, cls: compClass(t.title), started: t.started })),
+    titles: me.titles.map((t) => ({ year: t.year, name: t.title, cls: compClass(t.title), started: t.started, ...(typeof t.fmvp === 'boolean' ? { fmvp: hasFMVP(t) } : {}) })),
     best: best ? { year: best.year, team: best.team, titles: best.titles.length, acs: best.acs } : undefined,
     acs: acs?.acs ? { year: acs.year, value: acs.acs } : undefined,
     ending: { key: me.ending?.key ?? '', title: me.ending?.title ?? '', ...(me.ending?.marks?.length ? { marks: cleanCareerMarks(me.ending.marks) } : {}) },
@@ -518,7 +519,8 @@ export function noteHall(state: GameState, force = false): HallMilestone[] {
     const me = state.me
     if (!me) return []
     const id = careerIdOf(state)
-    const sig = `${id}|${me.achievements.length}|${me.phase}|${me.ending?.key ?? ''}`
+    const fmvpSig = me.titles.map(t => t.fmvp === undefined ? '?' : t.fmvp ? '1' : '0').join('')
+    const sig = `${id}|${me.achievements.length}|${me.phase}|${me.ending?.key ?? ''}|${fmvpSig}`
     if (!force && sig === noted) return []
     noted = sig
     const h = readHall()
@@ -534,6 +536,16 @@ export function noteHall(state: GameState, force = false): HallMilestone[] {
       changed = true
     }
     let fresh: HallMilestone[] = []
+    const prior = h.cards.find(c => c.id === id)
+    if (prior && me.phase === 'retired') {
+      for (const t of me.titles) {
+        const held = prior.titles.find(x => x.year === t.year && x.name === t.title)
+        if (held?.started && held.fmvp === undefined && typeof t.fmvp === 'boolean') {
+          held.fmvp = hasFMVP(t)
+          changed = true
+        }
+      }
+    }
     if (me.phase === 'retired' && me.ending && !h.cards.some((c) => c.id === id)) {
       h.cards.push(cardOf(state, id))
       if (h.cards.length > CARDS_CAP) h.cards.splice(0, h.cards.length - CARDS_CAP)
@@ -561,6 +573,10 @@ export function mergeHall(into: Hall, from: Hall): Hall {
     const existing = into.cards.find((x) => x.id === c.id)
     if (!existing) into.cards.push(c)
     else {
+      for (const award of c.titles) {
+        const own = existing.titles.find(t => t.year === award.year && t.name === award.name)
+        if (own?.started && own.fmvp === undefined && typeof award.fmvp === 'boolean') own.fmvp = award.fmvp
+      }
       const marks = cleanCareerMarks([...(existing.ending.marks ?? []), ...(c.ending.marks ?? [])])
       if (marks.length) existing.ending.marks = marks
     }

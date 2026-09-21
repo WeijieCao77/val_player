@@ -315,7 +315,7 @@ export function doTransfer(
     const notes: string[] = []
     trustOnDeparture(state, p, notes)
     for (const t of notes) {
-      state.news.push({ day: state.day, kind: 'club', important: true, text: t })
+      state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: t })
     }
   }
 
@@ -341,7 +341,7 @@ export function doTransfer(
         cover.contractYears = contractLength(cover, new Rng(hashStr(`cover:${state.seed}:${state.year}:${state.day}:${cover.id}`)), squadOf(state, from.id))
         cover.salary = expectedSalary(cover, from.tier)
         from.roster.push(cover.id)
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'transfer',
           text: `${from.name} 紧急签下自由人 ${cover.ign}（${cover.overall}）填补空缺。`,
         })
@@ -419,7 +419,7 @@ export function doTransfer(
     ((state.enquiries ?? []).some((e) => e.playerId === p.id && !e.answer) ||
       state.offers.some((o) => o.playerId === p.id && o.status === 'pending' &&
         o.toTeam === state.myTeam))
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day,
     kind: 'transfer',
     text: (fee > 0
@@ -444,7 +444,7 @@ export function releasePlayer(state: GameState, p: Player): string {
     const notes: string[] = []
     trustOnDeparture(state, p, notes)
     for (const t of notes) {
-      state.news.push({ day: state.day, kind: 'club', important: true, text: t })
+      state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: t })
     }
   }
   if (from) {
@@ -464,7 +464,7 @@ export function releasePlayer(state: GameState, p: Player): string {
   p.listed = false
   p.listedOn = undefined
   p.morale = clamp(p.morale - 6, 0, 100)
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'transfer',
     text: `${from?.name ?? '某队'} 与 ${p.ign} 解除合同，该选手成为自由人。`,
     important: from?.id === state.myTeam,
@@ -752,7 +752,7 @@ export function bidForOurPlayers(state: GameState, rng: Rng, notes?: string[]): 
         )
         continue
       }
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'transfer', important: true,
         text: `${team.name} 支付了 ${target.ign} 合同中的解约金 $${fee.toLocaleString()}，我们无权拒绝。`,
       })
@@ -761,7 +761,7 @@ export function bidForOurPlayers(state: GameState, rng: Rng, notes?: string[]): 
         + '我们无权拒绝，他已经离队。',
       )
     } else {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'transfer', important: true,
         text: `${team.name} 报价 $${fee.toLocaleString()} 求购 ${target.ign}，等待我们答复。`,
       })
@@ -964,14 +964,14 @@ export function resolveDueOffers(state: GameState, rng: Rng): string[] {
       offer.status = 'expired'
       offer.note = `${p.ign} 已经加盟了 ${state.teams[p.teamId ?? '']?.name ?? '别的俱乐部'}。`
       notes.push(offer.note)
-      state.news.push({ day: state.day, kind: 'transfer', text: offer.note, important: true })
+      state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: offer.note, important: true })
       continue
     }
 
     const msg = resolveMyOffer(state, offer, rng)
     const signed = (offer.status as TransferOffer['status']) === 'accepted'
     notes.push(msg)
-    state.news.push({ day: state.day, kind: 'transfer', text: msg, important: signed })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: msg, important: signed })
   }
   // keep the list from growing without bound
   if (state.offers.length > 60) {

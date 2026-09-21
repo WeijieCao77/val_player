@@ -554,7 +554,7 @@ export function choosePick(state: GameState, ev: DrawEvent, comp: Competition, w
   ev.outcome.pairs = [...(ev.outcome.pairs ?? []), [who, cand]]
   ev.steps.push({ team: cand, pot: 1, slot: `${state.teams[who]?.tag} 的八强对手`, by: who, note: why })
   ev.log.push(`${state.teams[who]?.tag} 选择了 ${state.teams[cand]?.tag}（${why}）`)
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: who === state.myTeam || cand === state.myTeam,
     text: `${comp.name} 八强抽签：${state.teams[who]?.name} 选择 ${state.teams[cand]?.name} 作为对手——${why}。`,
   })

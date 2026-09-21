@@ -76,6 +76,8 @@ export interface TrophyMatch {
 }
 
 export interface Trophy {
+  /** Persisted award; undefined means the old record cannot answer. */
+  fmvp?: boolean
   /** one per title, as the title's card is keyed (me/moments.ts) */
   key: string
   year: number
@@ -201,7 +203,7 @@ function ladderFirstIn(me: MeState, year: number): string | null {
   return hit.length ? hit[hit.length - 1] : null
 }
 
-function trophyOf(state: GameState, t: { year: number; title: string; started: boolean }): Trophy {
+function trophyOf(state: GameState, t: { year: number; title: string; started: boolean; fmvp?: boolean }): Trophy {
   const me = state.me!
   const comp = compOf(state, t.year, t.title)
   const ev = eventFor(t.year, t.title, comp)
@@ -223,6 +225,7 @@ function trophyOf(state: GameState, t: { year: number; title: string; started: b
     cls: compClass(t.title),
     tier: trophyTier(t.title),
     started: t.started,
+    fmvp: t.started ? t.fmvp : false,
     first: false,
     firstOfTier: false,
     club: club.name,

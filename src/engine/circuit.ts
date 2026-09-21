@@ -300,7 +300,7 @@ function adoptName(state: GameState, ev: CEvent, vlr: string, teamId: string): v
   const name = ev.names[vlr]
   const t = state.teams[teamId]
   if (!name || !t || t.name === name) return
-  state.news.push({ day: state.day, kind: 'club', text: `${t.name} 的阵容以 ${name} 的名义出战${ev.cn}。` })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', text: `${t.name} 的阵容以 ${name} 的名义出战${ev.cn}。` })
   t.name = name
   t.tag = tagOf(name)
 }
@@ -1760,7 +1760,7 @@ function begin(state: GameState, comp: Competition, ev: CEvent, notes: string[])
   // out of the player's reach, each side takes the field with the people it really brought
   const founded = syncEvent(state, ev.rosters ?? {})
   if (founded.length) {
-    state.news.push({ day: state.day, kind: 'club', text: `🆕 ${founded.slice(0, 6).join('、')}${founded.length > 6 ? ` 等 ${founded.length} 家` : ''} 以新俱乐部的身份登场（${ev.cn}）。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', text: `🆕 ${founded.slice(0, 6).join('、')}${founded.length > 6 ? ` 等 ${founded.length} 家` : ''} 以新俱乐部的身份登场（${ev.cn}）。` })
   }
   const { seeds, swaps } = seedsFor(state, ev)
   c.seeds = leagueOut(state, ev, takeSeat(state, ev, seeds))

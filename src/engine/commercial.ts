@@ -208,7 +208,7 @@ export function runGigsToday(state: GameState, notes: string[]): void {
 
     const who = attendees.map((p) => p.ign).join('、')
     notes.push(`💼 ${gig.label}（${gig.partner}）完成，进账 ${Math.round(gig.fee / 1000)}K。出席：${who}`)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club', important: false,
       text: `💼 ${team.name} 参加了${gig.partner}的${gig.label}。`,
     })
@@ -501,7 +501,7 @@ export function signSponsor(state: GameState, id: string): string {
       ? Number(/前 (\d+)/.exec(t.demands.find((d) => d.key === 'placing')!.text)?.[1] ?? 8)
       : undefined,
   }]
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club', important: true,
     text: `🤝 ${team.name} 与 ${t.name} 达成赞助协议，保底 ${Math.round(t.base / 1000)}K/赛季。`,
   })
@@ -523,7 +523,7 @@ export function dropSponsor(state: GameState, index: number): string {
   const sp = team.sponsors[index]
   if (!sp) return '没有这份合同。'
   team.sponsors = team.sponsors.filter((_, i) => i !== index)
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club',
     text: `🤝 ${team.name} 与 ${sp.name} 的赞助合作提前结束。`,
   })
@@ -702,7 +702,7 @@ export function settleSponsorDemands(state: GameState): string[] {
     })
     if (!broken) { kept.push(sp); continue }
     notes.push(`📄 ${sp.name} 终止了合作：合同写明「${broken.text}」，本赛季没有做到。`)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club', important: true,
       text: `📄 ${team.name} 与 ${sp.name} 的赞助因未达成约定条件而终止。`,
     })

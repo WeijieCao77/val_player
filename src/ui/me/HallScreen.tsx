@@ -219,6 +219,7 @@ function CareerCard({ c, mine }: { c: HallCard; mine: boolean }) {
         {c.from}–{c.to}{c.seasons ? ` · ${c.seasons} 季` : ' · 没打上职业'}{c.clubs.length ? ` · ${c.clubs.join(' → ')}` : ''}
       </div>
       {c.ending.marks?.map((mark) => <p key={mark.id} className="tiny muted" style={{ margin: '6px 0', overflowWrap: 'anywhere' }}><b>生涯印记 · {mark.title}</b> · {mark.text}</p>)}
+      {c.titles.some(t => t.started && t.fmvp === true) && <p className="tiny muted">决赛 MVP（FMVP） · {c.titles.filter(t => t.started && t.fmvp === true).length} 次已确认</p>}
       {shown.length > 0 && (
         <div className="hc-wall">
           {shown.map((t, i) => {

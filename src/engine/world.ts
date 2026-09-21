@@ -328,7 +328,7 @@ export function appointIgl(state: GameState, playerId: string): string {
   p.isIgl = true
   p.iglSource = 'appointed'
   team.igl = p.id
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'club', important: true,
     text: `${p.ign} 出任主指挥${prev ? `，${prev.ign} 转为副指挥` : ''}。`,
   })
@@ -378,7 +378,7 @@ export function ensureCaller(state: GameState, teamId: string): void {
     ?? flagged.sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
   team.igl = best?.id ?? null
   if (teamId === state.myTeam && had && best) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club', important: true,
       text: `${best.ign} 接过主指挥——原来的指挥已经不在队里了。`,
     })
@@ -444,7 +444,7 @@ export function syncCallersWithWorld(state: GameState): string[] {
   }
   state.callerSync = CALLER_STAMP
   if (notes.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club', important: touched.has(state.myTeam),
       text: `指挥名单按最新数据更新：${notes.join('，')}。`,
     })

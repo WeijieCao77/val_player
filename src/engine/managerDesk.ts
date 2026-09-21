@@ -57,7 +57,7 @@ function persuadeStay(state: GameState, playerId: string, approach: StayApproach
   const roll = ((hashStr(`stay:${state.seed}:${state.year}:${p.id}:${approach}`) >>> 6) % 1000) / 1000
   const stays = (line: string) => {
     p.retiring = false
-    state.news.push({ day: state.day, kind: 'player', important: true, text: `🤝 ${line}` })
+    state.news.push({ year: state.year, day: state.day, kind: 'player', important: true, text: `🤝 ${line}` })
     return line
   }
 
@@ -94,7 +94,7 @@ function persuadeStay(state: GameState, playerId: string, approach: StayApproach
     }
     case 'accept': {
       p.morale = clamp(p.morale + 6, 0, 100)
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'player', important: true,
         text: `🫡 俱乐部官宣：将在赛季末为 ${p.ign} 举办退役仪式。`,
       })
@@ -289,14 +289,14 @@ export const managerDesk: ManagerDesk = {
 
   contractsRun(state: GameState, run: ContractsRun, notes: string[]): void {
     for (const p of run.walked) {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'club', important: true,
         text: `👋 ${p.ign} 的合同到期满一年未续约，已经离队。`,
       })
       notes.push(`👋 ${p.ign} 合同到期一年未续，已自由转会离队。`)
     }
     for (const p of run.expiring) {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'club', important: true,
         text: `⏳ ${p.ign} 的合同已到期，本赛季内必须续约，否则下个休赛期他会走。`,
       })

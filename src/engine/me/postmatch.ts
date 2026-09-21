@@ -206,7 +206,7 @@ export const rankInBox = (rows: readonly BoxRow[], playerId: string): number =>
  */
 export const mvpNote = (maps: number, performanceVersion?: 1): string =>
   performanceVersion === 1
-    ? `MVP 按${maps > 1 ? '全部地图累计回合的' : '本图的'}贡献评分：击杀、助攻、生存、首杀净贡献和残局；胜方轻微优先，不按位置直接加分。ACS 仍只表示伤害。`
+    ? `MVP 按${maps > 1 ? '全部地图累计回合的' : '本图的'}贡献评分，不只看 ACS：击杀、助攻、首杀减首死、残局加分，死亡扣分；胜方另加 0.08，不按位置直接加分。ACS 是伤害指标。`
     : maps > 1
     ? 'MVP 看的是每张图的 ACS 平均，胜方优先；表里的 ACS 和评分是几张图合起来算的，所以 MVP 不一定是表里最高的那个。'
     : 'MVP 看的是这张图的 ACS，胜方优先，所以不一定是表里评分最高的那个。'

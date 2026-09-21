@@ -73,7 +73,7 @@ export function arrive2026(state: GameState, notes: string[]): { coaches: number
   if (coaches || prospects) {
     const line = `📋 2026 赛季开始：${coaches} 家俱乐部的教练组按真实的 2026 年名单就位，${prospects} 名联赛以下的职业选手进入自由市场。`
     notes.push(line)
-    state.news.push({ day: state.day, kind: 'league', text: line })
+    state.news.push({ year: state.year, day: state.day, kind: 'league', text: line })
   }
   return { coaches, prospects }
 }

@@ -23,6 +23,13 @@ import { injuryTrainMul } from './injury'
 /** How much a week of practice is worth at this age; me/life.ts says the year it drops. */
 export const trainAgeMul = (age: number): number => (age <= 20 ? 1.35 : age <= 23 ? 1.1 : age <= 26 ? 0.8 : 0.45)
 
+/** Personal practice catches a developing player up sooner, without moving
+ * ceilings or inflating NPCs. +40% through 80 OVR, tapering to the normal pace
+ * at 90. Age, fatigue, injury and per-attribute headroom still apply. Legacy
+ * players without personal ceilings retain their original path. */
+export const practicePace = (p: Pick<Player, 'overall' | 'caps'>): number =>
+  p.caps ? 1 + 0.4 * clamp((90 - p.overall) / 10, 0, 1) : 1
+
 /**
  * The same week-of-practice base the club engine uses (training.ts
  * trainPlayer), without the focus: age, condition, mood, coaching, facility
@@ -40,7 +47,7 @@ export function gainBase(p: Player, team: Team, rng: Rng): number {
   const motivated = 0.75 + p.morale / 200
   // a player with ceilings of his own trains each attribute against its own room (roomMul, where the hours land)
   return rng.range(7, 16) * age * tired * motivated * (1 + coach + facility) *
-    (p.caps ? 1 : clamp(headroom / 12, 0.25, 1.6))
+    (p.caps ? practicePace(p) : clamp(headroom / 12, 0.25, 1.6))
 }
 
 /** Room under a ceiling at which an hour is worth a full hour, in points.

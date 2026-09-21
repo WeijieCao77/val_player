@@ -54,6 +54,7 @@ export default function TrophyCase() {
                   <span className="trc-n">{trophyTitleLine(t)}</span>
                   <span className="trc-m">{[t.club, t.stage].filter(Boolean).join(' · ') || '生涯记录只剩下这座奖杯'}</span>
                   <span className="trc-p">{trophyPart(t)}</span>
+                  {t.fmvp === true && <span className="trc-p">★ 决赛 MVP（FMVP）</span>}
                 </span>
                 <span className="trc-go" aria-hidden="true">›</span>
               </button>
@@ -72,6 +73,8 @@ function TrophyDetail({ t, onClose }: { t: Trophy; onClose: () => void }) {
   return (
     <Modal title="奖杯" onClose={onClose} onBgClose={onClose}>
       <h3 className="trd-head">{trophyTitleLine(t)}</h3>
+      {t.fmvp === true ? <p><b>★ 决赛 MVP（FMVP）是你 · 已记入永久生涯荣誉</b></p>
+        : t.started && t.fmvp === undefined ? <p className="tiny muted">决赛 MVP 记录不足，未计入已确认数量。</p> : null}
       <p className="trd-when">
         {t.end != null ? dayLabel(t.year, t.end) : `${t.year} 赛季`}
         {t.stage ? ` · ${t.stage}` : ''}{t.city ? ` · ${t.city}` : ''}

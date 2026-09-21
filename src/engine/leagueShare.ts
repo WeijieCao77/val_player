@@ -122,7 +122,7 @@ export function negotiateShare(state: GameState): string {
   if (roll < p) {
     deal.share = Math.min(SHARE_MAX, deal.share + 5)
     const msg = `联盟松口了：捆绑包分成提到 ${deal.share}%。`
-    state.news.push({ day: state.day, kind: 'club', important: true, text: `🤝 ${msg}` })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: `🤝 ${msg}` })
     return msg
   }
   return `联盟这次没让步——分成维持 ${deal.share}%，明年可以再谈。战绩和声望是最好的筹码。`
@@ -149,7 +149,7 @@ export function offerBundle(state: GameState, notes: string[]): void {
   const line = `📦 联盟提出为 ${me.name} 推出主题捆绑包：可以现在拿 $${BUNDLE_BUYOUT.toLocaleString()} 买断，`
     + '也可以按销量对赌、赛季结束结算。去「财务」页答复,10 天内有效。'
   notes.push(line)
-  state.news.push({ day: state.day, kind: 'club', important: true, text: line })
+  state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: line })
 }
 
 /** The manager's answer to the capsule proposal. */

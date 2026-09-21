@@ -42,6 +42,8 @@ import type { GameState, Player, WorldState } from './types'
  */
 
 export const RULER = 2
+/** Separate from RULER: loading a current-scale save must not run the full ruler twice. */
+export const REGIONAL_RULER = 1
 
 /** A world built on this ruler. Absent is the builders' own scale, which every save from before it keeps. */
 export const rulerOn = (state: Pick<WorldState, 'ruler'>): boolean => (state.ruler ?? 1) >= RULER
@@ -64,10 +66,10 @@ export const K_SUB = K_TOP / SUB_RATIO ** 2
 export const FULL_SEASON = 1500
 
 interface TRating { o: number; n: number }
-interface TClub { k: 1 | 2; d: number }
+interface TClub { k: 1 | 2; d: number; r: string }
 interface TYear { clubs: Record<string, TClub>; rosters: Record<string, string[]>; ratings: Record<string, TRating> }
 const BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
-const CIRCUIT = circuitRaw as unknown as Record<string, { rosters?: Record<string, string[]> }[]>
+const CIRCUIT = circuitRaw as unknown as Record<string, { region: string | null; stage?: string; rosters?: Record<string, string[]>; places?: [string, number][] }[]>
 interface W21Player { id: string; teamId: string | null; overall: number; vlr?: { rounds: number } | null; rounds?: number }
 const W21 = world2021Raw as unknown as { players: W21Player[]; teams: { id: string; tier: number }[] }
 
@@ -161,7 +163,7 @@ function worldLines(): Line[] {
 }
 
 const TABLES = new Map<number, Map<string, number>>()
-function tableOf(year: number): Map<string, number> {
+function baseTableOf(year: number): Map<string, number> {
   let t = TABLES.get(year)
   if (!t) {
     t = shiftsOf(year === 2021 ? [...worldLines(), ...bookLines(2021)] : bookLines(year))
@@ -170,9 +172,96 @@ function tableOf(year: number): Map<string, number> {
   return t
 }
 
+export interface RegionalCalibration {
+  year: number
+  localSamples: number
+  peerSamples: number
+  peerMedian: number
+  localP90: number
+  peerP90: number
+  maxDiscount: number
+  shifts: Map<string, number>
+  protectedIds: Set<string>
+}
+const REGIONAL_TABLES = new Map<number, RegionalCalibration>()
+const quantile = (values: number[], q: number): number => {
+  const sorted = values.slice().sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) * q)] ?? 0
+}
+
+/**
+ * A bounded game calibration, not a claim to know a real player's international rating.
+ * Domestic rounds already count as top-tier rounds in the builders' worldwide percentiles.
+ * More domestic rounds make that estimate certain without making its opponents comparable.
+ * The diagnosed CN upper-tail excess is corrected only in a year whose own p90 exceeds
+ * other top-tier lines: 2022/2024/2025 have no excess and receive no extra shift.
+ * No nationality is read. Imports whose source season was mostly at CN clubs are measured
+ * on that source too; a Chinese national whose source was overseas is not in this cohort.
+ * A roster entry at a genuine international top-four team conservatively protects its
+ * players. The book has team places/rosters, not individual international statlines, so
+ * this is deliberately not presented as proof that every listed player played each map.
+ * Only the requested CN cohort changes; this is not forced equality between all regions.
+ */
+export function regionalCalibration(year: number): RegionalCalibration {
+  const cached = REGIONAL_TABLES.get(year)
+  if (cached) return cached
+  const out: RegionalCalibration = { year, localSamples: 0, peerSamples: 0, peerMedian: 0, localP90: 0, peerP90: 0, maxDiscount: 0, shifts: new Map(), protectedIds: new Set() }
+  REGIONAL_TABLES.set(year, out)
+  const Y = BOOK.years[String(year)]
+  if (year < 2022 || !Y) return out
+  const source = new Map<string, { cn: number; other: number }>()
+  const mark = (club: string, ids: string[]) => {
+    const c = Y.clubs[club]
+    if (!c) return
+    for (const id of ids) {
+      const count = source.get(id) ?? { cn: 0, other: 0 }
+      count[c.r === 'China' ? 'cn' : 'other']++
+      source.set(id, count)
+    }
+  }
+  for (const [club, ids] of Object.entries(Y.rosters)) mark(club, ids)
+  for (const ev of CIRCUIT[String(year)] ?? []) {
+    for (const [club, ids] of Object.entries(ev.rosters ?? {})) mark(club, ids)
+    if (ev.region !== null || !['masters1', 'masters2', 's1masters', 's2finals', 's3finals', 'champions', 'kickoff'].includes(ev.stage ?? '')) continue
+    for (const [club, place] of ev.places ?? []) {
+      if (place < 1 || place > 4) continue
+      for (const id of ev.rosters?.[club] ?? []) out.protectedIds.add(id)
+    }
+  }
+  const base = baseTableOf(year)
+  const top = bookLines(year).filter(l => l.tier === 1 && l.n >= SOLID && source.has(l.id))
+  const local = top.filter(l => source.get(l.id)!.cn > source.get(l.id)!.other)
+  const peers = top.filter(l => source.get(l.id)!.cn <= source.get(l.id)!.other)
+  const value = (l: Line) => l.o + (base.get(l.id) ?? 0)
+  out.localSamples = local.length; out.peerSamples = peers.length
+  // Sparse small scenes are not enough evidence for a new regional correction.
+  if (local.length < 30 || peers.length < 80) return out
+  out.peerMedian = quantile(peers.map(value), 0.5)
+  out.localP90 = quantile(local.map(value), 0.9)
+  out.peerP90 = quantile(peers.map(value), 0.9)
+  out.maxDiscount = Math.min(4, Math.max(0, out.localP90 - out.peerP90))
+  for (const l of local) {
+    if (out.protectedIds.has(l.id)) continue
+    const tail = clamp((value(l) - out.peerMedian) / Math.max(1, out.localP90 - out.peerMedian), 0, 1)
+    const d = -Math.round(out.maxDiscount * tail)
+    if (d) out.shifts.set(l.id, d)
+  }
+  return out
+}
+
+/** The added delta alone: used by a separate one-time migration, never the whole ruler twice. */
+export const regionalRulerShift = (year: number, vlr: string): number => regionalCalibration(year).shifts.get(vlr) ?? 0
+
+export function lastRegionalRulerShift(year: number, vlr: string): number {
+  for (let y = Math.min(year, 2026); y >= 2022; y--) {
+    if (BOOK.years[String(y)]?.ratings[vlr]) return regionalRulerShift(y, vlr)
+  }
+  return 0
+}
+
 /** How far this ruler moves a person's rating of that year — `vlr` is his vlr id, without the V. */
 export function rulerShift(year: number, vlr: string): number {
-  return tableOf(year).get(vlr) ?? 0
+  return (baseTableOf(year).get(vlr) ?? 0) + regionalRulerShift(year, vlr)
 }
 
 /** Move all eight by `d`, the overall with them, and the headroom he had above it. */
@@ -303,7 +392,9 @@ export function rereadWorld(state: GameState): number {
   let moved = 0
   for (const p of Object.values(state.players)) {
     if (p.id === state.me?.id || !/^V\d+$/.test(p.id)) continue
-    const d = lastShift(state.year, p.id.slice(1))
+    // Keep the pre-existing v1 -> v2 rank-preserving player migration on its old baseline.
+    // The separate regional migration runs AFTER that and never moves the player himself.
+    const d = lastShift(state.year, p.id.slice(1)) - lastRegionalRulerShift(state.year, p.id.slice(1))
     if (!d) continue
     shiftPlayer(p, d)
     refreshValue(p)

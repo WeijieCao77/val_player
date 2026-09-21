@@ -2,6 +2,7 @@ import { statLine } from '../../engine/player'
 import { performanceRating } from '../../engine/performance'
 import { isQualifier } from '../../engine/me/compclass'
 import type { GameState, Stats } from '../../engine/types'
+import { fmvpTotals } from '../../engine/me/fmvpRead'
 
 /** A read-only view over the existing career ledger, never the trimmed match list. */
 export function careerOverview(state: GameState, scope: 'season' | 'career') {
@@ -15,6 +16,7 @@ export function careerOverview(state: GameState, scope: 'season' | 'career') {
   // their current club won. Qualifier wins are qualification, not trophies.
   const currentTitles = me.titles.filter(t => t.year === state.year && !isQualifier(t.title))
   return {
+    fmvps: fmvpTotals(me.titles, scope === 'season' ? state.year : undefined),
     maps: stats.maps, starts, wins,
     rating: hasRounds ? performanceRating(stats).toFixed(2) : '—',
     acs: hasRounds ? line.acs.toFixed(0) : '—',

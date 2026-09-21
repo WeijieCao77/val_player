@@ -295,8 +295,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
               <p className="small" style={{ margin: 0 }}>
                 <b>{rec.kills}/{rec.deaths}/{rec.assists}</b> · {rec.performanceVersion === 1 ? '贡献评分' : '评分'} <b>{rec.rating.toFixed(2)}</b> · 队内第 {rec.rank}{rec.mvp ? ' · MVP' : ''}{rec.carried ? ' · 输了比赛但你全队最高' : ''}
               </p>
-              {/* 队内名次按评分排，MVP 不是：同一行里两个数说不到一起去，就在这儿说清楚（2026-09-20 玩家提问） */}
-              {rec.mvp && <p className="tiny faint" style={{ margin: '6px 0 0' }}>{mvpNote(rec.maps, rec.performanceVersion)}</p>}
+              {/* 没拿到 MVP 的玩家也能直接了解评选口径；历史记录仍解释历史规则。 */}
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>{mvpNote(rec.maps, rec.performanceVersion)}</p>
             </div>
           </div>
         ) : <p className="muted center">你没有出场。</p>}

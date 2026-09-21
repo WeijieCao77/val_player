@@ -1,4 +1,5 @@
 import { Rng, hashStr } from '../rng'
+import { SEASON_DAYS } from '../calendar'
 import type { GameState, Player } from '../types'
 import { birthOf, dateOfDay, dayNo, sameDate } from './life'
 import type { MeMatchRecord } from './types'
@@ -74,7 +75,8 @@ function runOf(state: GameState, league: MeMatchRecord[]): { won: boolean; n: nu
 function whyThisWeek(state: GameState, mates: Player[]): Why[] {
   const me = state.me!
   const now = dayNo(state.year, state.day)
-  const inWeek = (y: number, d: number): boolean => { const n = dayNo(y, d); return n > now - 7 && n <= now }
+  const seasonNow = state.year * SEASON_DAYS + state.day
+  const inWeek = (y: number, d: number): boolean => { const n = y * SEASON_DAYS + d; return n > seasonNow - 7 && n <= seasonNow }
   const league = me.matches.filter((m) => !m.friendly)
   const week = league.filter((m) => inWeek(m.year, m.day))
   const out: Why[] = []

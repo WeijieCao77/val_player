@@ -263,7 +263,7 @@ export function lineupNews(state: GameState, f: Fixture, result: MatchResult, no
     if (!text) continue
     if (!ours && !newsworthy(state, f, team)) continue
     if (state.news.some((n) => n.text === text && n.day <= state.day && state.day - n.day <= STICKY_DAYS)) continue
-    state.news.push({ day: state.day, kind: 'club', text, important: ours || undefined })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', text, important: ours || undefined })
     if (ours && (teamId !== mine || outsiders.length)) notes.push(text)
   }
 }

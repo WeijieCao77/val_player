@@ -9,6 +9,7 @@ import { cny } from '../../engine/me/moneyfmt'
 import { careerRewrites, retitledLine, shareLine } from '../../engine/me/rewrites'
 import { TROPHY_RANK, trophyTier } from '../../engine/me/trophies'
 import type { LookKey } from '../../engine/me/hall'
+import { fmvpTotals } from '../../engine/me/fmvpRead'
 
 /**
  * The career card as a picture you can keep.
@@ -1022,7 +1023,7 @@ export function drawCareerCard(state: GameState, look: LookKey = 'studio'): HTML
   const stats: [string, string][] = [
     ['首发 / 出场', `${starts}/${matches}`],
     ['首发胜场', String(wins)],
-    ['冠军', String(titles.length)],
+    ['冠军 / FMVP', `${titles.length} / ${fmvpTotals(me.titles).confirmed}`],
     ['粉丝', `${fansCn(me.fans)} · ${fanTier(me.fans).name}`],
     ['生涯总收入', cny(earned)],
   ]

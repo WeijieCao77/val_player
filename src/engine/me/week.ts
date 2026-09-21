@@ -46,6 +46,7 @@ import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
+import { rememberFMVPs } from './fmvp'
 import { momentMark, noteQualify, pushMoment } from './moments'
 import { intlLinesOf, noteIntlRun } from './intl'
 import { seasonLedger } from './worldline'
@@ -617,7 +618,7 @@ function closingClub(state: GameState): void {
   leaveClub(state, '解散了')
   for (const pid of [...t.roster]) releaseForHistory(state, state.players[pid])
   quietClub(t)
-  state.news.push({ day: state.day, kind: 'club', important: true, text: `🕯️ ${t.name} 宣布解散。` })
+  state.news.push({ day: state.day, year: state.year, kind: 'club', important: true, text: `🕯️ ${t.name} 宣布解散。` })
   push(state, { kind: 'released', id: 'fold' })
   state.foldNotice = undefined
 }
@@ -652,8 +653,9 @@ export function syncTitles(state: GameState): void {
     }
     if (me.titles.some((x) => x.year === t.year && x.title === t.title)) continue
     const started = startedIn(state, t.title, t.year)
-    const fmvp = started && finalMvp(state, t.title, t.year)
     me.titles.push({ year: t.year, title: t.title, started })
+    rememberFMVPs(state)
+    const fmvp = started && finalMvp(state, t.title, t.year)
     // whoever was in the room shares it
     bondNoteTitle(state, t.title)
     // and a trophy I started in loosens a ceiling, the final's MVP one more (me/bottleneck.ts)

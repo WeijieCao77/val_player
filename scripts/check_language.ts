@@ -765,10 +765,10 @@ console.log('\n九 字面：引号括号成对、全角标点旁不留空格、�
   // the weekly report puts 🏆 before a league's news and 📰 before a transfer; the engine's own line may already carry one
   const s = createCareer({ name: 'Words', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 9, year: 2026 })
   s.news.push(
-    { day: s.day, kind: 'league', important: true, text: '🏆 BESTIA 夺得 挑战者联赛 · 拉美南区 冠军！' },
-    { day: s.day, kind: 'league', important: true, text: '某联赛 常规赛结束，季后赛名单：A、B。' },
-    { day: s.day, kind: 'player', important: true, text: '👋 某选手 正式挂上鼠标，结束了他的职业生涯——30 岁。' },
-    { day: s.day, kind: 'transfer', important: true, text: '某俱乐部 免费签下自由人 某选手。' },
+    { year: s.year, day: s.day, kind: 'league', important: true, text: '🏆 BESTIA 夺得 挑战者联赛 · 拉美南区 冠军！' },
+    { year: s.year, day: s.day, kind: 'league', important: true, text: '某联赛 常规赛结束，季后赛名单：A、B。' },
+    { year: s.year, day: s.day, kind: 'player', important: true, text: '👋 某选手 正式挂上鼠标，结束了他的职业生涯——30 岁。' },
+    { year: s.year, day: s.day, kind: 'transfer', important: true, text: '某俱乐部 免费签下自由人 某选手。' },
   )
   const paper = weekReport(s)
   const ICON = /^\p{Extended_Pictographic}️?\s*\p{Extended_Pictographic}/u

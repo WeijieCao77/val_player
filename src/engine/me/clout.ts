@@ -197,7 +197,7 @@ export function doList(state: GameState, targetId: string): string {
     return floor
   }
   leaveRoster(state, target)
-  state.news.push({ day: state.day, kind: 'transfer', important: true, text: `${team.name} 与 ${target.ign} 解约，该选手成为自由人。` })
+  state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true, text: `${team.name} 与 ${target.ign} 解约，该选手成为自由人。` })
   me.coachTrust = clamp(me.coachTrust - 4, 0, 100)
   for (const id of team.roster) if (id !== me.id) duoBonded(state, me.id, id, -6)
   pushLog(state, 'team', `你向教练组提出换掉 ${target.ign}，成功了。他被放走，位置空了出来。<b>基地安静了很久——他们知道这是你提的。</b>`)
@@ -350,7 +350,7 @@ export function doSign(state: GameState, targetId: string): string {
   joinRoster(state, target, myTeam, rng)
   myTeam.budget -= fee
   seller.budget += fee
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'transfer', important: true,
     text: `${myTeam.name} 以 ${worldMoney(fee, leagueCurOf(myTeam.region), state.year)} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
   })

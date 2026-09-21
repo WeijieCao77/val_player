@@ -248,7 +248,7 @@ function createMasters(state: GameState, stage: StageKey, name: string, feeder: 
   comp.plannedStart = day
   if (drawRules(state)) openSwissDraw(state, comp, day, false)
   else state.fixtures.push(...swissNext(state, comp, swiss, day))
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: true,
     text: `${name}（${comp.city}）参赛名单出炉：${byes.map((t) => state.teams[t]?.name).join('、')} 作为赛区冠军直接进入季后赛；`
       + `${swiss.map((t) => state.teams[t]?.name).join('、')} 先打瑞士轮。`,
@@ -275,7 +275,7 @@ function createChampions(state: GameState, name: string, day: number): void {
     const pots = [0, 1, 2, 3].map((k) => REGIONS.map((r) => field[r][k]).filter((t): t is string => !!t))
     comp.seedPots = pots
     holdDraw(state, drawChampionsGroups(state, comp, pots, day), false)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'league', important: true,
       text: `${name}（${comp.city}）参赛名单出炉，分组抽签待举行：${all.map((t) => state.teams[t]?.tag).join('、')}。`,
     })
@@ -283,7 +283,7 @@ function createChampions(state: GameState, name: string, day: number): void {
   }
   comp.groups = groups
   state.fixtures.push(...advanceTemplate(state, comp, championsGroups(), null, all, day, 3, 0))
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: true,
     text: `${name}（${comp.city}）分组出炉：`
       + groups.map((g, i) => `${GROUPS[i]}组 ${g.map((t) => state.teams[t]?.name).join('、')}`).join('；') + '。',
@@ -327,7 +327,7 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
   }
 
   const champ = state.teams[comp.champion]
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: true,
     text: `🏆 ${champ?.name} 夺得 ${comp.name} 冠军！`,
   })
@@ -352,7 +352,7 @@ export function settleCompetition(state: GameState, comp: Competition, notes: st
     // has to be earned against a better world than the first.
     if (!comp.region) {
       state.rivalry = (state.rivalry ?? 0) + 1
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: true,
         text: `🔥 ${champ?.name} 的 ${comp.name} 冠军震动了各赛区——多家俱乐部宣布加练备战，休赛期引援预计更加激进。`,
       })
@@ -423,7 +423,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       comp.byes = ev.pots[1]?.teams.slice()
       comp.bracketStarted = true
       state.fixtures.push(...advanceTemplate(state, comp, TRIPLE_12, TRIPLE_12_PLACES, comp.seeds ?? [], ev.playDay, 3))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: mine(comp.teams),
         text: `${comp.name} 抽签完成：${(comp.byes ?? []).map((t) => state.teams[t]?.name).join('、')} 轮空至胜者组第二轮，其余八队抽入首轮。`,
       })
@@ -440,7 +440,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       groups.forEach((g, i) => {
         state.fixtures.push(...scheduleGroupSeason(state, comp, g, comp.groupNames![i], stage, days[0], days[1], 3, rng))
       })
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: mine(comp.teams),
         text: `${comp.name} 分组抽签完成——Alpha：${groups[0]?.map((t) => state.teams[t]?.tag).join('、')}；Omega：${groups[1]?.map((t) => state.teams[t]?.tag).join('、')}。`,
       })
@@ -450,7 +450,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       const round = Number(ev.phase?.match(/swiss-r(\d)/)?.[1] ?? 1)
       state.fixtures.push(...(ev.outcome.pairs ?? []).map(([a, b]) =>
         makeFixture(state, ev.playDay, comp.stage, comp.key, a, b, 3, `SW:${round}:瑞士轮 第${round}轮`)))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: mine(comp.teams),
         text: `${comp.name} 瑞士轮第 ${round} 轮抽签：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
       })
@@ -461,7 +461,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       comp.byes = undefined
       comp.bracketStarted = true
       state.fixtures.push(...advanceTemplate(state, comp, MASTERS_8, doubleFor(8).places, comp.seeds, ev.playDay, 3))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: mine(comp.seeds),
         text: `${comp.name} 八强对阵确定：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
       })
@@ -473,7 +473,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       comp.groupNames = ['A', 'B', 'C', 'D']
       comp.teams = groups.flat()
       state.fixtures.push(...advanceTemplate(state, comp, championsGroups(), null, comp.teams, ev.playDay, 3, 0))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: true,
         text: `${comp.name}（${comp.city}）分组抽签：`
           + groups.map((g, i) => `${GROUPS[i]}组 ${g.map((t) => state.teams[t]?.name).join('、')}`).join('；') + '。',
@@ -484,7 +484,7 @@ function consumeDraw(state: GameState, comp: Competition, ev: DrawEvent): void {
       comp.seeds = (ev.outcome.pairs ?? []).flat()
       comp.bracketStarted = true
       state.fixtures.push(...advanceTemplate(state, comp, MASTERS_8, doubleFor(8).places, comp.seeds, ev.playDay, 3, championsGroups().length))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league', important: mine(comp.seeds),
         text: `${comp.name} 八强抽签：${(ev.outcome.pairs ?? []).map(([a, b]) => `${state.teams[a]?.tag} vs ${state.teams[b]?.tag}`).join('，')}。`,
       })
@@ -592,7 +592,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
         const { through, out } = swissOutcome(comp, swiss)
         comp.finished = out
         const pick = createPlayoffPick(state, comp, comp.byes ?? [], through, when)
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'league', important: [...(comp.byes ?? []), ...through].includes(state.myTeam),
           text: `${comp.name} 瑞士轮结束，${through.map((t) => state.teams[t]?.name).join('、')} 晋级。四个赛区冠军按抽出的顺序选择八强对手：${pick.pickOrder?.map((t) => state.teams[t]?.tag).join(' → ')}。`,
         })
@@ -609,7 +609,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
         comp.byes = undefined
         comp.bracketStarted = true
         state.fixtures.push(...advanceTemplate(state, comp, DOUBLE_8, doubleFor(8).places, comp.seeds, when, 3))
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'league', important: comp.seeds.includes(state.myTeam),
           text: `${comp.name} 瑞士轮结束，${through.map((t) => state.teams[t]?.name).join('、')} 晋级季后赛。`,
         })
@@ -667,7 +667,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
         comp.seeds = championsSeeds(firsts, seconds)
         comp.bracketStarted = true
         state.fixtures.push(...advanceTemplate(state, comp, drawRules(state) ? MASTERS_8 : DOUBLE_8, doubleFor(8).places, comp.seeds, when, 3, groupsT.length))
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'league', important: comp.seeds.includes(state.myTeam),
           text: `${comp.name} 小组赛结束，八强：${comp.seeds.map((t) => state.teams[t]?.name).join('、')}。`,
         })
@@ -693,7 +693,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
       comp.bracketStarted = true
       comp.finished = [alpha[4], omega[4], alpha[5], omega[5]].filter(Boolean)
       state.fixtures.push(...advanceTemplate(state, comp, STAGE_8, STAGE_8_PLACES, seeds, when, 3))
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league',
         text: `${comp.name} 小组赛结束，季后赛八强：${seeds.map((s) => state.teams[s]?.name).join('、')}。`,
         important: seeds.includes(state.myTeam),
@@ -722,7 +722,7 @@ function progressCompetitions(state: GameState, notes: string[] = [], autoPick =
       } else {
         state.fixtures.push(...startBracket(state, comp, seeds, comp.stage, state.day + 4, 3))
       }
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'league',
         text: `${comp.name} 常规赛结束，季后赛名单：${seeds.map((s) => state.teams[s]?.name).join('、')}。`,
         important: seeds.includes(state.myTeam),
@@ -899,7 +899,7 @@ export function commitFixture(
     // a manager's club: his players' trust in him, and the board's view of the result (engine/desk.ts)
     deskOf(state)?.matchPlayed(state, f, result)
     for (const t of room) {
-      state.news.push({ day: state.day, kind: 'club', important: true, text: t })
+      state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: t })
       notes.push(t)
     }
 
@@ -967,7 +967,7 @@ export function commitFixture(
       }
     }
     if (isMine) state.lastResults.push(f.id)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club',
       text: `训练赛｜${state.teams[f.teamA]?.tag} ${result.mapsWonA}-${result.mapsWonB} ${state.teams[f.teamB]?.tag}`,
     })
@@ -1003,7 +1003,7 @@ export function commitFixture(
 
   if (isMine) state.lastResults.push(f.id)
 
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day,
     kind: 'match',
     // a scoreline is the densest thing in the feed; the tags are what people
@@ -1082,7 +1082,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
   // a club history let go goes quiet a few weeks after its last event, one at a time (engine/timeline.ts)
   const gone = historyFolds(state)
   if (gone.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'club',
       text: `🕯️ 宣布解散、不再参赛：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 家` : ''}。`,
     })
@@ -1108,7 +1108,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
     if (gone.length || fresh.length) {
       const line = `🗺️ 图池轮换：${fresh.map(mapCn).join('、')} 加入，${gone.map(mapCn).join('、')} 移出。`
       notes.push(line)
-      state.news.push({ day: state.day, kind: 'league', text: line })
+      state.news.push({ year: state.year, day: state.day, kind: 'league', text: line })
     }
     // a manager's save: the board's brief, job offers, the league's capsule (engine/desk.ts)
     deskOf(state)?.stageChanged(state, prevStage, notes)
@@ -1247,7 +1247,7 @@ function retirePlayer(state: GameState, p: Player, notes: string[]): string {
   })
   if (state.retireFeed.length > 24) state.retireFeed.splice(0, state.retireFeed.length - 24)
   if (mine || star) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'player', important: mine,
       text: `👋 ${p.ign} 正式挂上鼠标，结束了他的职业生涯——${p.age} 岁${t ? `，最后一站 ${t.name}` : ''}。`,
     })
@@ -1326,7 +1326,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
     reprice(promoted, step)
     reprice(relegated, 1 / step)
     deskOf(state)?.ascension(state, promoted, relegated, notes)
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'league', important: true,
       text: `🎫 ${promoted.name} 通过 Ascension 升入 VCT ${region}，${relegated.name} 降入次级联赛。`,
     })
@@ -1377,7 +1377,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   }
 
   if (released.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'transfer',
       text: `合同到期成为自由人：${released.slice(0, 8).join('、')}`
         + (released.length > 8 ? ` 等 ${released.length} 人` : '') + '。',
@@ -1427,7 +1427,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   }
   // the rest of the league's farewells make the news too, one line for all
   if (departed.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'player',
       text: `👋 正式退役：${departed.slice(0, 8).join('、')}`
         + (departed.length > 8 ? ` 等 ${departed.length} 人` : '') + '。',
@@ -1453,7 +1453,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
       p.persuaded = false
       const mine = p.teamId === state.myTeam
       if (mine || p.overall >= 80) {
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'player', important: mine,
           text: `📢 ${p.ign}（${p.age} 岁）宣布本赛季结束后退役。`,
         })
@@ -1465,7 +1465,7 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
     }
   }
   if (noticed.length) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'player',
       text: `📢 宣布本赛季结束后退役：${noticed.slice(0, 8).join('、')}`
         + (noticed.length > 8 ? ` 等 ${noticed.length} 人` : '') + '。',
@@ -1525,21 +1525,21 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
       if (line) gone.push(line)
     }
     if (r.moved || r.founded.length) {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'transfer',
         text: `📜 ${state.year} 赛季开始前，${r.moved} 名选手按真实历史换了东家`
           + (r.founded.length ? `；新俱乐部：${r.founded.slice(0, 8).join('、')}${r.founded.length > 8 ? ` 等 ${r.founded.length} 家` : ''}` : '') + '。',
       })
     }
-    for (const line of r.renamed.slice(0, 8)) state.news.push({ day: state.day, kind: 'club', text: `🔁 ${line}。` })
+    for (const line of r.renamed.slice(0, 8)) state.news.push({ year: state.year, day: state.day, kind: 'club', text: `🔁 ${line}。` })
     if (r.folded.length) {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'club',
         text: `🕯️ 这一年不再参赛：${r.folded.slice(0, 8).join('、')}${r.folded.length > 8 ? ` 等 ${r.folded.length} 家` : ''}。`,
       })
     }
     if (gone.length) {
-      state.news.push({
+      state.news.push({ year: state.year,
         day: state.day, kind: 'player',
         text: `👋 离开职业赛场：${gone.slice(0, 8).join('、')}${gone.length > 8 ? ` 等 ${gone.length} 人` : ''}。`,
       })
@@ -1638,7 +1638,7 @@ export function ensureMinimumRosters(state: GameState, rng: Rng, only?: Readonly
       team.roster.push(target.id)
       // offseason emergency signings go on the record like any other move
       if (!quiet) {
-        state.news.push({
+        state.news.push({ year: state.year,
           day: state.day, kind: 'transfer',
           text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。`,
         })
@@ -1650,7 +1650,7 @@ export function ensureMinimumRosters(state: GameState, rng: Rng, only?: Readonly
     if (team.starters.length < 5) team.starters = autoStarters(state, team.id)
   }
   if (short.length && !quiet) {
-    state.news.push({
+    state.news.push({ year: state.year,
       day: state.day, kind: 'system',
       text: `自由市场已无可签选手，以下战队人数不足：${short.slice(0, 6).join('、')}。`,
     })

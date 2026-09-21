@@ -106,7 +106,7 @@ export function historyNames(state: GameState, notes: string[]): void {
     if (old === t.name || t.dormant || fromKey(now[0]) !== keyOf(state.year, state.day)) continue
     const mine = t.id === state.myTeam
     const line = `🔁 ${old} 更名为 ${t.name}。`
-    state.news.push({ day: state.day, kind: 'club', important: mine, text: line })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: mine, text: line })
     if (mine) notes.push(`${line}你的俱乐部跟着真实历史改名。`)
   }
 }

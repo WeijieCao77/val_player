@@ -415,7 +415,7 @@ function judgeSeat(state: GameState, mine: string | null, Y: TYear, notes: strin
   if (!out) return
   state.seat = { club: mine, displaced: out.id, league, from: 2023 }
   notes.push(`🏛️ ${t.name} 拿到了 VCT ${league} 的合作席位——2022 年打进了${reached.map((c) => c.name).join('、')}。真实历史里这个席位属于 ${out.name}。`)
-  state.news.push({
+  state.news.push({ year: state.year,
     day: state.day, kind: 'league', important: true,
     text: `🏛️ Riot 公布 2023 合作战队：${t.name} 入选 VCT ${league}，${out.name} 未获席位。`,
   })
@@ -497,7 +497,7 @@ function inherit(state: GameState, mine: string | null, year: number, day: numbe
     const verb = e.kind === 'rebrand' ? '更名为' : e.kind === 'merger' ? '合并为' : '整队加入'
     const line = `🔁 ${old} ${verb} ${t.name}——真实历史里 ${e.fromName} 在 ${e.year} 年${verb} ${e.toName}，你的俱乐部跟着走。`
     notes.push(line)
-    state.news.push({ day: state.day, kind: 'club', important: true, text: line })
+    state.news.push({ year: state.year, day: state.day, kind: 'club', important: true, text: line })
   }
 }
 

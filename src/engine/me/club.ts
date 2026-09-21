@@ -103,7 +103,7 @@ export function makeRoom(state: GameState, team: Team): void {
     const out = (bench.length ? bench : squad).sort((a, b) => a.overall - b.overall)[0]
     if (!out) return
     leaveRoster(state, out)
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `${team.name} 和 ${out.ign} 解约，给你腾出名单位置。`)
   }
 }
@@ -127,7 +127,7 @@ function fillSquad(state: GameState, team: Team, rng: Rng): void {
     const target = free.sort((a, b) => score(b) - score(a))[0]
     joinRoster(state, target, team, rng)
     const line = `俱乐部签下自由人 ${target.ign}（${target.role}）补进名单。`
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 免费签下自由人 ${target.ign}。` })
     pushLog(state, 'team', line)
     me.weekNotes.push(line)
   }
@@ -223,12 +223,12 @@ export function clubWindow(state: GameState, rng: Rng): void {
       .sort((a, b) => a.overall - b.overall)[0]
     if (!out || floorBlock(state, team.id)) return
     leaveRoster(state, out)
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `俱乐部放走了 ${out.ign}，给新人腾出位置。`)
   }
   joinRoster(state, target, team, rng)
   me.flags.clubSigned = state.year
-  state.news.push({ day: state.day, kind: 'transfer', important: true, text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。` })
+  state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true, text: `${team.name} 免费签下自由人 ${target.ign}（${target.overall}）。` })
   pushLog(state, 'team', `俱乐部签下自由人 ${target.ign}（${target.role}）。`)
 }
 
@@ -244,7 +244,7 @@ export function clubWinter(state: GameState): void {
   const worst = bench.sort((a, b) => a.overall - b.overall)[0]
   if (worst && worst.overall < team.rating - SURPLUS && !floorBlock(state, team.id)) {
     leaveRoster(state, worst)
-    state.news.push({ day: state.day, kind: 'transfer', text: `${team.name} 与 ${worst.ign} 解约，该选手成为自由人。` })
+    state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${worst.ign} 解约，该选手成为自由人。` })
     pushLog(state, 'team', `俱乐部放走了 ${worst.ign}。`)
   }
 }
