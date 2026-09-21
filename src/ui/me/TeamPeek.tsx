@@ -6,7 +6,6 @@ import { Modal, Crest } from './common'
 import { rosterOf } from './teamRead'
 import { REGION_CN } from '../../engine/types'
 import { CLUB_TIER_CN } from '../../engine/me/prepro'
-import './teamPeek.css'
 
 /** Read-only card: local UI state, no commit, roster repair or recruitment. */
 export default function TeamPeekButton({ id, label }: { id: string; label?: string }) {

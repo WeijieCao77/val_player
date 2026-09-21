@@ -7,6 +7,7 @@ import { bookCovers, hasPlace, inVctLeague, isTimelineWorld, pastTheBook } from 
 import { dateOf, offPool } from '../staffStints'
 import { clubWindow, feeOf, joinRoster } from './club'
 import { pushLog } from './log'
+import { isRecentClubDeparture } from './clubDepartures'
 
 /**
  * The market around a player: 破晓's AI market (market.ts), on this world.
@@ -202,7 +203,8 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
           if (mineJob(to, p.role)) continue
           const q = weakestIn(to, p.role)
           const gap = q ? upBy(p, q) : null
-          if (q && gap != null) options.push({ p, from, q, to, gap })
+          if (q && gap != null && !isRecentClubDeparture(state, to.id, p.id)
+            && !isRecentClubDeparture(state, from.id, q.id)) options.push({ p, from, q, to, gap })
         }
       }
     }
@@ -214,6 +216,7 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
       if (done >= cap) break
       if ((lost.get(o.from.id) ?? 0) >= losses || (intake.get(o.to.id) ?? 0) >= intakeCap || capped(o.from) || capped(o.to)) continue
       if (o.p.teamId !== o.from.id || o.q.teamId !== o.to.id) continue
+      if (isRecentClubDeparture(state, o.to.id, o.p.id) || isRecentClubDeparture(state, o.from.id, o.q.id)) continue
       if (importBlock(state, o.to.id, o.p) || importBlock(state, o.from.id, o.q)) continue
       const cost = feeOf(o.p) - feeOf(o.q)
       if (o.to.budget < (cost > 0 ? cost * cover : cost)) continue
@@ -258,6 +261,7 @@ export function marketWindow(state: GameState, rng: Rng, winter: boolean): void 
           .filter((to) => !tradedOut(to) && !capped(to) && !mineJob(to, p.role))
           .map((to) => ({ to, q: weakestIn(to, p.role) }))
           .filter((x): x is { to: Team; q: Player } => !!x.q && p.overall >= x.q.overall + upgrade)
+          .filter(({ to, q }) => !isRecentClubDeparture(state, to.id, p.id) && !isRecentClubDeparture(state, from.id, q.id))
           .filter(({ to, q }) => !importBlock(state, to.id, p) && !importBlock(state, from.id, q) && to.budget >= feeOf(p) - feeOf(q))
         if (!open.length || !rng.chance(tradeOdds * willing(p))) continue
         const { to, q } = rng.pick(open)
