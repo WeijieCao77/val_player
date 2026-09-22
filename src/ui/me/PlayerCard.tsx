@@ -12,6 +12,8 @@ import { agentCn } from '../../engine/content'
 import { StarTitleTag } from './Rivals'
 import Face from './Face'
 import { playerDisplayName } from './playerDisplayName'
+import { useNumbers, attrWord } from './words'
+import AbilityRadar from './AbilityRadar'
 
 /**
  * Another player's card, as a player sees it: who he is and where he plays,
@@ -25,8 +27,11 @@ import { playerDisplayName } from './playerDisplayName'
  */
 export default function PlayerCard({ playerId, onClose }: { playerId: string; onClose: () => void }) {
   const { game } = useGame()
+  const [numbers] = useNumbers()
   const p = game.players[playerId]
   if (!p) return null
+  const isMe = game.me?.id === p.id
+  const exactAttrs = !isMe || numbers
   const displayName = playerDisplayName(p.realName)
   const team = p.teamId ? game.teams[p.teamId] : null
   const location = playerLocation(p, team ?? null, game.year)
@@ -86,13 +91,19 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
           ) : null}
 
           {ATTR_KEYS.map((k) => (
-            <div key={k} className="row" style={{ gap: 10, marginBottom: 5 }}>
+            <div key={k} className="row player-attribute-row" style={{ gap: 10, marginBottom: 5 }}>
               <span className="small muted" style={{ width: 34 }}>{ATTR_CN[k]}</span>
-              <Bar
-                value={p.attrs[k]}
-                color={p.attrs[k] >= 85 ? 'var(--accent)' : p.attrs[k] >= 72 ? 'var(--warn)' : 'var(--loss)'}
-              />
-              <span className="mono small" style={{ width: 22, textAlign: 'right' }}>{p.attrs[k]}</span>
+              {exactAttrs ? (
+                <>
+                  <Bar
+                    value={p.attrs[k]}
+                    color={p.attrs[k] >= 85 ? 'var(--accent)' : p.attrs[k] >= 72 ? 'var(--warn)' : 'var(--loss)'}
+                  />
+                  <span className="mono small" style={{ width: 22, textAlign: 'right' }}>{p.attrs[k]}</span>
+                </>
+              ) : (
+                <span className="small" style={{ flex: 1 }}>{attrWord(p.attrs[k])}</span>
+              )}
             </div>
           ))}
 
@@ -104,11 +115,15 @@ export default function PlayerCard({ playerId, onClose }: { playerId: string; on
         </div>
 
         <div className="radar-wrap" style={{ flexDirection: 'column', gap: 10 }}>
-          <Radar
-            values={ATTR_KEYS.map((k) => p.attrs[k])}
-            labels={ATTR_KEYS.map((k) => ATTR_CN[k])}
-            size={236}
-          />
+          {isMe ? (
+            <AbilityRadar attrs={p.attrs} showNumbers={exactAttrs} />
+          ) : (
+            <Radar
+              values={ATTR_KEYS.map((k) => p.attrs[k])}
+              labels={ATTR_KEYS.map((k) => ATTR_CN[k])}
+              size={236}
+            />
+          )}
           {p.agentPool.length > 0 && (
             <div className="row wrap tiny muted" style={{ gap: 6, justifyContent: 'center', alignItems: 'center' }}>
               <span>常用特工：</span>

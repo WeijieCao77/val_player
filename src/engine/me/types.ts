@@ -746,6 +746,7 @@ export interface GrowthWeekResult {
 export interface MeState {
   /** One secondary position, independently trained; only the protagonist uses this metadata. */
   positionTraining?: import('./secondaryRole').PositionTraining
+  qualifyAlerts?: import('./qualifyAlerts').QualifyAlertPrefs
   /** Small normalized local JPEG; no upload or original image is stored. */
   avatar?: string
   /** Personal weekly growth baseline, independent from action undo checkpoints. */

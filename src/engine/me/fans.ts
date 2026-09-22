@@ -45,7 +45,7 @@ export function fanCap(state: GameState): number {
   return cap
 }
 
-export function fanWeek(state: GameState): void {
+export function fanOutlook(state: GameState): { cap: number; next: number; delta: number; direction: 'up' | 'down' | 'flat'; deltaWan: number } {
   const me = state.me!
   const cap = fanCap(state)
   const pro = me.phase === 'pro'
@@ -53,7 +53,17 @@ export function fanWeek(state: GameState): void {
   rate *= traitMul(me, 'fan')
   if (me.stream.deal) rate *= 1.25
   const gap = cap - me.fans
-  me.fans = Math.max(0, me.fans + gap * (gap > 0 ? rate : 0.02))
+  const next = Math.max(0, me.fans + gap * (gap > 0 ? rate : 0.02))
+  const delta = next - me.fans
+  const deltaWan = fansWan(next) - fansWan(me.fans)
+  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
+  return { cap, next, delta, direction, deltaWan }
+}
+
+export function fanWeek(state: GameState): void {
+  const me = state.me!
+  const outlook = fanOutlook(state)
+  me.fans = outlook.next
   me.heat = Math.max(0, me.heat * HEAT_DECAY)
 }
 

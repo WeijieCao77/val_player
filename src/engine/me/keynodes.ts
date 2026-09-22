@@ -26,7 +26,7 @@ export const KEY_NODES: NodeDef[] = [
     lean: { duelUp: 0, duelDown: 1, meHot: 0, theyHot: 2, theirBroke: 0, theirSaved: 1, threeSites: 0, teleporter: 2 },
     a: [
       { t: '第一个冲进去清近点', dim: 'reaction', risk: 0.9 },
-      { t: '交技能把架枪的人逼出来', dim: 'utility', risk: 0.6 },
+      { t: '与队友衔接道具，把架枪的人逼出来', dim: 'utility', risk: 0.6 },
       { t: '留在后面，看住回防的路', dim: 'awareness', risk: 0.45 },
     ] },
   { id: 'def_contact', phase: 'entry', q: '防守开局，你守的这条路上传来了脚步声。', ctx: '是一个人来探，还是整队要压过来，现在还说不准。',
@@ -39,7 +39,7 @@ export const KEY_NODES: NodeDef[] = [
     a: [
       { t: '顶着技能守住位置', dim: 'clutch', risk: 0.85 },
       { t: '先让出来，等回防一起打', dim: 'teamwork', risk: 0.5 },
-      { t: '交自己的技能拖住他们', dim: 'utility', risk: 0.6 },
+      { t: '与队友衔接道具，拖住他们', dim: 'utility', risk: 0.6 },
     ] },
 
   // ---------------------------------------------------------------- mid: rotating, regrouping, the count after the first fights
@@ -71,7 +71,7 @@ export const KEY_NODES: NodeDef[] = [
     a: [
       { t: '找个远处的角度交叉架枪', dim: 'awareness', risk: 0.5 },
       { t: '往前压，别让他们靠近爆能器', dim: 'reaction', risk: 0.85 },
-      { t: '留着技能，等他们拆除时再交', dim: 'utility', risk: 0.6 },
+      { t: '与队友留好道具衔接，等他们拆除时再交', dim: 'utility', risk: 0.6 },
     ] },
   { id: 'post_retake', phase: 'post', q: '对面在点里安装了爆能器，你们要回防。', ctx: '时间在走：等人齐了再进要时间，一个人先进是赌。',
     premise: { side: 'def', planted: true }, rec: 0,
@@ -79,7 +79,7 @@ export const KEY_NODES: NodeDef[] = [
     a: [
       { t: '等人齐了一起回防', dim: 'teamwork', risk: 0.5 },
       { t: '你先摸进去，从背后打乱他们', dim: 'clutch', risk: 0.9 },
-      { t: '先把技能砸在爆能器周围再进', dim: 'utility', risk: 0.6 },
+      { t: '先与队友配合，用道具覆盖爆能器周围再进', dim: 'utility', risk: 0.6 },
     ] },
   { id: 'post_three', phase: 'post', q: '爆能器已经安装，双方各剩三个人。', ctx: '三对三，谁的配合先乱，这回合就是谁的麻烦。',
     premise: { planted: true, alive: { mine: 3, theirs: [3, 3] } }, rec: 0,
@@ -161,11 +161,11 @@ export const KEY_NODES: NodeDef[] = [
     when: (c) => c.weak === 'awareness', premise: { side: 'def' }, rec: 1,
     lean: { threeSites: 1, teleporter: 1, streakUs: 0, streakThem: 1, teamUp: 1, teamDown: 0 },
     a: [{ t: '信自己的判断，留在这一侧', dim: 'awareness', risk: 0.75 }, { t: '按指挥说的转过去', dim: 'teamwork', risk: 0.45 }] },
-  { id: 'weak_util', phase: 'entry', tier: 'weak', q: '这一波的烟要你来放，位置差半个身位就封不住。',
-    ctx: '封住了队友走得进去，封偏了他们正面就是一条空枪线。',
+  { id: 'weak_util', phase: 'entry', tier: 'weak', q: '这一波的道具衔接要你来牵头，时机差半拍队友就进不去。',
+    ctx: '接上了队友就能贴着进点，接不上正面就是一条空枪线。',
     when: (c) => c.weak === 'utility', premise: { side: 'atk', buyMine: ['full', 'force'] }, rec: 0,
     lean: { theirBroke: 1, theirSaved: 0, teamUp: 0, teamDown: 1, threeSites: 0 },
-    a: [{ t: '这颗烟我来放', dim: 'utility', risk: 0.7 }, { t: '不靠这颗烟，改成快打', dim: 'reaction', risk: 0.8 }] },
+    a: [{ t: '我来牵头衔接道具', dim: 'utility', risk: 0.7 }, { t: '不等这套道具衔接，改成快打', dim: 'reaction', risk: 0.8 }] },
   { id: 'weak_last', phase: 'clutch', tier: 'weak', q: '你和一个队友还站着，对面也是两个。',
     ctx: '两个人的残局，谁先犯错谁就交出这一回合。',
     when: (c) => c.weak === 'clutch', premise: { alive: { mine: 2, theirs: [2, 2] } }, rec: 1,
@@ -206,10 +206,10 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '冲进去就被逼了回来。这波进点散了。',
     },
     {
-      okWin: '你的技能把架枪的位置逼了出来，队友一步一步清过去。',
-      okLoss: '你的技能把架枪的位置逼了出来，可对面补位太快。',
-      failWin: '你的技能交偏了，架枪的人还在。队友的枪更快。',
-      failLoss: '技能交偏了。架枪的人纹丝不动。',
+      okWin: '你与队友的道具衔接把架枪的位置逼了出来，队友一步一步清过去。',
+      okLoss: '你与队友的道具衔接把架枪的位置逼了出来，可对面补位太快。',
+      failWin: '你与队友的道具衔接没卡上，架枪的人还在。队友的枪更快。',
+      failLoss: '道具衔接没卡上。架枪的人纹丝不动。',
     },
     {
       okWin: { k0: '你守在后面，回防的人一露头就被你报了出来。', k1: '你守在后面，回防的第一个人刚露头就被你放倒。' },
@@ -246,10 +246,10 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '让早了，回防还没到齐。',
     },
     {
-      okWin: '你的技能把他们卡在门口多站了几秒，队友赶到。',
-      okLoss: '你的技能拖住了几秒，可对面第二波技能跟着就到。',
-      failWin: '你的技能交早了，他们等烟散了才进。队友已经转到。',
-      failLoss: '技能交早了。他们等烟散了才进。',
+      okWin: '你与队友的道具衔接把他们卡在门口多站了几秒，队友赶到。',
+      okLoss: '你与队友的道具衔接拖住了几秒，可对面第二波道具跟着就到。',
+      failWin: '你与队友的道具衔接没卡上，他们等过了这波压制才进。队友已经转到。',
+      failLoss: '道具衔接没卡上。他们等过了这波压制才进。',
     },
   ],
   mid_fake: [
@@ -260,7 +260,7 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '转点的时候队伍拉得太长，前后脱了节。',
     },
     {
-      okWin: '你的技能把假打做得像真的一样，对面的人都转了过来，另一边轻松打开。',
+      okWin: '你与队友的道具衔接把假打做得像真的一样，对面的人都转了过来，另一边轻松打开。',
       okLoss: '假打骗走了对面的人，可真打的那一波没能打开。',
       failWin: '假打没骗到人，对面一个都没动。正面硬打也打开了。',
       failLoss: '假打没骗到人，对面一个都没动。',
@@ -336,10 +336,10 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '你往前压早了，身后的角度就这么空了出来。',
     },
     {
-      okWin: '他们蹲下拆除的那一刻，你的技能正好砸了上去。',
-      okLoss: '你的技能打断了第一次拆除，可他们第二次没给你机会。',
-      failWin: '你的技能交早了一步，拆除的人躲了过去。队友补上了枪。',
-      failLoss: '技能早了一步。拆除的人躲了过去。',
+      okWin: '他们蹲下拆除的那一刻，你与队友的道具衔接正好卡了上去。',
+      okLoss: '你与队友的道具衔接打断了第一次拆除，可他们第二次没给你机会。',
+      failWin: '你与队友的道具衔接没卡上，拆除的人躲了过去。队友补上了枪。',
+      failLoss: '道具衔接没卡上。拆除的人躲了过去。',
     },
   ],
   post_retake: [
@@ -356,10 +356,10 @@ export const KEY_HL: Record<string, HlOpt[]> = {
       failLoss: '刚摸进去就被看到了。回防少了一个人。',
     },
     {
-      okWin: '你的技能把爆能器周围砸得没人敢站，队友顺势压了进去。',
-      okLoss: '你的技能把爆能器周围逼空了，可对面从远处架着枪。',
-      failWin: '你的技能砸空了，对面根本不在爆能器旁边。队友找到了他们。',
-      failLoss: '技能砸空了。对面根本不在爆能器旁边。',
+      okWin: '你与队友的道具衔接把爆能器周围压得没人敢站，队友顺势压了进去。',
+      okLoss: '你与队友的道具衔接把爆能器周围逼空了，可对面从远处架着枪。',
+      failWin: '你与队友的道具衔接落空了，对面根本不在爆能器旁边。队友找到了他们。',
+      failLoss: '道具衔接落空了。对面根本不在爆能器旁边。',
     },
   ],
   post_three: [
@@ -581,13 +581,13 @@ export const KEY_HL: Record<string, HlOpt[]> = {
   ],
   weak_util: [
     {
-      okWin: '你的烟正好落在该落的地方，架枪的位置被整个封住，队友一步一步走了进去。',
-      okLoss: '你的烟封得很正，队友也进去了，可点里的对枪没打赢。',
-      failWin: '你的烟偏了半个身位，架枪的人还看得见路。队友的枪更快。',
-      failLoss: '你的烟偏了半个身位，那条枪线一直空着，队友一个一个倒在了进点的路上。',
+      okWin: '你与队友的道具衔接正好卡在点上，架枪的位置被整个压住，队友一步一步走了进去。',
+      okLoss: '你与队友的道具衔接很顺，队友也进去了，可点里的对枪没打赢。',
+      failWin: '道具衔接时机偏了半拍，架枪的人还看得见路。队友的枪更快。',
+      failLoss: '道具衔接时机偏了半拍，那条枪线一直空着，队友一个一个倒在了进点的路上。',
     },
     {
-      okWin: { k0: '不等烟了，五个人一口气压上去，对面还没站好位置。', k1: '不等烟了，你跟着快打的节奏放倒一个。', k2: '不等烟了，你在这一波里连着放倒两个。' },
+      okWin: { k0: '不等道具衔接了，五个人一口气压上去，对面还没站好位置。', k1: '不等道具衔接了，你跟着快打的节奏放倒一个。', k2: '不等道具衔接了，你在这一波里连着放倒两个。' },
       okLoss: { k0: '快打的时机挑得很好，可对面这一回合的反应比你们更快。', k1: '快打里你放倒了一个，可对面的反应更快。' },
       failWin: '快打的节奏没跟上，前后脱了节。队友把场面收了回来。',
       failLoss: '快打的节奏没跟上，五个人一个一个撞了上去。',
@@ -666,7 +666,7 @@ export const KEY_HINTS: Record<string, string[][]> = {
   weak_gun: [['对面这张图习惯在那条线的尽头架一个人，很久才动一次。'], ['对面这几回合都绕开那条线走近路。']],
   weak_react: [['对面守这个点的人站得很靠里，进门那一下不会马上撞上。'], ['对面在门口留了个人架枪，第一个进去的正对着他。']],
   weak_read: [['对面这张图做假打的时候，技能总比脚步先到。'], ['技能声和脚步声几乎是一起过去的，那边是真打。']],
-  weak_util: [['对面架枪的位置很固定，一颗烟就能把它挡住。'], ['对面这张图守点的人换位置很勤，封住的那一个多半已经走了。']],
+  weak_util: [['对面架枪的位置很固定，围绕这个位置衔接道具更容易奏效。'], ['对面这张图守点的人换位置很勤，围绕原位置准备的道具配合可能扑空。']],
   weak_last: [['对面剩下的两个人分在两条路上，谁也照应不到谁。'], ['对面剩下的两个人一直贴着走。']],
   weak_hold: [['对面回防总是从同一个口子进来，两条枪线接上就堵死了。'], ['对面回防的人到得很散，一个接一个。']],
   weak_call: [['队友都在等一句准话，语音里没人抢着说。'], ['语音里已经有两个人在同时报点，再多一句只会更乱。']],

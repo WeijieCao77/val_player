@@ -14,6 +14,8 @@ import type { GameState } from '../types'
 import type { MomentItem } from './types'
 import { rankAt } from './rank'
 import { compClass } from './compclass'
+import { queueQualification } from './qualifyAlerts'
+import { pushLog } from './log'
 
 export const MOMENTS_CAP = 12
 
@@ -25,6 +27,7 @@ export function pushMoment(state: GameState, m: Omit<MomentItem, 'year' | 'day'>
   if (!me || me.phase === 'retired') return
   const list = (me.moments ??= [])
   if (list.some((x) => x.key === m.key)) return
+  if (m.kind === 'qualify' && !queueQualification(state, m)) return
   list.push({ ...m, year: state.year, day: state.day })
   if (list.length > MOMENTS_CAP) list.splice(0, list.length - MOMENTS_CAP)
 }
@@ -103,6 +106,7 @@ export function noteQualify(state: GameState): void {
     // through a qualifier plays its decider in this very competition (circuit.ts offerPlayIn)
     if (state.fixtures.some((f) => (f.comp === comp.key || f.comp === comp.name) && f.played
       && (f.teamA === club || f.teamB === club))) continue
+    pushLog(state, 'good', `国际赛出线｜${comp.name}：俱乐部取得参赛资格。`)
     pushMoment(state, { kind: 'qualify', key: `qualify:${comp.key}`, comp: comp.name, teamId: club })
   }
 }

@@ -1,0 +1,40 @@
+/* AbilityRadar styles */
+.ability-radar {
+  --radar-accent: var(--accent, #ff4655);
+  --radar-line: var(--line, rgba(255,255,255,0.12));
+  --radar-muted: var(--muted, #a0a0b0);
+  --radar-bg: var(--panel-3, #1b1b23);
+  background: var(--panel-3, #1b1b23);
+  border-radius: 8px;
+  padding: 8px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.ability-radar-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.ability-radar-off {
+  background: var(--panel-3, #1b1b23);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.ability-radar-off p {
+  margin: 0;
+}
+.ability-radar-off .tiny {
+  font-size: 12px;
+  color: var(--faint, #6b6b7b);
+}
+ .ability-radar-scale { margin: 0; text-align: center; }
+@media (max-width: 390px) {
+  .ability-radar {
+    padding: 4px;
+  }
+}

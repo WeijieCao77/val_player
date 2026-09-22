@@ -13,6 +13,7 @@ import Face, { FaceRow } from './Face'
 import { Medal, PromoBadge, TrophyChampions, TrophyLeague, TrophyMasters } from './art/fx'
 import { RankBadge } from './art/emblem'
 import { Scene } from './art/scenes'
+import QualifyAlertSettings from './QualifyAlertSettings'
 
 /**
  * The big moments the engine queued (me/moments.ts), one card at a time: a title,
@@ -69,6 +70,7 @@ export default function MomentQueue() {
       next={next}
     >
       {card.extra}
+      {m.kind === 'qualify' && <QualifyAlertSettings />}
     </Moment>
   )
 }

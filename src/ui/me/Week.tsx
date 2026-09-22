@@ -1,5 +1,7 @@
 import { Fragment, useState } from 'react'
 import WeeklyGrowth from './WeeklyGrowth'
+import SecondaryRole from './SecondaryRole'
+import './sept22-ui.css'
 import { useGame } from './ctx'
 import { Crest, Panel, fmtDay } from './common'
 import { FaceRow } from './Face'
@@ -11,6 +13,7 @@ import { nextCardDue, useNextHidden } from './guide'
 import { actionBlock, doAction, matchAhead, repeatLastWeek, staminaLeft, undoAction, undoWeek, weekCalendar, weekInDays } from '../../engine/me/week'
 import { REPLAY_CN, UNDO_EDGE_CN, canUndo, undoDepth } from '../../engine/me/undo'
 import { duelBlock, startDuel } from '../../engine/me/duel'
+import { duelRelation } from '../../engine/me/duelRead'
 import { injuryStatus } from '../../engine/me/injury'
 import { activeAbsence } from '../../engine/me/absence'
 import DuelPlay from './DuelPlay'
@@ -246,6 +249,10 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
           title={`本周行动 · 剩 ${me.ap} 点`}
         >
           <WeeklyGrowth />
+          <details className="secondary-weekly">
+            <summary>副位置训练 <span className="tiny muted">· 手动安排，不自动扣行动点</span></summary>
+            <div className="secondary-weekly-body"><SecondaryRole /></div>
+          </details>
           {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan — on the 下一步 card while it is up */}
           {(() => {
             const line = card ? null : hourLine(game)
@@ -389,11 +396,11 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
                       className={`act-card${(me.plan.duel ?? 0) ? ' on' : ''}${duelWhy ? ' locked' : ''}`}
                       onClick={() => { if (!duelWhy) tryDuel() }}
                     >
-                      <div className="t">对位挑战{weightTag('duel')}<span className="tag">2 点</span></div>
+                      <div className="t">{target ? duelRelation(game, target).label : '对位挑战'}{weightTag('duel')}<span className="tag">2 点</span></div>
                       <div className="d">
                         {target
-                          ? `和 ${target.ign} 打三局两胜的对位，再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场教练给试用期。`
-                          : '替补时挑战同位置首发，赢够三次拿试用期。'}
+                          ? `${duelRelation(game, target).explanation} 再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场教练给试用期。`
+                          : '替补时参加首发选拔，赢够三次拿试用期。'}
                       </div>
                       {duelWhy && <div className="why">{duelWhy}</div>}
                     </div>

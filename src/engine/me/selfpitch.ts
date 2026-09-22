@@ -246,6 +246,58 @@ export function oddsLine(state: GameState, o: PitchOdds): string {
   return `${sum} = ${o.pct}%${cap}`
 }
 
+/**
+ * 为什么是这个把握: plain-language paragraphs explaining the chance in the row.
+ * Reuses the odds object o, no recalculation, no state. When `numbers` is false,
+ * no exact numbers or percentages appear; team/player names may contain digits.
+ */
+export function pitchExplanation(o: PitchOdds, numbers: boolean): string[] {
+  const out: string[] = []
+  const gap = o.gap
+  const need = o.need
+
+  // 球队试训门槛与当前同位首发不是同一条线
+  out.push(`这家俱乐部的试训门槛是看试训实力，${need.mate ? `他们现在同位置的首发是 ${need.mate.ign}` : '目前没有同位置首发'}，门槛跟首发不是一条线。`)
+
+  // 实力差距
+  if (gap > 0) {
+    out.push(`你的试训实力高出他们的门槛${numbers ? ` ${gap} 点` : '一截'}，这是加分项。`)
+  } else if (gap < 0) {
+    out.push(`你的试训实力还差他们的门槛${numbers ? ` ${-gap} 点` : '一截'}，这是减分项。`)
+  } else {
+    out.push('你的试训实力正好在他们的门槛上。')
+  }
+
+  // 需求
+  switch (need.kind) {
+    case 'hole':
+      out.push('他们当前首发里缺少这个位置，你是补缺，这会有额外加分。')
+      break
+    case 'beat':
+      out.push('你比他们现在的首发强，这代表你有机会竞争首发，但只是需求加分，并不保证录取。')
+      break
+    case 'place':
+      out.push('他们的名单还没满六人，有空位，有空位也会加分，但这不等于他们会随便签人。')
+      break
+    default:
+      out.push('他们现在没有明显的岗位需求，这不会加分。')
+  }
+
+  // 首次职业投一线
+  if (o.nevpro) {
+    out.push(numbers ? `从未打过职业时，自荐一级俱乐部最多 ${NEVPRO_TOP}%，其他加分也不能超过这条限制。` : '从未打过职业时，自荐一级俱乐部存在额外的把握上限；高综合也不能跳过职业履历。')
+  }
+
+  // 预算/违约金
+  if (o.short) {
+    out.push('他们的预算付不起你的违约金，这会大幅降低把握。')
+  } else if (o.fee > 0) {
+    out.push('他们的预算付得起你的违约金，这不是问题。')
+  }
+
+  return out
+}
+
 /* ------------------------------------------------------------------ */
 /*  gates                                                              */
 /* ------------------------------------------------------------------ */

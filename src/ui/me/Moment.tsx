@@ -56,6 +56,7 @@ export default function Moment({
       if (!isTopLayer(bg.current)) return
       // Enter on the focused secondary button is that button's own press
       const at = document.activeElement
+      if (e.key === 'Enter' && (at instanceof HTMLSelectElement || at instanceof HTMLInputElement || at instanceof HTMLTextAreaElement || (at instanceof HTMLElement && at.isContentEditable))) return
       if (e.key === 'Enter' && at instanceof HTMLButtonElement && at !== btn.current) return
       e.preventDefault()
       press.current()

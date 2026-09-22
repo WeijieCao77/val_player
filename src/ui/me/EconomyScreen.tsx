@@ -10,7 +10,7 @@ import type { MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
 import { AGENTS, COURSES, GEAR_EFFECT, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
-import { fanCap, fansCn, fanTier } from '../../engine/me/fans'
+import { fanOutlook, fansCn, fanTier } from '../../engine/me/fans'
 import OutletPanels from './OutletPanels'
 
 export default function EconomyScreen() {
@@ -18,7 +18,7 @@ export default function EconomyScreen() {
   const me = game.me!
   const p = game.players[me.id]
   const act = (why: string | null) => { if (why) toast(why); commit() }
-  const cap = fanCap(game)
+  const outlook = fanOutlook(game)
   // my contract as signed, in its club's currency; the wallet is RMB
   const pay = payOf(game)
   void p
@@ -42,9 +42,14 @@ export default function EconomyScreen() {
         </Panel>
         <Panel title="粉丝与直播">
           <p className="small" style={{ marginTop: 0 }}>
-            粉丝 <b>{fansCn(me.fans)}</b>（{fanTier(me.fans).name}）· 天花板约 {fansCn(cap)}
+            粉丝 <b>{fansCn(me.fans)}</b>（{fanTier(me.fans).name}）· 支持规模约 {fansCn(outlook.cap)}
           </p>
-          <p className="tiny faint">天花板看天梯、杯赛、首发和冠军。</p>
+          <p className="tiny faint">支持规模看天梯、杯赛、首发、冠军、独家直播和出海。</p>
+          <p className="small">
+            本周自然趋势：{outlook.direction === 'up' ? '增长' : outlook.direction === 'down' ? '回落' : '平稳'}
+            {outlook.direction !== 'flat' && <>，约 {Math.abs(outlook.deltaWan).toFixed(1)} 万</>}
+          </p>
+          <p className="tiny faint">仅按当前状态预估，不含本周新赛事/直播等事件。超过现阶段支持规模会缓慢回落，1000 万不是固定上限，但也不是每段生涯都能达到。</p>
           <p className="small">礼物分成 <b>{Math.round(streamCut(me.fans) * 100)}%</b></p>
           <p className="small" style={{ margin: 0 }}>
             {me.stream.deal ? `独家：${me.stream.deal.platform} · 本赛段 ${me.stream.thisStage}/${me.stream.deal.minPerStage} 次 · 到 ${me.stream.deal.untilYear} 年`

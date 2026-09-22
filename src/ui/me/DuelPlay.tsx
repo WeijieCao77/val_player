@@ -1,6 +1,7 @@
 import { useGame } from './ctx'
 import { Modal, OvrBadge, Roles } from './common'
 import { closeDuel, duelCompare, duelOptP, duelPick, duelScene, DIM_CN } from '../../engine/me/duel'
+import { duelRelation } from '../../engine/me/duelRead'
 import { EDGE_NEED } from '../../engine/me/coach'
 import type { DuelSceneLog } from '../../engine/me/types'
 import { attrWord, sayDim, useNumbers } from './words'
@@ -32,14 +33,14 @@ export default function DuelPlay({ onDone }: { onDone: () => void }) {
   const close = () => { closeDuel(game); commit(); onDone() }
 
   return (
-    <Modal title={`训练赛 · 对位挑战 vs ${him?.ign ?? '首发'}`} onClose={live.done ? close : () => {}} onBgClose={() => {}}>
-      <div className="score-line" style={{ padding: '4px 0 8px' }}>
-        <div className="t a"><Face id={p.id} name={p.ign} size={28} /><Roles p={p} /><span>{p.ign}</span><OvrBadge value={p.overall} /></div>
+    <Modal title={`训练赛 · ${him ? duelRelation(game, him).label : '对位挑战'} vs ${him?.ign ?? '首发'}`} onClose={live.done ? close : () => {}} onBgClose={() => {}}>
+      <div className="score-line" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', gap: 6, alignItems: 'center', padding: '4px 0 8px' }}>
+        <div className="t a" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 4, alignItems: 'center' }}><Face id={p.id} name={p.ign} size={28} /><Roles p={p} /><span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.ign}>{p.ign}</span><OvrBadge value={p.overall} /></div>
         <div className="s">{live.sc[0]} : {live.sc[1]}</div>
-        <div className="t">{him && <Face id={him.id} name={him.ign} size={28} />}<Roles p={him} /><span>{him?.ign}</span><OvrBadge value={him?.overall ?? 0} /></div>
+        <div className="t" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 4, alignItems: 'center' }}>{him && <Face id={him.id} name={him.ign} size={28} />}<Roles p={him} /><span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={him?.ign}>{him?.ign}</span><OvrBadge value={him?.overall ?? 0} /></div>
       </div>
 
-      <p className="tiny muted">{p.role}岗位专项：{coreNames.join('、')}。对位按岗位任务比较；其他属性仍影响综合实力和正式比赛。</p>
+      <p className="tiny muted">{p.role}岗位专项：{coreNames.join('、')}。选拔按当前岗位任务比较；其他属性仍影响综合实力和正式比赛。{him ? ` ${duelRelation(game, him).explanation}` : ''}</p>
 
       {scene && !live.done ? (
         <div className="node-box">

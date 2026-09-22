@@ -15,6 +15,7 @@ import { rankAt } from './rank'
 import { cny } from './moneyfmt'
 import { wageCny } from './paytable'
 import { CAREER_MARKS } from './careerMarks'
+import { milestoneReached } from './milestones'
 
 /**
  * Achievements, laid out along the roads a career actually takes.
@@ -324,6 +325,8 @@ export const ACHIEVEMENTS: AchDef[] = [
   // the seasons' own record, never the detail: that reaches back a year (me/detail.ts), and under the
   // 120-record cap before it this asked for 100 starts among the last 120 matches — all but unreachable
   { key: 'matches100', route: 'vet', name: '一百场', desc: '首发打满 100 场正赛', reward: { heat: 10 }, cond: (s) => careerStarts(M(s)) >= 100 },
+  { key: 'maps1000', route: 'vet', name: '千图征途', desc: '职业正赛累计出场 1000 图', reward: { title: '千图征途' }, cond: (s) => milestoneReached(s, 'maps1000') },
+  { key: 'kills10000', route: 'vet', name: '万杀选手', desc: '职业正赛累计取得 10000 击杀', reward: { title: '万杀选手' }, cond: (s) => milestoneReached(s, 'kills10000') },
   { key: 'seasons8', route: 'vet', name: '常青树', desc: '打满八个职业赛季', reward: { title: '老将' }, cond: (s) => proSeasons(s) >= 8 },
   { key: 'age30', route: 'vet', name: '三十而立', desc: '30 岁还在打', reward: { body: 1 }, cond: (s) => P(s).age >= 30 && M(s).phase === 'pro' },
   { key: 'seasons12', route: 'vet', name: '十二年', desc: '打满十二个职业赛季', reward: { title: '元老' }, cond: (s) => proSeasons(s) >= 12 },

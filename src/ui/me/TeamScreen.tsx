@@ -5,6 +5,7 @@ import { callerOf, squadOf } from '../../engine/roster'
 import { attrWord, trustLabel, useNumbers } from './words'
 import { BOND_ROLE_TEXT, bondAll, bondMainRole } from '../../engine/me/bond'
 import { duelTarget, roomCall, standingLine } from '../../engine/me/coach'
+import { duelRelation } from '../../engine/me/duelRead'
 import { IGL_TRUST_LOST, SKID_OF, SKID_WINS, clubCaller, iglBlock, iglGates, myCall } from '../../engine/me/igl'
 import { roomView } from '../../engine/me/room'
 import { mateMark } from '../../engine/me/hurtplay'
@@ -16,6 +17,7 @@ import { worldMoney } from './common'
 import { leagueCurOf } from '../../engine/me/currency'
 import { useState } from 'react'
 import Face from './Face'
+import './sept22-ui.css'
 
 // 很铁 / 不错 / 一般 …: the ladder is the engine's (engine/bonds.ts bondWord), because the room's own
 // friction reads it — a pair this screen calls 很铁 does not argue over a defeat and is not who
@@ -45,14 +47,19 @@ export default function TeamScreen() {
               const bond = isMe ? 0 : bondBetween(game, me.id, p.id)
               const main = caller?.id === p.id
               return (
-                <tr key={p.id} className={isMe ? 'me' : 'clickable'} onClick={() => !isMe && openPlayer(p.id)}>
-                  <td className="sticky-name at-left"><Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>{p.isIgl ? <span className={`tag${main ? ' t1' : ''}`} style={{ marginLeft: 6 }} title={main ? '主指挥：比赛里全队按他的指挥来打' : '副指挥：主指挥不在场上时由他来喊'}>{main ? '主指挥' : '副指挥'}</span> : null}{p.fictional ? <span className="tag" style={{ marginLeft: 6 }} title="虚构选手，不对应真实的人">虚构新人</span> : null}</td>
+                <tr key={p.id} className={`clickable${isMe ? ' me' : ''}`} onClick={() => openPlayer(p.id)}>
+                  <td className="sticky-name at-left">
+                    <button type="button" className="team-player-open" aria-label={`查看${p.ign}的选手资料`}
+                      onClick={(event) => { event.stopPropagation(); openPlayer(p.id) }}>
+                      <Face id={p.id} name={p.ign} size={22} /><b style={{ color: isMe ? 'var(--accent)' : undefined }}>{p.ign}</b>
+                    </button>
+                    {p.isIgl ? <span className={`tag${main ? ' t1' : ''}`} style={{ marginLeft: 6 }} title={main ? '主指挥：比赛里全队按他的指挥来打' : '副指挥：主指挥不在场上时由他来喊'}>{main ? '主指挥' : '副指挥'}</span> : null}{p.fictional ? <span className="tag" style={{ marginLeft: 6 }} title="虚构选手，不对应真实的人">虚构新人</span> : null}</td>
                   <td><Roles p={p} /></td>
                   <td className="num"><OvrBadge value={p.overall} /></td>
                   <td className="num">{p.age}</td>
                   {/* out hurt: the lay-off in words, with no diagnosis of a real person's body (engine/me/hurtplay.ts) */}
                   <td style={{ minWidth: 72 }}>{mateMark(game, p.id) ? <span className="tag warn">{mateMark(game, p.id)}</span> : <Condition p={p} day={game.day} hideNumber />}</td>
-                  <td>{starter ? <span className="tag win">首发</span> : <span className="tag">替补</span>}{target?.id === p.id ? <span className="tag warn" style={{ marginLeft: 4 }}>你的对位</span> : null}</td>
+                  <td>{starter ? <span className="tag win">首发</span> : <span className="tag">替补</span>}{target?.id === p.id ? <span className="tag warn" style={{ marginLeft: 4 }}>{duelRelation(game, target).tag}</span> : null}</td>
                   <td className="tiny">{isMe ? '—' : bondWord(bond)}</td>
                 </tr>
               )
@@ -116,11 +123,12 @@ export default function TeamScreen() {
                   )
                 })}
               </div>
-            ) : <p className="tiny muted" style={{ margin: '0 0 6px' }}>名单里没有第二个 {p.role}，这个位置暂时没人跟你抢。</p>
+            ) : <p className="tiny muted" style={{ margin: '0 0 6px' }}>名单里没有其他同岗位选手；首发名额仍由教练选拔。</p>
           })()}
           <p className="small" style={{ margin: '0 0 6px' }}>
             {/* the week screen's own sentence (engine/me/coach.ts standingLine), so the two never disagree */}
             {standingLine(game, 'team')}
+            {target ? ` ${duelRelation(game, target).explanation}` : ''}
           </p>
           <p className="tiny faint" style={{ margin: 0 }}>
             名单每周一重排；以首发打满 8 场、教练信任到「信任」以上，或者以首发拿下冠军，就是他认定的首发，输了比赛也不会被拿去试新阵容；连着三场全队最差会被换下两周（刚以首发拿下冠军的几场不算）；能力接近时，教练先用和队伍合得来的人。

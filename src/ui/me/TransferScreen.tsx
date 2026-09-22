@@ -13,7 +13,7 @@ import type { AsideKind } from '../../engine/me/aside'
 import { fansCn } from '../../engine/me/fans'
 import {
   CONTACT_TRUST, PITCH_AP, PITCH_LEAD, PITCH_MAX, PITCH_SQUAD, REPLY_MAX, REPLY_MIN, ROSTER_FULL,
-  groupCn, oddsLine, oddsWord, periodEndAbs, pitchBlock, pitchTargets, sendPitch,
+  groupCn, oddsLine, oddsWord, periodEndAbs, pitchBlock, pitchExplanation, pitchTargets, sendPitch,
 } from '../../engine/me/selfpitch'
 import type { PitchGroup, PitchRow } from '../../engine/me/selfpitch'
 import { pitchBook } from '../../engine/me/pitchbook'
@@ -354,6 +354,7 @@ function PitchList({ contract }: { contract: boolean }) {
         {off ? <span className="sp-why">{r.why}。</span>
           : nums ? <span className="sp-why faint">{oddsLine(game, o)}</span>
             : o.nevpro ? <span className="sp-why faint">{groupCn(game, 'vct')} 俱乐部基本只从打过职业比赛的人里挑。</span> : null}
+        {!off && <details className="sp-why"><summary>为什么是这个把握</summary>{pitchExplanation(o, nums).map((line, i) => <p key={i}>{line}</p>)}</details>}
       </div>
     )
   }

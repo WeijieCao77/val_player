@@ -14,7 +14,7 @@ import { ensureCaller } from '../world'
 import { addMoney } from './money'
 import { PLAYER_PRIZE_SHARE } from './prizes'
 import { keepInBand, offerOf, payOf } from './paytable'
-import { roundPay, toCny, toUsd } from './currency'
+import { convert, roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { dateCn, lockLifts, lockSaid, periodKey, windowAt } from './window'
 import { pushMoment } from './moments'
@@ -66,7 +66,14 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
     : (d >= 8 ? 'star' : 'starter')
   // the world's dollar wage, moved to the club's league level and written in its currency (me/paytable.ts)
   const base = expectedSalary(p, team.tier)
-  const { cur, salary } = offerOf(team, state.year, base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1))
+  let { cur, salary } = offerOf(team, state.year, base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1))
+  if (kind === 'renew' && me.phase === 'pro' && state.myTeam === teamId && p.teamId === teamId && team.starters.includes(me.id)) {
+    const current = payOf(state)
+    if (current && current.tier === team.tier && (p.contract?.promisedRole === 'starter' || p.contract?.promisedRole === 'star') && ROLE_PAY[role] >= ROLE_PAY[p.contract!.promisedRole] && Number.isFinite(current.salary) && current.salary > 0) {
+      const protectedSalary = keepInBand(team, state.year, convert(current.salary, current.cur, cur, state.year))
+      salary = Math.max(salary, protectedSalary)
+    }
+  }
   const years = team.tier === 1 ? (rng.chance(0.5) ? 2 : 3) : (rng.chance(0.6) ? 1 : 2)
   const signBonus = roundPay(salary * rng.range(0, 0.3), cur)
   const buyout = roundPay(salary * (team.tier === 1 ? rng.range(4, 8) : rng.range(2, 4)), cur)

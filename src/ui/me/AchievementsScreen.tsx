@@ -4,6 +4,8 @@ import { ACHIEVEMENTS, ACH_ROUTES, earnedTitles, rewardText, wearTitle, wornTitl
 import { ENDINGS_ME } from '../../engine/me/endings'
 import { careerMarksFor } from '../../engine/me/careerMarks'
 import TrophyCase from './TrophyCase'
+import CareerMilestones from './CareerMilestones'
+import QualifyAlertSettings from './QualifyAlertSettings'
 
 export default function AchievementsScreen() {
   const { game, commit, go } = useGame()
@@ -21,6 +23,8 @@ export default function AchievementsScreen() {
       <TrophyCase />
     <div className="grid" style={{ gridTemplateColumns: narrow ? 'minmax(0, 1fr)' : 'minmax(0, 1.6fr) minmax(0, 1fr)' }}>
       <Panel title={`成就 · ${got}/${ACHIEVEMENTS.length}`} actions={worn ? <span className="tag win" title="称号">{worn}</span> : undefined}>
+        <CareerMilestones />
+        <QualifyAlertSettings />
         <p className="tiny faint" style={{ marginTop: 0 }}>解锁当周发奖励，每项只发一次。{titles.length > 1 ? '称号可以换着戴。' : ''}</p>
         <button className="sm" style={{ margin: '0 0 8px' }} onClick={() => go('hall')}>成就殿堂 →</button>
         {ACH_ROUTES.map((r) => {

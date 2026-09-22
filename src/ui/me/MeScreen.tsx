@@ -18,6 +18,7 @@ import { CareerRewrites } from './Worldline'
 import CareerOverview from './CareerOverview'
 import AvatarEditor from './AvatarEditor'
 import SecondaryRole from './SecondaryRole'
+import AbilityRadar from './AbilityRadar'
 
 /**
  * One attribute's bar: the fill is the value, the upright tick is its ceiling
@@ -75,6 +76,7 @@ export default function MeScreen() {
             </>
           )}
         >
+          <AbilityRadar attrs={p.attrs} showNumbers={nums} />
           {ATTR_KEYS.map((k) => {
             const v = p.attrs[k]
             const cap = caps[k]
