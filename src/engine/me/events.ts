@@ -17,6 +17,7 @@ import { CAREER_EVENTS } from './events_career'
 import { sealWeek } from './undo'
 import { checkAchievements } from './achievements'
 import { activeAbsence } from './absence'
+import { familyVisitBlocked, FAMILY_VISIT_EVENTS } from './familyVisit'
 
 export interface EventOpt {
   t: string
@@ -211,6 +212,7 @@ const EVENT_COOLDOWN_DAYS = 56
 function canFire(state: GameState, ev: EventDef): boolean {
   const me = state.me!
   if (activeAbsence(state) && !ev.allowDuringAbsence) return false
+  if ((FAMILY_VISIT_EVENTS as readonly string[]).includes(ev.id) && familyVisitBlocked(state)) return false
   if ((me.eventCounts[ev.id] ?? 0) >= ev.max) return false
   const last = me.flags[`ev_${ev.id}`]
   if (last != null && state.day - last >= 0 && state.day - last < EVENT_COOLDOWN_DAYS) return false
@@ -297,6 +299,17 @@ export function resolveEvent(state: GameState, id: string, choice: number): stri
   const me = state.me!
   const ev = eventOf(id)
   if (!ev) return []
+  const isFamily = (FAMILY_VISIT_EVENTS as readonly string[]).includes(id)
+  if (isFamily) {
+    if (me.pendingEvent !== id || !me.pending.some(x => x.kind === 'event' && x.id === id)) return []
+    if (familyVisitBlocked(state)) {
+      me.pendingEvent = undefined
+      pop(state, 'event', id)
+      const line = '家庭返乡安排暂缓，待本次国际赛事结束后再联系。'
+      pushLog(state, 'event', line)
+      return [line]
+    }
+  }
   if (ev.onResolve && (me.pendingEvent !== id || !me.pending.some(x => x.kind === 'event' && x.id === id))) return []
   if (ev.onResolve) sealWeek(state)
   const index = Number.isInteger(choice) && choice >= 0 && choice < ev.a.length ? choice : ev.rec
