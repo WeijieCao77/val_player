@@ -847,6 +847,8 @@ export interface MeState {
   promiseMatches?: number
   coachTrust: number
   gmTrust: number
+  /** Last manual manager conversation, in absolute career weeks; absent in older saves. */
+  managerTalkWeek?: number
   fans: number
   heat: number
   /** the wallet, in RMB (me/currency.ts) */

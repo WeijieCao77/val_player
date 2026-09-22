@@ -17,6 +17,7 @@ import { worldMoney } from './common'
 import { leagueCurOf } from '../../engine/me/currency'
 import { useState } from 'react'
 import Face from './Face'
+import ManagerTalk from './ManagerTalk'
 import './sept22-ui.css'
 
 // 很铁 / 不错 / 一般 …: the ladder is the engine's (engine/bonds.ts bondWord), because the room's own
@@ -253,6 +254,7 @@ function CloutPanel() {
   return (
     <Panel title="话语权" actions={<span className={`tag${total >= 62 ? ' t1' : ''}`}>{tier.name}</span>}>
       <p className="small" style={{ marginTop: 0 }}>{tier.blurb}</p>
+      <ManagerTalk />
 
       <div className="row wrap" style={{ gap: 8 }}>
         <button className="sm" disabled={!listGate.ok} onClick={() => setOpen(open === 'list' ? '' : 'list')}>提出换人</button>
