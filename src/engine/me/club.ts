@@ -4,7 +4,7 @@ import { defaultContract, ROLES } from '../types'
 import type { GameState, Player, Role, Team } from '../types'
 import { squadOf } from '../roster'
 import { importBlock } from '../imports'
-import { releaseForHistory, signForHistory } from '../timeline'
+import { historyKeeps, releaseForHistory, signForHistory } from '../timeline'
 import { dateOf, offPool } from '../staffStints'
 import { autoStarters, ensureCaller } from '../world'
 import { coachStarters } from './coach'
@@ -222,6 +222,9 @@ export function clubWindow(state: GameState, rng: Rng): void {
   const me = state.me
   const team = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
   if (!me || !team) return
+  // a season history has the club's roster for, its signings are history's (engine/timeline.ts followBook):
+  // one of its own here would be let go again at the next event (reported 2026-09-21..23, 535927c8)
+  if (historyKeeps(state, team.id)) return
   const considered = rng.chance(0.5)
   if (!considered || me.flags.clubSigned === state.year) {
     pushLog(state, 'team', me.flags.clubSigned === state.year
@@ -281,7 +284,7 @@ export function clubWindow(state: GameState, rng: Rng): void {
 export function clubWinter(state: GameState): void {
   const me = state.me!
   const team = state.teams[state.myTeam]
-  if (!team || me.phase !== 'pro' || team.roster.length < CLUB_CEILING) return
+  if (!team || me.phase !== 'pro' || team.roster.length < CLUB_CEILING || historyKeeps(state, team.id)) return
   const bench = team.roster
     .filter((id) => id !== me.id && !team.starters.includes(id))
     .map((id) => state.players[id])

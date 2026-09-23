@@ -33,11 +33,20 @@ import type { RawPlayer } from './world'
  *  - before each event (syncEvent): each real side takes the field with the
  *    people it really brought, which is where a mid-season move shows
  *
- * Neither touches the player's reach — his club, everyone on it, and him.
- * Inside it the world is his: a man he signed stays signed, a club he keeps
- * alive stays alive, and his squad grows the way the game grows it. Outside
- * it history resumes: a player he let go goes where history took him, and a
- * club that lost a man to him plays short until it signs somebody.
+ * Neither touches the player himself. His club follows history too: the men it
+ * really signed arrive when they arrived, the men it really let go leave for
+ * where they went, and its people are rated off the year's numbers like
+ * everyone's. He is the one man history never had, so he takes nobody's place
+ * on the books — he is one more on the roster, and whether he starts is between
+ * him and the coach. Only where the registered seven would be eight does the
+ * weakest of history's bench make way (followBook). A club history let go that
+ * he keeps alive stays alive.
+ *
+ * It used to leave his whole reach alone — his club and everyone on it. Joined
+ * in 2021, EDward Gaming kept its 2021 five through 2022 and 2023 while the book
+ * had Life leaving for FunPlus Phoenix and Smoggy arriving, and history only
+ * came back the day he left (reported 2026-09-21..23: 47eadfcf, f12ac3f3,
+ * 23c5b08a 「24年life还在edg」, 535927c8; scripts/check_club_history.ts).
  */
 
 /** `d` the first day it played that year, `e` the last */
@@ -156,13 +165,124 @@ export function lastYearOf(p: Pick<Player, 'id'>): number | undefined {
   return v ? BOOK.last[v] : undefined
 }
 
-/** The player's reach: his club, the people on it, himself. */
+/**
+ * The player's reach: his club, and the people history leaves alone — himself. His team-mates are history's
+ * like everyone else's (the note at the top of this file); a manager's save, with no career in it, still keeps
+ * its whole squad out of history's hands.
+ */
 export function reachOf(state: GameState): { club: string | null; people: Set<string> } {
   const club = state.me ? (state.me.phase === 'pro' ? state.myTeam : null) : state.myTeam
   const people = new Set<string>()
   if (state.me) people.add(state.me.id)
-  for (const id of (club && state.teams[club]?.roster) || []) people.add(id)
+  else for (const id of (club && state.teams[club]?.roster) || []) people.add(id)
   return { club, people }
+}
+
+/**
+ * Is this club's roster history's this season — the book has it this year, and the year is not past the book?
+ * The player's club then makes no market moves of its own (me/club.ts clubWindow, clubWinter): history's
+ * signings and departures are its moves, and one of the club's own would only be undone at the next event.
+ */
+export function historyKeeps(state: GameState, teamId: string): boolean {
+  if (!isTimelineWorld(state) || pastTheBook(state)) return false
+  const Y = BOOK.years[String(state.year)]
+  return !!Y && !!bookRosterOf(state, Y.rosters, teamId)
+}
+
+/**
+ * What history just did to the player's club, in one news line he will see on his week (me/press.ts puts his
+ * club's moves first): who came, who left and for where.
+ */
+function sayOwnMoves(state: GameState, mine: string | null, before: string[]): void {
+  const t = mine ? state.teams[mine] : undefined
+  const me = state.me
+  if (!t || !me || me.phase !== 'pro') return
+  const name = (id: string) => state.players[id]?.ign ?? id
+  const came = t.roster.filter((id) => id !== me.id && !before.includes(id))
+  const left = before.filter((id) => id !== me.id && !t.roster.includes(id))
+  if (!came.length && !left.length) return
+  const where = (id: string) => {
+    const to = state.players[id]?.teamId
+    return to && state.teams[to] ? `${name(id)}（去了 ${state.teams[to].name}）` : name(id)
+  }
+  const parts = [
+    came.length ? `${came.map(name).join('、')} 加盟` : '',
+    left.length ? `${left.map(where).join('、')} 离队` : '',
+  ].filter(Boolean)
+  state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true,
+    text: `📜 ${t.name} 按真实历史调整阵容：${parts.join('；')}。` })
+}
+
+/** The registered roster: the player's club carries at most this many, him included (me/club.ts CLUB_CEILING). */
+const MY_CEILING = 7
+
+/** The book's roster for a club this year: the club history carried it on as, else its own (bookClubOf). */
+function bookRosterOf(state: GameState, rosters: Record<string, string[]>, teamId: string): string[] | undefined {
+  const heirs = Object.entries(state.heirs ?? {}).filter(([, to]) => to === teamId).map(([id]) => id.slice(4))
+  for (const v of heirs.reverse()) if (rosters[v]) return rosters[v]
+  return teamId.startsWith('V21T') ? rosters[teamId.slice(4)] : undefined
+}
+
+/**
+ * The player's club, the way history had it: `ids` signed on, and at the season's turn (`whole`) everybody
+ * else but him let go — the rule every other club lives by. He is one more than history had, so where that
+ * makes eight the weakest man off the five who is not him makes way. The five keeps whoever is still here,
+ * and a gap is filled by the strongest left until the coach names his own (me/coach.ts weeklyLineup).
+ * Only a career: a manager's squad is his own.
+ */
+function followBook(state: GameState, t: Team, ids: string[], year: number, rng: Rng, whole: boolean): boolean {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return false
+  const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && p.id !== me.id)
+  // Before an event, a side sharing fewer than three men with the club is not the club moving players but a
+  // second five history entered under its name: Xi Lai Gaming played 2025's 中国进化系列赛 第二幕、第三幕 with
+  // its reserves. At anybody else's club they come and go by the event; at mine they would swap the five I
+  // play in twice in a fortnight. His club plays those with its own (a probe of five 2021 careers, 2026-09-24).
+  if (!whole && want.length >= 3 && want.filter((p) => p.teamId === t.id).length < 3) return false
+  const keep = new Set([...want.map((p) => p.id), me.id])
+  let moved = false
+  if (whole) {
+    for (const pid of [...t.roster]) {
+      if (keep.has(pid)) continue
+      release(state, state.players[pid])
+      moved = true
+    }
+  }
+  for (const p of want) {
+    if (p.teamId === t.id) continue
+    sign(state, p, t, year, rng)
+    moved = true
+  }
+  const brought = new Set(want.map((p) => p.id))
+  const out = (pool: Player[]) => pool.sort((a, b) => Number(t.starters.includes(a.id)) - Number(t.starters.includes(b.id)) || a.overall - b.overall)[0]
+  let guard = 0
+  while (t.roster.length > MY_CEILING && guard++ < 8) {
+    const squad = t.roster.map((id) => state.players[id]).filter((p): p is Player => !!p && p.id !== me.id)
+    const spare = squad.filter((p) => !brought.has(p.id))
+    const go = out(spare.length ? spare : squad)
+    if (!go) break
+    release(state, go)
+    moved = true
+  }
+  if (!moved) return false
+  fillFive(state, t)
+  ensureCaller(state, t.id)
+  rerate(state, t)
+  return true
+}
+
+/**
+ * The player's club's five after history took somebody out of it: whoever is still here stays, and a gap is
+ * filled by the strongest man left beside the player — his own place is the coach's to give (me/coach.ts
+ * weeklyLineup), not history's.
+ */
+function fillFive(state: GameState, t: Team): void {
+  const me = state.me
+  if (!me || me.phase !== 'pro') return
+  t.starters = t.starters.filter((id) => t.roster.includes(id))
+  const bench = t.roster.map((id) => state.players[id]).filter((p): p is Player => !!p && p.id !== me.id && !t.starters.includes(p.id))
+    .sort((a, b) => b.overall - a.overall)
+  while (t.starters.length < 5 && bench.length) t.starters.push(bench.shift()!.id)
 }
 
 const leagueLabel = (c: Pick<TClub, 'l' | 's' | 'r'>): string => (c.l ? `VCT ${c.l}` : `Challengers ${c.s ?? c.r}`)
@@ -693,6 +813,7 @@ export function syncYear(state: GameState, year: number): YearSync {
     t.scene = c.s ?? undefined
   }
 
+  const ownBefore = mine ? [...(state.teams[mine]?.roster ?? [])] : []
   for (const [vlr, ids] of Object.entries(Y.rosters)) {
     if (mine && state.heirs?.[clubId(vlr)] === mine) continue
     const t = state.teams[clubId(vlr)]
@@ -706,6 +827,11 @@ export function syncYear(state: GameState, year: number): YearSync {
       out.moved++
     }
   }
+  // and the player's own club last, as history opened its year — with him on it (followBook)
+  const ownIds = mine && state.teams[mine] ? bookRosterOf(state, Y.rosters, mine) : undefined
+  if (ownIds && followBook(state, state.teams[mine!], ownIds, year, rng, true)) out.moved++
+  if (mine && state.teams[mine]) fillFive(state, state.teams[mine])
+  sayOwnMoves(state, mine, ownBefore)
 
   for (const t of Object.values(state.teams)) {
     if (!t.id.startsWith('V21T') || active.has(t.id) || t.id === mine || t.dormant) continue
@@ -793,6 +919,10 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
   const { club: mine, people } = reachOf(state)
   const rng = new Rng(hashStr(`timeline-ev:${state.seed}:${year}:${state.day}`))
   inherit(state, mine, year, state.day, [])
+  // the player's club takes the field with the people history brought, and him (followBook)
+  const ownBefore = mine ? [...(state.teams[mine]?.roster ?? [])] : []
+  const ownIds = mine && state.teams[mine] ? bookRosterOf(state, rosters, mine) : undefined
+  if (ownIds) followBook(state, state.teams[mine!], ownIds, year, rng, false)
   for (const [vlr, ids] of Object.entries(rosters)) {
     const id = clubId(vlr)
     if (id === mine || (mine && state.heirs?.[id] === mine)) continue
@@ -827,5 +957,8 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
       rerate(state, team)
     }
   }
+  // a team-mate history took to another side's event roster has left too: his old five is filled again
+  if (mine && state.teams[mine]) fillFive(state, state.teams[mine])
+  sayOwnMoves(state, mine, ownBefore)
   return founded
 }

@@ -1442,8 +1442,8 @@ function endSeason(state: GameState, rng: Rng, notes: string[] = []): void {
   for (const p of Object.values(state.players)) {
     if (p.id === state.me?.id) continue
     if (p.retiring) continue
-    // a real person who really played on is not retiring in this world either —
-    // unless he is inside the player's reach, where the world is the player's
+    // a real person who really played on is not retiring in this world either — a team-mate of the
+    // player's included (engine/timeline.ts reachOf); in a manager's save his own squad is his
     if ((lastYearOf(p) ?? 0) > state.year && !reach.people.has(p.id)) continue
     let announceP = p.age >= 33 ? 0.45 : p.age >= 31 ? 0.2 : p.age >= 29 ? 0.06 : 0
     if (p.contractYears >= 3) announceP = 0
