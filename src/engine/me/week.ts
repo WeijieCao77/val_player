@@ -669,7 +669,10 @@ export function syncTitles(state: GameState): void {
     const won = Object.values(state.comps).find((c) => c.name === t.title && !!c.champion && !!state.teams[c.champion]?.roster.includes(me.id))
     pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp, bench: !started, teamId: won?.champion ?? state.myTeam })
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
-    if (me.phase === 'pro') fireEvent(state, 'after_title')
+    // 夺冠之夜 — the manager wants my interview first, 「今晚所有人都想要你一块」 — is the night of a man who played
+    // it. From the bench the event card above is the title's card (MomentQueue), and the night followed it anyway:
+    // in six 强队替补 careers it came 18 times from the bench and 3 from the five (reported 2026-09-23, 1bf81754)
+    if (me.phase === 'pro' && started) fireEvent(state, 'after_title')
   }
 }
 

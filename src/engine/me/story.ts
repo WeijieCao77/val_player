@@ -1,6 +1,7 @@
 import type { GameState, Region } from '../types'
 import { duoBonded } from '../bonds'
 import { regionIn } from '../era'
+import { SEASON_DAYS } from '../calendar'
 import type { EventDef, EventOpt } from './events'
 import { pushLog } from './log'
 
@@ -95,6 +96,22 @@ export const isPre = (s: GameState): boolean => s.me!.phase !== 'pro'
 export const isStarter = (s: GameState): boolean => isPro(s) && !!s.teams[s.myTeam]?.starters.includes(s.me!.id)
 export const isBenched = (s: GameState): boolean => isPro(s) && !s.teams[s.myTeam]?.starters.includes(s.me!.id)
 export const clubTier = (s: GameState): number => (isPro(s) ? s.teams[s.myTeam]?.tier ?? 0 : 0)
+/** days back a start still counts as 「lately」 for onFloor: a month, about four match weeks */
+export const ON_FLOOR_DAYS = 28
+/**
+ * On the floor lately: named in the five, or started one of my club's own matches in the last four weeks — a
+ * substitute who came in for a hurt starter last week is still that match's man.
+ *
+ * For the cards that assume I played: a post-match interview, the round a team-mate did not follow me into, a
+ * loss blamed on me. Reported 2026-09-23 (1bf81754): 「在替补席的时候触发的首发才应该做的事件有点太多了」 —
+ * gated on the whole roster (isPro), they came to the bench as often as to the five.
+ */
+export const onFloor = (s: GameState): boolean => {
+  if (!isPro(s)) return false
+  if (isStarter(s)) return true
+  const now = s.year * SEASON_DAYS + s.day
+  return s.me!.matches.some((m) => m.started && !m.friendly && now - (m.year * SEASON_DAYS + m.day) <= ON_FLOOR_DAYS)
+}
 
 /** the scene I play in — my club's, or my own without one — as one of today's four */
 export function macroOf(s: GameState): Region {

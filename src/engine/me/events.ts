@@ -18,6 +18,7 @@ import { sealWeek } from './undo'
 import { checkAchievements } from './achievements'
 import { activeAbsence } from './absence'
 import { familyVisitBlocked, FAMILY_VISIT_EVENTS } from './familyVisit'
+import { onFloor } from './story'
 
 export interface EventOpt {
   t: string
@@ -92,7 +93,8 @@ export const EVENTS: EventDef[] = [
     q: '存款够买人生第一辆车了。', ctx: '队友都说不用买，俱乐部有班车。',
     a: [{ t: '买', g: 'show', e: { money: -250000, heat: 20, mental: 2 } }, { t: '再存存', g: 'grind', e: { mental: 1 } }] },
   // ---- the room
-  { id: 'locker_blame', w: 0, max: 6, when: pro, rec: 1,
+  // a loss put on me is a loss I played in (me/story.ts onFloor, reported 2026-09-23)
+  { id: 'locker_blame', w: 0, max: 6, when: onFloor, rec: 1,
     q: '输掉比赛之后，一个队友在语音里把责任推给了你。', ctx: '所有人都听见了。',
     a: [{ t: '当场怼回去', g: 'hard', e: { bond: -12, mental: 1, tilt: 5 }, seed: 'blame:fight' }, { t: '先认，回头私下说', g: 'warm', e: { bond: 4, tilt: 3 } }, { t: '不说话，用下一场回答', g: 'grind', e: { quest: 'rumor', tilt: 6 } }] },
   { id: 'locker_dinner', w: 7, max: 9, when: pro, rec: 0,
@@ -114,7 +116,8 @@ export const EVENTS: EventDef[] = [
   { id: 'bible', w: 4, max: 1, when: (s) => pro(s) && famous(s, 200), rec: 1,
     q: '有人把你的语录做成了「圣经」，全网在传。', ctx: '有些话确实是你说的。',
     a: [{ t: '亲自下场玩梗', g: 'show', e: { heat: 60, coachTrust: -3 } }, { t: '当没看见，闷头训练', g: 'grind', e: { quest: 'bible' } }, { t: '发文澄清', g: 'hard', e: { heat: 15, fans: -10 } }] },
-  { id: 'rumor', w: 0, max: 2, when: pro, rec: 1,
+  // its steady answer is 「用比赛说话」, a quest of two wins started in (me/quests.ts rumor): the five's to take
+  { id: 'rumor', w: 0, max: 2, when: starter, rec: 1,
     q: '论坛上有人造谣你打假赛，帖子在首页。', ctx: '俱乐部让你先别回应。',
     a: [{ t: '直接回怼', g: 'hard', e: { heat: 35, gmTrust: -6, tilt: 8 } }, { t: '不回应，用下一场说话', g: 'grind', e: { quest: 'rumor' } }, { t: '让俱乐部发律师函', g: 'warm', e: { gmTrust: 3, heat: 5 } }] },
   { id: 'caster', w: 4, max: 2, when: (s) => starter(s) && famous(s, 100), rec: 0,
@@ -193,7 +196,8 @@ export const EVENTS: EventDef[] = [
   { id: 'gear_broke', w: 5, max: 4, when: () => true, rec: 0,
     q: '鼠标坏了，比赛在三天后。', ctx: '临时换设备手会生。',
     a: [{ t: '买同款', g: 'grind', e: { money: -700 } }, { t: '趁机升级', g: 'show', e: { money: -1300, mental: 1 } }, { t: '借队友的先用', g: 'warm', e: { form: -2, bond: 2 } }] },
-  { id: 'interview', w: 5, max: 5, when: (s) => pro(s) && famous(s, 100), rec: 1,
+  // 赛后采访 is for a man who played the match (me/story.ts onFloor): drawn for the whole roster, it came to the bench too
+  { id: 'interview', w: 5, max: 5, when: (s) => onFloor(s) && famous(s, 100), rec: 1,
     q: '赛后采访，记者问你怎么看对面的指挥。', ctx: '镜头对着你。',
     a: [{ t: '说他今天没打好', g: 'hard', e: { heat: 30, gmTrust: -3 } }, { t: '夸一句', g: 'warm', e: { heat: 10, gmTrust: 2 } }, { t: '「我们只看自己」', g: 'grind', e: { heat: 5 } }] },
   { id: 'ranked_flame', w: 6, max: 5, when: pre, rec: 1,

@@ -187,7 +187,9 @@ export const MORE_EVENTS: EventDef[] = [
     q: '当年你开手部摄像头自证的那段录像被翻了出来，剪成了集锦。', ctx: '标题是「从被说开挂，到打职业」。',
     a: [{ t: '转发，配一句「还在练」', g: 'show', e: { heat: 30, fans: 20 } },
       { t: '不提旧事', g: 'grind', e: { mental: 1, tilt: -3 } }] },
-  { id: 'echo_cheat_old', w: 0, max: 1, rec: 2, echo: 'cheat', when: isPro,
+  // its steady answer, 「用下一场说话」, is two wins started in within three weeks (me/quests.ts rumor): from the
+  // bench it could only fail, and the fans it cost were taken (reported 2026-09-23, 1bf81754). The echo waits.
+  { id: 'echo_cheat_old', w: 0, max: 1, rec: 2, echo: 'cheat', when: isStarter,
     q: '那条说你开挂的旧帖又被顶了上来，这次你已经是职业选手。', ctx: '当年那件事，你没有正面说清楚。',
     a: [{ t: '开手部摄像头直播一场', g: 'show', e: { heat: 30, fatigue: 5, fans: 10 } },
       { t: '请俱乐部发声明', g: 'warm', e: { gmTrust: -3, heat: 5 } },

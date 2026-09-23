@@ -2,10 +2,14 @@ import type { GameState, Role } from '../types'
 import type { EventDef } from './events'
 import { activeAbsence } from './absence'
 import { ensureCareerEvents, recordCareerEvent } from './eventState'
+import { onFloor } from './story'
 
 // Draft themes supplied by DeepSeek v4 Pro; prerequisites, choices and effects reviewed locally.
 const pro = (s: GameState) => s.me!.phase === 'pro' && !activeAbsence(s)
-const role = (r: Role) => (s: GameState) => pro(s) && s.players[s.me!.id].role === r
+// the four role cards talk about a round I was in — the entry I opened, the flank I held, the smoke I threw, the
+// info I called — and its numbers on the data panel: a man on the floor lately (me/story.ts onFloor), not the
+// bench (reported 2026-09-23, 1bf81754: 「在替补席的时候触发的首发才应该做的事件有点太多了」)
+const role = (r: Role) => (s: GameState) => pro(s) && s.players[s.me!.id].role === r && onFloor(s)
 const support = (text: string, helpsTeammate = false) => (s: GameState, i: number): string[] => {
   if (helpsTeammate && i === 0) ensureCareerEvents(s).supportChoices++
   recordCareerEvent(s, 'support', text)
