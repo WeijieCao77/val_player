@@ -90,4 +90,23 @@ game.fixtures = [{ ...mkFixture('sw', 1, 'A', 'B', [1, 1]), label: 'SW:1:瑞士�
 const swiss = legacyTrees(game, legacy)[0]
 assert.equal(swiss.tree, false)
 assert.equal(swiss.matches[0].winner, undefined, 'draw cannot mark side B as winner')
+// A walkover is stored winner-first; its card still seats each side on the edge it came in by (reported
+// 2026-09-24: 2027 Thailand's A组 败者赛 drew Team NKT as 「#1 败者」 when #1 was a walkover and NKT had lost #2).
+// GSL group: #1 s0 v s1, #2 s2 v s3, #3 胜者赛 w1 v w2, #4 败者赛 l1 v l2, #5 决胜赛 l3 v w4.
+{
+  const gsl = eventOf('F2026:oq0:th')!
+  const n = gsl.units[0].nodes!
+  assert.deepEqual([n[3].a, n[3].b], [['l', 0], ['l', 1]], 'GSL fixture shape changed: pick another event')
+  const walkComp: Competition = { ...sample, key: 'walk-test', champion: undefined,
+    circuit: { ...sample.circuit!, id: gsl.id, mode: 'sim', done: undefined, seeds: ['A', null, 'C', 'D'], walk: { '0': 'A', '3': 'C' } } }
+  game.fixtures = [{ ...mkFixture('w1', 1, 'C', 'D', [0, 2]), comp: 'walk-test', node: 1 }]
+  const before = JSON.stringify(game)
+  const cards = circuitTrees(game, walkComp)[0].matches
+  assert.deepEqual(cards[0].sides.map(s => s.id), ['A', null], 'walkover #1: A on its own seed, nobody opposite')
+  assert.deepEqual(cards[3].sides.map(s => s.id), [null, 'C'], 'walkover #4: C came in as #2 败者, the #1 败者 side is empty')
+  assert.equal(cards[3].walk, true)
+  assert.equal(cards[3].winner, 'C')
+  assert.deepEqual(cards[4].sides.map(s => s.id), [undefined, 'C'], '#5 waits on #3; C in on #4 胜者')
+  assert.equal(JSON.stringify(game), before)
+}
 console.log(`PASS bracket projection: ${events} events / ${matches} nodes / ${edges} real edges; no future leaks, no state mutation, layout bounds, double/triple/GSL/single/bye/Swiss.`)

@@ -3385,6 +3385,10 @@ export function eventSoFar(state: GameState, comp: Competition): EventSoFar | nu
   const read = slot
   const sides = (at: number): [string | null | undefined, string | null | undefined] => {
     const g = games.get(at)
+    // a walkover this world settled is written winner-first (playOn): its sides read off its own slots, each in
+    // the place it came from. The 对阵图 drew 2027 Thailand's A组 败者赛 with Team NKT on the edge from the
+    // walkover's 「#1 败者」, when it was #2 that Team NKT had lost.
+    if (g && c.mode === 'sim' && walks.has(at) && nodes[at]) return [read(nodes[at].unit, nodes[at].a), read(nodes[at].unit, nodes[at].b)]
     if (g) return [g.a, g.b]
     const p = pending.get(at)
     if (p) return p
