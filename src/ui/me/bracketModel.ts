@@ -1,4 +1,5 @@
 import { eventOf, eventSoFar } from '../../engine/circuit'
+import type { CUnit } from '../../engine/circuit'
 import { labelOf, roundCn } from '../../engine/eventTable'
 import { DOUBLE_8, MASTERS_8, STAGE_8, TRIPLE_12, championsGroups, doubleFor } from '../../engine/bracket'
 import type { Wave } from '../../engine/bracket'
@@ -16,6 +17,19 @@ const won = (f?: Fixture) => !f?.result || f.result.mapsWonA === f.result.mapsWo
   : f.result.mapsWonA > f.result.mapsWonB ? f.teamA : f.teamB
 const result = (f?: Fixture): Pick<TreeMatch, 'fixture' | 'scores' | 'winner'> => ({ fixture: f,
   scores: f?.result ? [f.result.mapsWonA, f.result.mapsWonB] : undefined, winner: won(f) })
+
+/**
+ * Where a seat comes from in an earlier phase. A phase whose places are read group by group (PhaseSeats) names the
+ * group and the place in it: a rank number is the real event's own bookkeeping, and 2025 China Stage 1's 5-0 group
+ * winner read 「小组赛第 9 名」 (reported 2026-09-24).
+ */
+function placeSource(u: CUnit | undefined, rank: number | undefined): string {
+  const label = u?.label ?? '上一阶段'
+  const at = rank != null ? u?.seats?.at[rank] : undefined
+  if (!at) return `${label}第 ${rank ?? '?'} 名`
+  const groups = u!.seats!.groups.length
+  return groups > 1 ? `${label} 第 ${at[0] + 1} 组第 ${at[1]} 名` : `${label}第 ${at[1]} 名`
+}
 
 /** Read-only projection. Never use a future historical node's teams, winner or score. */
 export function circuitTrees(state: GameState, comp: Competition): TreeSection[] {
@@ -37,7 +51,7 @@ export function circuitTrees(state: GameState, comp: Competition): TreeSection[]
       const sides = slots.map((s, k): TreeSide => ({
         id: ids[k], name: ids[k] ? view?.names.get(ids[k]!) : undefined,
         source: s[0] === 'w' || s[0] === 'l' ? `#${s[1] + 1} ${s[0] === 'w' ? '胜者' : '败者'}`
-          : s[0] === 'g' ? `${ev.units[s[1]]?.label ?? '上一阶段'}第 ${s[2] ?? '?'} 名` : '抽签/参赛名额待定',
+          : s[0] === 'g' ? placeSource(ev.units[s[1]], s[2]) : '抽签/参赛名额待定',
         ...(tree && (s[0] === 'w' || s[0] === 'l') ? { from: `${ui}:${s[1]}`, outcome: s[0] } : {}),
       })) as [TreeSide, TreeSide]
       if (!columns.has(n.round)) columns.set(n.round, columns.size)

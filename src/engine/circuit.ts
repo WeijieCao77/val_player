@@ -4,7 +4,7 @@ import partneredRaw from '../data/routes_partnered.json'
 import { aheadEventsOf, oqPoolOf } from './ahead'
 import type { Plan, Seat } from './ahead'
 import { circuitPointsFor, regionIn, stageAtIn } from './era'
-import { bookLeague, foldDue, inVctLeague, sceneFor, successorsOf, syncEvent } from './timeline'
+import { bookLeague, foldDue, inVctLeague, sceneFor, seatsOf, successorsOf, syncEvent } from './timeline'
 import { makeFixture, newRow, newStandings } from './league'
 import { realName } from './names'
 import type { Competition, Fixture, GameState, Region, StageKey, Team, VctSeason } from './types'
@@ -889,8 +889,68 @@ function seatsOfUnit(ev: CEvent, ui: number): PhaseSeats | undefined {
   return { kind, shape, groups, at }
 }
 
+/**
+ * Two round-robin groups closed by a round of seeding matches, each group's Nth against the other's Nth, that seat
+ * the playoffs: the winner of the Nth match is seed N and its loser seed 4 + N, and seed K meets seed 9 − K. VCT 2026 China Stage 1 (vlr.gg/event/2864,
+ * group stage: Group Alpha and Group Omega, six each, a single round robin, the top four of each through; then
+ * 「Group Stage–Seeding」 AG–XLG, JDG–EDG, TYL–DRG, TEC–TE, and Upper Quarterfinals XLG–TEC, EDG–DRG, TYL–JDG, TE–AG).
+ *
+ * vlr's graph wrote the round robin as winner and loser slots, and the seeding matches as the winners and losers of
+ * group games; scripts/build_circuit.py read the playoffs' seats as ranks of the whole unit. Played that way the
+ * groups paired sides by their results and the seats went by elimination order: in one world Wolves won its seeding
+ * match and went out, and Xi Lai Gaming reached the playoffs without playing one (reported 2026-09-24).
+ *
+ * Here the seeding matches move to the head of the playoffs — same order, so every tie keeps its number and a save's
+ * ties stay where they were — each side entering as its group's place (PhaseSeats reads the robin), and each
+ * playoff seat they filled becomes that match's winner or loser. Only where all of that reads off the real event
+ * exactly; anything else is left as it was.
+ */
+function seedingIntoPlayoffs(ev: CEvent): void {
+  const gi = ev.units.findIndex((u) => u.type === 'bracket' && (u.nodes ?? []).some((n) => /^Seeding$/.test(n.round)))
+  if (gi < 0) return
+  const g = ev.units[gi]
+  const all = g.nodes!
+  const k = all.findIndex((n) => /^Seeding$/.test(n.round))
+  const seeding = all.slice(k)
+  const group = all.slice(0, k)
+  if (!seeding.every((n) => /^Seeding$/.test(n.round)) || group.some((n) => [n.a, n.b].some((s) => (s[0] === 'w' || s[0] === 'l') && s[1] >= k))) return
+  // the groups: each a full single round robin
+  const linked = linkedGroups(group)
+  const teamsIn = (js: number[]) => uniq(js.flatMap((j) => group[j].teams).filter(Boolean))
+  if (linked.length < 2 || !linked.every((js) => { const n = teamsIn(js).length; return n >= 3 && js.length === (n * (n - 1)) / 2 && new Set(js.map((j) => [...group[j].teams].sort().join('|'))).size === js.length })) return
+  // the one phase after it, whose every seat from this unit a seeding match filled
+  const readers = ev.units.map((u, ui) => ({ u, ui })).filter(({ u }) => (u.nodes ?? []).some((n) => [n.a, n.b].some((s) => s[0] === 'g' && s[1] === gi)))
+  if (readers.length !== 1 || readers[0].ui !== gi + 1) return
+  const p = readers[0].u
+  const fed = (t: string, j: number): Slot | null => {
+    const n = seeding[j]
+    if (!n.winner || !t) return null
+    return n.winner === t ? ['w', j] : n.teams.includes(t) ? ['l', j] : null
+  }
+  const shift = seeding.length
+  const nodes: CNode[] = []
+  let r = 0
+  for (const n of seeding) nodes.push({ ...n, a: ['g', gi, ++r], b: ['g', gi, ++r] })
+  for (const n of p.nodes ?? []) {
+    const side = (s: Slot, t: string): Slot | null => {
+      if (s[0] === 'w' || s[0] === 'l') return [s[0], s[1] + shift]
+      if (s[0] !== 'g' || s[1] !== gi) return s
+      for (let j = 0; j < seeding.length; j++) { const hit = fed(t, j); if (hit) return hit }
+      return null
+    }
+    const [a, b] = [side(n.a, n.teams[0]), side(n.b, n.teams[1])]
+    if (!a || !b) return
+    nodes.push({ ...n, a, b })
+  }
+  g.nodes = group
+  g.last = Math.max(...group.map((n) => n.day))
+  p.nodes = nodes
+  p.first = Math.min(...nodes.map((n) => n.day))
+}
+
 for (const [year, evs] of Object.entries(CIRCUIT)) {
   for (const ev of evs) {
+    seedingIntoPlayoffs(ev)
     ev.units.forEach((u, ui) => {
       // before the seats are worked out: they are read in the order the table is
       if (Number(year) >= RIOT_TIES_FROM && !isOpen(u)) u.tiebreak = 'riot'
@@ -1260,6 +1320,15 @@ function promotedIn(state: GameState, ev: CEvent, drawn: { seeds: (string | null
   const id = ev.projected?.base ?? ev.id
   let out = drawn.seeds
   const swaps = drawn.swaps.slice()
+  // last season's, carried over the winter (carryPromotions)
+  for (const p of state.promoted ?? []) {
+    if (p.year !== state.year || p.feeds !== id) continue
+    const at = ev.seeds.indexOf(p.real)
+    if (at < 0 || out[at] === p.club || out.includes(p.club)) continue
+    out = out.slice()
+    out[at] = p.club
+    swaps.push({ real: p.real, now: p.club, from: `promoted:${p.feeds}` })
+  }
   for (const comp of Object.values(state.comps)) {
     const c = comp.circuit
     const m = c?.playin && /^(\d+):(\d+)$/.exec(c.playin.key)
@@ -1281,6 +1350,39 @@ function promotedIn(state: GameState, ev: CEvent, drawn: { seeds: (string | null
   }
   return out === drawn.seeds ? drawn : { seeds: out, swaps }
 }
+
+/**
+ * A promotion place won in a decider whose split is next season's: carried over the winter, before this season's
+ * events and ties are cleared (engine/season.ts openYear), for promotedIn to seat its winner there.
+ *
+ * Reported 2026-09-24, with 「赢了晋升赛没上一级联赛」: twelve Challengers promotion stages of 2023–2025 send their
+ * sides into the next season's first split — 2025 North America ACE Stage 3's Promotion/Relegation into 2026's
+ * Stage 1 among them — and the club that won its decider for the last place played the next season where it had
+ * been. The place is the real side's that held it (its unit's `ranked`), taken in the split where that side really
+ * played. Where that side is not in that split — six of the twelve: the real place went to a side under another name
+ * or nobody's the book can follow — the seat is not read, and none is made up.
+ */
+export function carryPromotions(state: GameState): void {
+  const out: NonNullable<GameState['promoted']> = []
+  for (const comp of Object.values(state.comps)) {
+    const c = comp.circuit
+    const m = c?.playin && /^(\d+):(\d+)$/.exec(c.playin.key)
+    if (!c || !m) continue
+    const fe = eventOf(c.id)
+    const ui = Number(m[1])
+    const rank = Number(m[2])
+    const u = fe?.units[ui]
+    if (!fe || fe.projected || !u?.feeds || rank > (u.promotes ?? 0) || YEAR_OF.get(u.feeds) !== state.year) continue
+    const f = state.fixtures.find((x) => x.id === c.playin!.fixture)
+    const won = f ? gameOf(f)?.w : null
+    const real = u.ranked?.[rank - 1]
+    if (won && real && won !== teamOf(state, fe, real)) out.push({ year: state.year, feeds: u.feeds, real, club: won })
+  }
+  state.promoted = out.length ? out : undefined
+}
+
+/** A real event's field as a draw made now would seat it, before the player's club's seat or play-in — for scripts. */
+export const drawnSeeds = (state: GameState, ev: CEvent): (string | null)[] => seedsFor(state, ev).seeds
 
 /** Two events share a scene when their scopes meet; an international meets everyone. */
 function sameScene(a: CEvent, b: CEvent): boolean {
@@ -1625,16 +1727,19 @@ function isHome(state: GameState, ev: CEvent, team: Team | undefined, club: stri
 
 /** 方案 C: the seat the player's club took stays taken, in every event that seat plays. */
 function takeSeat(state: GameState, ev: CEvent, seeds: (string | null)[]): (string | null)[] {
-  const s = state.seat
   // the new format has no seats to take: its leagues are drawn afresh (engine/leagues.ts)
-  if (!s || state.year < s.from || ev.plan) return seeds
-  const seatEvent = (isLeagueEvent(state.year, ev) && ev.region === s.league) || /LOCK\/\/IN/i.test(ev.name)
-  // the seat's real holder at this event: the club it was taken from, or what history carried that club on as
-  const holders = [s.displaced, ...successorsOf(s.displaced, state.year)]
-  const i = seeds.findIndex((t) => !!t && holders.includes(t))
-  if (!seatEvent || i < 0 || seeds.includes(s.club)) return seeds
-  const out = seeds.slice()
-  out[i] = s.club
+  if (ev.plan) return seeds
+  let out = seeds
+  for (const s of seatsOf(state)) {
+    if (state.year < s.from) continue
+    const seatEvent = (isLeagueEvent(state.year, ev) && ev.region === s.league) || /LOCK\/\/IN/i.test(ev.name)
+    // the seat's real holder at this event: the club it was taken from, or what history carried that club on as
+    const holders = [s.displaced, ...successorsOf(s.displaced, state.year)]
+    const i = out.findIndex((t) => !!t && holders.includes(t))
+    if (!seatEvent || i < 0 || out.includes(s.club)) continue
+    out = out.slice()
+    out[i] = s.club
+  }
   return out
 }
 
@@ -1989,9 +2094,10 @@ export function nextSeasonFor(state: GameState, team: Team): { ev: CEvent; door:
   const own = new Set<string>()
   if (team.id.startsWith('V21T')) own.add(team.id.slice(4))
   for (const [from, to] of Object.entries(state.heirs ?? {})) if (to === team.id && from.startsWith('V21T')) own.add(from.slice(4))
-  // an Ascension won this season: next season is the league's (ascensionSeat)
-  const up = ascensionSeat(state, y)
-  const league = inVctLeague(state, team) || (!!up?.displaced && up.club === team.id)
+  // an Ascension played this season: next season is the league's for the club it sent up, and not for the one it did not (ascensionSeats)
+  const moved = ascensionSeats(state, y)
+  const league = (inVctLeague(state, team) && !moved.some((x) => x.lost && x.displaced === team.id))
+    || moved.some((x) => !x.lost && !!x.displaced && x.club === team.id)
   const scene = sceneFor(state, team, false)
   // isHome, for next season
   const home = (ev: CEvent): boolean => {
@@ -2015,8 +2121,9 @@ export function nextSeasonFor(state: GameState, team: Team): { ev: CEvent; door:
 
 /** The seat an Ascension this world played sends the player's club up to (ascensionSeat). */
 export interface AscensionSeat {
+  /** the club that goes up: the player's, or — `lost` — the club that took the place the player's club really had */
   club: string
-  /** the club that really took the seat: the side the player's club stands in for in the league's events; null where history's next season took nobody from this Ascension */
+  /** the club that really took the seat: the side `club` stands in for in the league's events; null where history's next season took nobody from this Ascension */
   displaced: string | null
   league: string
   /** the season the seat is played from */
@@ -2027,11 +2134,13 @@ export interface AscensionSeat {
   leagueCn: string
   /** where the player's club finished the Ascension */
   place: number
+  /** the player's club was the side history sent up, and did not earn the place here: the seat is `club`'s */
+  lost?: true
 }
 
 /**
- * The league seat the player's club won at this world's Ascension, for season `year` — read before that season's
- * events are drawn, off the season before it that is still on the books.
+ * The league seats this world's Ascension of the season before `year` moves — read at the turn, before that
+ * season's events are drawn, off the season still on the books.
  *
  * Reported 2026-09-23 (「为什么我玩lizhi赢了晋升赛没上一级联赛呀」): a club that won 2023's China Ascension played
  * 2024 in the Evolution Series. A league's field from 2024 to 2026 is its real seeds (legacySeeds), and an
@@ -2044,11 +2153,20 @@ export interface AscensionSeat {
  * partnered seat does (takeSeat, engine/timeline.ts applySeat). 2023 Americas sent nobody up — The Guard won and
  * VCT Americas 2024 had no side from its Ascension — so there is no seat to take, and none is made up. From 2027 the
  * leagues are drawn afresh (engine/leagues.ts), China's two visitors off its Ascension.
+ *
+ * The other way round (2026-09-24): where the side history sent up is the player's club and it finished below that
+ * place here, the seat is not its — it goes to the best placed side here not already in next season's league (in one
+ * world TYLOO won 2023's China Ascension, and TYLOO was a partner for 2024), and the player's club stays in the
+ * Challengers; where that side is the player's club after all, nothing moves. A club that already holds a seat, or a seat already taken
+ * from its holder, moves nothing. A seat won while an earlier club of the player's still holds one is a seat of its
+ * own (GameState.seats).
  */
-export function ascensionSeat(state: GameState, year: number): AscensionSeat | null {
-  if (year < 2024 || year > LAST_REAL_YEAR || state.seat) return null
+export function ascensionSeats(state: GameState, year: number): AscensionSeat[] {
+  if (year < 2024 || year > LAST_REAL_YEAR) return []
   const club = playerClub(state)
-  if (!club || !state.teams[club]) return null
+  if (!club || !state.teams[club]) return []
+  const held = seatsOf(state)
+  if (held.some((x) => x.club === club)) return []
   for (const comp of Object.values(state.comps)) {
     const c = comp.circuit
     const ev = c && eventOf(c.id)
@@ -2058,19 +2176,29 @@ export function ascensionSeat(state: GameState, year: number): AscensionSeat | n
     if (at < 0) continue
     const mine = comp.places?.[at] ?? at + 1
     const next = eventsOf(year).filter((e) => !e.projected && !e.plan && e.stage === 'kickoff' && e.region === ev.region && isLeagueEvent(year, e))
-    if (!next.length) return null
+    if (!next.length) return []
     const seeded = new Set(next.flatMap((e) => e.seeds))
     const up = ev.places.filter(([v]) => seeded.has(v)).sort((a, b) => a[1] - b[1])[0]
-    const leagueCn = next[0].cn.split(' · ')[0]
+    const base = { league: ev.region, from: year, event: ev.cn, leagueCn: next[0].cn.split(' · ')[0], place: mine }
     // won, and history's next season has no seat from this Ascension: said so, and nothing is made up
-    if (!up) return mine === 1 ? { club, displaced: null, league: ev.region, from: year, event: ev.cn, leagueCn, place: mine } : null
-    if (mine > up[1]) return null
-    const displaced = teamOf(state, next[0], up[0])
-    if (!displaced || displaced === club) return null
-    return { club, displaced, league: ev.region, from: year, event: ev.cn, leagueCn, place: mine }
+    if (!up) return mine === 1 ? [{ club, displaced: null, ...base }] : []
+    const real = teamOf(state, next[0], up[0])
+    if (!real || held.some((x) => x.displaced === real)) return []
+    if (real !== club) return mine <= up[1] ? [{ club, displaced: real, ...base }] : []
+    if (mine <= up[1]) return []
+    // the player's club was history's, and lost the place: the best placed side here that is not in next season's
+    // league already goes up in its seat — and where that is the player's club after all, nothing moves
+    const bound = new Set(next.flatMap((e) => e.seeds.map((v) => teamOf(state, e, v))).filter((t): t is string => !!t && t !== club))
+    const winner = comp.finished.find((t) => !bound.has(t) && !!state.teams[t] && !state.teams[t].dormant && !held.some((x) => x.club === t))
+    if (!winner || winner === club || inVctLeague(state, state.teams[winner])) return []
+    return [{ club: winner, displaced: club, lost: true, ...base }]
   }
-  return null
+  return []
 }
+
+/** The seat the player's own club goes up to (ascensionSeats), or where it won and history had none to give. */
+export const ascensionSeat = (state: GameState, year: number): AscensionSeat | null =>
+  ascensionSeats(state, year).find((x) => !x.lost) ?? null
 
 /** A phase's first day: an open qualifier's own days are on record, any other unit's first match is its opening. */
 function unitFirst(ev: CEvent, ui: number): number {
