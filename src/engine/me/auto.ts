@@ -1,8 +1,8 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { activeAbsence, absenceBlock } from './absence'
-import { ATTR_KEYS } from '../types'
+import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Role } from '../types'
-import { duoMate, hourValues } from './growth'
+import { duoMate, hourValues, practiceSplit } from './growth'
 export { duoMate }
 import { emptyTalents, talentsOf } from './career'
 import { ceilingOf, weightsFor } from '../player'
@@ -135,6 +135,37 @@ export function practiceWithRoom(state: GameState, preferred: Exclude<Practice, 
   for (const h of values) if (h.key === 'aim' || h.key === 'vod' || h.key === 'util') return h.key
   for (const key of ['aim', 'vod', 'util'] as const) if (useful(key)) return key
   return null
+}
+
+/**
+ * A practice whose own attribute — 枪法训练's 枪法, 复盘's 意识, 道具与跑图's 道具 (FEEDS) — sits at its
+ * ceiling with no live break to count toward: what is left of it is its minor share, 枪法训练's 反应 at 0.35
+ * of the hour, and the rest of the hour banks nothing (growth.ts addXp).
+ */
+export function halfEmpty(state: GameState, key: Exclude<Practice, 'duo'>): boolean {
+  const p = state.players[state.me!.id]
+  const k = FEEDS[key]
+  return p.attrs[k] >= ceilingOf(p, k) && !chasing(state, k)
+}
+
+/**
+ * The steady plan takes a half-empty practice once a week, not every slot the role, the weakest attribute and
+ * the talent each hand it.
+ *
+ * Reported 2026-09-22 (a17ca0ba): 「属性到99后自动分配还是会去练」. practiceWithRoom kept a session while any
+ * attribute it trains had room, so a duelist at 枪法 99 went on booking 枪法训练 two and three times a week for
+ * his 反应 (scripts/check_auto_training_room.ts: a 决斗者 at 枪法 99, 反应 87 — weeks of 枪法训练 ×2–3 on
+ * 枪法 99, two thirds of every hour into nothing). One session still reaches the minor share; a second one goes
+ * to the practice worth the most to 综合 right now (growth.ts hourValues), and stays only when there is no
+ * other practice with room. A train quest and 复盘方法's tilt relief are any session's worth, not this one's.
+ */
+export function roomier(state: GameState, key: Exclude<Practice, 'duo'>): Exclude<Practice, 'duo'> {
+  const me = state.me!
+  if ((me.plan[key] ?? 0) < 1 || !halfEmpty(state, key)) return key
+  if (key === 'vod' && me.courses.includes('review') && me.tilt > 0) return key
+  const other = hourValues(state).find((h): h is typeof h & { key: Exclude<Practice, 'duo'> } =>
+    (h.key === 'aim' || h.key === 'vod' || h.key === 'util') && h.key !== key && h.attrs.length > 0)
+  return other ? other.key : key
 }
 
 /** points past 均衡型 at which the talent has its session every week; a smaller lean has it that share of the weeks */
@@ -290,13 +321,13 @@ export function autoPlan(state: GameState, talent = true): string {
   const session = (s: Practice): void => {
     if (s !== 'duo') {
       const useful = practiceWithRoom(state, s)
-      if (useful) want(useful)
+      if (useful) want(roomier(state, useful))
       return
     }
     const mate = duoMate(state)
     if (!mate) {
       const useful = practiceWithRoom(state, 'util')
-      if (useful) want(useful)
+      if (useful) want(roomier(state, useful))
       return
     }
     me.duoWith = mate.id
@@ -334,7 +365,15 @@ function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAc
   if (was.trainedWeek !== me.week && me.positionTraining?.trainedWeek === me.week) parts.push('副位置训练 ×1')
   if (!parts.length) return me.ap > 0 ? '这周没有还能做的事了，剩下的行动点用不出去。' : '这周的行动点已经用完了。'
   const now = Math.round(100 - p.fatigue)
-  return `按推荐做完了 ${spent} 点：${parts.join('、')}。体力 ${was.stamina} → ${now}。`
+  // a session kept for its minor share says so, or 枪法 99 beside 枪法训练 ×1 reads as a wasted hour (roomier)
+  const half = (['aim', 'vod', 'util'] as const)
+    .filter((k) => (me.plan[k] ?? 0) > (was.plan[k] ?? 0) && halfEmpty(state, k))
+    .map((k) => {
+      const rest = [...Object.keys(practiceSplit(p, k)), ...(k === 'vod' ? ['igl'] : [])].filter((a) => a !== FEEDS[k] && p.attrs[a as keyof Attrs] < ceilingOf(p, a as keyof Attrs))
+      return rest.length ? `${ATTR_CN[FEEDS[k]]}已到顶，${ACTION_BY_KEY[k].label}练的是${rest.map((a) => ATTR_CN[a as keyof Attrs]).join('、')}` : ''
+    })
+    .filter(Boolean)
+  return `按推荐做完了 ${spent} 点：${parts.join('、')}。体力 ${was.stamina} → ${now}。${half.length ? `（${half.join('；')}）` : ''}`
 }
 
 /** Answer whatever is in front of me the steady way. Returns a line for the record. */

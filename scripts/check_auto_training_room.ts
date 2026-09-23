@@ -212,4 +212,35 @@ check('five roles, pre/pro, fresh/tired: no useless aim, correct AP, fatigue bud
     assert.equal(p.fatigue, own(copy).fatigue)
   }
 })
+// Public feedback a17ca0ba (2026-09-22): 「属性到99后自动分配还是会去练」. A duelist at 枪法 99 with 反应 and
+// 意识 still open booked 枪法训练 in the weakest slot, the role's tail and the talent's slot alike — two or three
+// sessions a week of which 0.65 of every hour banked nothing.
+check('枪法 at its ceiling, 反应 open: 枪法训练 once a week, the rest to practice with room', () => {
+  const s = fixture(), m = s.me!, p = own(s)
+  p.attrs.aim = 80; p.attrs.reaction = 60; p.attrs.awareness = p.attrs.clutch = 70
+  m.talents = { ...emptyTalents(), aim: 12, reaction: 12 }
+  assert.equal(chasing(s, 'aim'), false)
+  const line = autoPlan(s, true)
+  assert.equal(m.plan.aim, 1, JSON.stringify(m.plan))
+  assert.ok((m.plan.vod ?? 0) + (m.plan.util ?? 0) >= 1, JSON.stringify(m.plan))
+  assert.ok((p.xp.reaction ?? 0) > 0)
+  assert.equal(p.xp.aim ?? 0, 0)
+  assert.match(line, /枪法已到顶，枪法训练练的是反应/)
+  account(s, 12)
+})
+check('枪法训练 the only practice with room: repeats stay (nothing better to do with the hours)', () => {
+  const s = fixture(true), m = s.me!, p = own(s)
+  p.attrs.reaction = 50
+  autoPlan(s, false)
+  assert.ok((m.plan.aim ?? 0) >= 2, JSON.stringify(m.plan))
+  assert.ok((p.xp.reaction ?? 0) > 0)
+})
+check('a live 枪法 break is not half-empty: its two sessions stay', () => {
+  const s = fixture(true), m = s.me!
+  own(s).attrs.reaction = 50; own(s).attrs.awareness = 50
+  m.bottleneck!.mechV!.aim = 0; m.bottleneck!.aimStreak = 2
+  assert.equal(chasing(s, 'aim'), true)
+  autoPlan(s, false)
+  assert.ok((m.plan.aim ?? 0) >= 2, JSON.stringify(m.plan))
+})
 console.log(`PASS ${checks} bounded auto-training checks`)
