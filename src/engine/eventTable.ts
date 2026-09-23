@@ -215,6 +215,7 @@ export function roundCn(round: string): string {
     .replace(/^Middle Final$/, '中段组决赛')
     .replace(/^(Bronze( Match| Final)?|Consolation)$/, '季军赛')
     .replace(/^Knockout Round$/, '首轮')
+    .replace(/^Seeding( Match)?$/, '种子排位赛')
     .replace(/^Play-?[Ii]ns?$/, '附加赛')
     .replace(/^Tie ?[Bb]reaker$/, '加赛')
 }

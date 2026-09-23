@@ -546,18 +546,22 @@ function judgeSeat(state: GameState, mine: string | null, Y: TYear, notes: strin
   })
 }
 
+/** Every league seat this world has taken: 方案 C's, then those won at an Ascension since, in the order they were won. */
+export const seatsOf = (state: GameState): NonNullable<GameState['seats']> => [...(state.seat ? [state.seat] : []), ...(state.seats ?? [])]
+
 function applySeat(state: GameState, year: number): void {
-  const s = state.seat
-  if (!s || year < s.from) return
-  const mine = state.teams[s.club]
-  if (mine) { mine.tier = 1; mine.league = `VCT ${s.league}` }
-  // the seat's real holder, and whatever history carried it on as: Giants Gaming's was GIANTX's from 2024
-  for (const id of [s.displaced, ...successorsOf(s.displaced, year)]) {
-    const out = state.teams[id]
-    if (!out || id === s.club) continue
-    out.tier = 2
-    out.scene = sceneFor(state, out)
-    out.league = `Challengers ${out.scene ?? out.region}`
+  for (const s of seatsOf(state)) {
+    if (year < s.from) continue
+    const up = state.teams[s.club]
+    if (up) { up.tier = 1; up.league = `VCT ${s.league}` }
+    // the seat's real holder, and whatever history carried it on as: Giants Gaming's was GIANTX's from 2024
+    for (const id of [s.displaced, ...successorsOf(s.displaced, year)]) {
+      const out = state.teams[id]
+      if (!out || id === s.club) continue
+      out.tier = 2
+      out.scene = sceneFor(state, out)
+      out.league = `Challengers ${out.scene ?? out.region}`
+    }
   }
 }
 
@@ -853,7 +857,8 @@ export function syncYear(state: GameState, year: number): YearSync {
 
   applySeat(state, year)
   const own = mine ? state.teams[mine] : undefined
-  if (own && year >= 2023 && state.seat?.club !== mine) {
+  // a club a seat moved, up or down, has its tier from applySeat, not the book
+  if (own && year >= 2023 && !seatsOf(state).some((x) => year >= x.from && (x.club === mine || x.displaced === mine))) {
     const book = bookClubOf(state, Y, mine!)
     own.tier = book?.l ? 1 : 2
     // a seat this year means no Challengers league; own.league is still last year's here, so ask the book

@@ -1,7 +1,7 @@
 import { Rng, clamp } from './rng'
 import { absentPlayer } from './me/absence'
 import { MAPS, HIGHLIGHT_TEMPLATES as HL, mapCn } from './content'
-import { mapAvailableOn, mapsAvailableOn } from './me/mapEra'
+import { mapAvailableOn, proMapsAvailableOn } from './me/mapEra'
 import { agentMod, autoAgents, normalizeAgents } from './agents'
 import { DIAL_SCALE, callBoost, compStyle, famBonus, familiarity, tacticEdge } from './comp'
 import type { CompStyle } from './comp'
@@ -373,9 +373,12 @@ export function activePool(seed: number, phase: PoolPhase = 0, available: readon
   return pool.sort()
 }
 
-/** Today's pool for this save — the one every veto and every screen must use. */
+/**
+ * Today's pool for this save — the one every veto and every screen must use. A career's is drawn from the maps the
+ * pros had played by today (me/mapEra.ts FIRST_PRO), not every map already patched in.
+ */
 export const poolFor = (state: Pick<GameState, 'seed' | 'year' | 'stage'> & Partial<Pick<GameState, 'day' | 'me'>>): string[] =>
-  activePool(state.seed + state.year, poolPhaseOf(state.stage), state.me ? mapsAvailableOn(state.year, state.day ?? 0) : MAPS)
+  activePool(state.seed + state.year, poolPhaseOf(state.stage), state.me ? proMapsAvailableOn(state.year, state.day ?? 0) : MAPS)
 
 export function vetoOrder(bo: 1 | 2 | 3 | 5): ('ban' | 'pick')[] {
   // 7-map pool

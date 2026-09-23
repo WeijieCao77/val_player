@@ -969,6 +969,17 @@ export interface WorldState {
    */
   seat?: { club: string; displaced: string; league: string; from: number }
   /**
+   * League seats won since at an Ascension (engine/circuit.ts ascensionSeats), each held like 方案 C's: the player's
+   * club up in the seat of the side that Ascension really sent, or — where the side history sent up was the player's
+   * club and it did not earn the place here — the club that did, up in its seat (engine/timeline.ts seatsOf)
+   */
+  seats?: { club: string; displaced: string; league: string; from: number }[]
+  /**
+   * Promotion places won in a decider whose split is the next season's, carried over the winter: `club` takes the
+   * seat `real` (a vlr id) held in event `feeds` of season `year` (engine/circuit.ts carryPromotions)
+   */
+  promoted?: { year: number; feeds: string; real: string; club: string }[]
+  /**
    * Clubs the player's club carried on as — successor world id to the player's
    * club — when history rebranded, merged or bought it whole (engine/timeline.ts inherit)
    */
