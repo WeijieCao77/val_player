@@ -50,7 +50,7 @@ import { eventOf, eventsOf, isLeagueEvent, worldIdOf } from '../src/engine/circu
 import type { CEvent } from '../src/engine/circuit'
 import { MAX_NEW_PARTNERS } from '../src/engine/leagues'
 import { historyNames } from '../src/engine/names'
-import { bookClubsAt } from '../src/engine/timeline'
+import { bookClubsAt, seatsOf } from '../src/engine/timeline'
 import type { Competition, GameState, Region } from '../src/engine/types'
 import { qualifyHolds, qualifyStats } from './qualify_holds'
 
@@ -421,10 +421,14 @@ function lineage(): void {
       continue
     }
     const t = state.teams[club]
+    // a club that took a league seat on its 2022 (方案 C, judgeSeat) plays the league, not the successor's
+    // Challengers events: in a world where DAMWON reached Masters Copenhagen 2022 it is VCT Pacific's in 2023
+    const upped = seatsOf(state).some((x) => x.club === club && state.year >= x.from)
     const seeded = Object.values(state.comps)
       .filter((c) => c.circuit?.mode && eventOf(c.circuit.id)?.seeds.includes(successor.slice(4)))
+      .filter((c) => !(upped && eventOf(c.circuit!.id)?.scene))
     const inIt = seeded.filter((c) => c.teams.includes(club))
-    console.log(`\n== 传承：${label}：${state.year} 年第 ${state.day} 天，你的俱乐部叫 ${t?.name}；`
+    console.log(`\n== 传承：${label}：${state.year} 年第 ${state.day} 天，你的俱乐部叫 ${t?.name}${upped ? `（${t?.league} 的席位）` : ''}；`
       + `真实种子里有它的已开赛事 ${seeded.length} 场，你在其中 ${inIt.length} 场`)
     if (state.gameOver) fail(`传承 ${label}：${state.gameOver}`)
     if (t?.name !== want) fail(`传承 ${label}：${year} 年应该改名为 ${want}，实际 ${t?.name}`)

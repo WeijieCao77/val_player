@@ -1141,7 +1141,16 @@ function poolTouched(state: GameState, pool: string): boolean {
     && c.teams.some((t) => regions.has(state.teams[t]?.region ?? '')))
 }
 
-/** A pool's table in this world: points, then the order history had, then strength. */
+/**
+ * A pool's table in this world: points, then the order history had, then strength.
+ *
+ * A club is on it by its points, not by the five on its roster that day. The Champions draw reads this table right
+ * after the event's own roster sync (begin → syncEvent), which moves players to the clubs history had at the event:
+ * in one 2021 European career (seed 11) Keyd Stars, second on Brazil's points at 225 and marked 「积分已定」 from day
+ * 301, lost a player to that sync on the draw's day, fell off the table for being four, and Sharks Esports (215) took
+ * its place while Keyd went nowhere (reported 2026-09-24). A short-handed club plays with a stand-in (engine/standin.ts)
+ * and keeps what it earned; a club with no points and no five is no side at all, and a club let go is off the table.
+ */
 function poolRanking(state: GameState, pool: string): string[] {
   const regions = new Set(poolRegions(state.year, pool))
   // from 2024 a pool is a league: the clubs that hold its seats, wherever they are from
@@ -1153,8 +1162,8 @@ function poolRanking(state: GameState, pool: string): string[] {
     if (id && !realOrder.has(id)) realOrder.set(id, i)
   })
   return Object.values(state.teams)
-    .filter((t) => t.roster.length >= 5 && (league
-      ? t.tier === 1 && !t.dormant && regionIn(t.region, state.year) === league
+    .filter((t) => !t.dormant && (t.roster.length >= 5 || t.champPoints > 0) && (league
+      ? t.tier === 1 && regionIn(t.region, state.year) === league
       : regions.has(t.region)))
     .sort((a, b) => b.champPoints - a.champPoints
       || (realOrder.get(a.id) ?? 999) - (realOrder.get(b.id) ?? 999)
