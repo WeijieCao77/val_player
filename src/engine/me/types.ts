@@ -835,6 +835,12 @@ export interface MeState {
   duelLive?: DuelLive
   /** confirmed as a starter: selection reads my full rating, not the rookie discount */
   proven: boolean
+  /**
+   * The men history signed onto my club while I was on it (engine/timeline.ts followBook), by club: a
+   * starter does not lose his place in the five to one of them (me/coach.ts heldSeat). Absent
+   * in older saves and at a club history has not signed anyone for.
+   */
+  historyArrivals?: { club: string; ids: string[] }
   /** official starts at this club since I joined it — with the coach's trust, how a starter becomes his own (me/coach.ts earnProven); absent in older saves */
   startsHere?: number
   /** official starts left, after a title won as a starter, in which a bad run costs no place (me/coach.ts coachAfterTitle) */

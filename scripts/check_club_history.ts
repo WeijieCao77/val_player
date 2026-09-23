@@ -14,6 +14,7 @@ import assert from 'node:assert/strict'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { historyKeeps, reachOf, syncEvent, syncYear } from '../src/engine/timeline'
 import { clubWindow, clubWinter } from '../src/engine/me/club'
+import { coachStarters } from '../src/engine/me/coach'
 import { Rng } from '../src/engine/rng'
 import type { GameState } from '../src/engine/types'
 
@@ -76,6 +77,38 @@ check('an event roster: history\'s signing arrives; an eighth man sends the weak
   assert.ok(t.roster.includes(me))
   assert.equal(t.starters.length, 5)
   assert.ok(t.starters.every((x) => t.roster.includes(x)))
+})
+check('a starter keeps his place against a man history brings in; off the five, or benched for form, it is merit', () => {
+  const s = structuredClone(base)
+  const t = s.teams[EDG]
+  const mine = s.players[me]
+  t.starters = [me, ...t.starters.filter((x) => x !== me).slice(0, 4)]
+  turn(s, 2022)
+  const arrivals = s.me!.historyArrivals!
+  assert.equal(arrivals.club, EDG)
+  assert.ok(arrivals.ids.includes('V3017'), 'nobody arrived with 2022')
+  // the arrival is far better, and at my job
+  const star = s.players['V3017']
+  star.role = mine.role; star.roles = [mine.role]; star.isIgl = false
+  star.overall = 99; star.rounds = 5000
+  for (const k of Object.keys(star.attrs) as (keyof typeof star.attrs)[]) star.attrs[k] = 99
+  assert.ok(t.starters.includes(me))
+  let five = coachStarters(s)
+  assert.ok(five.includes(me), 'the starter keeps his seat')
+  // one of history's men takes the bench for it — at my job, the weakest of them in the coach's eyes
+  assert.equal(five.length, 5)
+  assert.ok(arrivals.ids.some((id) => t.roster.includes(id) && !five.includes(id)), JSON.stringify({ five, arrivals: arrivals.ids }))
+  const plainFive = (() => { const was = t.starters; t.starters = t.starters.filter((x) => x !== me); const f = coachStarters(s); t.starters = was; return f })()
+  assert.ok(!plainFive.includes(me), 'without the hold the coach would have benched him')
+  // benched for form: the hold is gone and the coach reads merit
+  s.me!.benchLock = s.day + 7
+  five = coachStarters(s)
+  assert.ok(!five.includes(me))
+  // back on the bench, he competes on merit next time too
+  s.me!.benchLock = undefined
+  t.starters = five
+  five = coachStarters(s)
+  assert.ok(five.includes(star.id))
 })
 check('a second five entered under the club\'s name (fewer than three shared) does not swap the player\'s team-mates', () => {
   const s = structuredClone(base)

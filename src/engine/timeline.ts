@@ -37,10 +37,11 @@ import type { RawPlayer } from './world'
  * really signed arrive when they arrived, the men it really let go leave for
  * where they went, and its people are rated off the year's numbers like
  * everyone's. He is the one man history never had, so he takes nobody's place
- * on the books — he is one more on the roster, and whether he starts is between
- * him and the coach. Only where the registered seven would be eight does the
- * weakest of history's bench make way (followBook). A club history let go that
- * he keeps alive stays alive.
+ * on the books — he is one more on the roster. In the five he takes one seat
+ * at most: a starter keeps his place against a man history brings in, who sits
+ * (me/coach.ts heldSeat); off it, he competes on merit. Only where the
+ * registered seven would be eight does the weakest of history's bench make way
+ * (followBook). A club history let go that he keeps alive stays alive.
  *
  * It used to leave his whole reach alone — his club and everyone on it. Joined
  * in 2021, EDward Gaming kept its 2021 five through 2022 and 2023 while the book
@@ -248,11 +249,15 @@ function followBook(state: GameState, t: Team, ids: string[], year: number, rng:
       moved = true
     }
   }
+  // who history brought in, kept for the coach: a starter keeps his place in the five against them (me/coach.ts heldSeat)
+  const arrivals = me.historyArrivals?.club === t.id ? me.historyArrivals : (me.historyArrivals = { club: t.id, ids: [] })
   for (const p of want) {
     if (p.teamId === t.id) continue
     sign(state, p, t, year, rng)
+    if (!arrivals.ids.includes(p.id)) arrivals.ids.push(p.id)
     moved = true
   }
+  arrivals.ids = arrivals.ids.filter((id) => t.roster.includes(id))
   const brought = new Set(want.map((p) => p.id))
   const out = (pool: Player[]) => pool.sort((a, b) => Number(t.starters.includes(a.id)) - Number(t.starters.includes(b.id)) || a.overall - b.overall)[0]
   let guard = 0

@@ -230,7 +230,36 @@ export function coachStarters(state: GameState, room = true): string[] {
     const inst = (sameRole.length ? sameRole : spare).sort((a, b) => cv(b) - cv(a))[0]
     if (inst) five[five.indexOf(mine)] = inst
   }
+  // A starter who is in the five keeps his place against a man history signed onto the club
+  // (engine/timeline.ts followBook): I am the one man history never had, so the seat I take is one of theirs,
+  // and that man takes the bench. I still lose it the ordinary ways — a benching for form or a coach trying
+  // another five (benchLock), an injury, a trial — and then compete for it on merit like anyone.
+  // Measured 2026-09-24, eighteen 2021 careers of five seasons, 192f963 against the club following history:
+  // with no hold the share of club matches started fell 89.0% → 83.7% and a recognised starter was benched
+  // 7 → 11 times; holding it for the recognised and trusted only, still 83.7%; for whoever is in the five,
+  // 89.4% and 3 (scratchpad fb-week_measure_*.jsonl).
+  if (mine && !five.includes(mine) && heldSeat(state)) {
+    const arrivals = new Set(me!.historyArrivals!.ids)
+    const taken = five.filter((p) => arrivals.has(p.id) && !(p.isIgl && p === igl))
+    const sameRole = taken.filter((p) => (p.roles ?? [p.role]).includes(mine.role))
+    const out = (sameRole.length ? sameRole : taken).sort((a, b) => cv(a) - cv(b))[0]
+    if (out) five[five.indexOf(out)] = mine
+  }
   return five.map((p) => p.id)
+}
+
+/**
+ * My place is held against history's signings: in the five as it stands, not on trial, fit, not benched for
+ * form or a rotation, and at a club history has signed somebody for since I came.
+ */
+export function heldSeat(state: GameState): boolean {
+  const me = state.me
+  const team = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
+  const p = me ? state.players[me.id] : undefined
+  if (!me || !team || !p || me.trial) return false
+  if (me.historyArrivals?.club !== team.id || !me.historyArrivals.ids.length) return false
+  if (!team.starters.includes(me.id) || (me.benchLock && me.benchLock > state.day)) return false
+  return p.injuredUntil <= state.day && !absentPlayer(state, me.id)
 }
 
 /**
