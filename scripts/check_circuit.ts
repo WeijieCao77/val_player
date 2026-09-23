@@ -423,13 +423,21 @@ function lineage(): void {
     const t = state.teams[club]
     // a club that took a league seat on its 2022 (方案 C, judgeSeat) plays the league, not the successor's
     // Challengers events: in a world where DAMWON reached Masters Copenhagen 2022 it is VCT Pacific's in 2023
-    const upped = seatsOf(state).some((x) => x.club === club && state.year >= x.from)
-    const seeded = Object.values(state.comps)
-      .filter((c) => c.circuit?.mode && eventOf(c.circuit.id)?.seeds.includes(successor.slice(4)))
-      .filter((c) => !(upped && eventOf(c.circuit!.id)?.scene))
+    // — and then it plays the events of the seat it took (takeSeat: its league's, and LOCK//IN), in the place of the
+    // club it displaced. Either way there are events it must be in: a case that checks none checks nothing.
+    const seat = seatsOf(state).find((x) => x.club === club && state.year >= x.from)
+    const drawn = Object.values(state.comps).filter((c) => !!c.circuit?.mode)
+    const seeded = seat
+      ? drawn.filter((c) => {
+        const ev = eventOf(c.circuit!.id)
+        return !!ev && ev.seeds.includes(seat.displaced.slice(4))
+          && ((isLeagueEvent(state.year, ev) && ev.region === seat.league) || /LOCK\/\/IN/i.test(ev.name))
+      })
+      : drawn.filter((c) => eventOf(c.circuit!.id)?.seeds.includes(successor.slice(4)))
     const inIt = seeded.filter((c) => c.teams.includes(club))
-    console.log(`\n== 传承：${label}：${state.year} 年第 ${state.day} 天，你的俱乐部叫 ${t?.name}${upped ? `（${t?.league} 的席位）` : ''}；`
-      + `真实种子里有它的已开赛事 ${seeded.length} 场，你在其中 ${inIt.length} 场`)
+    console.log(`\n== 传承：${label}：${state.year} 年第 ${state.day} 天，你的俱乐部叫 ${t?.name}${seat ? `（${t?.league} 的席位，接的是 ${state.teams[seat.displaced]?.name}）` : ''}；`
+      + `${seat ? '这个席位' : '真实种子里有它'}的已开赛事 ${seeded.length} 场，你在其中 ${inIt.length} 场`)
+    if (!seeded.length) fail(`传承 ${label}：${seat ? '联赛席位' : '承接的俱乐部'}在第 ${state.year} 年第 ${state.day} 天还没有已开的赛事，这一项什么都没查到`)
     if (state.gameOver) fail(`传承 ${label}：${state.gameOver}`)
     if (t?.name !== want) fail(`传承 ${label}：${year} 年应该改名为 ${want}，实际 ${t?.name}`)
     if (state.heirs?.[successor] !== club) fail(`传承 ${label}：没有记下 ${successor} 由你的俱乐部承接`)
