@@ -77,7 +77,7 @@ export interface RunOut {
   t1Weeks: number; ratingSum: number; proWeeks: number; fatigueSum: number; weeks: number
   spent: Record<string, number>; money: number; secs: number
   /** week by week, as the plan was drawn: where I was, whether I was in the five, and the rest it took (check_buy.ts pairs these) */
-  track: { club: string; starter: boolean; rest: number }[]
+  track: { club: string; starter: boolean; rest: number; played: number; started: number }[]
 }
 
 /** autoWeek, with the shopping before the plan and the plan counted */
@@ -90,6 +90,8 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
   const year0 = state.year
   const hours: Record<string, number> = {}
   const track: RunOut['track'] = []
+  const counted = new WeakSet<object>()
+  for (const m of me.matches) counted.add(m)
   let peak = p.overall, peakYear = state.year, weeks = 0, weeksHurt = 0, t1Weeks = 0, ratingSum = 0, proWeeks = 0, fatigueSum = 0
   const clear = () => { let g = 0; while (me.pending.length && g++ < 20) autoResolve(state, me.pending[0]) }
   while (state.year - year0 < seasons && weeks < seasons * 60) {
@@ -100,7 +102,8 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
     const club = me.phase === 'pro' ? state.myTeam : ''
     const starter = !!club && !!state.teams[club]?.starters.includes(me.id)
     autoPlan(state)
-    track.push({ club, starter, rest: me.plan.rest ?? 0 })
+    const row = { club, starter, rest: me.plan.rest ?? 0, played: 0, started: 0 }
+    track.push(row)
     for (const [k, n] of Object.entries(me.plan)) hours[k] = (hours[k] ?? 0) + (n ?? 0)
     let stop = advanceWeek(state)
     let guard = 0
@@ -108,6 +111,13 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
       if (stop.kind === 'match') new MeMatch(state, stop.fixture).runOut()
       else clear()
       stop = advanceWeek(state)
+    }
+    // the week's matches, cups and exhibitions with them: what the body carried out of it
+    for (const m of me.matches) {
+      if (counted.has(m)) continue
+      counted.add(m)
+      row.played++
+      if (m.started) row.started++
     }
     weeks++
     fatigueSum += p.fatigue

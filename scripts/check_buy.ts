@@ -136,6 +136,13 @@ const TRAIN_MAX = 0.08
 // The leak this is for — paid recovery turned into practice (a077001) — shows in any week where it happens,
 // so the paired weeks still catch it (red on a077001's leak put back, 2026-09-24). A seed needs PAIRED_MIN such
 // weeks to be read, and at least SEEDS_READ seeds must be.
+//
+// And the same matches that week (2026-09-24, on the batch 74a35e0 with carry-feel and fb-circuit merged): at one
+// club, both in its five, the club's own results still part the two careers — seed 11's club went on a run in
+// 2027 without the shop and went out early with it. In the 27 weeks of 147 where the two played a different
+// number of matches the one buying nothing played 147 maps to 38, started each week at fatigue 48 against 31 and
+// rested 63 times to 19; in the other 120 weeks, 71 to 62 (87%). A week of matches is what makes a body need
+// rest, and the shop has no hand in how far the club goes, so the pair also plays the same matches.
 const PAIRED_MIN = 52
 const SEEDS_READ = 3
 // The peak is held one way: buying everything must not end stronger. Ending weaker is trophy luck, not a leak —
@@ -156,11 +163,12 @@ for (const seed of seeds) {
   peakGap += all.peak - none.peak
   worstSeed = Math.max(worstSeed, all.peak - none.peak)
   trainOver = Math.max(trainOver, (train(all) - train(none)) / Math.max(1, train(none)))
-  // the weeks both careers spend alike: same club (or both without one), both in its five or both not
+  // the weeks both careers spend alike: same club (or both without one), both in its five or both not, and
+  // the same matches played and started that week
   let paired = 0, restNone = 0, restAll = 0
   for (let i = 0; i < Math.min(none.track.length, all.track.length); i++) {
     const a = none.track[i], b = all.track[i]
-    if (a.club !== b.club || a.starter !== b.starter) continue
+    if (a.club !== b.club || a.starter !== b.starter || a.played !== b.played || a.started !== b.started) continue
     paired++; restNone += a.rest; restAll += b.rest
   }
   pairedAt.push(`${seed}:${paired}周 ${restNone}→${restAll}`)
@@ -172,7 +180,7 @@ for (const seed of seeds) {
   gaps.push(`seed ${seed}：峰值 ${none.peak} → ${all.peak}，训练 ${train(none)} → ${train(all)} 小时，休息 ${none.hours.rest ?? 0} → ${all.hours.rest ?? 0}，带伤 ${none.weeksHurt} → ${all.weeksHurt} 周，周末平均疲劳 ${tired(none)} → ${tired(all)}`)
 }
 peakGap /= seeds.length
-facts.push([`${seeds.length} 个种子各自什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（全买平均最多高 ${tol}），单个种子最多差 ${worstSeed >= 0 ? '+' : ''}${worstSeed}（容许 ${seedTol}）；同一支队、同样首发或替补的周里，全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上；${seedsRead} 个种子够 ${PAIRED_MIN} 周，要 ${SEEDS_READ} 个以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
+facts.push([`${seeds.length} 个种子各自什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（全买平均最多高 ${tol}），单个种子最多差 ${worstSeed >= 0 ? '+' : ''}${worstSeed}（容许 ${seedTol}）；同一支队、同样首发或替补、同样场数的周里，全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上；${seedsRead} 个种子够 ${PAIRED_MIN} 周，要 ${SEEDS_READ} 个以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
   peakGap <= tol && worstSeed <= seedTol && restShare >= REST_MIN && seedsRead >= SEEDS_READ && trainOver <= TRAIN_MAX])
 console.log(`  成对的周（种子:周数 休息 不买→全买）：${pairedAt.join('，')}`)
 
