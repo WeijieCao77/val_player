@@ -117,18 +117,42 @@ function tempTeam(state: GameState, id: string, name: string, tag: string, roste
   }
 }
 
-/** The four I am given for this cup. Their level tracks the cup's band and my own. */
+/**
+ * The four I am given for this cup. Their level tracks the cup's band and my own.
+ *
+ * It did not track mine (reported 2026-09-24: 「网吧赛公开赛这种比赛分到的队友到后面
+ * 和对面差距太大，基本打不赢」). They sat three under the band's middle whatever I
+ * was, while the other five climbed past the band's top (mountCupMatch), so by the
+ * final my four were eleven or twelve points a head under theirs, and my own level
+ * hardly counted: measured over 100 runs a cup (scratchpad carry-feel_probe d), a
+ * 55 won a cup 0% of the time, a 65 0%, a 75 0–2% and an 85 — a VCT starter's level
+ * — 0–5%. A player good enough for the café finds better people to queue with:
+ * the four now sit MATE_TRACK of the way from one under the band's middle toward me.
+ */
+export const MATE_TRACK = 0.4
 export function makePickupMates(state: GameState, cup: CupDef, rng: Rng): PickupMate[] {
   const me = state.me!
   const p = state.players[me.id]
   const roles: Role[] = ROLES.filter((r) => r !== '自由人' && r !== p.role)
   if (roles.length < 4) roles.push('决斗者')
-  const base = (cup.band[0] + cup.band[1]) / 2 - 3
+  const mid = (cup.band[0] + cup.band[1]) / 2
+  const base = mid - 1 + (p.overall - mid) * MATE_TRACK
   return roles.slice(0, 4).map((role, i) => ({
     id: `PU${i}`, ign: MATE_NAMES[rng.int(0, MATE_NAMES.length - 1)] + (i + 1), role,
     overall: clamp(Math.round(base + rng.norm(0, 4) + (me.pre.tac - 20) * 0.1), 50, 85),
   }))
 }
+
+/**
+ * Where in the band the round's five sit: the first round's a quarter of the way
+ * up, the final's three quarters (2026-09-24). They climbed from the band's
+ * bottom to two over its top — a final against the best five in any café, every
+ * time. A final is the side that won its half of the draw, not the ceiling of
+ * the field: with this, an entrant at the band's middle takes a cup about as
+ * often as one of sixteen should, and one well above it takes one in four or five.
+ */
+export const OPP_FIRST = 0.25
+export const OPP_FINAL = 0.75
 
 export const TEMP_MINE = 'CUP_ME'
 export const TEMP_OPP = 'CUP_OPP'
@@ -148,12 +172,12 @@ export function mountCupMatch(state: GameState, cup: CupDef, round: number, rng:
   state.teams[TEMP_MINE] = tempTeam(state, TEMP_MINE, `${state.players[me.id].ign} 的车队`, 'ME', ids, 60)
   // opponents get stronger every round
   const r = cup.rounds[round]
-  const lo = cup.band[0] + (cup.band[1] - cup.band[0]) * (round / Math.max(1, cup.rounds.length - 1))
+  const lo = cup.band[0] + (cup.band[1] - cup.band[0]) * (OPP_FIRST + (OPP_FINAL - OPP_FIRST) * (round / Math.max(1, cup.rounds.length - 1)))
   const oppIds: string[] = []
   const oppRoles: Role[] = ['决斗者', '先锋', '控场', '哨卫', '决斗者']
   for (let i = 0; i < 5; i++) {
     const id = `OP${i}`
-    state.players[id] = tempPlayer(state, id, `${MATE_NAMES[rng.int(0, MATE_NAMES.length - 1)]}`, oppRoles[i], clamp(Math.round(lo + rng.norm(2, 3)), 50, 90), rng)
+    state.players[id] = tempPlayer(state, id, `${MATE_NAMES[rng.int(0, MATE_NAMES.length - 1)]}`, oppRoles[i], clamp(Math.round(lo + rng.norm(0, 3)), 50, 90), rng)
     oppIds.push(id)
   }
   const name = OPP_NAMES[rng.int(0, OPP_NAMES.length - 1)]

@@ -181,6 +181,24 @@ export class MeMatch {
     return this.mineIsA ? pa : 1 - pa
   }
 
+  /**
+   * The round-win estimate for my side from the two fives alone, without the
+   * map's own swing — what the pre-match card's 实力碾压 … 差距过大 reads.
+   *
+   * It read roundProb, map one's own draw included, and the card is read as a
+   * verdict on the series (reported 2026-09-24: 「我赛前拿了金色显示的还是实力碾压g2
+   * 然后你告诉我输了」). Measured (scratchpad carry-feel_probe a, 2400 BO3s): off
+   * the two fives, 实力碾压 won 98% of series and 差距过大 appeared only on a real
+   * gap; off map one's draw, 实力碾压 won 96%, and 差距过大 — 「这一图基本没戏」 —
+   * came up on clubs 2.5 points apart and they took 26% of those series.
+   */
+  rosterProb(): number {
+    const m = this.map
+    if (!m || !this.side) return 0.5
+    const pa = m.rosterEstimate()
+    return this.mineIsA ? pa : 1 - pa
+  }
+
   /** my side's chance of taking the map in progress */
   winProb(): number {
     const m = this.map
