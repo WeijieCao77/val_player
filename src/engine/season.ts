@@ -29,7 +29,7 @@ import { importBlock } from './imports'
 import { contractLength, expectedSalary } from './player'
 import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
-import { bookAheadEvents, circuitPaid, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
+import { ascensionSeat, bookAheadEvents, circuitPaid, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { announceLeagues, keepScore, turnLeagues } from './leagues'
 import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { historyNames } from './names'
@@ -1516,6 +1516,21 @@ function openYear(state: GameState, rng: Rng, notes: string[]): void {
   // what last season's placings were worth toward a partner seat, before its events are cleared
   keepScore(state, state.year - 1)
   if (isTimelineWorld(state) && bookCovers(state.year)) {
+    // an Ascension the player's club won last season: its seat in the league, before the world is brought up to
+    // the year (syncYear's applySeat gives the tiers) and before the year's events are drawn (engine/circuit.ts ascensionSeat)
+    const up = ascensionSeat(state, state.year)
+    if (up && !up.displaced) {
+      notes.push(`🏛️ ${state.teams[up.club]?.name} 赢下了 ${state.year - 1} 年的${up.event}，但真实历史里 ${state.year} 赛季的${up.leagueCn}没有收这届晋级赛的队伍，这个席位不存在，${state.year} 赛季还在 Challengers。`)
+    } else if (up?.displaced) {
+      state.seat = { club: up.club, displaced: up.displaced, league: up.league, from: up.from }
+      const [mine, out] = [state.teams[up.club]?.name, state.teams[up.displaced]?.name]
+      const how = up.place === 1 ? `赢下了 ${state.year - 1} 年的${up.event}` : `在 ${state.year - 1} 年的${up.event}拿到第 ${up.place} 名`
+      notes.push(`🏛️ ${mine} ${how}，${state.year} 赛季升入${up.leagueCn}——坐的是真实历史里 ${out} 的席位。`)
+      state.news.push({ year: state.year,
+        day: state.day, kind: 'league', important: true,
+        text: `🏛️ ${mine} 通过${up.event}升入${up.leagueCn}，${out} 留在 Challengers。`,
+      })
+    }
     const r = syncYear(state, state.year)
     notes.push(...r.notes)
     const gone: string[] = []

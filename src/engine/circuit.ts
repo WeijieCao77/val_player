@@ -1989,7 +1989,9 @@ export function nextSeasonFor(state: GameState, team: Team): { ev: CEvent; door:
   const own = new Set<string>()
   if (team.id.startsWith('V21T')) own.add(team.id.slice(4))
   for (const [from, to] of Object.entries(state.heirs ?? {})) if (to === team.id && from.startsWith('V21T')) own.add(from.slice(4))
-  const league = inVctLeague(state, team)
+  // an Ascension won this season: next season is the league's (ascensionSeat)
+  const up = ascensionSeat(state, y)
+  const league = inVctLeague(state, team) || (!!up?.displaced && up.club === team.id)
   const scene = sceneFor(state, team, false)
   // isHome, for next season
   const home = (ev: CEvent): boolean => {
@@ -2007,6 +2009,65 @@ export function nextSeasonFor(state: GameState, team: Team): { ev: CEvent; door:
     if (league || !home(ev)) continue
     const door = ev.plan ? ev.plan.seats.some((s) => s.from === 'pool') : !!deciderPlace(y, ev)
     if (door) return { ev, door: 'open', day: ev.start! }
+  }
+  return null
+}
+
+/** The seat an Ascension this world played sends the player's club up to (ascensionSeat). */
+export interface AscensionSeat {
+  club: string
+  /** the club that really took the seat: the side the player's club stands in for in the league's events; null where history's next season took nobody from this Ascension */
+  displaced: string | null
+  league: string
+  /** the season the seat is played from */
+  from: number
+  /** the Ascension, as the player knows it */
+  event: string
+  /** the league, as the player knows it: 「中国联赛」 */
+  leagueCn: string
+  /** where the player's club finished the Ascension */
+  place: number
+}
+
+/**
+ * The league seat the player's club won at this world's Ascension, for season `year` — read before that season's
+ * events are drawn, off the season before it that is still on the books.
+ *
+ * Reported 2026-09-23 (「为什么我玩lizhi赢了晋升赛没上一级联赛呀」): a club that won 2023's China Ascension played
+ * 2024 in the Evolution Series. A league's field from 2024 to 2026 is its real seeds (legacySeeds), and an
+ * Ascension is the season before, so what the Ascension decided here never reached the next season's draw.
+ *
+ * Each Ascension of 2023–2025 really sent one side up (the one of its field in the next season's Kickoff; 2025
+ * Pacific's Kickoff also had FULL SENSE, seventh, by another road — the best placed of them is the Ascension's). The
+ * player's club takes that side's seat when it finished no lower than that side really did — the place it earned, as
+ * every other seat here is read. The seat then plays every league event that side's seat plays, the way 方案 C's
+ * partnered seat does (takeSeat, engine/timeline.ts applySeat). 2023 Americas sent nobody up — The Guard won and
+ * VCT Americas 2024 had no side from its Ascension — so there is no seat to take, and none is made up. From 2027 the
+ * leagues are drawn afresh (engine/leagues.ts), China's two visitors off its Ascension.
+ */
+export function ascensionSeat(state: GameState, year: number): AscensionSeat | null {
+  if (year < 2024 || year > LAST_REAL_YEAR || state.seat) return null
+  const club = playerClub(state)
+  if (!club || !state.teams[club]) return null
+  for (const comp of Object.values(state.comps)) {
+    const c = comp.circuit
+    const ev = c && eventOf(c.id)
+    if (!c || !ev || ev.stage !== 'ascension' || ev.plan || ev.projected || !ev.region || YEAR_OF.get(ev.id) !== year - 1) continue
+    if (c.mode !== 'sim' || !comp.champion) continue
+    const at = comp.finished.indexOf(club)
+    if (at < 0) continue
+    const mine = comp.places?.[at] ?? at + 1
+    const next = eventsOf(year).filter((e) => !e.projected && !e.plan && e.stage === 'kickoff' && e.region === ev.region && isLeagueEvent(year, e))
+    if (!next.length) return null
+    const seeded = new Set(next.flatMap((e) => e.seeds))
+    const up = ev.places.filter(([v]) => seeded.has(v)).sort((a, b) => a[1] - b[1])[0]
+    const leagueCn = next[0].cn.split(' · ')[0]
+    // won, and history's next season has no seat from this Ascension: said so, and nothing is made up
+    if (!up) return mine === 1 ? { club, displaced: null, league: ev.region, from: year, event: ev.cn, leagueCn, place: mine } : null
+    if (mine > up[1]) return null
+    const displaced = teamOf(state, next[0], up[0])
+    if (!displaced || displaced === club) return null
+    return { club, displaced, league: ev.region, from: year, event: ev.cn, leagueCn, place: mine }
   }
   return null
 }
