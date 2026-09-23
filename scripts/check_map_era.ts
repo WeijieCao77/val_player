@@ -6,7 +6,7 @@ import { MAPS, mapCn } from '../src/engine/content'
 import { Rng } from '../src/engine/rng'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { ARRIVALS } from '../src/engine/me/releases'
-import { mapAvailableOn, mapsAvailableOn } from '../src/engine/me/mapEra'
+import { FIRST_PRO, mapAvailableOn, mapInProPoolOn, mapsAvailableOn, proMapsAvailableOn } from '../src/engine/me/mapEra'
 import { activePool, MatchSim, poolFor, poolPhaseOf, runVeto, simulateMatch } from '../src/engine/match'
 import type { PoolPhase } from '../src/engine/match'
 import { MeMatch } from '../src/engine/me/matchplay'
@@ -85,20 +85,44 @@ check('manager activePool and poolFor preserve the old seeded algorithm in every
   const agreed = new MatchSim(manager, aId, bId, 1, new Rng(7), { map: 'Summit', format: 'full24' })
   assert.deepEqual(agreed.maps, ['Summit'], 'career release gating must not change manager agreements')
 })
-check('career pools: multiple seeds, phases and all release boundaries have enough distinct legal maps', () => {
-  const dates = [[2021, 0], [2022, 364], [2026, 172], [2026, 173], [2027, 0], ...releases.flatMap(a => [[a.year, a.day - 1], [a.year, a.day]])]
+check('pro pools open on each map\'s first pro match, never before its release; the patch day stays the release day', () => {
+  // every map after the launch five has a sourced first pro match (reported 2026-09-21: 「有些地图过早出现在比赛图池」)
+  for (const a of releases) {
+    const first = FIRST_PRO[a.name]
+    assert.ok(first, `${a.name}: no first pro match on record`)
+    assert.match(first.match, /^vlr\.gg\/\d+$/)
+    assert.ok(first.year * 1000 + first.day >= a.year * 1000 + a.day, `${a.name}: pro before its release`)
+    assert.equal(mapInProPoolOn(a.name, first.year, first.day - 1), false, `${a.name}: a day early`)
+    assert.equal(mapInProPoolOn(a.name, first.year, first.day), true)
+    assert.equal(mapAvailableOn(a.name, a.year, a.day), true, `${a.name}: released on its patch day all the same`)
+    for (let seed = 0; seed < 32; seed++) for (const stage of ['kickoff', 'stage1', 'stage2', 'offseason'] as StageKey[]) {
+      assert.ok(!poolFor({ seed, year: first.year, day: first.day - 1, stage, me: base.me }).includes(a.name), `${a.name} in a pro pool before ${first.match}`)
+    }
+  }
+  // the cases players could see: Breeze the day after its patch, Pearl at Masters Copenhagen (13–24 Jul 2022)
+  assert.ok(mapsAvailableOn(2021, 117).includes('Breeze') && !proMapsAvailableOn(2021, 117).includes('Breeze'))
+  assert.ok(mapsAvailableOn(2022, 195).includes('Pearl') && !proMapsAvailableOn(2022, 195).includes('Pearl'))
+  assert.ok(proMapsAvailableOn(2022, 242).includes('Pearl'), 'Pearl at Champions 2022')
+  assert.ok(!proMapsAvailableOn(2021, 260).includes('Fracture'), 'Masters Berlin had no Fracture')
+  assert.deepEqual(proMapsAvailableOn(2027, 0), mapsAvailableOn(2027, 0), 'every map in by 2027')
+})
+check('career pools: multiple seeds, phases and all first-pro boundaries have enough distinct legal maps', () => {
+  const pro = releases.map(a => ({ name: a.name, ...FIRST_PRO[a.name] }))
+  const dates = [[2021, 0], [2022, 364], [2026, 172], [2026, 173], [2027, 0], ...releases.flatMap(a => [[a.year, a.day - 1], [a.year, a.day]]),
+    ...pro.flatMap(a => [[a.year, a.day - 1], [a.year, a.day]])]
   const stages: StageKey[] = ['kickoff', 'masters1', 'stage1', 'masters2', 'stage2', 'champions', 'offseason']
   for (const [year, day] of dates) for (const seed of [0, 1, 7, 19, 73, 3750]) for (const stage of stages) {
     const state = { seed, year, day, stage, me: base.me }
     const before = JSON.stringify(state), pool = poolFor(state)
-    legal(pool, year, day, Math.min(7, mapsAvailableOn(year, day).length))
+    legal(pool, year, day, Math.min(7, proMapsAvailableOn(year, day).length))
+    assert.ok(pool.every(m => mapInProPoolOn(m, year, day)))
     assert.deepEqual(poolFor(state), pool)
     assert.equal(JSON.stringify(state), before, 'pool lookup mutated state')
   }
-  for (const release of releases) {
+  for (const first of pro) {
     const seen = new Set<string>()
-    for (let seed = 0; seed < 32; seed++) for (const map of poolFor({ seed, year: release.year, day: release.day, stage: 'kickoff', me: base.me })) seen.add(map)
-    assert.ok(seen.has(release.name), `${release.name} must become eligible, not stay excluded forever`)
+    for (let seed = 0; seed < 32; seed++) for (const map of poolFor({ seed, year: first.year, day: first.day, stage: 'kickoff', me: base.me })) seen.add(map)
+    assert.ok(seen.has(first.name), `${first.name} must become eligible on its first pro day, not stay excluded forever`)
   }
 })
 check('5/6/7-map veto boards give BO1/2/3/5 enough distinct maps, deterministically', () => {
