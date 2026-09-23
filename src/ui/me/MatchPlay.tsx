@@ -181,7 +181,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
   const theirR = mm.theirRounds
   const wp = map && !map.over ? mm.winProb() : null
   const rec = mm.record
-  const verdict = map && !map.over ? gapVerdict(mm.roundProb()) : null
+  // before kickoff the two fives alone (the card is read as the series'); on the map, the map's own estimate
+  const verdict = map && !map.over ? gapVerdict(phase === 'pre' ? mm.rosterProb() : mm.roundProb()) : null
   const verdictTag = (k: string) => k === 'crush' || k === 'edge' ? 'tag win' : k === 'even' ? 'tag' : 'tag warn'
 
   // the five on the floor for the current map, with the agent each is on;

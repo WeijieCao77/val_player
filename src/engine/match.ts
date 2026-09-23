@@ -32,6 +32,53 @@ import type {
  * still holds the K/D calibration.
  */
 const MAP_SWING = 6
+/**
+ * 手感 (2026-09-24): how each player turns up for one map, a draw of N(0,1) per
+ * player per map, and how much of a side's MAP_SWING is those five nights.
+ *
+ * Players said the numbers never moved: 「c不动」「评分一直在那个区间」「夸张的
+ * 数据很少」「明星选手的作用被低估了」. Measured (scratchpad carry-feel_probe, 407
+ * tier-1 series): the season's ratings ran 0.94–1.07 from P10 to P90, the best
+ * 95-overall NPC averaged 1.15, a series' rating moved 0.14 either way, and a
+ * player's night had nothing to do with whether his side won — the side's swing
+ * was one draw for the five, and kills were dealt out around it.
+ *
+ * Now most of that swing is the five's own nights, and the best man's counts
+ * the most: NIGHT_WEIGHTS by his place among the five on effective rating, so
+ * a star on a hot night lifts his side and on a cold one sinks it. The same
+ * night deals him more of its kills (NIGHT_KILL) and fewer of its deaths
+ * (NIGHT_DEATH). What is left over is TEAM_SWING, the side's own draw, so the
+ * whole swing is still MAP_SWING wide (√(TEAM_SWING² + NIGHT_EDGE²·Σw²) = 6.0)
+ * and the strength-gap curve stays where it was tuned. The same for every
+ * player on every side: an NPC star has his nights exactly as the career's own
+ * player does.
+ *
+ * Tried: the lineup's own 1.24 … 0.76 with NIGHT_EDGE 2 and NIGHT_KILL 0.35 put
+ * the series-to-series spread of a 90-overall player's rating at 0.20 (0.14),
+ * but his rating said less about whether we won (correlation 0.46 → 0.33) —
+ * big nights that did not carry. A steeper split with a smaller kill share gives
+ * 0.17 and 0.36–0.42 over the four roles: bigger nights, and they carry.
+ */
+export const NIGHT_EDGE = 2.3
+const NIGHT_WEIGHTS = [1.9, 1.1, 0.8, 0.6, 0.4]
+const TEAM_SWING = Math.sqrt(MAP_SWING ** 2 - NIGHT_EDGE ** 2 * NIGHT_WEIGHTS.reduce((s, w) => s + w * w, 0))
+export const NIGHT_KILL = 0.25
+export const NIGHT_DEATH = 0.12
+const LINEUP_WEIGHTS = [1.24, 1.1, 1.0, 0.9, 0.76]
+/**
+ * A star's gun (2026-09-24). The weight a player draws kills with was 42 + 0.78
+ * × his gun (aim, reaction, clutch) — the flat 42 kept role players on the
+ * scoreboard, and it also flattened the top: a 95 fragged 1.07× a 85. Above
+ * GUN_KNEE each point of gun now counts GUN_STAR more, and below it nothing
+ * moved, so the league's floor is where it was and its stars stand out. Same
+ * probe with the nights above, 407 tier-1 series: season ACS 170–235 → 158–259,
+ * top K/D 1.25 → 1.32, KPR floor 0.51 → 0.45 (real VCT: about 150–265, 1.3–1.45,
+ * 0.5); a 95-overall 决斗者 on a VCT five, 600 BO3s, tops his side's scoreboard
+ * 59% of series (54%) at 1.23 rating and 262 ACS (1.16, 244).
+ */
+const GUN_STAR = 2
+const GUN_KNEE = 80
+const gunWeight = (gun: number) => 42 + gun * 0.78 + GUN_STAR * Math.max(0, gun - GUN_KNEE)
 /** the strength gap, in rating points, that moves a round from 50% to 73% */
 const ROUND_SENS = 30
 
@@ -250,7 +297,7 @@ export function buildLineup(
 
   // the top performers carry slightly more than a flat mean
   const sorted = effs.slice().sort((a, b) => b - a)
-  const weights = [1.24, 1.1, 1.0, 0.9, 0.76]
+  const weights = LINEUP_WEIGHTS
   let base = 0
   let wsum = 0
   sorted.forEach((v, i) => {
@@ -528,6 +575,8 @@ function allocateRound(
   mapName: string,
   /** when the round is being played around one player, they see more of it */
   focusId?: string,
+  /** each player's 手感 on this map (NIGHT_KILL / NIGHT_DEATH); absent, everyone's is 0 */
+  night?: Readonly<Record<string, number>>,
 ): void {
   const roundKills: Record<string, number> = {}
   const roundDeaths = new Set<string>()
@@ -541,13 +590,16 @@ function allocateRound(
       // most of the weight: a 96-aim controller fragged like a 67-aim
       // initiator, because the role factor outweighed thirty points of aim.
       // Real scoreboards do not look like that (happywei 221 ACS to stax's
-      // 176), so the gun carries more of it now and the role a little less.
+      // 176), so the gun carries more of it now and the role a little less —
+      // and past GUN_KNEE more again (gunWeight), and a hot night more still (NIGHT_KILL).
       const kw = killers.map(
-        (p) => (42 + (p.attrs.aim * 0.55 + p.attrs.reaction * 0.3 + p.attrs.clutch * 0.15) * 0.78) *
-          KILL_WEIGHT[p.role] * (0.9 + p.form / 500) * (p.id === focusId ? 1.55 : 1),
+        (p) => gunWeight(p.attrs.aim * 0.55 + p.attrs.reaction * 0.3 + p.attrs.clutch * 0.15) *
+          KILL_WEIGHT[p.role] * (0.9 + p.form / 500) * (p.id === focusId ? 1.55 : 1) *
+          Math.exp(NIGHT_KILL * (night?.[p.id] ?? 0)),
       )
       const dw = vPool.map(
-        (p) => (120 - p.attrs.awareness * 0.35 - p.attrs.clutch * 0.2) * DEATH_WEIGHT[p.role],
+        (p) => (120 - p.attrs.awareness * 0.35 - p.attrs.clutch * 0.2) * DEATH_WEIGHT[p.role] *
+          Math.exp(-NIGHT_DEATH * (night?.[p.id] ?? 0)),
       )
       // The opening duel belongs to its actual killer/victim, not two other
       // independent players who might finish the round with zero kills/deaths.
@@ -613,6 +665,15 @@ function allocateRound(
 
 }
 
+/**
+ * What a side's five nights add to its strength on a map: each man's night, by
+ * his place among the five on effective rating (NIGHT_WEIGHTS).
+ */
+function nightEdge(players: Player[], night: Readonly<Record<string, number>>): number {
+  const order = players.slice().sort((x, y) => effectiveRating(y) - effectiveRating(x))
+  return order.reduce((s, p, i) => s + NIGHT_EDGE * (NIGHT_WEIGHTS[i] ?? 0) * (night[p.id] ?? 0), 0)
+}
+
 /** A tactical instruction called during a timeout; decays over a few rounds. */
 export interface TacticalCall {
   kind: 'focus' | 'rush' | 'steady'
@@ -669,6 +730,8 @@ export class MapSim {
   /** how each side turned up for THIS map — see MAP_SWING */
   private readonly swingA: number
   private readonly swingB: number
+  /** how each player turned up for THIS map — see NIGHT_EDGE; read-only, shared with fork() */
+  readonly night: Readonly<Record<string, number>>
 
   constructor(map: string, A: Lineup, B: Lineup, rng: Rng, format: 'first13' | 'full24' = 'first13') {
     this.format = format
@@ -676,8 +739,12 @@ export class MapSim {
     this.A = A
     this.B = B
     this.rng = rng
-    this.swingA = rng.norm(0, MAP_SWING)
-    this.swingB = rng.norm(0, MAP_SWING)
+    // the five's nights first, then what is left of the side's swing (NIGHT_EDGE)
+    const night: Record<string, number> = {}
+    for (const p of [...A.players, ...B.players]) night[p.id] = rng.norm(0, 1)
+    this.night = night
+    this.swingA = rng.norm(0, TEAM_SWING) + nightEdge(A.players, night)
+    this.swingB = rng.norm(0, TEAM_SWING) + nightEdge(B.players, night)
     this.ctx = { lines: {}, highlights: [], rounds: [] }
     for (const p of [...A.players, ...B.players]) this.ctx.lines[p.id] = blankLine()
   }
@@ -833,7 +900,7 @@ export class MapSim {
     const focus = (aWins ? this.calls.a : this.calls.b)
     allocateRound(
       winners, losers, winnersLost, losersLost, this.ctx, rng, mapCn(this.map),
-      focus?.kind === 'focus' ? focus.playerId : undefined,
+      focus?.kind === 'focus' ? focus.playerId : undefined, this.night,
     )
 
     if (aWins) {
@@ -913,6 +980,17 @@ export class MapSim {
     const swingB = this.b < this.a ? this.B.midRound * 0.35 : 0
     const sens = pistol ? ROUND_SENS + 5 : ROUND_SENS
     return 1 / (1 + Math.exp(-(strA + swingA - (strB + swingB)) / sens))
+  }
+
+  /**
+   * The round-win estimate for side A from the two fives on this map alone —
+   * attack and defence averaged, before this map's swing, the nights and any
+   * momentum. What the pre-match card reads (engine/me/matchplay.ts rosterProb):
+   * that card is about the series, and the map's own draw is gone by map two.
+   */
+  rosterEstimate(): number {
+    const diff = (this.A.atk + this.A.def) / 2 - (this.B.atk + this.B.def) / 2
+    return 1 / (1 + Math.exp(-diff / ROUND_SENS))
   }
 
   /**
