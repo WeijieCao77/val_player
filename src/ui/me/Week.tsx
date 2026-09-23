@@ -250,7 +250,7 @@ export default function Week({ onAdvance, onAdvanceUntil }: { onAdvance: () => v
         >
           <WeeklyGrowth />
           <details className="secondary-weekly">
-            <summary>副位置训练 <span className="tiny muted">· 手动安排，不自动扣行动点</span></summary>
+<summary>副位置训练 <span className="tiny muted">· {me.positionTraining?.autoTrain === true ? '已开启每周自动训练，推进或按推荐时执行' : '手动安排，不自动扣行动点'}</span></summary>
             <div className="secondary-weekly-body"><SecondaryRole /></div>
           </details>
           {/* the hour worth the most to 综合 right now (me/growth.ts hourValues): one line, not a plan — on the 下一步 card while it is up */}

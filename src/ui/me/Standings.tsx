@@ -17,6 +17,7 @@ import { statLine } from '../../engine/player'
 import { REGION_CN, REGIONS } from '../../engine/types'
 import type { Competition, Region } from '../../engine/types'
 import TeamPeekButton from './TeamPeek'
+import { attrWord, useNumbers } from './words'
 
 /**
  * The leagues, the brackets and the season's player table. The career's own
@@ -29,6 +30,19 @@ import TeamPeekButton from './TeamPeek'
  * 晋级形势 — then the events, what is being played now on top, and at the foot
  * 「其他赛区」, each region's current first, a click away.
  */
+
+function ClubCell({ id, label, title }: { id: string; label?: string; title?: string }) {
+  return (
+    <>
+      <span className="standings-clubclip" title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: 'clamp(80px, 25vw, 180px)', maxWidth: '100%' }}>
+        {id && <span style={{ flex: 'none' }}><Crest id={id} /></span>}
+        <span style={{ minWidth: 0, flex: 1 }}>
+          {id ? <TeamPeekButton id={id} label={label} /> : null}
+        </span>
+      </span>
+    </>
+  )
+}
 
 function Table({ comp, members, cut: cutOverride }: { comp: Competition; members?: string[]; cut?: number }) {
   const { game } = useGame()
@@ -73,9 +87,7 @@ function Table({ comp, members, cut: cutOverride }: { comp: Competition; members
                   {!comp.champion && i + 1 === cut && ''}
                 </td>
                 <td style={{ borderLeft: !comp.champion && i < cut ? '2px solid var(--accent)' : '2px solid transparent' }}>
-                  <span className="club" title={game.teams[id]?.name}>
-                    <Crest id={id} /><TeamPeekButton id={id} label={game.teams[id]?.tag} />
-                  </span>
+                  <ClubCell id={id} label={game.teams[id]?.tag} title={game.teams[id]?.name} />
                 </td>
                 <td className="num mono">{r.w}-{r.l}</td>
                 <td className="num muted">{r.mapW}-{r.mapL}</td>
@@ -176,7 +188,7 @@ export function PointsPanel({ table }: { table: PointsTable }) {
       <tr key={r.team} className={r.team === game.myTeam ? 'me' : ''} data-team={r.team} data-mark={r.mark ?? ''}>
         <td className="num muted">{i + 1}</td>
         <td>
-          <span className="club" title={game.teams[r.team]?.name}><Crest id={r.team} /><TeamPeekButton id={r.team} /></span>
+          <ClubCell id={r.team} title={game.teams[r.team]?.name} />
         </td>
         <td className="num mono"><b>{r.points}</b></td>
         {live && <td className="num mono muted">{running.get(r.team) ? `+${running.get(r.team)}` : ''}</td>}
@@ -241,7 +253,7 @@ function OtherRegions({ rows, onPick }: { rows: Other[]; onPick: (r: Region) => 
             {rows.map((r) => (
               <tr key={r.key} className="clickable" onClick={() => onPick(r.go)}>
                 <td>{r.label}</td>
-                <td><b>{r.leader}</b></td>
+                <td><b title={r.leader} style={{ display: 'block', maxWidth: 'clamp(80px, 20vw, 160px)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.leader}</b></td>
                 <td className="small muted">{r.value}</td>
               </tr>
             ))}
@@ -268,6 +280,8 @@ export function tabOf(place: Region, tabs: Region[], year: number): Region | und
 export default function Standings() {
   const { game, openPlayer } = useGame()
   const [tab, setTab] = useState<'leagues' | 'players'>('leagues')
+  const [q, setQ] = useState('')
+  const [nums] = useNumbers()
   // 2021 ran a dozen circuits; a tab for every one that has a club in it. 2022 folded the Southeast Asian
   // circuits into VCT APAC's Challengers, 东南亚 — and no club's own place is 'SEA', so that tab never showed and
   // a club from Malaysia & Singapore, Indonesia, Thailand, the Philippines, Vietnam or Hong Kong & Taiwan opened
@@ -320,6 +334,12 @@ export default function Standings() {
     .filter((p) => p.season.maps >= 8 && p.teamId)
     .sort((a, b) => performanceRating(b.season) - performanceRating(a.season))
     .slice(0, 40)
+  const query = q.normalize('NFKC').trim().toLowerCase()
+  const searching = query !== ''
+  const allPlayers = Object.values(game.players)
+  const matched = searching ? allPlayers.filter((p) => [p.ign, p.realName].some((name) => name?.normalize('NFKC').trim().toLowerCase().includes(query))) : leaders
+  const shownPlayers = searching ? matched.slice(0, 20) : leaders
+  const total = matched.length
   // where this stage leads, on my club's own tab only
   const qual = region === start ? qualification(game) : null
 
@@ -449,9 +469,7 @@ export default function Standings() {
                         {c.finished.map((id, i) => (
                           <tr key={id} className={id === game.myTeam ? 'me' : ''}>
                             <td className="num muted">{i + 1}{c.champion === id && ' 🏆'}</td>
-                            <td><span className="club" title={game.teams[id]?.name}>
-                              <Crest id={id} /><TeamPeekButton id={id} label={game.teams[id]?.tag} />
-                            </span></td>
+                            <td><ClubCell id={id} label={game.teams[id]?.tag} title={game.teams[id]?.name} /></td>
                             <td className="small muted">{REGION_CN[game.teams[id]?.region]}</td>
                           </tr>
                         ))}
@@ -465,7 +483,11 @@ export default function Standings() {
           <OtherRegions rows={others} onPick={setRegion} />
         </>
       ) : (
-        <Panel title="赛季选手排行（至少 8 张图）" flush>
+        <Panel title={searching ? `搜索结果${total ? `（${total} 人）` : ''}` : '赛季选手排行（至少 8 张图）'} flush>
+          <div style={{ padding: '8px 13px' }}>
+            <input type="search" aria-label="搜索选手" maxLength={80} value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索选手 IGN 或姓名" style={{ width: '100%', boxSizing: 'border-box' }} />
+            {searching && <p className="tiny faint" style={{ margin: '6px 0 0' }}>匹配 {total} 人，显示前 {shownPlayers.length} 人</p>}
+          </div>
           <div className="table-wrap">
             <table>
               <thead>
@@ -476,23 +498,24 @@ export default function Standings() {
                 </tr>
               </thead>
               <tbody>
-                {leaders.map((p, i) => {
+                {shownPlayers.map((p, i) => {
                   const s = statLine(p.season)
+                  const hasMaps = p.season.maps > 0
                   return (
                     <tr
                       key={p.id}
                       className={`clickable ${p.teamId === game.myTeam ? 'me' : ''}`}
                       onClick={() => openPlayer(p.id)}
                     >
-                      <td className="num muted">{i + 1}</td>
-                      <td><b>{p.ign}</b></td>
-                      <td className="small muted"><TeamPeekButton id={p.teamId ?? ''} /></td>
-                      <td className="num"><OvrBadge value={p.overall} /></td>
-                      <td className="num"><b>{performanceRating(p.season).toFixed(2)}</b></td>
-                      <td className="num mono">{s.acs.toFixed(0)}</td>
-                      <td className="num mono">{s.kd.toFixed(2)}</td>
+                      <td className="num muted">{searching ? '-' : i + 1}</td>
+                      <td><b title={p.ign} style={{ display: 'block', maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.ign}</b></td>
+                      <td className="small muted">{p.teamId ? <ClubCell id={p.teamId} title={game.teams[p.teamId]?.name} /> : <span>自由选手</span>}</td>
+                      <td className="num">{nums ? <OvrBadge value={p.overall} /> : attrWord(p.overall)}</td>
+                      <td className="num"><b>{hasMaps ? performanceRating(p.season).toFixed(2) : '—'}</b></td>
+                      <td className="num mono">{hasMaps ? s.acs.toFixed(0) : '—'}</td>
+                      <td className="num mono">{hasMaps ? s.kd.toFixed(2) : '—'}</td>
                       <td className={`num mono ${s.fkDiff >= 0 ? 'pos' : 'neg'}`}>
-                        {s.fkDiff > 0 ? '+' : ''}{s.fkDiff}
+                        {hasMaps ? `${s.fkDiff > 0 ? '+' : ''}${s.fkDiff}` : '—'}
                       </td>
                       <td className="num muted">{p.season.maps}</td>
                     </tr>
@@ -500,6 +523,7 @@ export default function Standings() {
                 })}
               </tbody>
             </table>
+            {searching && total === 0 && <div className="empty">没有找到匹配的选手。</div>}
           </div>
         </Panel>
       )}

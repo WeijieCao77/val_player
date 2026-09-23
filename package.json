@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "check:sept23": "npx tsx scripts/check_secondary_auto.ts && npx tsx scripts/check_retirement_choice.ts && node scripts/check_retirement_choice_ui.mjs && node scripts/check_sept23_ui.mjs && npx tsx scripts/check_sept23_pay_reach.ts && npx tsx scripts/check_sept23_pay_career.ts && npx tsx scripts/check_sept23_club_fit.ts && npx tsx scripts/check_sept23_fullpitch.ts",
     "check:feedback": "npx tsx scripts/check_map_era.ts && npx tsx scripts/check_auto_training_room.ts && npx tsx scripts/check_career_overview.ts && npx tsx scripts/check_bracket_tree.ts && node scripts/check_career_overview_mobile.mjs && node scripts/check_bracket_mobile.mjs && node scripts/check_save_notice_mobile.mjs && node scripts/check_mailbox_mobile.mjs && node scripts/check_support_career_mobile.mjs && npx tsx scripts/check_ending_feedback.ts && node scripts/check_ending_feedback_ui.mjs && npx tsx scripts/check_nextup_pending.ts && node scripts/check_box_merge.mjs && node scripts/check_box_merge_ui.mjs",
     "check:roles": "npx tsx scripts/check_role_performance.ts && npx tsx scripts/check_role_selection.ts && npx tsx scripts/check_role_growth.ts && npx tsx scripts/check_role_consumers.ts",
     "check:events": "npx tsx scripts/check_family_visit_tournament.ts && npx tsx scripts/check_career_events.ts && npx tsx scripts/check_career_absence.ts && npx tsx scripts/check_career_marks.ts && node scripts/check_career_events_ui.mjs",

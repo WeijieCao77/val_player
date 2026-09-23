@@ -13,7 +13,7 @@ import { iglDrop } from './igl'
 import { ensureCaller } from '../world'
 import { addMoney } from './money'
 import { PLAYER_PRIZE_SHARE } from './prizes'
-import { keepInBand, offerOf, payOf } from './paytable'
+import { keepInBand, offerOf, payOf, payBand } from './paytable'
 import { convert, roundPay, toCny, toUsd } from './currency'
 import { money as fmtMoney } from './moneyfmt'
 import { dateCn, lockLifts, lockSaid, periodKey, windowAt } from './window'
@@ -21,6 +21,8 @@ import { pushMoment } from './moments'
 import { standAtLeast, standingOf } from './rank'
 import { dropPitch } from './pitchbook'
 import { countOffer } from './telemetry'
+import { pitchAdmission } from './pitchAdmission'
+import { isIntlComp } from './compclass'
 
 /**
  * A wage in a club's own currency kept inside its league's band: the partner
@@ -67,6 +69,20 @@ export function makeDeal(state: GameState, teamId: string, kind: Deal['kind'], g
   // the world's dollar wage, moved to the club's league level and written in its currency (me/paytable.ts)
   const base = expectedSalary(p, team.tier)
   let { cur, salary } = offerOf(team, state.year, base * ROLE_PAY[role] * (0.7 + 0.6 * q) * (kind === 'renew' ? 1.05 : 1))
+  // The normal 2026 wage curve stays compressed; sustained international
+  // success can justify an exceptional contract, equally on renewal or a move.
+  if (state.year >= 2026 && team.tier === 1 && p.overall >= 90 && tryoutSkill(state) >= expectOf(team) + 4) {
+    const recent = (year: number) => year >= state.year - 2 && year <= state.year
+    const titles = new Set(me.titles.filter(t => t.started && recent(t.year) && isIntlComp(t.title))
+      .map(t => `${t.year}:${t.title}`))
+    const starts = me.seasons.filter(s => recent(s.year) && s.year < state.year && s.tier === 1)
+      .reduce((sum, s) => sum + s.starts, 0)
+      + me.matches.filter(m => m.year === state.year && m.started && !m.friendly).length
+    if (titles.size >= 3 && starts >= 60) {
+      const band = payBand(team.region, team.tier, state.year)
+      salary = Math.max(salary, keepInBand(team, state.year, band.cap * 0.8 * ROLE_PAY[role] / ROLE_PAY.starter))
+    }
+  }
   if (kind === 'renew' && me.phase === 'pro' && state.myTeam === teamId && p.teamId === teamId && team.starters.includes(me.id)) {
     const current = payOf(state)
     if (current && current.tier === team.tier && (p.contract?.promisedRole === 'starter' || p.contract?.promisedRole === 'star') && ROLE_PAY[role] >= ROLE_PAY[p.contract!.promisedRole] && Number.isFinite(current.salary) && current.salary > 0) {
@@ -208,6 +224,22 @@ export function acceptDeal(state: GameState, dealId: string): string {
   const me = state.me!
   const d = me.deals.find((x) => x.id === dealId)
   if (!d) return '这份报价已经不在了。'
+  let selfPitchBenchId: string | undefined
+  if (d.selfPitched) {
+    const to = state.teams[d.teamId]
+    if (!to) return '对方俱乐部已经不在了。'
+    const window = windowAt(state, to.id)
+    if (!window.open && !window.lock) return '转会窗口已经关闭，暂时不能签约。'
+    const admission = pitchAdmission(state, to, {
+      fee: buyoutDue(state),
+      salaryUsd: toUsd(d.salary, d.cur, state.year),
+      signBonusUsd: toUsd(d.signBonus, d.cur, state.year),
+    })
+    if (admission.reason) {
+      return admission.reason
+    }
+    selfPitchBenchId = admission.replaceId
+  }
   countOffer('accept')
   me.deals = me.deals.filter((x) => x.id !== dealId)
   pop(state, 'deal', dealId)
@@ -238,8 +270,8 @@ export function acceptDeal(state: GameState, dealId: string): string {
     pushLog(state, 'deal', `和 ${to} 谈妥了。${lockSaid(w.lock, w.side === 'other' ? `${to} ` : '你的俱乐部', `名单锁定到 ${when}，锁定解除再正式转会。`)}`)
     return `谈妥了：名单锁定解除（${when}后）正式去 ${to}。`
   }
-  joinClub(state, d)
-  return `你签进了 ${state.teams[d.teamId]?.name}。`
+  const failure = joinClub(state, d, selfPitchBenchId ? { benchId: selfPitchBenchId } : {})
+  return failure ?? `你签进了 ${state.teams[d.teamId]?.name}。`
 }
 
 /**
@@ -263,9 +295,24 @@ export function settleMove(state: GameState, now = false): void {
     m.until = w.lock.until
     return
   }
+  if (m.deal.selfPitched && w && !w.open) return
+  let benchId: string | undefined
+  if (m.deal.selfPitched) {
+    const admission = pitchAdmission(state, to, {
+      fee: buyoutDue(state),
+      salaryUsd: toUsd(m.deal.salary, m.deal.cur, state.year),
+      signBonusUsd: toUsd(m.deal.signBonus, m.deal.cur, state.year),
+    })
+    if (admission.reason) {
+      me.moveAfter = undefined
+      pushLog(state, 'bad', `和 ${to.name} 谈好的自荐签约在生效前被取消：${admission.reason}，名单和预算都不变。`)
+      return
+    }
+    benchId = admission.replaceId
+  }
   me.moveAfter = undefined
   pushLog(state, 'deal', `${m.event} 的名单锁定解除了，转会正式生效。`)
-  joinClub(state, m.deal)
+  joinClub(state, m.deal, { benchId, seasonTurn: now })
 }
 
 function applyTerms(state: GameState, d: Deal): void {
@@ -289,10 +336,22 @@ function applyTerms(state: GameState, d: Deal): void {
  * Off one roster, onto another, with everything that belongs to the old
  * room left behind: the coach's regard, the trial, the bench lock, the duels.
  */
-export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = {}): void {
+export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean; benchId?: string; seasonTurn?: boolean } = {}): string | null {
   const me = state.me!
   const p = state.players[me.id]
   const to = state.teams[d.teamId]
+  // Public entry points also validate: a caller cannot bypass acceptDeal and
+  // release a starter or move into a malformed eight-player roster.
+  if (d.selfPitched) {
+    if (!to) return '对方俱乐部已经不在了。'
+    if (!opts.seasonTurn && !windowAt(state, to.id).open) return '转会窗口或名单锁定尚未解除，暂时不能签约。'
+    const admission = pitchAdmission(state, to, {
+      fee: buyoutDue(state), salaryUsd: toUsd(d.salary, d.cur, state.year),
+      signBonusUsd: toUsd(d.signBonus, d.cur, state.year),
+    })
+    if (admission.reason) return admission.reason
+    opts = { ...opts, benchId: admission.replaceId }
+  }
   const from = p.teamId ? state.teams[p.teamId] : null
   // the word the offer's card put on the club, read before it is my club (me/prepro.ts awayWord reads my club's league)
   const word = awayWord(state, to)
@@ -318,7 +377,7 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
     }
   }
   // a club already carrying its registered seven lets its weakest man off the five go to register me (me/club.ts)
-  if (!from || from.id !== to.id) makeRoom(state, to)
+  if (!from || from.id !== to.id) makeRoom(state, to, opts.benchId)
   p.teamId = to.id
   to.roster.push(me.id)
   applyTerms(state, d)
@@ -374,6 +433,7 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean } = 
     const first = (p.clubHist?.length ?? 0) <= 1
     pushMoment(state, { kind: 'sign', key: `sign:${y}:${state.day}:${to.id}`, teamId: to.id, fromId: from?.id, first, years: d.years, pay: fmtMoney(d.salary, d.cur, y), role: ROLE_CN[d.role] })
   }
+  return null
 }
 
 /** The club lets me go. Back to the market, with a record this time. */

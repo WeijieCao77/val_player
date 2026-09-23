@@ -33,8 +33,8 @@ const server=createServer((req,res)=>{const path=new URL(req.url,'http://localho
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`
 let browser
 try{browser=await chromium.launch({headless:true});for(const width of [320,390,1440]){
- const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],blocked=[],dialogs=[];let acceptDialog=false
- page.on('pageerror',e=>errors.push(e.message));page.on('dialog',async d=>{dialogs.push(d.message());if(acceptDialog)await d.accept();else await d.dismiss()})
+ const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],blocked=[],dialogs=[]
+ page.on('pageerror',e=>errors.push(e.message));page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss()})
  await page.addInitScript(()=>{localStorage.setItem('val_player.numbers','0');indexedDB.open=()=>{throw Error('No actual saves')};HTMLMediaElement.prototype.play=async()=>{}})
  await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.origin===origin&&route.request().method()==='GET')return route.continue();blocked.push(url.origin+url.pathname);return route.abort()})
  await page.goto(origin)
@@ -42,14 +42,49 @@ try{browser=await chromium.launch({headless:true});for(const width of [320,390,1
  const overflow=async label=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${label} no page overflow at ${width}`)
  const close=async()=>{await page.getByRole('dialog').getByRole('button',{name:/关闭/}).click();await page.getByRole('dialog').waitFor({state:'hidden'})}
  await page.getByRole('button',{name:'Week',exact:true}).click();const details=page.locator('details.secondary-weekly');await details.waitFor()
- assert.equal(await details.evaluate(e=>e.open),false);const beforeOpen=await snapshot();await details.locator('summary').click();assert.equal(await snapshot(),beforeOpen,'opening the manual entry is read-only')
- const choose=details.getByRole('button',{name:'培养先锋',exact:true});await choose.click();assert.equal(await snapshot(),beforeOpen,'cancel choosing keeps whole world unchanged')
- acceptDialog=true;await choose.click();await page.waitForFunction(()=>window.game.me.positionTraining.secondary==='先锋');
- const train=details.getByRole('button',{name:'训练副位置',exact:true});assert.ok(await train.isEnabled());const beforeCancel=await snapshot();acceptDialog=false;await train.click();assert.equal(await snapshot(),beforeCancel,'cancel training no mutations')
- const trainingBefore=await page.evaluate(()=>({ap:window.game.me.ap,fatigue:window.game.players[window.game.me.id].fatigue}));acceptDialog=true;await train.click()
- assert.deepEqual(await page.evaluate(()=>({ap:window.game.me.ap,fatigue:window.game.players[window.game.me.id].fatigue,mastery:window.game.players[window.game.me.id].rolePro.先锋})),{ap:trainingBefore.ap-2,fatigue:trainingBefore.fatigue+4,mastery:2})
- assert.ok(await train.isDisabled());assert.ok(dialogs.some(s=>s.includes('锁定本周此前所有可撤回行动')));await overflow('Week');await details.screenshot({path:resolve(output,`${width}-weekly.png`)})
- const afterTrain=await snapshot();await details.locator('summary').click();await details.locator('summary').click();assert.equal(await snapshot(),afterTrain,'reopening never repeats training')
+ assert.equal(await details.evaluate(e=>e.open),false);const beforeOpen=await snapshot();await details.locator(':scope > summary').click();assert.equal(await snapshot(),beforeOpen,'opening the manual entry is read-only')
+ const choose=details.getByRole('button',{name:'培养先锋',exact:true});await choose.click();const alert=page.getByRole('alertdialog');await alert.waitFor();
+ assert.ok((await alert.innerText()).includes('首次投入训练后不能更换'));
+ await alert.getByRole('button',{name:'取消',exact:true}).click();await alert.waitFor({state:'hidden'});
+ assert.equal(await snapshot(),beforeOpen,'cancel choosing keeps whole world unchanged');
+ await choose.click();await alert.waitFor();await alert.getByRole('button',{name:'确认',exact:true}).click();
+ await page.waitForFunction(()=>window.game.me.positionTraining.secondary==='先锋');
+ await alert.waitFor({state:'hidden'});
+ const summary=details.locator(':scope > summary'),auto=details.getByRole('checkbox');
+ const manualLabel='手动安排，不自动扣行动点',autoLabel='已开启每周自动训练，推进或按推荐时执行';
+ assert.ok((await summary.innerText()).includes(manualLabel));assert.equal(await auto.isChecked(),false);
+ const beforeAuto=await snapshot(),autoAP=await page.evaluate(()=>window.game.me.ap);
+ await auto.click();await alert.waitFor();assert.match(await alert.innerText(),/开启本身不扣点/);
+ await alert.getByRole('button',{name:'取消',exact:true}).click();await alert.waitFor({state:'hidden'});
+ assert.equal(await snapshot(),beforeAuto,'cancel auto authorization leaves entire state unchanged');
+ assert.equal(await auto.isChecked(),false);assert.ok((await summary.innerText()).includes(manualLabel));
+ await auto.click();await alert.waitFor();await alert.getByRole('button',{name:'确认',exact:true}).click();await alert.waitFor({state:'hidden'});
+ await page.waitForFunction(()=>window.game.me.positionTraining.autoTrain===true);
+ await page.waitForFunction(()=>document.querySelector('details.secondary-weekly > summary')?.textContent.includes('已开启每周自动训练'));
+ assert.equal(await page.evaluate(()=>window.game.me.ap),autoAP,'enabling authorizes only; no AP spent');
+ assert.equal(await auto.isChecked(),true);assert.ok((await summary.innerText()).includes(autoLabel));
+ await auto.uncheck();await page.waitForFunction(()=>window.game.me.positionTraining.autoTrain===false);
+ await page.waitForFunction(()=>document.querySelector('details.secondary-weekly > summary')?.textContent.includes('手动安排，不自动扣行动点'));
+ assert.equal(await page.evaluate(()=>window.game.me.ap),autoAP,'disabling does not spend AP');assert.ok((await summary.innerText()).includes(manualLabel));
+ const train=details.getByRole('button',{name:'训练副位置',exact:true});assert.ok(await train.isEnabled());
+ const beforeCancel=await snapshot();await train.click();await alert.waitFor();
+ assert.ok((await alert.innerText()).includes('本次不可撤回'));
+ await alert.getByRole('button',{name:'取消',exact:true}).click();await alert.waitFor({state:'hidden'});
+ assert.equal(await snapshot(),beforeCancel,'cancel training no mutations');
+ const trainingBefore=await page.evaluate(()=>({ap:window.game.me.ap,fatigue:window.game.players[window.game.me.id].fatigue}));
+ await train.click();await alert.waitFor();
+ assert.ok((await alert.innerText()).includes('本次不可撤回'));
+ assert.ok((await alert.innerText()).includes('锁定本周此前所有可撤回行动'));
+ await alert.getByRole('button',{name:'确认',exact:true}).click();
+ await page.waitForFunction(()=>window.game.players[window.game.me.id].rolePro['先锋']===2);
+ assert.deepEqual(await page.evaluate(()=>({ap:window.game.me.ap,fatigue:window.game.players[window.game.me.id].fatigue,mastery:window.game.players[window.game.me.id].rolePro.先锋})),{ap:trainingBefore.ap-2,fatigue:trainingBefore.fatigue+4,mastery:2});
+ await alert.waitFor({state:'hidden'});
+ await page.waitForFunction(()=>{
+   const btn=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('训练副位置'));
+   return btn && btn.disabled;
+ });
+ assert.ok(await train.isDisabled());assert.deepEqual(dialogs,[]);await overflow('Week');await details.screenshot({path:resolve(output,`${width}-weekly.png`)})
+ const afterTrain=await snapshot();await details.locator(':scope > summary').click();await details.locator(':scope > summary').click();assert.equal(await snapshot(),afterTrain,'reopening never repeats training')
 
  await page.getByRole('button',{name:'Team',exact:true}).click();await page.locator('table').first().waitFor();await overflow('Team')
  const mine=page.locator('tbody tr.me'),npc=page.locator('tbody tr:not(.me)').first();const myId=await page.evaluate(()=>window.game.me.id),npcName=(await npc.locator('.team-player-open').innerText()).trim()

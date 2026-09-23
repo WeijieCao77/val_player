@@ -1849,6 +1849,11 @@ td .cf-flag.code, .small .cf-flag.code { background: var(--panel-3); color: var(
 }
 .club { display: inline-flex; align-items: center; gap: 6px; }
 .club .crest { vertical-align: baseline; }
+/* Standings only: preserve the roster button while bounding long club names. */
+.standings-clubclip .team-peek-trigger {
+  display: block; max-width: 100%; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
 /* the club in the header wears its crest a size up */
 .brand-club { display: inline-flex; align-items: center; gap: 7px; }
 

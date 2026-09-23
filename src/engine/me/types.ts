@@ -430,6 +430,8 @@ export interface PitchBook {
 export interface TryoutDayLog { day: number; pick: string; dim: string; p: number; ok: boolean }
 
 export interface Tryout {
+  /** Persist self-pitch provenance even if the invitation is later cleaned up. */
+  selfPitched?: true
   /** Role-specific assessment; absent keeps an already-started old tryout. */
   assessmentVersion?: 1
   inviteId: string
@@ -471,6 +473,8 @@ export interface Deal {
   abroad: boolean
   /** terms a club brought after I contacted it (me/selfpitch.ts) */
   via?: 'contact'
+  /** Originated from a self-pitch or contact; absent on legacy and unsolicited offers. */
+  selfPitched?: true
 }
 
 /** The contract I am on, as signed, in its club's league currency (me/paytable.ts payOf). */

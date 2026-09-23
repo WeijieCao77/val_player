@@ -14,6 +14,10 @@ export interface PositionTraining {
   secondary?: Role
   trainedWeek?: number
   switchedWeek?: number
+  /** Explicit opt-in only; old saves never acquire an automatic AP commitment. */
+  autoTrain?: boolean
+  /** Actual successful scheduled payment, including the final certification week. */
+  autoTrainedWeek?: number
 }
 export const SECONDARY_ROLES: Role[] = ROLES.filter(r => r !== '自由人')
 export const SECONDARY_START_WEEK = 26
@@ -21,6 +25,11 @@ export const SECONDARY_AP = 2
 export const SECONDARY_FATIGUE = 4
 export const SECONDARY_GAIN = 2
 const isRole = (r: unknown): r is Role => ROLES.includes(r as Role)
+
+function validSecondary(state: GameState, role: Role): boolean {
+  const me = state.me!, p = state.players[me.id]
+  return isRole(role) && role !== (me.positionTraining?.home ?? p.role) && role !== '自由人'
+}
 
 /** Main-player metadata only. NPC role coverage is never rewritten. */
 export function normalizePositionTraining(state: GameState): void {
@@ -30,10 +39,20 @@ export function normalizePositionTraining(state: GameState): void {
   const home = isRole(old?.home) ? old.home : p.role
   const secondary = isRole(old?.secondary) && old.secondary !== home && old.secondary !== '自由人'
     ? old.secondary : p.roles?.find(r => isRole(r) && r !== home && r !== '自由人')
+  const trainedWeek = Number.isInteger(old?.trainedWeek) && old!.trainedWeek! >= 0 && old!.trainedWeek! <= me.week ? old!.trainedWeek : undefined
+  const switchedWeek = Number.isInteger(old?.switchedWeek) && old!.switchedWeek! >= 0 && old!.switchedWeek! <= me.week ? old!.switchedWeek : undefined
+  const autoTrain = old?.autoTrain === true && isRole(old?.secondary) && old.secondary === secondary
+    && secondary !== home && secondary !== '自由人' && secondaryMastery(state) < 100
+  const autoTrainedWeek = isRole(old?.secondary) && old.secondary === secondary
+    && Number.isInteger(old?.autoTrainedWeek) && old!.autoTrainedWeek! >= SECONDARY_START_WEEK
+    && old!.autoTrainedWeek! <= me.week && old!.autoTrainedWeek === trainedWeek ? old!.autoTrainedWeek : undefined
   me.positionTraining = {
-    home, ...(secondary ? { secondary } : {}),
-    ...(Number.isInteger(old?.trainedWeek) && old!.trainedWeek! >= 0 && old!.trainedWeek! <= me.week ? { trainedWeek: old!.trainedWeek } : {}),
-    ...(Number.isInteger(old?.switchedWeek) && old!.switchedWeek! >= 0 && old!.switchedWeek! <= me.week ? { switchedWeek: old!.switchedWeek } : {}),
+    home,
+    ...(secondary ? { secondary } : {}),
+    ...(trainedWeek !== undefined ? { trainedWeek } : {}),
+    ...(switchedWeek !== undefined ? { switchedWeek } : {}),
+    ...(typeof old?.autoTrain === 'boolean' ? { autoTrain: !!autoTrain } : {}),
+    ...(autoTrainedWeek !== undefined ? { autoTrainedWeek } : {}),
   }
 }
 
@@ -73,6 +92,10 @@ export function chooseSecondary(state: GameState, role: Role): string | null {
   if (why) return why
   normalizePositionTraining(state)
   state.me!.positionTraining!.secondary = role
+  // New choice clears schedule markers
+  const training = state.me!.positionTraining!
+  training.autoTrain = false
+  delete training.autoTrainedWeek
   pushLog(state, 'info', `选定副位置：${role}。每周可投入一次专门训练，熟练后才可切换岗位。`)
   return null
 }
@@ -106,7 +129,39 @@ export function trainSecondary(state: GameState): string | null {
   me.weekNotes.push(line)
   ;(me.weekLog ??= []).push(line)
   pushLog(state, 'train', line)
+  if (mastered) training.autoTrain = false
   return null
+}
+
+export function setSecondaryAuto(state: GameState, enabled: boolean): string | null {
+  const me = state.me, p = me && state.players[me.id]
+  if (!me || !p) return '没有找到生涯主角。'
+  const training = me.positionTraining
+  if (!enabled) {
+    if (training) training.autoTrain = false
+    return null
+  }
+  if (!training?.secondary) return '先选定一个副位置。'
+  if (state.gameOver) return '生涯结束后不能安排自动训练。'
+  // Turning on validation
+  if (me.phase === 'retired') return '退役后不能安排自动训练。'
+  const secondary = training.secondary
+  if (!validSecondary(state, secondary)) return '副位置无效。'
+  if (me.week < SECONDARY_START_WEEK) return '完成 26 周生涯后开放副位置训练。'
+  if (secondaryMastery(state) >= 100) return '这个副位置已经练成。'
+  // No AP/cooldown/seal check; just set flag.
+  training.autoTrain = true
+  return null
+}
+
+export function runScheduledSecondary(state: GameState): boolean {
+  const me = state.me, training = me?.positionTraining
+  if (!me || training?.autoTrain !== true || state.gameOver || me.pending.length) return false
+  if (!state.players[me.id] || !training.secondary || !validSecondary(state, training.secondary)) return false
+  if (secondaryTrainingBlock(state) !== null) return false
+  if (trainSecondary(state) !== null) return false
+  training.autoTrainedWeek = me.week
+  return true
 }
 
 export function secondarySwitchBlock(state: GameState, target: Role): string | null {

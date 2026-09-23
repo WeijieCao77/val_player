@@ -29,6 +29,15 @@ export type RetireWhy = 'world_end' | 'pre_unsigned' | 'free_uncalled' | 'age_ca
 const intl = (s: GameState, kind: 'masters' | 'champions') => s.me!.titles.filter((t) => compClass(t.title) === kind)
 const proSeasons = (s: GameState) => s.me!.seasons.filter((x) => x.tier > 0).length
 
+export const RETIREMENT_AGE_CAP = 33
+export const RETIREMENT_DECLINE_AGE = 30
+
+/** One compact line for the season card about when the road ends; never a seasons-remaining count. */
+export function seasonHorizonLine(state: GameState): string {
+  const age = state.players[state.me!.id]?.age ?? 0
+  return `世界线到 ${WORLD_END - 1} 赛季为止（不是你的年龄上限）。你现在 ${age} 岁。${RETIREMENT_DECLINE_AGE} 岁起每次赛季结算可能因年龄退役，${RETIREMENT_AGE_CAP} 岁是年龄上限；连续四年未签约或连续两年自由身也会结束生涯。`
+}
+
 /** In order: the first that holds is the ending. */
 export const ENDINGS_ME: EndingDef[] = [
   { key: 'breaker', title: '破局者', text: '同一年捧起大师赛和冠军赛。这个赛区的天花板，是你亲手推上去的。',
@@ -151,8 +160,8 @@ export function retirementTick(state: GameState, rng: Rng): void {
   if (state.year >= WORLD_END) { retire(state, `${WORLD_END - 1} 赛季结束，这条世界线到这里为止`, 'world_end'); return }
   if (me.phase === 'pre' && me.pre.year >= 4) { retire(state, '四年没有签到合同，你放弃了', 'pre_unsigned'); return }
   if (me.phase === 'free' && me.freeYears >= 2) { retire(state, '两年没有俱乐部来电话，你宣布退役', 'free_uncalled'); return }
-  if (p.age >= 33) { retire(state, '33 岁，你宣布退役', 'age_cap'); return }
-  if (p.age >= 30 && me.phase === 'pro' && rng.chance(0.25 + (p.age - 30) * 0.1)) { retire(state, `${p.age} 岁，手已经跟不上眼了，你宣布退役`, 'age_decline'); return }
+  if (p.age >= RETIREMENT_AGE_CAP) { retire(state, `${RETIREMENT_AGE_CAP} 岁，你宣布退役`, 'age_cap'); return }
+  if (p.age >= RETIREMENT_DECLINE_AGE && me.phase === 'pro' && rng.chance(0.25 + (p.age - RETIREMENT_DECLINE_AGE) * 0.1)) { retire(state, `${p.age} 岁，手已经跟不上眼了，你宣布退役`, 'age_decline'); return }
   const pro = me.seasons.filter((x) => x.tier > 0).length
   me.retireAsk = pro >= 5
 }

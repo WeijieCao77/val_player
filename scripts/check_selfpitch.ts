@@ -68,6 +68,26 @@ function lift(s: GameState, level: number): void {
   recomputeOverall(p)
 }
 
+/** A real full squad with two distinct, owned, stronger substitutes. */
+function fullStrongBench(s: GameState, team: Team): () => void {
+  const roster = team.roster.slice()
+  const starters = team.starters.slice()
+  const ids: string[] = []
+  team.roster = roster.slice(0, 5)
+  team.starters = team.roster.slice()
+  while (team.roster.length < ROSTER_FULL) {
+    const p = structuredClone(s.players[roster[0]])
+    p.id = `check:full:${team.id}:${team.roster.length}`
+    p.teamId = team.id
+    for (const k of ATTR_KEYS) p.attrs[k] = 99
+    recomputeOverall(p)
+    s.players[p.id] = p
+    ids.push(p.id)
+    team.roster.push(p.id)
+  }
+  return () => { team.roster = roster; team.starters = starters; for (const id of ids) delete s.players[id] }
+}
+
 /** a club a 自荐 can go to today, as the transfer screen lists it */
 const open = (s: GameState, f: (t: Team) => boolean = () => true): Team | undefined =>
   pitchTargets(s).rows.find((r) => !r.why && f(r.team))?.team
@@ -142,10 +162,9 @@ console.log('一、闸：每一道都灰掉并写明原因（被拦下的不扣�
 
     // one club at a time: a full roster, a full import list, a club turned down this year, another 赛区 without the language
     const u = open(s, (x) => x.tier === 2 && x.id !== t.id)!
-    const roster = u.roster.slice()
-    while (u.roster.length < ROSTER_FULL) u.roster.push(`check:filler:${u.roster.length}`)
-    refused(s, u, new RegExp(`^名单满了（${ROSTER_FULL}/${ROSTER_FULL}），这个转会期不加人$`), '名单满了')
-    u.roster = roster
+    const restoreFull = fullStrongBench(s, u)
+    refused(s, u, /^对方名单已满，你的综合实力还不足/, '名单满了且没有更弱的替补')
+    restoreFull()
     const hadLimit = s.importLimit
     const p = s.players[me.id]
     const nat = p.nat
@@ -319,9 +338,19 @@ console.log('四、回复：3–7 天后到，按按钮上的把握抽；没成�
     check(r === `gap:实力还差一截（差 ${gap}）`, `离门槛差 ${gap}：「${r}」`)
   } else check(false, '没找到比门槛低 6 分以上的 Challengers 俱乐部')
   const full = open(s, (x) => x.tier === 2)!
-  const keep = full.roster.slice()
-  const r1 = reason(full, () => { while (full.roster.length < ROSTER_FULL) full.roster.push(`check:filler:${full.roster.length}`) }, () => { full.roster = keep })
-  check(r1.startsWith('full:名单满了'), `等回复期间对方名单满了：「${r1}」`)
+  me.pitch!.out = undefined
+  me.pending = []
+  const replies = me.pitch!.replies.length
+  const cancelled = me.pitch!.tally.cancelled
+  const invites = me.pre.invites.length
+  check(!sendPitch(s, full.id), '对方未满员时先发出自荐')
+  const restoreFull = fullStrongBench(s, full)
+  answer(s, 100)
+  check(!me.pitch!.out && me.pitch!.replies.length === replies && me.pitch!.tally.cancelled === cancelled + 1 && me.pre.invites.length === invites,
+    '等回复期间对方名单满了且替补更强：重新审核后取消，不发邀请也不误用上次拒信')
+  restoreFull()
+  me.pitch!.sent = []
+  me.pitch!.rejected = []
   lift(s, 90)
   const vct = openSoon(s, (x) => x.tier === 1 && pitchOdds(s, x).capped === 'nevpro' && pitchOdds(s, x).raw - NEVPRO_TOP > -Math.min(0, pitchOdds(s, x).parts.find((q) => q.key === 'gap')?.v ?? 0))
   if (vct) {

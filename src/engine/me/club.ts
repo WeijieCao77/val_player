@@ -96,8 +96,18 @@ export function leaveRoster(state: GameState, p: Player, deliberate = false): vo
  * A club that renews whoever it still uses sits at seven more often, and a
  * player who signed on top of that made eight.
  */
-export function makeRoom(state: GameState, team: Team): void {
+export function makeRoom(state: GameState, team: Team, benchId?: string): void {
   const me = state.me
+  if (benchId) {
+    if (team.roster.length !== CLUB_CEILING) return
+    const out = state.players[benchId]
+    if (out && out.teamId === team.id && !team.starters.includes(out.id) && out.id !== me?.id) {
+      leaveRoster(state, out, true)
+      state.news.push({ year: state.year, day: state.day, kind: 'transfer', text: `${team.name} 与 ${out.ign} 解约，该选手成为自由人。` })
+      pushLog(state, 'team', `${team.name} 和 ${out.ign} 解约，给你腾出名单位置。`)
+    }
+    return
+  }
   let guard = 0
   while (team.roster.length >= CLUB_CEILING && guard++ < 3) {
     const squad = squadOf(state, team.id).filter((p) => p.id !== me?.id)
@@ -211,7 +221,14 @@ function clubRenewals(state: GameState, team: Team, rng: Rng): void {
 export function clubWindow(state: GameState, rng: Rng): void {
   const me = state.me
   const team = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
-  if (!me || !team || !rng.chance(0.5) || me.flags.clubSigned === state.year) return
+  if (!me || !team) return
+  const considered = rng.chance(0.5)
+  if (!considered || me.flags.clubSigned === state.year) {
+    pushLog(state, 'team', me.flags.clubSigned === state.year
+      ? '本赛季已完成一次自由市场补强，俱乐部暂时保持名单。'
+      : '本次市场日俱乐部选择保持阵容，暂不在自由市场补强。')
+    return
+  }
   const myRole = state.players[me.id]?.role
   const five = team.starters.map((id) => state.players[id]).filter((p): p is Player => !!p && p.id !== me.id)
   let need: { role: Role; strength: number } | null = null
@@ -220,21 +237,31 @@ export function clubWindow(state: GameState, rng: Rng): void {
     const strength = five.filter((p) => jobsOf(p).includes(role)).reduce((m, p) => Math.max(m, p.overall), 0)
     if (!need || strength < need.strength) need = { role, strength }
   }
-  if (!need || need.strength > team.rating - WEAK) return
+  if (!need || need.strength > team.rating - WEAK) {
+    pushLog(state, 'team', '其他岗位暂时没有明显短板，俱乐部保持现有名单。')
+    return
+  }
   const role = need.role
   const wages = squadOf(state, team.id).reduce((s, p) => s + p.salary, 0)
   const room = team.budget - wages * 0.6
+  if (room <= 0) {
+    pushLog(state, 'team', '预留现有阵容薪资后预算不足，俱乐部暂时无法补强。')
+    return
+  }
   const value = (p: Player) => p.overall + Math.max(0, p.potential - p.overall) * 0.5
   const today = dateOf(state.year, state.day)
   const target = Object.values(state.players)
-    .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && p.role === role
-      && p.overall >= need!.strength + UPGRADE && expectedSalary(p, team.tier) < Math.max(40000, room * 0.25)
+    .filter((p) => p.teamId === null && !p.retiring && p.id !== me.id && p.role !== myRole && jobsOf(p).includes(role)
+      && p.overall >= need!.strength + UPGRADE && expectedSalary(p, team.tier) < Math.min(room, Math.max(40000, room * 0.25))
       && !isRecentClubDeparture(state, team.id, p.id)
       && !importBlock(state, team.id, p)
       // an upgrade is a player, not a man who has gone to a staff (engine/staffStints.ts)
       && !offPool(p.id, today))
     .sort((a, b) => value(b) - value(a))[0]
-  if (!target) return
+  if (!target) {
+    pushLog(state, 'team', `自由市场暂时没有兼顾实力、预算和注册条件的${role}补强人选。`)
+    return
+  }
   if (team.roster.length >= CLUB_CEILING) {
     const out = squadOf(state, team.id)
       .filter((p) => p.id !== me.id && jobsOf(p).includes(role))

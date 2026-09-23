@@ -24,7 +24,6 @@ import { takeIgl } from './igl'
 import { COURSES, FLAT_RELIEF, GEAR_PRICE, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
 import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
-import { retire } from './endings'
 import { expectOf, tryoutSkill } from './prepro'
 import { CEREMONIES, cerSkip } from './ceremony'
 import { compCn } from './compname'
@@ -35,6 +34,7 @@ import { momentMark } from './moments'
 import { chainMate, chainTask } from './storyweek'
 import { mineBy } from './nextup'
 import { closePitchReply } from './selfpitch'
+import { runScheduledSecondary, SECONDARY_AP } from './secondaryRole'
 
 /** fatigue the steady plan leaves at the end of a week: 体力 60, where the week screen's bar is still green */
 export const WEEK_END_FATIGUE = 40
@@ -229,13 +229,14 @@ export function autoPlan(state: GameState, talent = true): string {
   const end = () => weekEndFatigue(state, load)
   const spend = (k: keyof typeof ACTION_BY_KEY) => doAction(state, k) === null
   const rest = ACTION_BY_KEY.rest
-  const was = { ap: me.ap, plan: { ...me.plan }, stamina: Math.round(100 - p.fatigue) }
+  const was = { ap: me.ap, plan: { ...me.plan }, stamina: Math.round(100 - p.fatigue), trainedWeek: me.positionTraining?.trainedWeek }
   const said = () => autoLine(state, was)
   if (activeAbsence(state)) {
     spend('vod')
     while (me.ap > 0 && spend('rest')) { /* approved leave */ }
     return said()
   }
+  runScheduledSecondary(state)
   // hurt: the week goes on rest, which is what heals it (me/injury.ts) — a signed stream minimum aside
   if (injuryStatus(state)) {
     if (me.stream.deal && me.stream.thisStage < me.stream.deal.minPerStage) spend('stream')
@@ -322,7 +323,7 @@ export function autoPlan(state: GameState, talent = true): string {
 }
 
 /** what 按推荐做完 did, in one line — 破晓 says it in one line too (routine.ts quickPlan) */
-function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAction, number>>; stamina: number }): string {
+function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAction, number>>; stamina: number; trainedWeek?: number }): string {
   const me = state.me!
   const p = state.players[me.id]
   const spent = was.ap - me.ap
@@ -330,6 +331,7 @@ function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAc
     .map((a) => ({ a, n: (me.plan[a.key] ?? 0) - (was.plan[a.key] ?? 0) }))
     .filter((x) => x.n > 0)
     .map((x) => `${x.a.label} ×${x.n}`)
+  if (was.trainedWeek !== me.week && me.positionTraining?.trainedWeek === me.week) parts.push('副位置训练 ×1')
   if (!parts.length) return me.ap > 0 ? '这周没有还能做的事了，剩下的行动点用不出去。' : '这周的行动点已经用完了。'
   const now = Math.round(100 - p.fatigue)
   return `按推荐做完了 ${spent} 点：${parts.join('、')}。体力 ${was.stamina} → ${now}。`
@@ -338,7 +340,6 @@ function autoLine(state: GameState, was: { ap: number; plan: Partial<Record<MeAc
 /** Answer whatever is in front of me the steady way. Returns a line for the record. */
 export function autoResolve(state: GameState, item: PendingItem): string {
   const me = state.me!
-  const p = state.players[me.id]
   const rng = new Rng(hashStr(`auto:${state.seed}:${state.year}:${state.day}:${item.kind}:${item.id ?? ''}`))
   switch (item.kind) {
     case 'ceremony': {
@@ -456,7 +457,6 @@ export function autoResolve(state: GameState, item: PendingItem): string {
     case 'igl': takeIgl(state); return '接下了队内指挥'
     case 'season': {
       pop(state, 'season', item.id)
-      if (me.retireAsk && p.age >= 31) retire(state, `${p.age} 岁，你决定退役`, 'chose')
       return ''
     }
     case 'ending': pop(state, 'ending'); return ''
@@ -485,6 +485,7 @@ export function runAutoPilot(state: GameState): string[] {
     const line = autoResolve(state, me.pending[0])
     if (line) done.push(line)
   }
+  if (runScheduledSecondary(state)) done.push('完成本周副位置训练（2点行动、4点体力）。')
   if (me.auto.buy) done.push(...autoBuy(state))
   for (const d of done) me.autoNotes.push(d)
   if (me.autoNotes.length > 60) me.autoNotes.splice(0, me.autoNotes.length - 60)
@@ -566,8 +567,8 @@ export function quietAhead(state: GameState, days = 28): boolean {
  *           released · folding
  *   「商务」 stream (an exclusive) · cup (an entry, and its fee)
  *
- * and the season card while it asks a veteran of 31 whether he retires, which
- * autoResolve answers with a retirement. Everything else a run answers the
+ * and the season card while it asks a veteran of 31 whether he retires: this
+ * decision is always the player's; headless resolution safely continues. Everything else a run answers the
  * steady way, as it always has: events and trait notices whatever 「日常」
  * says, ceremonies, the plain season card, a knock on a match day.
  *
@@ -586,7 +587,7 @@ export const RUN_DIAL: Partial<Record<PendingItem['kind'], 'career' | 'biz'>> = 
  */
 export function leftToMe(state: GameState, item: PendingItem): boolean {
   const me = state.me!
-  if (item.kind === 'season') return !me.auto.career && !!me.retireAsk && (state.players[me.id]?.age ?? 0) >= 31
+  if (item.kind === 'season') return !!me.retireAsk && (state.players[me.id]?.age ?? 0) >= 31
   // a round of my cup is a match, not a decision: a run hands it to me or plays it, as it does my club's (advanceUntil)
   if (isCupRound(state, item)) return false
   const dial = RUN_DIAL[item.kind]
@@ -607,7 +608,7 @@ export function stopLine(state: GameState, item: PendingItem): string {
     return `${cup?.name ?? '杯赛'}${cup?.rounds[run.round]?.label ?? ''}今天开打`
   }
   const club = (id?: string) => (id && state.teams[id]?.name) || '俱乐部'
-  const dial = item.kind === 'season' ? 'career' : RUN_DIAL[item.kind]
+  const dial = item.kind === 'season' ? undefined : RUN_DIAL[item.kind]
   let what = '有件事等你拿主意'
   if (item.kind === 'deal') {
     const d = me.deals.find((x) => x.id === item.id)
@@ -655,6 +656,8 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
     return me.pending[0]
   }
   while (weeks < 60) {
+    const fullBeforePilot = me.weekDay === 0 && me.ap === me.apMax
+    const trainedBeforePilot = me.positionTraining?.trainedWeek
     runAutoPilot(state)
     const wait = settle()
     if (wait) return { stop: { kind: 'pending', item: wait }, weeks, notes }
@@ -666,7 +669,15 @@ export function advanceUntil(state: GameState, until: AdvanceUntil): { stop: Wee
       const aside = asideStop(state)
       if (aside) return { stop, weeks, notes, aside }
     }
-    if (me.weekDay === 0 && me.ap === me.apMax) autoPlan(state)
+    // The scheduled-only week may have been opened by PlayerGame's post-advance pilot.
+    // Do not mistake its paid 2 AP for a user-authored partial plan, even at certification.
+    const scheduledOnly = me.positionTraining?.autoTrainedWeek === me.week
+      && me.positionTraining.trainedWeek === me.week && me.ap === me.apMax - SECONDARY_AP
+      && me.trainWeek?.week !== me.week && !me.weekDone?.length
+      && !Object.values(me.plan).some(n => (n ?? 0) > 0)
+    const justScheduled = fullBeforePilot && trainedBeforePilot !== me.week
+      && me.positionTraining?.autoTrainedWeek === me.week
+    if (me.weekDay === 0 && (me.ap === me.apMax || scheduledOnly || justScheduled)) autoPlan(state)
     const onTable = asideItems(state)
     const momentsBefore = momentMark(state)
     stop = advanceWeek(state)

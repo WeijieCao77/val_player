@@ -6,7 +6,9 @@ import { pushLog } from './log'
 import { pop, pushFront, toFront } from './pending'
 import { expectOf, markDeclined, tryoutSkill } from './prepro'
 import { DIM_CN } from './nodes'
-import { makeDeal } from './contract'
+import { buyoutDue, makeDeal } from './contract'
+import { pitchAdmission } from './pitchAdmission'
+import { windowAt } from './window'
 import { tryoutNight } from './nights'
 import { countOffer } from './telemetry'
 import { roleCoreDims } from './roleCore'
@@ -125,19 +127,29 @@ export function startTryout(state: GameState, inviteId: string): string | null {
   const inv = me.pre.invites.find((i) => i.id === inviteId)
   if (!inv) return '这份邀请已经不在了。'
   if (me.tryout) return '你正在另一家试训。'
+  if (inv.via === 'self') {
+    const to = state.teams[inv.teamId]
+    if (!to) return '对方俱乐部已经不在了。'
+    const w = windowAt(state, to.id)
+    if (!w.open) return '对方窗口已经关了，你的自荐邀请不能现在开始。'
+    const admission = pitchAdmission(state, to, { fee: buyoutDue(state) })
+    if (admission.reason) return admission.reason
+  }
   countOffer('accept')
   pop(state, 'invite', inviteId)
   if (inv.direct) {
     me.pre.invites = me.pre.invites.filter((i) => i.id !== inviteId)
     // a man under contract is bought, not signed: his club is paid (me/contract.ts joinClub)
     const deal = makeDeal(state, inv.teamId, me.phase === 'pro' ? 'transfer' : 'sign', 'A', tryoutRng(state, 9))
+    if (inv.via === 'self') deal.selfPitched = true
     me.deals.push(deal)
     // 看合同 opens the contract, not another club's card waiting behind this one (me/pending.ts pushFront)
     pushFront(state, { kind: 'deal', id: deal.id })
     pushLog(state, 'deal', `${state.teams[inv.teamId]?.name} 免了试训，直接给了合同。`)
     return null
   }
-  me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [], assessmentVersion: 1 }
+  me.tryout = { inviteId, teamId: inv.teamId, startDay: state.day, step: 0, score: 0, log: [], assessmentVersion: 1,
+    ...(inv.via === 'self' ? { selfPitched: true as const } : {}) }
   // the first hour at the base is a night of its own (me/nights.ts), on screen before day one
   tryoutNight(state)
   // in the invitation's place: another club's invitation behind it waits until this tryout is over (me/pending.ts pushFront)
@@ -193,11 +205,34 @@ function finishTryout(state: GameState): void {
   const me = state.me!
   const t = me.tryout!
   const team = state.teams[t.teamId]
+  const inv = me.pre.invites.find((i) => i.id === t.inviteId)
+  const via = t.selfPitched ? 'self' : inv?.via
+  me.pre.invites = me.pre.invites.filter((i) => i.id !== t.inviteId)
+  pop(state, 'tryout', t.inviteId)
+
+  if (via === 'self') {
+    if (!team) {
+      me.tryout = undefined
+      pushLog(state, 'bad', '试训俱乐部已经不在了，本次自荐试训结束。')
+      return
+    }
+    const w = windowAt(state, team.id)
+    if (!w.open) {
+      me.tryout = undefined
+      pushLog(state, 'bad', `${team.name} 的窗口在试训结束时已经关了，试训结果作废。`)
+      return
+    }
+    const admission = pitchAdmission(state, team, { fee: buyoutDue(state) })
+    if (admission.reason) {
+      me.tryout = undefined
+      pushLog(state, 'bad', `试训结束时 ${team.name} 已经无法签下你：${admission.reason}，试训结果作废。`)
+      return
+    }
+  }
+
   const d = tryoutSkill(state) + t.score + me.pre.tac * 0.1 - expectOf(team)
   const grade = gradeOf(d)
   t.grade = grade
-  me.pre.invites = me.pre.invites.filter((i) => i.id !== t.inviteId)
-  pop(state, 'tryout', t.inviteId)
   me.pre.scoutSeen += 1
   if (grade === 'D' || (grade === 'C' && team.tier === 1 && !me.pre.wasPro)) {
     pushLog(state, 'bad', `${team.name} 试训评级 ${grade}：他们说以后再联系。（差距 ${Math.round(-d)} 分）`)
@@ -207,6 +242,7 @@ function finishTryout(state: GameState): void {
   }
   // a professional trialled by a VCT club that came for him (me/transfer.ts vctApproach) is bought from his club
   const deal = makeDeal(state, team.id, me.phase === 'pro' ? 'transfer' : 'sign', grade, tryoutRng(state, 8))
+  if (via === 'self') deal.selfPitched = true
   me.deals.push(deal)
   // passed: the contract is the next card on screen, in the tryout's place (me/pending.ts pushFront)
   pushFront(state, { kind: 'deal', id: deal.id })

@@ -8,6 +8,7 @@ import type { Invite, PitchOut, PitchReply, PitchWhy } from './types'
 import { pushLog } from './log'
 import { pop, push } from './pending'
 import { buyoutDue, makeDeal } from './contract'
+import { pitchAdmission } from './pitchAdmission'
 import { payOf } from './paytable'
 import { money as fmtMoney } from './moneyfmt'
 import { gradeOf } from './tryout'
@@ -363,7 +364,10 @@ export function pitchClubBlock(state: GameState, team: Team): string | null {
   const book = pitchBook(state)
   if (book.rejected.some((r) => r.team === team.id && r.year === state.year)) return '回绝过你，本赛季不再收你的自荐'
   if (declinedNow(state).has(team.id)) return '今年回绝过，今年不再谈'
-  if (team.roster.length >= ROSTER_FULL) return `名单满了（${team.roster.length}/${ROSTER_FULL}），这个转会期不加人`
+  if (team.roster.length >= ROSTER_FULL) {
+    const admission = pitchAdmission(state, team, { fee: buyoutDue(state) })
+    if (admission.reason) return admission.reason
+  }
   if (importBlock(state, team.id, p)) return '外援名额已经用满'
   if (book.sent.includes(team.id)) return '这个转会期已经投过这家'
   const w = windowAt(state, team.id)
@@ -480,6 +484,18 @@ export function pitchDay(state: GameState): void {
     pushLog(state, 'deal', `已经和 ${clubName(state, me.moveAfter.deal.teamId)} 谈妥，给 ${team.name} 的${what}作废了。`)
     return
   }
+  const w = windowAt(state, team.id)
+  if (!w.open) {
+    tally.cancelled++
+    pushLog(state, 'deal', `${team.name} 的窗口在回复前已经关了，你的${what}没有回音。`)
+    return
+  }
+  const admission = pitchAdmission(state, team, { fee: buyoutDue(state) })
+  if (admission.reason) {
+    tally.cancelled++
+    pushLog(state, 'deal', `${team.name} 回复前出了变故：${admission.reason}。你的${what}作废了。`)
+    return
+  }
   tally.replied++
   tally.odds += out.odds
   if (pitchHit(state, out)) {
@@ -502,6 +518,7 @@ function pitchYes(state: GameState, team: Team, out: PitchOut): void {
     if (skill >= expectOf(team) + 4) {
       const deal = makeDeal(state, team.id, 'transfer', gradeOf(skill - expectOf(team) + 4), rng)
       deal.via = 'contact'
+      deal.selfPitched = true
       me.deals.push(deal)
       push(state, { kind: 'deal', id: deal.id })
       pushLog(state, 'deal', `${where} 回应了你的接触：来和 ${clubName(state, state.myTeam)} 谈转会，${pay}，开了报价。`)
@@ -550,7 +567,10 @@ function pitchNo(state: GameState, team: Team, out: PitchOut): void {
 export function pitchWhy(state: GameState, team: Team): { why: PitchWhy; gap?: number; mate?: string } {
   const me = state.me!
   const p = state.players[me.id]
-  if (team.roster.length >= ROSTER_FULL) return { why: 'full' }
+  if (team.roster.length >= ROSTER_FULL) {
+    const admission = pitchAdmission(state, team, { fee: buyoutDue(state) })
+    if (admission.reason) return { why: 'full' }
+  }
   if (importBlock(state, team.id, p)) return { why: 'import' }
   const o = pitchOdds(state, team)
   const cands: [number, { why: PitchWhy; gap?: number; mate?: string }][] = []

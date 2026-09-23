@@ -23,6 +23,7 @@ import { Panel } from './common'
 import { attrWord, useNumbers } from './words'
 import { track } from '../../engine/me/telemetry'
 import AvatarEditor from './AvatarEditor'
+import OriginDetails from './OriginDetails'
 
 const ROLES_PICK: Role[] = ['决斗者', '先锋', '控场', '哨卫']
 
@@ -372,13 +373,16 @@ export default function NewCareer({
           {offer.map((k) => {
             const o = originOf(k)
             return (
-              <button key={k} className={`origin-pick${originKey === k ? ' on' : ''}`} aria-pressed={originKey === k} onClick={() => setOriginKey(k)}>
-                {/* the card is the story; what it does to the numbers stays in
-                    origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
-                {/* named on the server 「来自」 queues on, the year it opens: 韩服高分路人王, 2021's China on 亚服 */}
-                <b>{originName(o, serverAt(region, year, 0))}</b>
-                <span>{o.blurb}</span>
-              </button>
+              <div key={k} className="nc-origin-card" data-origin={o.key} style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                <button className={`origin-pick${originKey === k ? ' on' : ''}`} aria-pressed={originKey === k} onClick={() => setOriginKey(k)} style={{ width: '100%', flex: 1 }}>
+                  {/* the card is the story; what it does to the numbers stays in
+                      origins.ts — a wall of +5 · −6 · $1,500 is not a background */}
+                  {/* named on the server 「来自」 queues on, the year it opens: 韩服高分路人王, 2021's China on 亚服 */}
+                  <b>{originName(o, serverAt(region, year, 0))}</b>
+                  <span>{o.blurb}</span>
+                </button>
+                <OriginDetails origin={o} nums={capNums} />
+              </div>
             )
           })}
         </div>

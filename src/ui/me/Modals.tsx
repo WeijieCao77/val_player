@@ -18,7 +18,7 @@ import { storyHint, storyTag } from '../../engine/me/story'
 import { AXIS_CN, traitOf } from '../../engine/me/traits'
 import { pop } from '../../engine/me/pending'
 import { daysLeft, dealWord, setAside, withinCn } from '../../engine/me/aside'
-import { retire } from '../../engine/me/endings'
+import { retire, seasonHorizonLine } from '../../engine/me/endings'
 import { DIM_CN } from '../../engine/me/nodes'
 import { declineIgl, iglOffer, takeIgl } from '../../engine/me/igl'
 import { PITCH_MAX, closePitchReply, oddsWord, whyText } from '../../engine/me/selfpitch'
@@ -543,6 +543,7 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
   const me = game.me!
   const p = game.players[me.id]
   const s = me.seasons.find((x) => String(x.year) === year) ?? me.seasons[me.seasons.length - 1]
+  const [confirmRetire, setConfirmRetire] = useState(false)
   const close = () => { pop(game, 'season', year); commit(); onDone() }
   return (
     <Modal title={`${year} 赛季结束`} onClose={close} onBgClose={() => {}}>
@@ -565,11 +566,25 @@ function SeasonModal({ year, onDone }: { year: string; onDone: () => void }) {
       {/* 这个赛季改写的历史 (engine/me/worldline.ts): kept on the season's last day, its heaviest three shown */}
       {s?.rewrites?.length ? <SeasonRewrites rows={s.rewrites.slice(0, SHOWN)} /> : null}
       <p className="small muted">你 {p.age} 岁了。{me.phase === 'pro' ? `合同还剩 ${p.contractYears} 年。` : me.phase === 'free' ? '还是自由身。' : '还没有合同。'}</p>
+      <details className="tiny muted" style={{ marginTop: 8 }}>
+        <summary>生涯结束条件</summary>
+        <p style={{ margin: '4px 0 0' }}>{seasonHorizonLine(game)}</p>
+      </details>
       {me.retireAsk && me.phase !== 'retired' && (
         <div className="panel alert" style={{ marginTop: 8 }}>
           <div className="panel-body">
             <p className="small" style={{ marginTop: 0 }}>五个赛季了。可以就此收官拿一个结局，也可以继续。</p>
-            <button className="warn sm" onClick={() => { retire(game, `${p.age} 岁，你决定退役`, 'chose'); commit(); onDone() }}>退役</button>
+            {confirmRetire ? (
+              <>
+                <p className="small" style={{ color: 'var(--loss)' }}>这一下之后生涯就结束了，不能反悔。</p>
+                <div className="row" style={{ gap: 10, justifyContent: 'center' }}>
+                  <button className="warn sm" onClick={() => { retire(game, `${p.age} 岁，你决定退役`, 'chose'); pop(game, 'season', year); commit(); onDone() }}>确认退役</button>
+                  <button onClick={() => setConfirmRetire(false)}>再想想</button>
+                </div>
+              </>
+            ) : (
+              <button className="warn sm" onClick={() => setConfirmRetire(true)}>退役…</button>
+            )}
           </div>
         </div>
       )}

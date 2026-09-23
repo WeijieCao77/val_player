@@ -57,7 +57,7 @@ function run(home:Role,secondary:Role,seed:number,enabled:boolean):void {
     assert.ok(me.ap>=0&&me.ap<=me.apMax)
     for(const k of ATTR_KEYS)assert.ok(Number.isFinite(p.attrs[k])&&p.attrs[k]>=0&&p.attrs[k]<=99)
     if(me.week===20){delete me.positionTraining;state=migratePlayerSave(unpackState(packState(state)));reloads++}
-    else if(me.week%13===0){const position=JSON.stringify(me.positionTraining),mastery=secondaryMastery(state);state=migratePlayerSave(unpackState(packState(state)));assert.equal(JSON.stringify(state.me!.positionTraining),position);assert.equal(secondaryMastery(state),mastery);reloads++}
+    else if(me.week%13===0){const position=structuredClone(me.positionTraining),mastery=secondaryMastery(state);state=migratePlayerSave(unpackState(packState(state)));assert.deepEqual(state.me!.positionTraining,position);assert.equal(secondaryMastery(state),mastery);reloads++}
     me=state.me!;p=state.players[me.id]
     assert.ok(p,'main player survives')
     if(me.week%26===0)console.log('PROGRESS',home,enabled?'train':'control',me.week,secondaryMastery(state))
