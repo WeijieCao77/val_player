@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { weekReport } from '../src/engine/me/press'
+import { deskLine, weekReport } from '../src/engine/me/press'
 import { mateLine } from '../src/engine/me/chatter'
 import { advanceDay } from '../src/engine/season'
 import type { MeMatchRecord } from '../src/engine/me/types'
@@ -38,6 +38,29 @@ assert.deepEqual(out, ['log:fresh', '📰 news:fresh'])
 out = reportAt(2027, 100, [[2027, 99, 'fresh'], ...Array.from({ length: 10 }, (_, i): [number, number, string] => [2026, 99, `stale-${i}`])])
 assert.deepEqual(out, ['log:fresh', '📰 news:fresh'])
 console.log('PASS report: 7-day edges, cross-year/day-zero, future/invalid, sparse undated legacy, caps, read purity')
+
+// Public feedback 7161c4da (2026-09-21): a line the week already carries (an achievement, a ceiling that gave —
+// logged and put on the week at once) is not read back from the log a second time, and the four 「mine」 slots
+// go to lines not yet on the paper. Found in a 2021 China career: 「成就：第一次首发」 twice in one report.
+s.year = 2027; s.day = 100
+me.log = [
+  { year: 2027, day: 99, kind: 'good', text: '成就：第一次首发——打上一场正赛的首发。' },
+  ...['a', 'b', 'c', 'd'].map((t) => ({ year: 2027, day: 98, kind: 'match' as const, text: `match:${t}` })),
+]
+s.news = [{ year: 2027, day: 99, kind: 'transfer', text: '📰 already said' }]
+me.weekNotes = ['成就：第一次首发——打上一场正赛的首发。', '📰 already said']
+out = weekReport(s)
+assert.deepEqual(out, ['match:a', 'match:b', 'match:c', 'match:d'])
+me.weekNotes = []
+assert.deepEqual(weekReport(s), ['match:a', 'match:b', 'match:c', 'match:d', '📰 already said'])
+me.log.reverse()
+me.weekNotes = ['成就：第一次首发——打上一场正赛的首发。']
+// newest last is the log's order; the line already said does not take one of the four slots
+assert.deepEqual(weekReport(s), ['match:d', 'match:c', 'match:b', 'match:a', '📰 already said'])
+// the manager's 「我们夺得」 beside the league's own title line: a club called 我们
+assert.ok(deskLine('🏆 我们夺得 挑战者联赛 · 北美 · 第一赛段 冠军！'))
+assert.ok(!deskLine('🏆 TSM 夺得 挑战者联赛 · 北美 · 第一赛段 冠军！'))
+console.log('PASS report: lines already on the week are not repeated; the manager\'s 「我们夺得」 stays off a player\'s week')
 
 // Chatter uses the same 364-day clock for match facts, but birthdays retain
 // real calendar dates. Suppress birthdays so the match is the only trigger.
