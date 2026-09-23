@@ -76,6 +76,8 @@ export interface RunOut {
   mech: number; mile: number; exp: number; titles: number; starts: number; matches: number
   t1Weeks: number; ratingSum: number; proWeeks: number; fatigueSum: number; weeks: number
   spent: Record<string, number>; money: number; secs: number
+  /** week by week, as the plan was drawn: where I was, whether I was in the five, and the rest it took (check_buy.ts pairs these) */
+  track: { club: string; starter: boolean; rest: number }[]
 }
 
 /** autoWeek, with the shopping before the plan and the plan counted */
@@ -87,6 +89,7 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
   const p = state.players[me.id]
   const year0 = state.year
   const hours: Record<string, number> = {}
+  const track: RunOut['track'] = []
   let peak = p.overall, peakYear = state.year, weeks = 0, weeksHurt = 0, t1Weeks = 0, ratingSum = 0, proWeeks = 0, fatigueSum = 0
   const clear = () => { let g = 0; while (me.pending.length && g++ < 20) autoResolve(state, me.pending[0]) }
   while (state.year - year0 < seasons && weeks < seasons * 60) {
@@ -94,7 +97,10 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
     if (me.phase === 'retired' || state.gameOver) break
     shopAll(state, parts)
     if (injuryStatus(state)) weeksHurt++
+    const club = me.phase === 'pro' ? state.myTeam : ''
+    const starter = !!club && !!state.teams[club]?.starters.includes(me.id)
     autoPlan(state)
+    track.push({ club, starter, rest: me.plan.rest ?? 0 })
     for (const [k, n] of Object.entries(me.plan)) hours[k] = (hours[k] ?? 0) + (n ?? 0)
     let stop = advanceWeek(state)
     let guard = 0
@@ -127,7 +133,7 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
     mech: sum(bn?.mech), mile: sum(bn?.mile), exp: bn?.exp ?? 0,
     titles: me.titles.filter((t) => t.started).length, starts: pro.reduce((s, x) => s + x.starts, 0), matches: pro.reduce((s, x) => s + x.matches, 0),
     t1Weeks, ratingSum, proWeeks, fatigueSum, weeks,
-    spent, money: me.money, secs: Math.round((Date.now() - t0) / 1000),
+    spent, money: me.money, secs: Math.round((Date.now() - t0) / 1000), track,
   }
 }
 

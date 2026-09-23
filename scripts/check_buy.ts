@@ -126,6 +126,18 @@ const base = (): GameState => {
 // with it, that is the leak coming back: find the cause, do not lower this again.
 const REST_MIN = 0.65
 const TRAIN_MAX = 0.08
+// 2026-09-24: the rest is read over the weeks the two careers spend alike — the same club, both in its five or
+// both off it — and no longer over the whole three seasons. Over the whole career it read the path, not the
+// shop: the career that buys everything also has 金牌经纪人, which brings more offers, and a different club
+// means a different number of matches and a different body. At 686990b seed 7 went TLA → 200 → MDR buying
+// everything and stayed at TLA buying nothing: start-of-week fatigue 23 against 29, rest 135 → 85 (63%), while
+// the shop took 0.7 fatigue a week off it; at f91ec98 it was seed 12, off to Giants and on the bench there. Over
+// ten seeds the whole-career ratio sat at 85–87% on both sides, and 192f963 itself had seeds at 68% and 70%.
+// The leak this is for — paid recovery turned into practice (a077001) — shows in any week where it happens,
+// so the paired weeks still catch it (red on a077001's leak put back, 2026-09-24). A seed needs PAIRED_MIN such
+// weeks to be read, and at least SEEDS_READ seeds must be.
+const PAIRED_MIN = 52
+const SEEDS_READ = 3
 // The peak is held one way: buying everything must not end stronger. Ending weaker is trophy luck, not a leak —
 // on 2026-09-14, after the qualification fixes changed the world, seed 7 went 79 → 77 with 581 → 586 hours of
 // practice, 146 → 145 of rest and no injuries either side; one seed's titles alone swing the peak −2…+4. The
@@ -135,6 +147,8 @@ let peakGap = 0
 let worstSeed = -Infinity
 let trainOver = 0
 let restShare = 1
+let seedsRead = 0
+const pairedAt: string[] = []
 for (const seed of seeds) {
   const none = runCareer(seed, 'none', 'EMEA', '决斗者', 'chal', seasons)
   const all = runCareer(seed, 'all', 'EMEA', '决斗者', 'chal', seasons)
@@ -142,13 +156,25 @@ for (const seed of seeds) {
   peakGap += all.peak - none.peak
   worstSeed = Math.max(worstSeed, all.peak - none.peak)
   trainOver = Math.max(trainOver, (train(all) - train(none)) / Math.max(1, train(none)))
-  restShare = Math.min(restShare, (all.hours.rest ?? 0) / Math.max(1, none.hours.rest ?? 0))
+  // the weeks both careers spend alike: same club (or both without one), both in its five or both not
+  let paired = 0, restNone = 0, restAll = 0
+  for (let i = 0; i < Math.min(none.track.length, all.track.length); i++) {
+    const a = none.track[i], b = all.track[i]
+    if (a.club !== b.club || a.starter !== b.starter) continue
+    paired++; restNone += a.rest; restAll += b.rest
+  }
+  pairedAt.push(`${seed}:${paired}周 ${restNone}→${restAll}`)
+  if (paired >= PAIRED_MIN) {
+    seedsRead++
+    restShare = Math.min(restShare, restAll / Math.max(1, restNone))
+  }
   const tired = (r: typeof none) => Math.round(r.fatigueSum / Math.max(1, r.weeks))
   gaps.push(`seed ${seed}：峰值 ${none.peak} → ${all.peak}，训练 ${train(none)} → ${train(all)} 小时，休息 ${none.hours.rest ?? 0} → ${all.hours.rest ?? 0}，带伤 ${none.weeksHurt} → ${all.weeksHurt} 周，周末平均疲劳 ${tired(none)} → ${tired(all)}`)
 }
 peakGap /= seeds.length
-facts.push([`${seeds.length} 个种子各自什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（全买平均最多高 ${tol}），单个种子最多差 ${worstSeed >= 0 ? '+' : ''}${worstSeed}（容许 ${seedTol}）；全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
-  peakGap <= tol && worstSeed <= seedTol && restShare >= REST_MIN && trainOver <= TRAIN_MAX])
+facts.push([`${seeds.length} 个种子各自什么都不买 vs 全买，${seasons} 季：综合峰值平均差 ${peakGap >= 0 ? '+' : ''}${peakGap.toFixed(2)}（全买平均最多高 ${tol}），单个种子最多差 ${worstSeed >= 0 ? '+' : ''}${worstSeed}（容许 ${seedTol}）；同一支队、同样首发或替补的周里，全买的休息至少是不买的 ${Math.round(restShare * 100)}%（要 ${REST_MIN * 100}% 以上；${seedsRead} 个种子够 ${PAIRED_MIN} 周，要 ${SEEDS_READ} 个以上），训练最多多 ${(trainOver * 100).toFixed(1)}%（容许 ${TRAIN_MAX * 100}%）`,
+  peakGap <= tol && worstSeed <= seedTol && restShare >= REST_MIN && seedsRead >= SEEDS_READ && trainOver <= TRAIN_MAX])
+console.log(`  成对的周（种子:周数 休息 不买→全买）：${pairedAt.join('，')}`)
 
 for (const g of gaps) console.log(`  ${g}`)
 for (const [what, ok] of facts) console.log(`${ok ? '✓' : '✗'} ${what}`)
