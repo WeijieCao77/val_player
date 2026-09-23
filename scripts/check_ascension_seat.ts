@@ -22,8 +22,10 @@ import { declineDeal } from '../src/engine/me/contract'
 import { advanceDay } from '../src/engine/season'
 import { ascensionSeat, ascensionSeats, eventOf, eventsOf } from '../src/engine/circuit'
 import type { AscensionSeat } from '../src/engine/circuit'
+import timelineRaw from '../src/data/timeline.json'
 import type { Competition, GameState, Team } from '../src/engine/types'
 
+const BOOK = timelineRaw as unknown as { years: Record<string, { clubs: Record<string, unknown> }> }
 const t0 = Date.now()
 let checks = 0
 const ok = (label: string) => { checks++; console.log(`OK ${label}`) }
@@ -106,6 +108,11 @@ const lostFor = (year: number, region: string, realVlr: string, place: number): 
   assert.deepEqual(lostFor(2023, 'China', '11981', 1), [], 'history\'s side that also won here: nothing moves')
   assert.deepEqual(lostFor(2024, 'Pacific', '466', 2), [], 'BOOM Esports really went up from second: second keeps it')
   assert.equal(lostFor(2024, 'Pacific', '466', 3)[0]?.lost, true)
+  // the winner here let go by history at the turn: the place passes down — to the player's club, second, so nothing moves
+  const folded = world(2023, 'China', 2, 'V21T11981')
+  const comp = Object.values(folded.comps)[0]
+  folded.teams[comp.finished[0]].dormant = true
+  assert.deepEqual(ascensionSeats(folded, 2024), [], 'a winner let go passes the place down, here to the side history sent up')
 }
 ok('the player\'s club was history\'s side and lost the place here: the winner goes up in its seat')
 
@@ -136,12 +143,15 @@ function career(club: string, win: boolean, prep?: (s: GameState) => void): Game
       played = true
       assert.equal(c.circuit?.mode, 'sim')
       const rest = c.finished.filter((t) => t !== club)
-      // lost: behind a side that plays 2024 and is not a partner already — one bound for the league, or one history
-      // lets go at the turn (Monarch Effect), passes the place on, here to the player's club and nothing moves
-      const ids = (es: typeof asc[]) => new Set(es.flatMap((e) => e.seeds.map((v) => `V21T${v}`)))
-      const bound = ids(eventsOf(2024).filter((e) => e.stage === 'kickoff' && e.region === 'China'))
-      const alive = ids(eventsOf(2024))
-      const lead = rest.find((t) => !bound.has(t) && alive.has(t))!
+      // lost: behind a side the roster book still has in 2024 and that is not a partner already — one bound for the
+      // league, or one history lets go at the turn, passes the place on, here to the player's club, and nothing moves.
+      // 「Seeded somewhere in 2024」 is not 「plays 2024」: Octagonal Disposition Gaming is on a 2024 event's list and
+      // left the book after 2023 (its last day 329), so with carry-feel's results it led here and the seat stayed put
+      const bound = new Set(eventsOf(2024).filter((e) => e.stage === 'kickoff' && e.region === 'China').flatMap((e) => e.seeds.map((v) => `V21T${v}`)))
+      const alive = (t: string) => !!BOOK.years['2024'].clubs[t.slice(4)] && !!s.teams[t] && !s.teams[t].dormant
+      // the best such side of the field — or, where this world's field has none, one the book has, put in first
+      const lead = [...rest, ...Object.keys(s.teams).filter((t) => s.teams[t].region === 'China')].find((t) => !bound.has(t) && alive(t))!
+      assert.ok(lead, 'a Chinese club the book has in 2024, outside the league')
       c.finished = win ? [club, ...rest] : [lead, club, ...rest.filter((t) => t !== lead)]
       c.champion = c.finished[0]
       c.places = c.finished.map((_, i) => i + 1)
