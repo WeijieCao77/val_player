@@ -34,7 +34,7 @@ export default function AvatarEditor({ value, onChange, disabled, onBusyChange }
         : <span className="face face-me" style={{ width: 64, height: 64 }} aria-label="默认头像" role="img">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4.4" /><path d="M3 24c.6-5.4 4.3-8.6 9-8.6s8.4 3.2 9 8.6z" /></svg>
         </span>}
-      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" aria-label="选择头像图片"
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.jfif,.webp" aria-label="选择头像图片"
         hidden disabled={disabled || busy} onChange={upload} />
       <button type="button" className="sm" disabled={disabled || busy} onClick={() => input.current?.click()}>
         {busy ? '处理图片中…' : avatar ? '更换头像' : '上传头像'}
@@ -44,7 +44,7 @@ export default function AvatarEditor({ value, onChange, disabled, onBusyChange }
       }}>{busy ? '取消并恢复默认' : '恢复默认'}</button>}
     </div>
     {error && <p role="alert" className="tiny" style={{ color: 'var(--loss)', overflowWrap: 'anywhere' }}>{error}</p>}
-    <p className="tiny faint" style={{ marginBottom: 0 }}>本地图片居中裁剪为 128 × 128，最长边 ≤4096 像素、文件 ≤8 MiB。仅保存压缩头像，不上传服务器。</p>
+    <p className="tiny faint" style={{ marginBottom: 0 }}>本地图片居中裁剪为 128 × 128；支持静态 PNG、JPEG、WebP，最长边 ≤8192 像素、文件 ≤8 MiB。仅保存压缩头像，不上传服务器。</p>
     <p className="tiny faint" style={{ marginTop: 4 }}>仅保存在当前生涯，随存档导入导出；分享卡和成就殿堂不包含头像。</p>
   </div>
 }

@@ -68,9 +68,37 @@ try {
   }
   const alphaWhite=await page.evaluate(async()=>{const img=new Image();img.src=window.h.game.me.avatar;await img.decode();const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');g.drawImage(img,0,0);return [...g.getImageData(64,64,1,1).data]})
   check(alphaWhite.every(v=>v>=250),'transparent raster gets white background')
+  // Real files arrive mislabelled, untyped, or with data after the main image (Ultra HDR gain
+  // maps, camera trailers, chat-app appendices); the bytes decide, and the main image decodes.
+  const jpegBytes=Buffer.from(fixtures.jpeg.base64,'base64'),pngBytes=Buffer.from(fixtures.png.base64,'base64'),webpBytes=Buffer.from(fixtures.webp.base64,'base64')
+  const large=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=4200;c.height=4000;const g=c.getContext('2d');g.fillStyle='#48c';g.fillRect(0,0,4200,4000);return c.toDataURL('image/png').split(',')[1]})
+  const tolerated=[
+    {...fixtures.png,name:'wrong.jpg',mimeType:'image/jpeg'},
+    {...fixtures.jpeg,name:'noext',mimeType:''},
+    {...fixtures.jpeg,name:'photo.jpg',mimeType:'image/jpg'},
+    {...fixtures.jpeg,name:'download.jpg',mimeType:'application/octet-stream'},
+    {...fixtures.webp,name:'wechat.jpg',mimeType:'image/jpeg'},
+    {name:'ultrahdr.jpg',mimeType:'image/jpeg',base64:Buffer.concat([jpegBytes,jpegBytes]).toString('base64')},
+    {name:'trailer.jpg',mimeType:'image/jpeg',base64:Buffer.concat([jpegBytes,Buffer.from('SEFT camera trailer')]).toString('base64')},
+    {name:'padded.png',mimeType:'image/png',base64:Buffer.concat([pngBytes,Buffer.alloc(4)]).toString('base64')},
+    {name:'padded.webp',mimeType:'image/webp',base64:Buffer.concat([webpBytes,Buffer.alloc(3)]).toString('base64')},
+    {name:'large.png',mimeType:'image/png',base64:large},
+  ]
+  for(const f of tolerated){
+    await page.evaluate(()=>window.h.setAvatar(undefined));await upload(f)
+    await page.waitForFunction(()=>!!window.h.game.me.avatar,null,{timeout:8000}).catch(()=>{})
+    const alerts=await page.getByRole('alert').allInnerTexts()
+    check(alerts.length===0&&await page.evaluate(()=>{const a=window.h.game.me.avatar;return !!a&&window.h.avatarData(a)===a}),`${f.name} accepted by content ${alerts.join(' ')}`)
+  }
+  prior=await page.evaluate(()=>window.h.game.me.avatar)
+  const named=[
+    {name:'photo.heic',mimeType:'',base64:Buffer.concat([Buffer.from([0,0,0,24]),Buffer.from('ftypheic'),Buffer.alloc(16)]).toString('base64'),expect:'HEIC'},
+    {name:'anim.gif',mimeType:'image/gif',base64:Buffer.concat([Buffer.from('GIF89a'),Buffer.alloc(8)]).toString('base64'),expect:'GIF'},
+    {name:'unknown',mimeType:'',base64:Buffer.from('not image').toString('base64'),expect:'无法识别'},
+  ]
+  for(const f of named){await upload(f);await page.getByRole('alert').waitFor();const text=await page.getByRole('alert').innerText();check(text.includes(f.expect)&&await page.evaluate(a=>window.h.game.me.avatar===a,prior),`${f.name} rejected with a reason: ${text}`)}
   const invalids=[
     {name:'fake.jpg',mimeType:'image/jpeg',base64:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64')},
-    {...fixtures.png,name:'wrong.jpg',mimeType:'image/jpeg'},
     {name:'bad.png',mimeType:'image/png',base64:Buffer.from('not image').toString('base64')},
     {name:'big.png',mimeType:'image/png',base64:Buffer.alloc(8*1024*1024+1).toString('base64')},
     {name:'bad.svg',mimeType:'image/svg+xml',base64:Buffer.from('<svg/>').toString('base64')},

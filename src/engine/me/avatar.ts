@@ -5,8 +5,11 @@ export const AVATAR_MAX_CHARS = 28000
 export const AVATAR_SIZE = 128
 const SOFS = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf])
 
-/** Bounded marker walk, including stuffed entropy bytes and progressive scans. */
-export function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | undefined {
+/** Bounded marker walk, including stuffed entropy bytes and progressive scans.
+ * `exact` demands the file end at the first EOI, as our own normalized avatars do; an imported
+ * photo may carry a gain map, a camera trailer or a chat app's appendix after it and passes with
+ * `exact` off, because only the main image the browser decodes ever reaches the canvas. */
+export function jpegDimensions(bytes: Uint8Array, exact = true): { width: number; height: number } | undefined {
   if (bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216) return
   let at = 2, scanned = false
   let dims: { width: number; height: number } | undefined
@@ -14,7 +17,7 @@ export function jpegDimensions(bytes: Uint8Array): { width: number; height: numb
     if (bytes[at++] !== 255) return
     while (bytes[at] === 255) at++
     const marker = bytes[at++]
-    if (marker === 217) return at === bytes.length && scanned ? dims : undefined
+    if (marker === 217) return scanned && (!exact || at === bytes.length) ? dims : undefined
     if (!marker || marker === 216 || marker === undefined || (marker >= 208 && marker <= 215)) return
     if (marker === 1) continue
     if (at + 2 > bytes.length) return

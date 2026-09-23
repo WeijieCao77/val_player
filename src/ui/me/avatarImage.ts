@@ -1,23 +1,45 @@
 import { avatarData, AVATAR_SIZE, jpegDimensions } from '../../engine/me/avatar'
 
 const MAX_BYTES = 8 * 1024 * 1024
-const MAX_EDGE = 4096
-const MAX_PIXELS = 16_000_000
+const MAX_EDGE = 8192
+const MAX_PIXELS = 40_000_000
+/** Phone decoders may give up well below the header bound; name what to shrink when they do. */
+const SAFE_PIXELS = 16_000_000
+type Kind = 'image/png' | 'image/jpeg' | 'image/webp'
+const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10]
 export class AvatarConversionError extends Error {}
 const bad = (message = '图片损坏或格式不受支持，请换一张 PNG、JPEG 或 WebP 图片。'): never => { throw new AvatarConversionError(message) }
 const bounded = (w: number, h: number): void => {
-  if (!w || !h || w > MAX_EDGE || h > MAX_EDGE || w * h > MAX_PIXELS) bad('图片尺寸过大或无效：最长边不超过 4096 像素，总像素不超过 1600 万。')
+  if (!w || !h || w > MAX_EDGE || h > MAX_EDGE || w * h > MAX_PIXELS) bad('图片尺寸过大或无效：最长边不超过 8192 像素，总像素不超过 4000 万。请先缩小再上传。')
 }
 
-/** Inspect headers BEFORE allocating decoded pixels. Files are already byte-bounded. */
-function inspect(bytes: Uint8Array, mime: string): { width: number; height: number } {
+/** Trust the bytes, not the declared type: Windows and chat apps label PNG or WebP files .jpg,
+ * leave the type empty, or send image/jpg. Unsupported formats get told what they are. */
+function sniff(bytes: Uint8Array, file: File): Kind {
+  const ascii = (at: number, n: number) => String.fromCharCode(...bytes.subarray(at, at + n))
+  if (bytes.length >= 8 && PNG_SIG.every((v, i) => bytes[i] === v)) return 'image/png'
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return 'image/jpeg'
+  if (bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP') return 'image/webp'
+  const name = file.name.toLowerCase(), type = file.type.toLowerCase()
+  const brand = bytes.length >= 12 && ascii(4, 4) === 'ftyp' ? ascii(8, 4).trim().toLowerCase() : ''
+  if (/^(heic|heix|hevc|hevx|mif1|msf1|heim|heis|avif|avis)$/.test(brand) || /\.(heic|heif|avif)$/.test(name) || /heic|heif|avif/.test(type))
+    return bad('暂不支持 HEIC/HEIF/AVIF 照片。iPhone 可在「设置 › 相机 › 格式」选「兼容性最佳」，或先把照片转成 JPEG 再上传。')
+  if (ascii(0, 4) === 'GIF8' || name.endsWith('.gif') || type === 'image/gif') return bad('暂不支持 GIF，请换一张静态 PNG、JPEG 或 WebP 图片。')
+  const head = ascii(0, Math.min(bytes.length, 64))
+  if (/^\s*(<\?xml|<svg|<!doctype svg)/i.test(head) || name.endsWith('.svg') || type.includes('svg')) return bad('暂不支持 SVG，请换一张 PNG、JPEG 或 WebP 图片。')
+  if (ascii(0, 2) === 'BM' || ascii(0, 4) === 'II*\0' || ascii(0, 4) === 'MM\0*') return bad('暂不支持 BMP/TIFF，请先转成 PNG 或 JPEG。')
+  return bad('无法识别这张图片的格式，仅支持静态 PNG、JPEG、WebP。')
+}
+
+/** Inspect headers BEFORE allocating decoded pixels. Files are already byte-bounded.
+ * Data after the main image (Ultra HDR gain maps, camera trailers, chat-app appendices) is
+ * ignored rather than rejected: only the browser's decode of the main image reaches the canvas. */
+function inspect(bytes: Uint8Array, mime: Kind): { width: number; height: number } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const word = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4))
   let dims: { width: number; height: number } | undefined
-  if (mime === 'image/jpeg') dims = jpegDimensions(bytes)
+  if (mime === 'image/jpeg') dims = jpegDimensions(bytes, false)
   else if (mime === 'image/png') {
-    const sig = [137, 80, 78, 71, 13, 10, 26, 10]
-    if (!sig.every((v, i) => bytes[i] === v)) bad()
     let at = 8, ended = false
     while (at + 12 <= bytes.length) {
       const length = view.getUint32(at), type = word(at + 4)
@@ -29,15 +51,17 @@ function inspect(bytes: Uint8Array, mime: string): { width: number; height: numb
       }
       if (type === 'acTL') bad('暂不支持动画图片，请选择一张静态图片。')
       at += length + 12
-      if (type === 'IEND') { if (length || at !== bytes.length) bad(); ended = true; break }
+      if (type === 'IEND') { if (length) bad(); ended = true; break }
     }
     if (!ended) bad()
-  } else if (mime === 'image/webp') {
-    if (bytes.length < 20 || word(0) !== 'RIFF' || word(8) !== 'WEBP' || view.getUint32(4, true) + 8 !== bytes.length) bad()
+  } else {
+    if (bytes.length < 20) bad()
+    const end = view.getUint32(4, true) + 8
+    if (end < 20 || end > bytes.length) bad()
     let at = 12, canvas: { width: number; height: number } | undefined
-    while (at + 8 <= bytes.length) {
+    while (at + 8 <= end) {
       const type = word(at), length = view.getUint32(at + 4, true), start = at + 8
-      if (start + length > bytes.length) bad()
+      if (start + length > end) bad()
       if (type === 'ANIM' || type === 'ANMF') bad('暂不支持动画图片，请选择一张静态图片。')
       if (type === 'VP8X') {
         if (length !== 10 || canvas || bytes[start] & 2) bad('暂不支持动画或异常 WebP 图片。')
@@ -54,11 +78,22 @@ function inspect(bytes: Uint8Array, mime: string): { width: number; height: numb
       }
       at = start + length + (length & 1)
     }
-    if (at !== bytes.length || (canvas && (!dims || canvas.width !== dims.width || canvas.height !== dims.height))) bad()
+    if (at !== end || (canvas && (!dims || canvas.width !== dims.width || canvas.height !== dims.height))) bad()
   }
   if (!dims) return bad()
   bounded(dims.width, dims.height)
   return dims
+}
+
+/** Older browsers have no File.arrayBuffer; FileReader reads the same bytes. */
+function readBytes(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(new AvatarConversionError('图片无法读取，请换一张图片。'))
+    reader.readAsArrayBuffer(file)
+  })
 }
 
 async function loadImage(file: File): Promise<HTMLImageElement> {
@@ -82,10 +117,16 @@ async function loadImage(file: File): Promise<HTMLImageElement> {
 /** All work remains on this device; only the normalized JPEG is returned. */
 export async function fileToAvatarDataUrl(file: File): Promise<string> {
   if (!file.size || file.size > MAX_BYTES) return bad('请选择不超过 8 MiB 的图片，文件不能为空。')
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return bad('仅支持静态 PNG、JPEG、WebP；暂不支持 SVG、GIF、HEIC。')
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  const header = inspect(bytes, file.type)
-  const img = await loadImage(file)
+  const bytes = new Uint8Array(await readBytes(file))
+  const kind = sniff(bytes, file)
+  const header = inspect(bytes, kind)
+  let img: HTMLImageElement
+  try {
+    img = await loadImage(file)
+  } catch (e) {
+    if (header.width * header.height > SAFE_PIXELS) return bad('这张图片像素太多，当前设备解码失败；请先缩小到 4096 像素以内再上传。')
+    throw e
+  }
   const w = img.naturalWidth, h = img.naturalHeight
   bounded(w, h)
   // EXIF orientation can swap width and height when a camera photo decodes.
