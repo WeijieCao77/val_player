@@ -1,5 +1,6 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { absentPlayer, activeAbsence } from './absence'
+import { SEASON_DAYS } from '../calendar'
 import { ROLES, SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
@@ -238,27 +239,107 @@ export function coachStarters(state: GameState, room = true): string[] {
   // with no hold the share of club matches started fell 89.0% → 83.7% and a recognised starter was benched
   // 7 → 11 times; holding it for the recognised and trusted only, still 83.7%; for whoever is in the five,
   // 89.4% and 3 (scratchpad fb-week_measure_*.jsonl).
-  if (mine && !five.includes(mine) && heldSeat(state)) {
-    const arrivals = new Set(me!.historyArrivals!.ids)
-    const taken = five.filter((p) => arrivals.has(p.id) && !(p.isIgl && p === igl))
-    const sameRole = taken.filter((p) => (p.roles ?? [p.role]).includes(mine.role))
-    const out = (sameRole.length ? sameRole : taken).sort((a, b) => cv(a) - cv(b))[0]
-    if (out) five[five.indexOf(out)] = mine
+  //
+  // Refined 2026-09-24 by the author: 「如果是同位置的引援就作为替补然后轮换，其他位置的引援就照历史执行」.
+  // Only a man at my position yields his seat to me — history's signings at the other four play where history
+  // has them — and he is not parked: he rotates in (rotationCall) and takes the seat for good once he clearly
+  // outplays me on the field (outplayedBy). Measured over the same eighteen careers, f7d06c2 against this:
+  // share of club matches started 89.2% → 82.9%, most of it the rotation — the seat was held against a
+  // same-position signing in 2031 of 4570 professional weeks and he was named to start in 333 of them (16%);
+  // a recognised starter benched outside a rotation week 2 → 12 times; history's signings at the other four
+  // positions played 74% → 76% of the matches they were there for; 综合 after five seasons 83.7 → 83.6
+  // (scratchpad club-rotation_m_*.jsonl).
+  if (mine && heldSeat(state)) {
+    const rivals = sameRoleArrivals(state, mine).filter((p) => !(p.isIgl && p === igl))
+    const turn = rotationCall(state)
+    if (!five.includes(mine) && !turn) {
+      const taken = rivals.filter((p) => five.includes(p) && !outplayedBy(state, p))
+      const out = taken.sort((a, b) => cv(a) - cv(b))[0]
+      if (out) five[five.indexOf(out)] = mine
+    } else if (five.includes(mine) && turn && !five.includes(turn.sub)) {
+      five[five.indexOf(mine)] = turn.sub
+    }
   }
   return five.map((p) => p.id)
 }
 
 /**
- * My place is held against history's signings: in the five as it stands, not on trial, fit, not benched for
- * form or a rotation, and at a club history has signed somebody for since I came.
+ * Clearly outplayed, over time: across the club's official matches of the last OUTPLAY_DAYS, the 替补 at my
+ * position rated at least HOLD_CLEAR above me on average, from at least OUTPLAY_MATCHES starts each — his come
+ * from the rotation. Then he takes the seat on merit. Read off what was played, not off 综合 or the coach's eye:
+ * the eye moves with every match's fatigue, and read that way the seat went back and forth inside a week; and
+ * a star signing measured on 综合 took it on arrival — 194 of 4569 professional weeks in eighteen careers —
+ * which is not 「作为替补然后轮换」.
+ */
+export const HOLD_CLEAR = 0.15
+export const OUTPLAY_MATCHES = 3
+export const OUTPLAY_DAYS = 84
+export function outplayedBy(state: GameState, rival: Player): boolean {
+  const me = state.me
+  if (!me) return false
+  const now = state.year * SEASON_DAYS + state.day
+  const recent = me.matches.filter((m) => !m.friendly && now - (m.year * SEASON_DAYS + m.day) <= OUTPLAY_DAYS)
+  const mineR = recent.filter((m) => m.started).map((m) => m.rating)
+  const hisR = recent.map((m) => m.box?.find((r) => r.mine && r.id === rival.id)?.rating).filter((r): r is number => r != null)
+  if (mineR.length < OUTPLAY_MATCHES || hisR.length < OUTPLAY_MATCHES) return false
+  const avg = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length
+  return avg(hisR) - avg(mineR) >= HOLD_CLEAR
+}
+/** a held seat's scheduled rotation: the 替补 at my position starts one week in this many… */
+export const ROTATE_EVERY = 4
+/** …and one in this many once I am the coach's own, trusted starter (认定首发) */
+export const ROTATE_EVERY_TRUSTED = 6
+/** a week this tired or this far off form, he starts instead whatever the schedule says */
+export const ROTATE_FATIGUE = 65
+export const ROTATE_FORM = 58
+
+/** History's signings at my position — the same main role — on the roster, fit. */
+function sameRoleArrivals(state: GameState, mine: Player): Player[] {
+  const me = state.me!
+  const team = state.teams[state.myTeam]
+  const ids = me.historyArrivals?.club === team?.id ? me.historyArrivals.ids : []
+  return ids.map((id) => state.players[id])
+    // his main position, as mine is: a sentinel whose agent pool also has a duelist in it is not at my position
+    .filter((p): p is Player => !!p && p.teamId === team?.id && p.role === mine.role
+      && p.injuredUntil <= state.day && !absentPlayer(state, p.id))
+}
+
+/**
+ * This week the 替补 at my position starts instead of me, and why: I am worn out (ROTATE_FATIGUE) or off form
+ * (ROTATE_FORM), or it is his turn (one week in ROTATE_EVERY, ROTATE_EVERY_TRUSTED for 认定首发). Never while a
+ * contract's starting promise still holds, nor in the matches after a title won as a starter (graceMatches),
+ * nor for a man on trial. Decided when the week's five is named (weeklyLineup, `fresh`) and kept for the week,
+ * so every call in one week names the same five.
+ */
+export function rotationCall(state: GameState, fresh = false): { sub: Player; why: 'tired' | 'form' | 'turn' } | null {
+  const me = state.me
+  const mine = me ? state.players[me.id] : undefined
+  const a = me?.historyArrivals
+  if (!me || !mine || !a?.seat || a.club !== state.myTeam || me.trial || (me.graceMatches ?? 0) > 0 || promiseSeat(state) === 'start') return null
+  if (!fresh && a.rot?.week === me.week) {
+    const kept = a.rot.sub ? state.players[a.rot.sub] : undefined
+    return kept && kept.teamId === state.myTeam && kept.injuredUntil <= state.day && !absentPlayer(state, kept.id) ? { sub: kept, why: a.rot.why } : null
+  }
+  const sub = sameRoleArrivals(state, mine).sort((x, y) => coachView(state, y) - coachView(state, x))[0]
+  if (!sub) return null
+  if (mine.fatigue >= ROTATE_FATIGUE) return { sub, why: 'tired' }
+  if (mine.form <= ROTATE_FORM) return { sub, why: 'form' }
+  const every = me.proven && me.coachTrust >= PROVEN_TRUST ? ROTATE_EVERY_TRUSTED : ROTATE_EVERY
+  return (me.week - (a.since ?? me.week)) % every === every - 1 ? { sub, why: 'turn' } : null
+}
+
+/**
+ * My place is held against history's signings at my position: I hold it (historyArrivals.seat — I was in the
+ * five, and have not lost it on merit or for form since), not on trial, fit, not benched for form or a
+ * 试新阵容 (benchLock), at a club history has signed somebody for since I came.
  */
 export function heldSeat(state: GameState): boolean {
   const me = state.me
   const team = me?.phase === 'pro' ? state.teams[state.myTeam] : undefined
   const p = me ? state.players[me.id] : undefined
   if (!me || !team || !p || me.trial) return false
-  if (me.historyArrivals?.club !== team.id || !me.historyArrivals.ids.length) return false
-  if (!team.starters.includes(me.id) || (me.benchLock && me.benchLock > state.day)) return false
+  if (me.historyArrivals?.club !== team.id || !me.historyArrivals.ids.length || !me.historyArrivals.seat) return false
+  if (me.benchLock && me.benchLock > state.day) return false
   return p.injuredUntil <= state.day && !absentPlayer(state, me.id)
 }
 
@@ -306,10 +387,30 @@ export function weeklyLineup(state: GameState): void {
   if (!me) return
   const team = state.teams[state.myTeam]
   const was = team.starters.includes(me.id)
+  // this week's rotation at my position, decided once, before the five is named (rotationCall)
+  if (me.historyArrivals?.club === state.myTeam) {
+    const r = rotationCall(state, true)
+    me.historyArrivals.rot = { week: me.week, sub: r?.sub.id ?? null, why: r?.why ?? 'turn' }
+  }
   team.starters = coachStarters(state)
   const now = team.starters.includes(me.id)
+  // the seat held against history's signing at my position (heldSeat): kept while I am in the five, through a
+  // rotation week, an injury or a leave; lost when the coach leaves me out for anything else
+  const a = me.historyArrivals
+  const turn = !now && a?.seat ? rotationCall(state) : null
+  const hurt = (state.players[me.id]?.injuredUntil ?? 0) > state.day || !!absentPlayer(state, me.id)
+  if (a && a.club === state.myTeam) {
+    if (now) { if (!a.seat) a.since = me.week; a.seat = true }
+    else if (!turn && !hurt) a.seat = false
+  }
   if (now && !was) pushLog(state, 'good', me.trial ? '教练兑现了承诺：本周你在首发名单里，这是试用。' : '教练把你排进了本周的首发名单。')
-  if (!now && was) pushLog(state, 'bad', '本周你回到替补席。')
+  if (!now && turn && turn.sub && team.starters.includes(turn.sub.id)) {
+    const line = turn.why === 'tired' ? `本周轮换：你太累了，${turn.sub.ign} 替你首发。`
+      : turn.why === 'form' ? `本周轮换：你状态不在，${turn.sub.ign} 替你首发。`
+      : `本周轮换：${turn.sub.ign} 首发，你歇一周，首发位置还是你的。`
+    pushLog(state, 'info', line)
+    me.weekNotes.push(line)
+  } else if (!now && was) pushLog(state, 'bad', '本周你回到替补席。')
   // The first time the place moves on merit alone, the contract is named: it is the
   // sentence that makes the rule legible — 「合同上写着首发」 and yet here I am on the
   // bench — and it is said once a spell rather than every week it happens.

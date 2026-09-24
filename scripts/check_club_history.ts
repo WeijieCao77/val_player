@@ -14,9 +14,11 @@ import assert from 'node:assert/strict'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { historyKeeps, reachOf, syncEvent, syncYear } from '../src/engine/timeline'
 import { clubWindow, clubWinter } from '../src/engine/me/club'
-import { coachStarters } from '../src/engine/me/coach'
+import { coachStarters, weeklyLineup, outplayedBy, ROTATE_EVERY, ROTATE_EVERY_TRUSTED, ROTATE_FATIGUE } from '../src/engine/me/coach'
+import { recomputeOverall } from '../src/engine/player'
 import { Rng } from '../src/engine/rng'
 import type { GameState } from '../src/engine/types'
+import type { MeMatchRecord } from '../src/engine/me/types'
 
 globalThis.fetch = () => Promise.reject(new Error('offline check'))
 const EDG = 'V21T1120'
@@ -78,37 +80,117 @@ check('an event roster: history\'s signing arrives; an eighth man sends the weak
   assert.equal(t.starters.length, 5)
   assert.ok(t.starters.every((x) => t.roster.includes(x)))
 })
-check('a starter keeps his place against a man history brings in; off the five, or benched for form, it is merit', () => {
+// Refined 2026-09-24 by the author: 「进去队伍之后……同位置的引援就作为替补然后轮换，其他位置的引援就照历史执行」.
+/** 2022 at EDG with me in the five, one of history's signings made my position's (the rival) and another a strong one elsewhere */
+function held() {
   const s = structuredClone(base)
   const t = s.teams[EDG]
   const mine = s.players[me]
   t.starters = [me, ...t.starters.filter((x) => x !== me).slice(0, 4)]
   turn(s, 2022)
-  const arrivals = s.me!.historyArrivals!
-  assert.equal(arrivals.club, EDG)
-  assert.ok(arrivals.ids.includes('V3017'), 'nobody arrived with 2022')
-  // the arrival is far better, and at my job
-  const star = s.players['V3017']
-  star.role = mine.role; star.roles = [mine.role]; star.isIgl = false
-  star.overall = 99; star.rounds = 5000
-  for (const k of Object.keys(star.attrs) as (keyof typeof star.attrs)[]) star.attrs[k] = 99
-  assert.ok(t.starters.includes(me))
-  let five = coachStarters(s)
-  assert.ok(five.includes(me), 'the starter keeps his seat')
-  // one of history's men takes the bench for it — at my job, the weakest of them in the coach's eyes
+  const a = s.me!.historyArrivals!
+  assert.equal(a.club, EDG)
+  const rival = s.players['V3017']
+  const other = Object.values(s.players).find((p) => p.ign === 'ZmjjKK')!
+  assert.ok(a.ids.includes(rival.id) && a.ids.includes(other.id), JSON.stringify(a.ids))
+  rival.role = mine.role; rival.roles = [mine.role]; rival.isIgl = false; rival.rounds = 5000; rival.injuredUntil = 0
+  for (const k of Object.keys(rival.attrs) as (keyof typeof rival.attrs)[]) rival.attrs[k] = Math.min(99, mine.attrs[k] + 4)
+  recomputeOverall(rival)
+  const offRole = mine.role === '控场' ? '哨卫' : '控场'
+  other.role = offRole; other.roles = [offRole]; other.isIgl = false; other.rounds = 5000; other.injuredUntil = 0
+  for (const k of Object.keys(other.attrs) as (keyof typeof other.attrs)[]) other.attrs[k] = 95
+  recomputeOverall(other)
+  mine.fatigue = 20; mine.form = 75; mine.injuredUntil = 0
+  s.me!.proven = false; s.me!.coachTrust = 60; s.me!.graceMatches = 0; s.me!.trial = undefined; s.me!.benchLock = undefined
+  s.me!.promiseMatches = 99
+  a.seat = true; a.since = s.me!.week; a.rot = undefined
+  return { s, t, a, mine, rival, other }
+}
+/** twelve weeks of lineups: in how many the rival starts and I do not */
+function rotations(s: GameState, rival: string): number {
+  let n = 0
+  const w0 = s.me!.week
+  for (let i = 0; i < 12; i++) {
+    s.me!.week = w0 + i
+    weeklyLineup(s)
+    const five = s.teams[EDG].starters
+    if (five.includes(rival) && !five.includes(me)) n++
+  }
+  s.me!.week = w0
+  return n
+}
+check('history\'s signing at my own position still arrives, and the week says he is the 替补 who rotates', () => {
+  const probe = structuredClone(base)
+  turn(probe, 2022); turn(probe, 2023)
+  const smoggy = Object.values(probe.players).find((p) => p.ign === 'Smoggy')!
+  const s = structuredClone(base)
+  s.players[me].role = smoggy.role
+  const t = s.teams[EDG]
+  t.starters = [me, ...t.starters.filter((x) => x !== me).slice(0, 4)]
+  turn(s, 2022)
+  if (!t.starters.includes(me)) t.starters = [me, ...t.starters.filter((x) => x !== me).slice(0, 4)]
+  turn(s, 2023)
+  const sm = Object.values(s.players).find((p) => p.ign === 'Smoggy')!
+  assert.equal(sm.teamId, EDG, 'the same-position signing is made')
+  assert.ok(s.news.some((n) => n.text === `📜 Smoggy 按真实历史加盟 EDward Gaming，和你打同一个位置，先作为替补轮换。`))
+  assert.equal(s.me!.historyArrivals!.seat, true)
+})
+check('the seat yields only at my position: history\'s signing elsewhere starts as history has him', () => {
+  const { s, t, mine, rival, other } = held()
+  const plain = (() => { const a = s.me!.historyArrivals!; a.seat = false; const f = coachStarters(s); a.seat = true; return f })()
+  assert.ok(plain.includes(rival.id) && !plain.includes(me), 'on merit alone the rival would start')
+  s.me!.historyArrivals!.rot = { week: s.me!.week, sub: null, why: 'turn' }
+  const five = coachStarters(s)
+  assert.ok(five.includes(me) && !five.includes(rival.id), 'the man at my position takes the bench')
+  assert.ok(five.includes(other.id), 'the signing at another position plays')
   assert.equal(five.length, 5)
-  assert.ok(arrivals.ids.some((id) => t.roster.includes(id) && !five.includes(id)), JSON.stringify({ five, arrivals: arrivals.ids }))
-  const plainFive = (() => { const was = t.starters; t.starters = t.starters.filter((x) => x !== me); const f = coachStarters(s); t.starters = was; return f })()
-  assert.ok(!plainFive.includes(me), 'without the hold the coach would have benched him')
-  // benched for form: the hold is gone and the coach reads merit
-  s.me!.benchLock = s.day + 7
-  five = coachStarters(s)
-  assert.ok(!five.includes(me))
-  // back on the bench, he competes on merit next time too
-  s.me!.benchLock = undefined
-  t.starters = five
-  five = coachStarters(s)
-  assert.ok(five.includes(star.id))
+  void t
+})
+check(`the 替补 at my position rotates in: one week in ${ROTATE_EVERY}, one in ${ROTATE_EVERY_TRUSTED} for 认定首发, none after a title`, () => {
+  let x = held()
+  assert.equal(rotations(x.s, x.rival.id), 12 / ROTATE_EVERY)
+  assert.ok(x.s.me!.log.some((l) => l.text === `本周轮换：${x.rival.ign} 首发，你歇一周，首发位置还是你的。`))
+  assert.equal(x.a.seat, true, 'a rotation week keeps the seat')
+  x = held(); x.s.me!.proven = true; x.s.me!.coachTrust = 80
+  assert.equal(rotations(x.s, x.rival.id), 12 / ROTATE_EVERY_TRUSTED)
+  x = held(); x.s.me!.graceMatches = 4
+  assert.equal(rotations(x.s, x.rival.id), 0)
+})
+check('worn out: he starts that week, whatever the schedule', () => {
+  const x = held()
+  x.mine.fatigue = ROTATE_FATIGUE + 5
+  weeklyLineup(x.s)
+  assert.ok(x.t.starters.includes(x.rival.id) && !x.t.starters.includes(me))
+  assert.ok(x.s.me!.log.some((l) => l.text === `本周轮换：你太累了，${x.rival.ign} 替你首发。`))
+  // every call that week names the same five, however the legs change in it
+  x.mine.fatigue = 10
+  assert.ok(!coachStarters(x.s).includes(me))
+})
+check('clearly outplayed at my position over time — on the field, from his rotation starts — he takes the seat', () => {
+  const x = held()
+  // a star at my position is still the 替补 on arrival: 综合 alone does not take the seat
+  for (const k of Object.keys(x.rival.attrs) as (keyof typeof x.rival.attrs)[]) x.rival.attrs[k] = 99
+  recomputeOverall(x.rival)
+  x.s.me!.week += 1
+  weeklyLineup(x.s)
+  assert.ok(x.t.starters.includes(me), 'held on arrival')
+  // what was played: three of my starts at 0.90, three of his rotation starts at 1.20
+  const rec = (daysAgo: number, started: boolean, his: number | null) => ({
+    year: x.s.year, day: x.s.day - daysAgo, started, friendly: false, won: true, rating: started ? 0.9 : 0, label: '第 1 轮', nodes: [],
+    box: his == null ? [] : [{ id: x.rival.id, ign: x.rival.ign, role: x.rival.role, mine: true, me: false, k: 0, d: 0, a: 0, acs: 0, rating: his, firstKills: 0, clutches: 0 }],
+  }) as unknown as MeMatchRecord
+  x.s.me!.matches = [rec(40, true, null), rec(33, true, null), rec(26, true, null), rec(19, false, 1.2), rec(12, false, 1.2), rec(5, false, 1.2)]
+  assert.equal(outplayedBy(x.s, x.rival), true)
+  x.s.me!.week += 1
+  weeklyLineup(x.s)
+  assert.ok(!x.t.starters.includes(me) && x.t.starters.includes(x.rival.id))
+  assert.equal(x.a.seat, false)
+  // two of his are not enough to judge
+  x.s.me!.matches = x.s.me!.matches.slice(0, 5)
+  assert.equal(outplayedBy(x.s, x.rival), false)
+  // benched for form: no hold either
+  const y = held(); y.s.me!.benchLock = y.s.day + 7
+  assert.ok(!coachStarters(y.s).includes(me))
 })
 check('a second five entered under the club\'s name (fewer than three shared) does not swap the player\'s team-mates', () => {
   const s = structuredClone(base)

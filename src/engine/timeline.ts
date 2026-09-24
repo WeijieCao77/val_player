@@ -249,13 +249,22 @@ function followBook(state: GameState, t: Team, ids: string[], year: number, rng:
       moved = true
     }
   }
-  // who history brought in, kept for the coach: a starter keeps his place in the five against them (me/coach.ts heldSeat)
+  // who history brought in, kept for the coach: one at my position does not take my seat while I hold it —
+  // he is the 替补 and rotates in (me/coach.ts heldSeat, rotationCall); the others play as history has them
   const arrivals = me.historyArrivals?.club === t.id ? me.historyArrivals : (me.historyArrivals = { club: t.id, ids: [] })
+  const mine = state.players[me.id]
+  const starting = t.starters.includes(me.id)
   for (const p of want) {
     if (p.teamId === t.id) continue
     sign(state, p, t, year, rng)
     if (!arrivals.ids.includes(p.id)) arrivals.ids.push(p.id)
     moved = true
+    if (starting && mine && p.role === mine.role) {
+      if (!arrivals.seat) arrivals.since = me.week
+      arrivals.seat = true
+      state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true,
+        text: `📜 ${p.ign} 按真实历史加盟 ${t.name}，和你打同一个位置，先作为替补轮换。` })
+    }
   }
   arrivals.ids = arrivals.ids.filter((id) => t.roster.includes(id))
   const brought = new Set(want.map((p) => p.id))
