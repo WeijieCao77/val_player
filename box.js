@@ -280,7 +280,65 @@ export function initBox({ dir, volatile }) {
       write({ o: 'new', id, t: Date.now(), dev: '', text, s: 'shown' })
     }
   }
+  try { releaseLabels() } catch (e) { logErr('release-labels', e) }
   return counts()
+}
+
+/* ---------- 随版本改的标签 ----------
+   作者 2026-09-24：「记得去后台把整改修复了的建议标签改了」——人不在电脑前，也不用把后台密码
+   交给谁，就让这一版上线后启动时自己改一次。规矩：
+   · 先把 box.jsonl 原样抄一份 box.jsonl.bak-<批次>（已有同名备份就不再抄），原数据一个字不动；
+   · 只改眼下还是「已展示」的那条，作者或别人已经动过的（隐藏、合并、删掉、改过状态）一律跳过；
+   · 改法就是审核页按钮写的那条 st 操作，走同一个 write()，作者随时能在审核页改回来；
+   · 做过一次就在 box-release.json 记下批次号，以后重启、压实都不会再改第二遍——
+     作者把某条改回「已展示」，它就停在「已展示」。 */
+const RELEASES = [
+  {
+    key: '2026-09-24-f7d06c2',
+    set: [
+      ['a17ca0ba', 'fixed'],   // 练满的属性自动分配还去练（副位置那半句 4f2cf5d 已做）
+      ['1bf81754', 'fixed'],   // 替补席触发首发才有的事件
+      ['2ba131e5', 'fixed'],   // 赢了晋升赛没升级
+      ['3b44e99b', 'fixed'],   // 地图过早进比赛图池
+      ['f12ac3f3', 'fixed'],   // 玩家所在队伍不跟时间线换人
+      ['5ab5a4b7', 'fixed'],   // 网吧赛公开赛队友差距太大
+      ['426624f0', 'fixed'],   // 明星选手作用被低估
+      ['64cd3906', 'fixed'],   // 夸张的数据很少
+      ['7161c4da', 'taken'],   // 周报 bug 修了，「高亮显示」没做
+      ['47eadfcf', 'taken'],   // 跟真实引援修了，「目标队伍不认可」没做
+      ['23c5b08a', 'taken'],   // Life 还在 EDG 修了，赛程指引、选英雄没做
+      ['535927c8', 'taken'],   // AI 转会不合理：部分
+      ['ddfc3c31', 'taken'],   // C 不动：有改善，「没法提出买人」没做
+      ['1aa69e63', 'taken'],   // C 不动：有改善
+      ['92276baa', 'taken'],   // 打不出与实力相符的战绩：有改善
+    ],
+  },
+]
+
+function releaseLabels() {
+  if (!BOX.ready || !BOX.file) return
+  const markFile = path.join(BOX.dir, 'box-release.json')
+  let done = []
+  try { done = JSON.parse(fs.readFileSync(markFile, 'utf8')).done || [] } catch { done = [] }
+  if (!Array.isArray(done)) done = []
+  for (const rel of RELEASES) {
+    if (done.includes(rel.key)) continue
+    // 名单上的一条都不在（新开的信箱、测试站点）：跟这个信箱无关，不留任何文件
+    if (!rel.set.some(([id]) => ITEMS.has(id))) continue
+    const due = rel.set.filter(([id, s]) => ITEMS.get(id)?.state === 'shown' && STATES.has(s))
+    if (due.length) {
+      // 备份要真写成了才往下改；抄不成就这一批整个不做，下次启动再试
+      const bak = `${BOX.file}.bak-${rel.key}`
+      if (!fs.existsSync(bak)) fs.copyFileSync(BOX.file, bak, fs.constants.COPYFILE_EXCL)
+      if (fs.statSync(bak).size < 1) return
+    }
+    let ok = 0
+    for (const [id, s] of due) if (write({ o: 'st', id, s })) ok++
+    if (ok < due.length) { logErr('release-labels', new Error(`${rel.key} 只写成 ${ok}/${due.length}，下次启动再补`)); return }
+    done.push(rel.key)
+    fs.writeFileSync(markFile, JSON.stringify({ done }))
+    console.log(`[box] 版本 ${rel.key}：${ok} 条改了标签，${rel.set.length - ok} 条已被动过或不在信箱里、跳过`)
+  }
 }
 
 /* ---------- 数一数 ---------- */
