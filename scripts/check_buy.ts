@@ -32,7 +32,7 @@
  *   npx tsx scripts/check_buy.ts [seasons=3] [seeds=7,8,9,11,12] [tol=1] [seedTol=2]
  */
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { autoPlan } from '../src/engine/me/auto'
+import { autoPlan, WEEK_END_FATIGUE } from '../src/engine/me/auto'
 import { doAction } from '../src/engine/me/week'
 import { COURSES, GEAR_SLOTS, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax } from '../src/engine/me/shop'
 import { ATTR_KEYS } from '../src/engine/types'
@@ -98,6 +98,23 @@ const base = (): GameState => {
     rested === RELIEF_FLOOR - 15 && tired === Math.max(RELIEF_FLOOR, 80 + price('physio').fatigue) && trip === RELIEF_FLOOR])
 }
 
+// 2b. and the floor sits above where the steady week ends (auto.ts WEEK_END_FATIGUE), read off what buying does rather
+// than off the constant: an ordinary week then has nothing for money to take off (shop.ts RELIEF_FLOOR). Added
+// 2026-09-24 when the career pairs below (4) lost the half leak — RELIEF_FLOOR 30 — among the careers' own noise:
+// fact 2 reads the floor it tests from the same constant, so no fact here said where the floor must be.
+{
+  const s = base()
+  const p = s.players[s.me!.id]
+  p.fatigue = 95
+  buyRelax(s, 'trip')
+  buyRelax(s, 'physio')
+  const after = p.fatigue
+  s.me!.relaxUsed = 0
+  buyRelax(s, 'trip')
+  buyRelax(s, 'physio')
+  facts.push([`花钱恢复不把身体补到稳健一周的周末以下：疲劳 95 连买两趟旅行和两次理疗，停在 ${Math.round(p.fatigue)}（第一轮后 ${Math.round(after)}），要高于 ${WEEK_END_FATIGUE}`, p.fatigue > WEEK_END_FATIGUE && after > WEEK_END_FATIGUE])
+}
+
 // 3. the steady plan does not turn paid recovery into practice on a rested week
 {
   const plain = base()
@@ -143,6 +160,13 @@ const TRAIN_MAX = 0.08
 // number of matches the one buying nothing played 147 maps to 38, started each week at fatigue 48 against 31 and
 // rested 63 times to 19; in the other 120 weeks, 71 to 62 (87%). A week of matches is what makes a body need
 // rest, and the shop has no hand in how far the club goes, so the pair also plays the same matches.
+//
+// And the practice is read over those same weeks (2026-09-24, batch d75aa8f with club-rotation): over the whole
+// career it read the path too — seed 11's two careers took different turns through the 替补 rotation and the
+// bench, and the one buying everything trained 514 → 557 hours (+8.4%) while resting 88% as much as the other
+// in the weeks they spent alike. Money buying practice shows in the week it happens, so the weeks they spend
+// alike are where to look for it: the leak put back (RELIEF_FLOOR 0) and half of it (RELIEF_FLOOR 30) both
+// still go red on these weeks (see the commit).
 const PAIRED_MIN = 52
 const SEEDS_READ = 3
 // The peak is held one way: buying everything must not end stronger. Ending weaker is trophy luck, not a leak —
@@ -162,19 +186,20 @@ for (const seed of seeds) {
   const train = (r: typeof none) => ['aim', 'vod', 'util', 'ranked', 'scrim'].reduce((s, k) => s + (r.hours[k] ?? 0), 0)
   peakGap += all.peak - none.peak
   worstSeed = Math.max(worstSeed, all.peak - none.peak)
-  trainOver = Math.max(trainOver, (train(all) - train(none)) / Math.max(1, train(none)))
+  const wholeOver = (train(all) - train(none)) / Math.max(1, train(none))
   // the weeks both careers spend alike: same club (or both without one), both in its five or both not, and
   // the same matches played and started that week
-  let paired = 0, restNone = 0, restAll = 0
+  let paired = 0, restNone = 0, restAll = 0, trainNone = 0, trainAll = 0
   for (let i = 0; i < Math.min(none.track.length, all.track.length); i++) {
     const a = none.track[i], b = all.track[i]
     if (a.club !== b.club || a.starter !== b.starter || a.played !== b.played || a.started !== b.started) continue
-    paired++; restNone += a.rest; restAll += b.rest
+    paired++; restNone += a.rest; restAll += b.rest; trainNone += a.train; trainAll += b.train
   }
-  pairedAt.push(`${seed}:${paired}周 ${restNone}→${restAll}`)
+  pairedAt.push(`${seed}:${paired}周 休息 ${restNone}→${restAll} 训练 ${trainNone}→${trainAll}（整个生涯 ${wholeOver >= 0 ? '+' : ''}${(wholeOver * 100).toFixed(1)}%）`)
   if (paired >= PAIRED_MIN) {
     seedsRead++
     restShare = Math.min(restShare, restAll / Math.max(1, restNone))
+    trainOver = Math.max(trainOver, (trainAll - trainNone) / Math.max(1, trainNone))
   }
   const tired = (r: typeof none) => Math.round(r.fatigueSum / Math.max(1, r.weeks))
   gaps.push(`seed ${seed}：峰值 ${none.peak} → ${all.peak}，训练 ${train(none)} → ${train(all)} 小时，休息 ${none.hours.rest ?? 0} → ${all.hours.rest ?? 0}，带伤 ${none.weeksHurt} → ${all.weeksHurt} 周，周末平均疲劳 ${tired(none)} → ${tired(all)}`)
