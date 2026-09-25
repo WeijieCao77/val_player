@@ -12,6 +12,8 @@
  *  - the pool: engine/staffStints.ts offPoolOn keeps him off it on every day
  *  - a new world, opened in 2021 and in 2026 (2021 brought up to it on the book): no id, no handle,
  *    and the clubs he played for in 2026 field five
+ *  - a club short of five (his clubs, a coach's) signs a free agent of its own level, not the best man going:
+ *    a ~64 club with a 93 free agent at the missing role on the market leaves him there
  *  - a save from before, twice — him at an AI club and him at the player's own — with his handle in
  *    the news, the log, a box score, a trophy's roster, bonds, training, the map sheet: loaded, he is
  *    out of the pool and every record, both clubs field five, the news says nothing, the log one line
@@ -26,6 +28,8 @@ import { CLUB_FLOOR } from '../src/engine/me/club'
 import { migratePlayerSave } from '../src/engine/me/save'
 import { cleanHall } from '../src/engine/me/hall'
 import { packState, unpackState } from '../src/engine/save'
+import { Rng } from '../src/engine/rng'
+import { ensureMinimumRosters } from '../src/engine/season'
 import { REMOVED_LABEL, REMOVED_PLAYERS, REMOVED_STAMP, removedPlayer } from '../src/engine/removedPlayers'
 import { offPool, offPoolOn } from '../src/engine/staffStints'
 import type { GameState, Player } from '../src/engine/types'
@@ -169,6 +173,31 @@ console.log('新开的世界')
   const rosters = (s: GameState) => JSON.stringify([Object.keys(s.players).sort(), Object.values(s.teams).map((t) => [t.id, t.roster])])
   const again = migratePlayerSave(unpackState(packState(s26)))
   check(rosters(again) === rosters(s26) && again.news.length === s26.news.length, '新存档读档：一个人都不动，也不多一条新闻')
+}
+
+console.log('少一人的俱乐部补谁')
+{
+  // reported 2026-09-25: ALTERNATE aTTaX (~64) opened 2024 with four and signed Wo0t (94) off the free-agent list
+  const s = createCareer({ name: 'Fill', region: 'EMEA', role: '哨卫', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 13, year: 2026 })
+  const club = Object.values(s.teams).find((t) => !t.dormant && t.id !== s.myTeam && t.roster.length === 5 && t.roster.every((id) => s.players[id]))!
+  const out = s.players[club.roster[4]]
+  const role = out.role
+  out.teamId = null
+  delete s.players[out.id]
+  club.roster = club.roster.slice(0, 4)
+  club.starters = club.starters.filter((id) => club.roster.includes(id))
+  for (const id of club.roster) s.players[id].overall = 63 + club.roster.indexOf(id)
+  const base = s.players[club.roster[0]]
+  const free = (id: string, ign: string, overall: number): Player => ({
+    ...structuredClone(base), id, ign, overall, teamId: null, role, roles: [role], region: club.region, isIgl: false, iglSource: undefined, retiring: false,
+  })
+  s.players['Xstar'] = free('Xstar', 'StarFA', 93)
+  s.players['Xfit'] = free('Xfit', 'FitFA', 65)
+  ensureMinimumRosters(s, new Rng(1), new Set([club.id]), true)
+  const signed = s.players[club.roster[4]]
+  check(club.roster.length === 5 && !club.roster.includes('Xstar') && !!signed && signed.overall <= 66 + 3,
+    `一支 ~64 的俱乐部（${club.name}）少一人、自由市场上有 93 的同位置选手：没签他，签的是 ${signed?.ign}（${signed?.overall}，${signed?.role}）`)
+  check(s.players.Xstar.teamId === null, '93 的那位还是自由人')
 }
 
 console.log('读档：老存档里的他')
