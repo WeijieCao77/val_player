@@ -223,7 +223,17 @@ console.log('五、真实伤缺临时替补也使用本队单场预算与同对�
   const selected = selectLineup(s, team.id)
   const outsider = selected.find((p) => p.teamId !== team.id)
   if (!outsider || selected.length !== 5) throw new Error('真实伤缺阵容没有调用临时替补')
-  const five = [outsider, ...selected.filter((p) => p.id !== outsider.id)]
+  // The frozen pair values below depend on the order the five are walked in (one Rng(1) draw per pair, in
+  // lineup order), not only on who they are. That order is the coach's (me/coach.ts coachStarters), and it
+  // changed on 2026-09-25 (176d244, 「首发看副位置」: the strongest five covering four roles, enumerated) —
+  // the same four fit men, RoomProbe · rexxtoned · GSR · Prti, came back as GSR · rexxtoned · RoomProbe · Prti,
+  // and every pair got a different draw. So the walk is pinned to the baseline's order, and who the five are
+  // is checked on its own: the pair formula is what this section guards, not the coach's listing order.
+  const BASELINE_ORDER = ['RoomProbe', 'rexxtoned', 'GSR', 'Prti']
+  const rest = selected.filter((p) => p.id !== outsider.id)
+  ok(JSON.stringify(rest.map((p) => p.ign).sort()) === JSON.stringify([...BASELINE_ORDER].sort()) && outsider.ign === 'niwt',
+    `临时替补阵容换了人：${outsider.ign} + ${rest.map((p) => p.ign).join('、')}`)
+  const five = [outsider, ...rest.sort((a, b) => BASELINE_ORDER.indexOf(a.ign) - BASELINE_ORDER.indexOf(b.ign))]
   setAllBonds(s, five, -60)
   five.forEach((p) => { p.morale = 100 })
   const pristine = structuredClone(s)
