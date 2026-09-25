@@ -2,7 +2,7 @@ import { Rng, clamp, hashStr } from '../rng'
 import { absenceActionBlock } from './absence'
 import { ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
-import { ageDrift, ceilingOf, recomputeOverall, refreshValue, weightsFor } from '../player'
+import { ageAttrMul, ageLoss, ceilingOf, recomputeOverall, refreshValue, trainAgeMul, weightsFor } from '../player'
 import { recommendedTrainingFocus } from './focus'
 import { ceilingRoom } from './bottleneck'
 import { bondBetween, duoBonded } from '../bonds'
@@ -20,8 +20,8 @@ import { cny } from './moneyfmt'
 import { cerRestMul } from './ceremony'
 import { injuryTrainMul } from './injury'
 
-/** How much a week of practice is worth at this age; me/life.ts says the year it drops. */
-export const trainAgeMul = (age: number): number => (age <= 20 ? 1.35 : age <= 23 ? 1.1 : age <= 26 ? 0.8 : 0.45)
+/** How much a week of practice is worth at this age — the world's one curve (engine/player.ts); me/life.ts says the year it drops. */
+export { trainAgeMul }
 
 /** Personal practice catches a developing player up sooner, without moving
  * ceilings or inflating NPCs. +40% through 80 OVR, tapering to the normal pace
@@ -96,19 +96,22 @@ export function addXp(p: Player, k: keyof Attrs, amount: number): boolean {
 }
 
 /**
- * The winter's ageing, for the 我的 page: from 27 the hands go first
- * (engine/training.ts seasonRollover: |ageDrift| / 2 a year that an attribute
- * is hit, by 0–2 for 枪法 and 反应, so a real slip two times in three). In words;
- * the chances only when the 数值 switch is on.
+ * The age curve, for the 我的 page (engine/player.ts): young, the hours go further;
+ * from 27 each winter takes 枪法 and 反应 and their ceilings with them, and
+ * practice on them counts for less. In words; the figures only when the 数值
+ * switch is on, read off the same functions the engine uses.
  */
 export function ageNote(age: number, nums: boolean): string | null {
+  if (age <= 21) {
+    return nums ? `正是涨得最快的年纪：同样的训练，${age <= 19 ? '19 岁以前' : '20–21 岁'}涨得是 24–26 岁的 ${(trainAgeMul(age) / trainAgeMul(24)).toFixed(1)} 倍。` : '正是涨得最快的年纪，同样的训练，现在练最划算。'
+  }
   if (age < 25) return null
   const words = age < 27
-    ? '27 岁起，每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。'
-    : `${age} 岁了：每个休赛期枪法和反应可能掉一两点，越往后越容易掉；意识还会随经验涨。`
+    ? '27 岁起过了巅峰期：每个休赛期枪法和反应会往下走，瓶颈跟着降，练也补不回原来的高度；意识、道具、沟通不掉，意识还会慢慢涨。'
+    : `${age} 岁，过了巅峰期：每个休赛期枪法和反应慢慢往下走，瓶颈跟着降；意识还在涨。`
   if (!nums) return words
-  const slip = (a: number) => Math.round(Math.min(1, Math.abs(ageDrift({ age: a } as Player)) * 0.5) * 200 / 3)
-  return `${words}（枪法、反应每个休赛期掉点的机会：27–28 岁约 ${slip(27)}%，29–30 岁约 ${slip(29)}%，31 岁起约 ${slip(31)}%。）`
+  const pts = (a: number) => ageLoss(a, 'aim')
+  return `${words}（枪法、反应每个休赛期大约掉：27 岁 ${pts(27)} 点，28 岁 ${pts(28)} 点，29–30 岁 ${pts(29)} 点，31 岁起 ${pts(31)} 点；残局 28 岁约 ${ageLoss(28, 'clutch')} 点，29 岁起约 ${ageLoss(29, 'clutch')} 点。27 岁起练枪法、反应只涨平时的 ${Math.round(ageAttrMul(27, 'aim') * 100)}%。）`
 }
 
 /** How each extra hour splits across attributes. */
@@ -165,7 +168,7 @@ export function hourValues(state: GameState): HourValue[] {
   const w = weightsFor(p)
   const open = (k: keyof Attrs) => p.attrs[k] < ceilingOf(p, k)
   // what an hour on k is worth: the role's weight, where the hours land (roomMul)
-  const worth = (k: keyof Attrs) => w[k] * (p.caps ? roomMul(p, k) : 1) * injuryTrainMul(state, k)
+  const worth = (k: keyof Attrs) => w[k] * (p.caps ? roomMul(p, k) : 1) * injuryTrainMul(state, k) * ageAttrMul(p.age, k)
   const out: HourValue[] = []
   for (const key of ['aim', 'vod', 'util'] as const) {
     const split = practiceSplit(p, key)
@@ -292,8 +295,8 @@ export function runAction(state: GameState, key: MeAction): string {
   const g = weekGain(state)
   const w = weightsFor(p)
   const rose: (keyof Attrs)[] = []
-  // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts)
-  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k) * (p.caps ? roomMul(p, k) : 1)) && !rose.includes(k)) rose.push(k) }
+  // hurt: hours into the sore part go almost nowhere, the rest count for less (me/injury.ts); past the peak the hands learn slower (engine/player.ts ageAttrMul)
+  const bump = (k: keyof Attrs, amt: number) => { if (addXp(p, k, amt * injuryTrainMul(state, k) * (p.caps ? roomMul(p, k) : 1) * ageAttrMul(p.age, k)) && !rose.includes(k)) rose.push(k) }
   let fatigue = def.fatigue
   let line = ''
   switch (key) {

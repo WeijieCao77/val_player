@@ -848,7 +848,9 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs, l
   // the winter's ageing (engine/training.ts seasonRollover), said when it takes something: from 27 the hands go first
   const slipped = before ? ATTR_KEYS.filter((k) => p.attrs[k] < before[k]) : []
   if (before && slipped.length) {
-    pushLog(state, 'bad', `休赛期：${p.age} 岁了，${slipped.map((k) => `${ATTR_CN[k]} ${before[k]} → ${p.attrs[k]}`).join('、')}。手先慢，脑子还在长。`)
+    // in plain words, with what the winter still gave the head (asked 2026-09-25)
+    const head = p.attrs.awareness > before.awareness ? `意识 ${before.awareness} → ${p.attrs.awareness}，还在涨` : '意识还在涨'
+    pushLog(state, 'bad', `休赛期：${p.age} 岁了，${slipped.map((k) => `${ATTR_CN[k]} ${before[k]} → ${p.attrs[k]}`).join('、')}。过了巅峰期，枪法和反应开始慢慢往下走，瓶颈跟着降；${head}。`)
   }
   if (pro) {
     pushLog(state, 'season', `${year} 赛季结束：出场 ${s.starts}/${s.matches}，首发胜 ${s.wins} 场，综合 ${s.overall} → ${p.overall}${titles.length ? `，冠军：${titles.join('、')}` : ''}${quals.length ? `，出线：${quals.join('、')}` : ''}${intl.length ? `。大师赛 / 冠军赛：${intl.join('；')}` : ''}。`)

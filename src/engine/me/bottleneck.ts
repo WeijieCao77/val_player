@@ -1,7 +1,7 @@
 import { clamp } from '../rng'
 import { ATTR_CN, ATTR_KEYS } from '../types'
 import type { Attrs, GameState, Player } from '../types'
-import { recomputeOverall, refreshValue, weightsFor } from '../player'
+import { PEAK_END, ageLoss, recomputeOverall, refreshValue, weightsFor } from '../player'
 import { pushLog } from './log'
 import type { BottleneckState, LogKind } from './types'
 import { compClass, isIntlComp, isQualifier } from './compclass'
@@ -108,8 +108,17 @@ const byWeight = (p: Pick<Player, 'role'>): K[] => {
   return ATTR_KEYS.slice().sort((a, b) => w[b] - w[a])
 }
 
-/** The attribute a trophy opens beside 残局 and 沟通: the heaviest his role has. */
-const mainOf = (p: Pick<Player, 'role'>): K => byWeight(p).find((k) => k !== 'clutch' && k !== 'communication') ?? 'aim'
+/**
+ * Past the peak 枪法 and 反应 fade every winter and take their ceilings with them (engine/player.ts
+ * ageLoss): no break opens them any more, their own paths are closed and said so, and what a break
+ * carries over goes to what still grows. With breaks still landing there, a 30-year-old's 枪法 was
+ * bought back to 99 the winter after it slipped (measured 2026-09-25: 枪法 at 30 within a point of
+ * the peak in 15 of 16 careers).
+ */
+export const fading = (p: Pick<Player, 'age'>, k: K): boolean => (k === 'aim' || k === 'reaction') && p.age > PEAK_END
+
+/** The attribute a trophy opens beside 残局 and 沟通: the heaviest his role has that still grows. */
+const mainOf = (p: Pick<Player, 'role' | 'age'>): K => byWeight(p).find((k) => k !== 'clutch' && k !== 'communication' && !fading(p, k)) ?? 'awareness'
 
 /**
  * Lay `room` points of overall headroom across the eight by √weight, as whole
@@ -430,7 +439,8 @@ function planBreak(p: Player, bn: BottleneckState, k: K, value: number, kind: 'm
   const room = flat ? 1 : clamp(1 - used / max, kind === 'mile' ? 0.4 : 0.12, 1)
   const want = Math.min(value * room, max - used)
   const plan = new Map<K, number>()
-  const owed = kind === 'mech' && max - used >= w[k] / 2
+  // past the peak the hands' ceilings only come down (fading): nothing lands on them
+  const owed = kind === 'mech' && max - used >= w[k] / 2 && !fading(p, k)
   if (want < 0.05 && !owed) return { plan, paid: 0, want }
   let left = want
   const put = (j: K, first: boolean) => {
@@ -441,8 +451,8 @@ function planBreak(p: Player, bn: BottleneckState, k: K, value: number, kind: 'm
       n++
     }
   }
-  put(k, owed)
-  for (const j of byWeight(p)) if (j !== k && left >= 0.05) put(j, false)
+  if (!fading(p, k)) put(k, owed)
+  for (const j of byWeight(p)) if (j !== k && !fading(p, j) && left >= 0.05) put(j, false)
   // what the points are really worth, rounding included, is what the pool spends
   const paid = [...plan.entries()].reduce((s, [j, n]) => s + n * w[j], 0)
   return { plan, paid, want }
@@ -452,6 +462,7 @@ function planBreak(p: Player, bn: BottleneckState, k: K, value: number, kind: 'm
 export function pathDead(state: GameState, k: K): string | null {
   const me = state.me!
   const p = state.players[me.id]
+  if (fading(p, k)) return `过了巅峰期，${ATTR_CN[k]}的瓶颈不会再往上走，每个休赛期还会降一点；突破的收获会落在意识这些还在涨的地方`
   if (ceilingsOf(p)[k] >= CAP_HARD) return `已经到 ${CAP_HARD}，这是所有人的终点，没有再往上的路`
   const bn = me.bottleneck
   const P = BREAK_PATHS[k]
@@ -560,7 +571,9 @@ export function ceilingNote(state: GameState, action: string): string | null {
   if (!k || !me) return null
   const p = state.players[me.id]
   if (!p?.caps || !atCeiling(p, k)) return null
-  const head = `${ATTR_CN[k]}到瓶颈了：再练${ATTR_CN[k]}不涨，练的时间也不会存着；不练也不会掉。`
+  // past the peak the winter does take 枪法 and 反应 (engine/player.ts ageLoss): the week's hours still do not
+  const fades = (k === 'aim' || k === 'reaction') && ageLoss(p.age, k) > 0
+  const head = `${ATTR_CN[k]}到瓶颈了：再练${ATTR_CN[k]}不涨，练的时间也不会存着；${fades ? '少练不会掉，年纪带来的下滑只在休赛期。' : '不练也不会掉。'}`
   const dead = pathDead(state, k)
   if (dead) return `${head}${dead}。`
   if (BREAK_PATHS[k].pro && me.phase !== 'pro') return `${head}冲击瓶颈要先签下一支队。`
