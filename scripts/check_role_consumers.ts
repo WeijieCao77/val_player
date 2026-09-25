@@ -24,7 +24,13 @@ for (const id of ids) s.players[id].season = { ...emptyStats(), maps: 25, rounds
   kills: 420, deaths: 440, assists: 140, damage: 82000, firstKills: 40, firstDeaths: 42, clutches: 8 }
 Object.assign(p.season, { kills: 360, assists: 330, deaths: 390, damage: 74000, firstKills: 30, firstDeaths: 24, clutches: 15 })
 const fragger = s.players[[...ids].find(id => id !== p.id)!]
-Object.assign(fragger.season, { kills: 480, assists: 50, deaths: 420, damage: 105000, firstKills: 50, firstDeaths: 45, clutches: 8 })
+// 2026-09-25 (match-rating): the author approved kills and damage weighing more than assists
+// (「杀人的评分也太低了」). The fragger here was 480 kills and 105000 damage to the support's 360
+// and 74000 — 0.2 kills and 50 damage a round more — and the old rating, an assist paying what a
+// kill paid, still put the support first; that is the rule the mailbox asked to end (it now
+// rates 1.02 to 1.09). The point kept: a strong support season still leads a table it does not
+// top on kills or ACS, against a fragger 0.13 kills and 27 damage a round ahead of it.
+Object.assign(fragger.season, { kills: 440, assists: 50, deaths: 420, damage: 90000, firstKills: 50, firstDeaths: 45, clutches: 8 })
 assert.ok(p.season.kills < fragger.season.kills && p.season.damage < fragger.season.damage)
 assert.ok(performanceRating(p.season) > performanceRating(fragger.season))
 const before = JSON.stringify(s)

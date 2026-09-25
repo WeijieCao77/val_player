@@ -36,13 +36,18 @@ import type { GameState, MapLine, MapScore, MatchResult } from '../src/engine/ty
 // 2026-09-20 role-balance intentionally replaces the old ACS promise for NEW
 // matches. This oracle is independent of performance.ts; legacy cases remain
 // pinned in check_role_performance.ts rather than silently deleting coverage.
+// 2026-09-25 (match-rating): the oracle below is the rating's sum written out
+// by hand, so it moved with the author-approved reweighting (kills and damage
+// up, assists down: 「杀人的评分也太低了」「MVP不都是按acs吗」). Before, it was
+// .55 + .80 K + .80 A − .48 D + .25 (FK − FD) + 1.00 CL, and the nod 0.08.
 function contribution(l: MapLine): number {
   if (!l.rounds) return 0
   const r = l.rounds
-  return Math.max(0, Math.min(3, .55 + .80 * Math.min(5, l.kills / r)
-    + .80 * Math.min(1.5, l.assists / r) - .48 * Math.min(1, l.deaths / r)
-    + .25 * (Math.min(1, l.firstKills / r) - Math.min(1, l.firstDeaths / r))
-    + 1.00 * Math.min(1, l.clutches / r)))
+  return Math.max(0, Math.min(3, .49 + .70 * Math.min(5, l.kills / r)
+    + .20 * Math.min(750, l.damage / r) / 100
+    + .30 * Math.min(1.5, l.assists / r) - .50 * Math.min(1, l.deaths / r)
+    + .30 * (Math.min(1, l.firstKills / r) - Math.min(1, l.firstDeaths / r))
+    + .80 * Math.min(1, l.clutches / r)))
 }
 
 const mem: Record<string, string> = {}
@@ -173,7 +178,7 @@ console.log('\n二、本图最佳是同一贡献规则，只看本图实际数�
 check(mapWrong === 0, `每张图都对得上手算的${mapWrong ? `（${mapWrong} 张对不上）` : ''}`)
 
 console.log('\n三、两处用的是同一个加成：')
-check(PERFORMANCE_WIN_NOD === .08 && MVP_WIN_NOD === 18, `新胜方加成 ${PERFORMANCE_WIN_NOD}；旧存档保留 ${MVP_WIN_NOD}`)
+check(PERFORMANCE_WIN_NOD === .15 && MVP_WIN_NOD === 18, `新胜方加成 ${PERFORMANCE_WIN_NOD}；旧存档保留 ${MVP_WIN_NOD}`)
 
 console.log('\n四、屏幕上那行小字和规则一致：')
 check(/累计回合/.test(mvpNote(3, 1)) && /助攻/.test(mvpNote(3, 1)) && /胜方/.test(mvpNote(3, 1)),

@@ -13,15 +13,24 @@ const line = (p: Partial<MapLine> = {}): MapLine => ({ kills: 16, deaths: 16, as
 const map = (lines: Record<string, MapLine>, modern = true): MapScore => ({ map: 'Ascent', scoreA: 13, scoreB: 11, lines, ...(modern ? { performanceVersion: 1 as const } : {}) })
 const support = line({ kills: 12, deaths: 13, assists: 14, firstKills: 1, firstDeaths: 1, damage: 2400, acs: 145 })
 
-check('recorded support and clutch contributions can beat higher ACS; no role bonus', () => {
+// 2026-09-25 (match-rating): the author approved kills and damage weighing more
+// than assists (「杀人的评分也太低了」). The old first assertion here was that a
+// 12/13/14 support line on 145 ACS out-rates a 16/16/6 line on 181 ACS — the
+// assist paying what a kill paid. That is the rule the mailbox asked to end, so
+// it now reads the other way; support play still counts (assists, clutches,
+// staying alive), just not above the kills.
+check('kills and damage lead; assists, clutches, survival and openings still count; no role bonus', () => {
   const duel = line()
-  assert(performanceRating(support) > performanceRating(duel))
-  assert.equal(mapMvp(map({ duel, support }), { a: ['duel', 'support'], b: [] }), 'support')
+  assert(performanceRating(duel) > performanceRating(support))
+  assert.equal(mapMvp(map({ duel, support }), { a: ['duel', 'support'], b: [] }), 'duel')
   assert(performanceRating(line({ kills: 30 })) > performanceRating(support))
+  assert(performanceRating(line({ assists: 14 })) > performanceRating(line()))
+  assert(performanceRating(line({ kills: 17 })) - performanceRating(line()) > performanceRating(line({ assists: 7 })) - performanceRating(line()))
+  assert(performanceRating(line({ damage: 3600 })) > performanceRating(line()))
   assert(performanceRating(line({ clutches: 3 })) > performanceRating(line()))
   assert(performanceRating(line({ deaths: 10 })) > performanceRating(line()))
   assert(performanceRating(line({ firstKills: 5, firstDeaths: 1 })) > performanceRating(line()))
-  assert.equal(performanceRating(line({ kills: 0, deaths: 0, assists: 0, firstKills: 0, firstDeaths: 0 })), .55)
+  assert.equal(performanceRating(line({ kills: 0, deaths: 0, assists: 0, damage: 0, firstKills: 0, firstDeaths: 0 })), .49)
 })
 check('zero/missing/corrupt fields are finite, bounded, and zero rounds never win', () => {
   assert.equal(performanceRating({}), 0)
@@ -60,8 +69,11 @@ check('new and old career boxes use their own scoring; rating ties sort on ACS',
   const ids = teams[0].roster.slice(0, 2)
   const modern = map({ [ids[0]]: line(), [ids[1]]: support })
   const rows = boxScore(state, [modern], ids, [])
-  assert.equal(rows[0].id, ids[1])
-  assert.equal(rows[0].rating, Math.round(performanceRating(support) * 100) / 100)
+  // the 16/16/6 line tops this box since 2026-09-25 (kills over assists, see the first group);
+  // before, the 12/13/14 support did — each version still reads its own sum
+  assert.equal(rows[0].id, ids[0])
+  assert.equal(rows[0].rating, Math.round(performanceRating(line()) * 100) / 100)
+  assert.equal(rows[1].rating, Math.round(performanceRating(support) * 100) / 100)
   delete modern.performanceVersion
   const old = boxScore(state, [modern], ids, [])
   assert.equal(old.find((r) => r.id === ids[1])!.rating, Math.round(ratingOf(support) * 100) / 100)

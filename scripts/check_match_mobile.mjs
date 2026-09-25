@@ -119,7 +119,8 @@ try {
       assert.doesNotMatch(await own.locator('p').first().innerText(), /MVP/)
       const note = own.locator('p').filter({ hasText: legacy ? 'MVP 看的是' : 'MVP 按' })
       await note.waitFor()
-      if (!legacy) assert.match(await note.innerText(), /不只看 ACS.*助攻.*首杀减首死.*残局.*死亡扣分.*胜方另加 0.08/)
+      // the note's words moved with the rating on 2026-09-25 (kills and damage first, the winners' nod 0.08 → 0.15)
+      if (!legacy) assert.match(await note.innerText(), /击杀和伤害为主.*助攻.*首杀减首死.*残局.*死亡扣分.*胜方另加 0\.15/)
       await note.scrollIntoViewIfNeeded()
       const dimensions = await note.evaluate(el => {
         const rect = el.getBoundingClientRect(), modal = el.closest('.modal')

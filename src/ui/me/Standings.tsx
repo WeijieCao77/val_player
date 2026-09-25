@@ -12,10 +12,11 @@ import { circuitBonus, circuitPaid, eventOf, pointsTables } from '../../engine/c
 import type { PointsBasis, PointsRow, PointsTable } from '../../engine/circuit'
 import { eventTables } from '../../engine/eventTable'
 import { qualification } from '../../engine/qualify'
-import { performanceRating } from '../../engine/performance'
+import { BOARD_RULE, BOARD_RULE_DETAIL, boardLine } from '../../engine/leaderboard'
+import type { BoardLine } from '../../engine/leaderboard'
 import { statLine } from '../../engine/player'
 import { REGION_CN, REGIONS } from '../../engine/types'
-import type { Competition, Region } from '../../engine/types'
+import type { Competition, Player, Region } from '../../engine/types'
 import TeamPeekButton from './TeamPeek'
 import { attrWord, useNumbers } from './words'
 
@@ -330,9 +331,16 @@ export default function Standings() {
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 3 ? order(b) - order(a) : order(a) - order(b)))
   const shown = here === region ? eventsFor(region) : eventsFor(region, here)
 
+  // the rating first, the season's titles and MVPs on top (engine/leaderboard.ts)
+  const board = new Map<string, BoardLine>()
+  const lineOf = (p: Player): BoardLine => {
+    let l = board.get(p.id)
+    if (!l) board.set(p.id, l = boardLine(game, p))
+    return l
+  }
   const leaders = Object.values(game.players)
     .filter((p) => p.season.maps >= 8 && p.teamId)
-    .sort((a, b) => performanceRating(b.season) - performanceRating(a.season))
+    .sort((a, b) => lineOf(b).score - lineOf(a).score || lineOf(b).rating - lineOf(a).rating)
     .slice(0, 40)
   const query = q.normalize('NFKC').trim().toLowerCase()
   const searching = query !== ''
@@ -486,21 +494,26 @@ export default function Standings() {
         <Panel title={searching ? `搜索结果${total ? `（${total} 人）` : ''}` : '赛季选手排行（至少 8 张图）'} flush>
           <div style={{ padding: '8px 13px' }}>
             <input type="search" aria-label="搜索选手" maxLength={80} value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索选手 IGN 或姓名" style={{ width: '100%', boxSizing: 'border-box' }} />
-            {searching && <p className="tiny faint" style={{ margin: '6px 0 0' }}>匹配 {total} 人，显示前 {shownPlayers.length} 人</p>}
+            {searching
+              ? <p className="tiny faint" style={{ margin: '6px 0 0' }}>匹配 {total} 人，显示前 {shownPlayers.length} 人</p>
+              : <p className="tiny faint" style={{ margin: '6px 0 0' }} title={BOARD_RULE_DETAIL}>排名：{BOARD_RULE}。</p>}
           </div>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th className="num">#</th><th>选手</th><th>战队</th><th className="num">能力</th>
-                  <th className="num">贡献评分</th><th className="num">ACS</th><th className="num">K/D</th>
-                  <th className="num">首杀差</th><th className="num">场次</th>
+                  <th className="num" title={BOARD_RULE_DETAIL}>排名分</th><th className="num">评分</th>
+                  <th className="num">ACS</th><th className="num">K/D</th>
+                  <th className="num">首杀差</th><th title={BOARD_RULE_DETAIL}>荣誉</th><th className="num">场次</th>
                 </tr>
               </thead>
               <tbody>
                 {shownPlayers.map((p, i) => {
                   const s = statLine(p.season)
                   const hasMaps = p.season.maps > 0
+                  const b = lineOf(p)
+                  const honours = [b.titles ? `${b.titles} 冠` : '', b.mvps ? `MVP ${b.mvps}` : ''].filter(Boolean).join(' · ')
                   return (
                     <tr
                       key={p.id}
@@ -511,11 +524,17 @@ export default function Standings() {
                       <td><b title={p.ign} style={{ display: 'block', maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.ign}</b></td>
                       <td className="small muted">{p.teamId ? <ClubCell id={p.teamId} title={game.teams[p.teamId]?.name} /> : <span>自由选手</span>}</td>
                       <td className="num">{nums ? <OvrBadge value={p.overall} /> : attrWord(p.overall)}</td>
-                      <td className="num"><b>{hasMaps ? performanceRating(p.season).toFixed(2) : '—'}</b></td>
+                      <td className="num"><b>{hasMaps ? b.score.toFixed(2) : '—'}</b></td>
+                      <td className="num mono">{hasMaps ? b.rating.toFixed(2) : '—'}</td>
                       <td className="num mono">{hasMaps ? s.acs.toFixed(0) : '—'}</td>
                       <td className="num mono">{hasMaps ? s.kd.toFixed(2) : '—'}</td>
                       <td className={`num mono ${s.fkDiff >= 0 ? 'pos' : 'neg'}`}>
                         {hasMaps ? `${s.fkDiff > 0 ? '+' : ''}${s.fkDiff}` : '—'}
+                      </td>
+                      {/* no honours is not a missing number: the cell stays empty rather than a dash */}
+                      <td className="small muted" style={{ whiteSpace: 'nowrap' }}
+                        title={b.titleBonus + b.mvpBonus > 0 ? `荣誉加分 +${(b.titleBonus + b.mvpBonus).toFixed(3)}（冠军 +${b.titleBonus.toFixed(3)}，MVP +${b.mvpBonus.toFixed(3)}）` : undefined}>
+                        {honours}
                       </td>
                       <td className="num muted">{p.season.maps}</td>
                     </tr>
