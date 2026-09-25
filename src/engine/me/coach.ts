@@ -147,9 +147,73 @@ export function promiseHolds(state: GameState): boolean {
   return promiseSeat(state) !== null
 }
 
+/** the four jobs a five has to cover; 自由人 is "covers anything", never a slot (world.ts autoStarters) */
+const CORE = ROLES.filter((r) => r !== '自由人')
+const jobs = (p: Player) => p.roles ?? [p.role]
+const coverCount = (five: Player[]): number => {
+  const have = new Set(five.flatMap(jobs))
+  return CORE.filter((r) => have.has(r)).length
+}
+
 /**
- * The five the coach names this week — world.ts autoStarters, read through
- * coachView, with the trial rule on top: a man on trial plays.
+ * world.ts autoStarters' way, kept for a squad with fewer than five fit: one man a main role, then the gaps by a
+ * second role, then the best of the rest.
+ */
+function firstFive(squad: Player[]): Player[] {
+  const chosen: Player[] = []
+  for (const role of CORE) {
+    const p = squad.find((x) => x.role === role && !chosen.includes(x))
+    if (p) chosen.push(p)
+  }
+  for (const role of CORE) {
+    if (chosen.length >= 5) break
+    if (chosen.some((x) => jobs(x).includes(role))) continue
+    const p = squad.find((x) => !chosen.includes(x) && jobs(x).includes(role))
+    if (p) chosen.push(p)
+  }
+  for (const p of squad) {
+    if (chosen.length >= 5) break
+    if (!chosen.includes(p)) chosen.push(p)
+  }
+  return chosen.slice(0, 5)
+}
+
+/**
+ * The best five of the fit men that covers the four jobs, second roles counted as the match engine counts them
+ * (match.ts compositionScore) — then the caller in it where a covering five can have him, then the most the coach
+ * sees in them. Null with fewer than five fit.
+ *
+ * It was world.ts's way, which seats one man per MAIN role first and only then looks at second roles, so a weak
+ * specialist started over a better man because the job he covered was also covered by someone's second role
+ * (reported 2026-09-24:「得多看点副位置，不然会出现能力低的当首发」「比赛打完后获胜了，让能力低的替补我有点没法
+ * 理解」). Over six three-season careers (seeds 7 and 3, 2021 强队替补 EMEA and 2024 Challengers 中国) the five
+ * the coach named was not the best covering five in 200 of 618 professional weeks, by 4.9 of the coach's own
+ * points a week, and 12 of those weeks benched me for it.
+ */
+function bestFive(squad: Player[], cv: (p: Player) => number, day: number, igl: Player | undefined): Player[] | null {
+  // squad is in the coach's order already: the fit first, best first; a dozen is more than any roster holds
+  const fit = squad.filter((p) => p.injuredUntil <= day).slice(0, 12)
+  if (fit.length < 5) return null
+  let best: Player[] | null = null
+  let key = [-1, -1, -Infinity]
+  const n = fit.length
+  const pick: Player[] = []
+  const walk = (from: number) => {
+    if (pick.length === 5) {
+      const k = [coverCount(pick), igl && pick.includes(igl) ? 1 : 0, pick.reduce((s, p) => s + cv(p), 0)]
+      if (k[0] > key[0] || (k[0] === key[0] && (k[1] > key[1] || (k[1] === key[1] && k[2] > key[2] + 1e-9)))) { key = k; best = pick.slice() }
+      return
+    }
+    for (let i = from; i <= n - (5 - pick.length); i++) { pick.push(fit[i]); walk(i + 1); pick.pop() }
+  }
+  walk(0)
+  // in the coach's order, so a later swap by position reads the way it always did
+  return best ? (best as Player[]).sort((a, b) => fit.indexOf(a) - fit.indexOf(b)) : null
+}
+
+/**
+ * The five the coach names this week — the best covering five in the coach's eyes (bestFive), with the caller,
+ * the trial rule, the contract's promise and a held seat on top: a man on trial plays.
  */
 export function coachStarters(state: GameState, room = true): string[] {
   const team = state.teams[state.myTeam]
@@ -165,35 +229,19 @@ export function coachStarters(state: GameState, room = true): string[] {
     return fit(a) - fit(b) || cv(b) - cv(a)
   })
 
-  const chosen: Player[] = []
-  const core = ROLES.filter((r) => r !== '自由人')
-  for (const role of core) {
-    const p = squad.find((x) => x.role === role && !chosen.includes(x))
-    if (p) chosen.push(p)
-  }
-  for (const role of core) {
-    if (chosen.length >= 5) break
-    if (chosen.some((x) => (x.roles ?? [x.role]).includes(role))) continue
-    const p = squad.find((x) => !chosen.includes(x) && (x.roles ?? [x.role]).includes(role))
-    if (p) chosen.push(p)
-  }
-  for (const p of squad) {
-    if (chosen.length >= 5) break
-    if (!chosen.includes(p)) chosen.push(p)
-  }
-  const five = chosen.slice(0, 5)
-
   // The caller goes out with the team: the loudest flagged man — or me, once
   // the coach has named me his caller (me/igl.ts), over a louder deputy.
   const mine = me ? squad.find((p) => p.id === me.id) : undefined
   const igl = mine?.isIgl && mine.iglSource === 'appointed'
     ? mine
     : squad.filter((p) => p.isIgl).sort((a, b) => b.attrs.igl - a.attrs.igl)[0]
+  const five = bestFive(squad, cv, state.day, igl) ?? firstFive(squad)
+
   if (igl && !five.includes(igl)) {
     const covered = (without: Player) => {
       const rest = five.filter((x) => x !== without).concat(igl)
       const have = new Set(rest.flatMap((p) => p.roles ?? [p.role]))
-      return core.every((r) => have.has(r))
+      return CORE.every((r) => have.has(r))
     }
     const drop = five.slice().sort((a, b) => cv(a) - cv(b)).find(covered)
     if (drop) five[five.indexOf(drop)] = igl
@@ -381,6 +429,49 @@ export function duelTarget(state: GameState): Player | null {
   return pool.sort((a, b) => coachView(state, a) - coachView(state, b))[0]
 }
 
+/**
+ * Why this week's five has no place for me, in the coach's words. It said 「本周你回到替补席。」 and nothing else, so a
+ * week after a win that put a man with a lower 综合 in my seat read as no reason at all (reported 2026-09-24:
+ * 「比赛打完后获胜了，让能力低的替补我有点没法理解」). The coach does not read 综合 alone: an unproven man's number
+ * is discounted while the sample behind it is thin (world.ts confidentRating), and form, fatigue and his trust
+ * move it (coachView). This names whichever of those it was, or the four jobs a five has to cover.
+ */
+export function benchLine(state: GameState): string {
+  const me = state.me!
+  const mine = state.players[me.id]
+  const team = state.teams[state.myTeam]
+  const base = '本周你回到替补席'
+  if (!mine || !team) return `${base}。`
+  if (me.benchLock && me.benchLock > state.day) return `${base}：教练说过，这段时间先不考虑你。`
+  if (promiseSeat(state) === 'bench') return `${base}：合同写的是替补，保底的 ${PROMISE_FLOOR} 场还没坐完。`
+  const five = team.starters.map((id) => state.players[id]).filter((p): p is Player => !!p && p.id !== me.id)
+  const cv = (p: Player) => coachView(state, p)
+  const n = coverCount(five)
+  // the men whose seat I could take without leaving a job open; the caller goes out with the team
+  const swaps = five.filter((x) => !x.isIgl && coverCount(five.map((y) => (y === x ? mine : y))) >= n)
+  if (!swaps.length) {
+    const held = five.filter((z) => CORE.some((r) => jobs(z).includes(r) && !jobs(mine).includes(r)
+      && five.filter((y) => jobs(y).includes(r)).length === 1))
+    return `${base}：首发要把决斗者、先锋、控场、哨卫四个位置凑齐，${held.length ? `${held.map((z) => z.ign).join('、')} 打的是你打不了的位置，` : ''}剩下的位置教练这周更看好别人。多练一个副位置，能上的位置就多一个。`
+  }
+  const x = swaps.sort((a, b) => cv(a) - cv(b))[0]
+  // coachView's own terms, mine against his: what put him ahead, the biggest first
+  const tired = (p: Player) => -Math.max(0, p.fatigue - 60) * 0.05
+  const terms: [number, string][] = [
+    [x.overall - mine.overall, '他现在整体比你强'],
+    // an unproven man's number is discounted while the sample behind it is thin; a proven one is read at his 综合
+    [(mine.overall - (me.proven ? mine.overall : confidentRating(mine))) - (x.overall - confidentRating(x)),
+      '你还没转正，职业比赛打得也比他少，教练更信比赛里打出来的人'],
+    [-(me.coachTrust - 60) * 0.06, '教练对你还不够信任'],
+    [(x.form - mine.form) * 0.05, '你最近的状态不如他'],
+    [tired(x) - tired(mine), '你这周太累了'],
+    [roomEdge(state, x) - roomEdge(state, mine), '他跟队伍更合得来'],
+  ]
+  const why = terms.filter(([d]) => d >= 0.5).sort((a, b) => b[0] - a[0]).slice(0, 2).map(([, w]) => w)
+  if (!why.length) why.push('你们俩差得很少，这周他稍稍排在你前面')
+  return `${base}：教练这周用 ${x.ign}。${x.overall < mine.overall ? '他的综合能力不如你，但' : ''}${why.join('；')}。训练赛、对位挑战赢下来，教练会重新考虑。`
+}
+
 /** Name this week's five and tell me if my place changed — and, when the room settled it, why. */
 export function weeklyLineup(state: GameState): void {
   const me = state.me
@@ -410,7 +501,7 @@ export function weeklyLineup(state: GameState): void {
       : `本周轮换：${turn.sub.ign} 首发，你歇一周，首发位置还是你的。`
     pushLog(state, 'info', line)
     me.weekNotes.push(line)
-  } else if (!now && was) pushLog(state, 'bad', '本周你回到替补席。')
+  } else if (!now && was) pushLog(state, 'bad', roomCall(state) ? '本周你回到替补席。' : benchLine(state))
   // The first time the place moves on merit alone, the contract is named: it is the
   // sentence that makes the rule legible — 「合同上写着首发」 and yet here I am on the
   // bench — and it is said once a spell rather than every week it happens.
