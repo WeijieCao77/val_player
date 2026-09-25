@@ -1,3 +1,4 @@
+import { scrubNames } from '../removedPlayers'
 import { hashStr } from '../rng'
 import { REGION_CN } from '../types'
 import type { GameState, Region } from '../types'
@@ -393,6 +394,8 @@ export function cleanHall(raw: unknown): Hall {
     if (m && LOOK_BY_KEY[key]?.open) h.looks[key] = m
   }
   if (typeof o.look === 'string' && o.look !== 'studio' && LOOK_BY_KEY[o.look]) h.look = o.look as LookKey
+  // a card kept from before names nobody the author has since taken out of the game (engine/removedPlayers.ts)
+  scrubNames(h)
   return h
 }
 

@@ -106,6 +106,7 @@ from player_bios import trusted_bio, normalized_birth
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import staff as staff_book  # noqa: E402  who was on a staff when
+import removed as removed_book  # noqa: E402  who is not in the game at all
 from player_countries import player_country  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -270,9 +271,19 @@ def value_for(ovr: int, age: int, pot: int) -> int:
     return int(round(v / 1000.0) * 1000)
 
 
+REMOVED = removed_book.Removed()
+# a raw file read here comes without the people the author took out of the game (scripts/removed.py),
+# whether or not it was scrubbed on disk — stats_history.json is gitignored and fetched before them
+_SCRUB = {'history.json': REMOVED.scrub_history, 'stats_history.json': REMOVED.scrub_stats_history,
+          'bios.json': REMOVED.scrub_by_id, 'stats_players.json': REMOVED.scrub_by_id}
+
+
 def load(name: str):
     with open(os.path.join(DATA, name), encoding='utf-8') as f:
-        return json.load(f)
+        obj = json.load(f)
+    if name in _SCRUB:
+        _SCRUB[name](obj)
+    return obj
 
 
 def staff_pass(path: str, history: dict, staff: staff_book.Staff) -> int:

@@ -28,6 +28,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetch_bios import get  # noqa: E402  (same API manners and cache)
+from removed import Removed  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'src', 'data', 'lp_events.json')
@@ -250,6 +251,8 @@ def main() -> int:
                           'prizes': prize_slots(text)}
         print(f'  {min(i + 50, len(titles))}/{len(titles)}', flush=True)
 
+    # nobody the author took out of the game is written (scripts/removed.py)
+    Removed().scrub_lp_events(out)
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     with_format = sum(1 for v in out.values() if v['format'])

@@ -31,11 +31,11 @@ import { REGIONS } from './types'
 import { circuitPointsFor, formatOf, onTimeline, stageAtIn, stageNameIn } from './era'
 import { ascensionSeats, bookAheadEvents, carryPromotions, circuitPaid, eventsOf, progressCircuit, setupCircuitSeason } from './circuit'
 import { announceLeagues, keepScore, turnLeagues } from './leagues'
-import { bookCovers, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
+import { bookCovers, bookSeatedIn, historyFolds, isTimelineWorld, lastYearOf, reachOf, syncYear } from './timeline'
 import { historyNames } from './names'
 import { arrive2026 } from './today'
 import { lineupNews } from './standin'
-import type { Competition, Fixture, GameState, Player, Region, StageKey, Team, Tier } from './types'
+import type { Competition, Fixture, GameState, Player, Region, Role, StageKey, Team, Tier } from './types'
 import {
   DOUBLE_8, GROUPS, advanceTemplate, championsGroups, championsSeeds, decided, doubleFor,
   mastersSeeds, swissDone, swissNext, swissOutcome, templateDone, MASTERS_8, TRIPLE_12, TRIPLE_12_PLACES, STAGE_8, STAGE_8_PLACES, swissRoundOf, SWISS_ROUNDS, swissRecord
@@ -1624,6 +1624,45 @@ function rebaseSeasonClock(state: GameState, shift: number): void {
   deskOf(state)?.clockRebased(state, shift)
 }
 
+const FIELD_ROLES: Role[] = ['决斗者', '先锋', '控场', '哨卫']
+/** how far over its best man a club short of five will reach for a free agent */
+const REFILL_REACH = 3
+
+/**
+ * The free agent a club short of five signs: one who fits it, not the best man going.
+ *
+ * Reported 2026-09-25: with a player taken out of the game (engine/removedPlayers.ts), ALTERNATE aTTaX — a DACH Challengers side around 64 —
+ * opened 2024 with four and signed Wo0t (94) off the free-agent list, and in 2025 sScary (92): the refill took
+ * the strongest free agent in reach, whoever he was. A club in that spot calls up a man of its own level.
+ *
+ *  - nobody history has playing for another club that season (timeline.ts bookSeatedIn), and, where there is
+ *    anyone, nobody past his last year on record: an active player
+ *  - the rating nearest the club's level (the mean of its best five, or its rating with nobody left), and never
+ *    more than a few points over its best man while anyone is left under that
+ *  - a man for the role the squad is missing — the seat that came free — before one for a role it has
+ *  - its own region before an import, as before
+ */
+function refillPick(state: GameState, team: Team, pool: Player[]): Player | undefined {
+  if (!pool.length) return undefined
+  const squad = team.roster.map((id) => state.players[id]).filter((p): p is Player => !!p)
+  const top = squad.map((p) => p.overall).sort((a, b) => b - a).slice(0, 5)
+  const level = top.length ? top.reduce((s, v) => s + v, 0) / top.length : team.rating
+  const ceiling = top.length ? top[0] + REFILL_REACH : Infinity
+  const have = new Set(squad.map((p) => p.role))
+  const missing = new Set(FIELD_ROLES.filter((r) => !have.has(r)))
+  const seated = bookCovers(state.year) ? bookSeatedIn(state.year, eventsOf(state.year)) : new Map<string, Set<string>>()
+  const narrow = (xs: Player[], keep: (p: Player) => boolean) => {
+    const ys = xs.filter(keep)
+    return ys.length ? ys : xs
+  }
+  let cands = narrow(pool, (p) => [...(seated.get(p.id) ?? [])].every((c) => c === team.id))
+  cands = narrow(cands, (p) => { const last = lastYearOf(p); return last === undefined || last >= state.year })
+  cands = narrow(cands, (p) => p.overall <= ceiling)
+  const fits = (p: Player) => missing.size ? [p.role, ...(p.roles ?? [])].some((r) => missing.has(r)) : true
+  const score = (p: Player) => Math.abs(p.overall - level) + (fits(p) ? 0 : 6) + (p.region === team.region ? 0 : 4)
+  return cands.sort((a, b) => score(a) - score(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0]
+}
+
 /**
  * Keep AI clubs at five players by signing from the free-agent pool.
  *
@@ -1648,12 +1687,16 @@ export function ensureMinimumRosters(state: GameState, rng: Rng, only?: Readonly
       // under the import rule a club refills from its own region first;
       // fielding five still outranks the rule when the pool runs dry
       const legal = free.filter((p) => !importBlock(state, team.id, p))
-      const target = (legal.length ? legal : free)
-        .sort(
+      const pool = legal.length ? legal : free
+      // the career player's own club signs the best man going, as it always has (its own signings are me/club.ts's);
+      // every other club signs one who fits it (refillPick)
+      const target = state.me && team.id === state.myTeam
+        ? pool.sort(
           (a, b) =>
             b.overall + (b.region === team.region ? 6 : 0) -
             (a.overall + (a.region === team.region ? 6 : 0)),
         )[0]
+        : refillPick(state, team, pool)
       if (!target) break
       target.teamId = team.id
       target.contractYears = contractLength(target, rng, team.roster.map((id) => state.players[id]))

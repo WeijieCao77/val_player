@@ -23,6 +23,8 @@ import json
 import os
 import sys
 
+from removed import Removed
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, 'src', 'data', 'stats_history.json')
 HISTORY = os.path.join(ROOT, 'src', 'data', 'history.json')
@@ -41,6 +43,8 @@ def main() -> int:
 
     with open(RAW, encoding='utf-8') as f:
         raw = json.load(f)
+    # nobody the author took out of the game has a row (scripts/removed.py), even in a stats_history.json fetched before
+    Removed().scrub_stats_history(raw)
     with open(HISTORY, encoding='utf-8') as f:
         history = json.load(f)
     on_roster = {p['id'] for e in history.values() for t in e['teams'] for p in t['players']}

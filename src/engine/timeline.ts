@@ -139,6 +139,30 @@ export function hasPlace(state: GameState, t: Team): boolean {
 const clubId = (vlr: string): string => `V21T${vlr}`
 const vlrOf = (playerId: string): string | null => (/^V\d+$/.test(playerId) ? playerId.slice(1) : null)
 
+const SEATED = new Map<number, Map<string, Set<string>>>()
+
+/**
+ * The clubs the roster book has a man on in `year`, by player id → world club ids: the opening rosters and
+ * the sides at that year's events (`events`, circuit.json's rosters, passed in by the caller). A club short
+ * of five does not sign a free agent history has playing for somebody else that season (season.ts
+ * ensureMinimumRosters).
+ */
+export function bookSeatedIn(year: number, events: readonly { rosters?: Record<string, string[]> }[] = []): Map<string, Set<string>> {
+  const got = SEATED.get(year)
+  if (got) return got
+  const out = new Map<string, Set<string>>()
+  const add = (rosters: Record<string, string[]> | undefined) => {
+    for (const [vlr, ids] of Object.entries(rosters ?? {})) {
+      if (vlr.startsWith('N:')) continue
+      for (const x of ids) out.set(`V${x}`, (out.get(`V${x}`) ?? new Set()).add(clubId(vlr)))
+    }
+  }
+  add(BOOK.years[String(year)]?.rosters)
+  for (const e of events) add(e.rosters)
+  SEATED.set(year, out)
+  return out
+}
+
 /** Every handle the roster book has met, 2021 on: a made-up newcomer never takes one of them (me/newcomers.ts). */
 export const bookHandles = (): string[] =>
   Object.values(BOOK.years).flatMap((Y) => Object.values(Y.debuts).map((d) => d.ign))

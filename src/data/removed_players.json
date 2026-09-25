@@ -1,0 +1,25 @@
+{
+ "about": "People the author took out of the game for good: not in any roster, rating, year on record, statline board, bio, search or record. The fetchers and builders drop them (scripts/removed.py); a save already under way loses them as it loads (src/engine/me/staffMigrate.ts migrateRemoved). `seats` are the seats each held at a circuit event, read off the raw files before he was taken out, so the builders still count his side as having fielded five.",
+ "readBy": "scripts/removed.py (fetch_history.py, fetch_bios.py, fetch_stats.py, fetch_lp_events.py, build_stats.py, build_world_2021.py, build_circuit.py, build_timeline.py), src/engine/removedPlayers.ts, scripts/check_removed_players.ts",
+ "players": [
+  {
+   "vlr": "7987",
+   "ign": "KovaQ",
+   "reason": "作者移出：辱华言论（2026-09-25 玩家反馈）",
+   "date": "2026-09-25",
+   "seats": [
+    {"year": 2023, "event": "1680", "eventName": "Challengers League DACH Evolution: Relegation", "team": "13157", "club": "Albanian Eagle"},
+    {"year": 2023, "event": "1778", "eventName": "Challengers 2023 DACH: Arcade", "team": "8826", "club": "ALTERNATE aTTaX"},
+    {"year": 2024, "event": "1948", "eventName": "Challengers League 2024 DACH Evolution: Split 1", "team": "8826", "club": "ALTERNATE aTTaX"},
+    {"year": 2024, "event": "2072", "eventName": "Challengers League 2024 DACH Evolution: Split 2", "team": "8826", "club": "ALTERNATE aTTaX"},
+    {"year": 2025, "event": "2319", "eventName": "Challengers 2025: DACH Evolution Stage 1", "team": "8826", "club": "ALTERNATE aTTaX"},
+    {"year": 2025, "event": "2395", "eventName": "Challengers 2025: DACH Evolution Stage 2", "team": "8826", "club": "ALTERNATE aTTaX"},
+    {"year": 2026, "event": "2781", "eventName": "Challengers 2026: DACH Evolution Stage 1", "team": "5214", "club": "CGN Esports"},
+    {"year": 2026, "event": "2894", "eventName": "China Evolution Series 2026: Act 1", "team": "11328", "club": "FunPlus Phoenix"},
+    {"year": 2026, "event": "2864", "eventName": "VCT 2026: China Stage 1", "team": "11328", "club": "FunPlus Phoenix"},
+    {"year": 2026, "event": "2988", "eventName": "China Evolution Series 2026: Act 2", "team": "11328", "club": "FunPlus Phoenix"},
+    {"year": 2026, "event": "2978", "eventName": "VCT 2026: China Stage 2", "team": "11328", "club": "FunPlus Phoenix"}
+   ]
+  }
+ ]
+}
