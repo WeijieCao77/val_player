@@ -9,6 +9,7 @@ import { tryoutSkill, expectOf, skillRead } from '../src/engine/me/prepro'
 import { makeDeal } from '../src/engine/me/contract'
 import { pitchOdds } from '../src/engine/me/selfpitch'
 import { Rng } from '../src/engine/rng'
+import { ROLE_PAR, UNDER_PAR } from '../src/engine/performance'
 import { recomputeOverall, weightsFor } from '../src/engine/player'
 import { ATTR_KEYS, ATTR_CN, ROLES } from '../src/engine/types'
 import type { GameState, Role } from '../src/engine/types'
@@ -93,14 +94,29 @@ for (const role of ROLES) {
 function record(s: GameState, rating: number, version?: 1): MeMatchRecord {
   return { fixtureId: 'role-low-rank', day: s.day, year: s.year, comp: 'probe', label: '', opp: 'Probe', oppTag: 'PRB', started: true, won: false, score: '0-2', maps: 2, rounds: 44, kills: 30, deaths: 28, assists: 10, firstKills: 3, clutches: 1, acs: 200, rating, performanceVersion: version, mvp: false, carried: false, nodes: [], rank: 5 }
 }
+// 2026-09-25 (match-rating): 「表现不合格」 is now under the role's own par (engine/performance.ts
+// ROLE_PAR − UNDER_PAR: 决斗者 / 哨卫 0.99, 自由人 0.95, 控场 0.93, 先锋 0.91), not a flat 0.95 —
+// the author's call once the kill-led rating put the roles' averages 1.04 … 0.96 apart. The case
+// that was here, 0.94 punished for every role, encoded the flat line; the cases now sit just
+// either side of each role's own line, and a legacy record (no version) is punished as before.
 for (const role of ROLES) {
-  for (const [rating, version, punished] of [[1.05, 1, false], [0.94, 1, true], [1.05, undefined, true]] as const) {
+  const line = ROLE_PAR[role] - UNDER_PAR
+  const cases = [[1.05, 1, false], [+(line + 0.01).toFixed(2), 1, false], [+(line - 0.01).toFixed(2), 1, true], [1.05, undefined, true]] as const
+  for (const [rating, version, punished] of cases) {
     const s = fresh(role, 't1'), me = s.me!, p = s.players[me.id]
     p.isIgl = false; p.iglSource = undefined; me.trial = undefined; me.benchLock = undefined
     me.badStreak = 0; me.rotateHeat = 0; me.graceMatches = 0; me.coachTrust = 60; me.proven = false
     for (let i = 0; i < 3; i++) afterMyMatch(s, record(s, rating, version))
-    check(!!me.benchLock === punished, `${role}: rating=${rating} version=${version ?? 'legacy'} 末位处罚=${punished}`)
+    check(!!me.benchLock === punished, `${role}: rating=${rating} version=${version ?? 'legacy'} 本位线 ${line.toFixed(2)} 末位处罚=${punished}`)
   }
+}
+{
+  // the line is the role the match was played in (rec.role), when the record has one
+  const s = fresh('决斗者', 't1'), me = s.me!, p = s.players[me.id]
+  p.isIgl = false; p.iglSource = undefined; me.trial = undefined; me.benchLock = undefined
+  me.badStreak = 0; me.rotateHeat = 0; me.graceMatches = 0; me.coachTrust = 60; me.proven = false
+  for (let i = 0; i < 3; i++) afterMyMatch(s, { ...record(s, 0.95, 1), role: '控场' })
+  check(!me.benchLock, '主位置决斗者、这场按控场打：0.95 按控场的线（0.93）算，不处罚')
 }
 
 for (const role of ROLES) {
