@@ -705,6 +705,8 @@ export interface MomentItem {
   nominees?: string[]
   nomineeIds?: string[]
   nomineeTeams?: string[]
+  /** award: how it was judged, in words, as said on the night — absent for a night from before 2026-09-25 */
+  rule?: string
   /** rank: 「神话 1」, its tier and division, the server, the place on its board */
   rank?: string
   tier?: string

@@ -29,8 +29,9 @@ const mem: Record<string, string> = {}
 
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { MapSim, MatchSim, buildLineup } from '../src/engine/match'
-import { aggregateLines, performanceRating } from '../src/engine/performance'
-import { BOARD_MVP, BOARD_MVP_MAX, BOARD_RULE, BOARD_TITLE, boardLine } from '../src/engine/leaderboard'
+import { ROLE_PAR, UNDER_PAR, aggregateLines, performanceRating, underPar } from '../src/engine/performance'
+import { AWARD_RULE, BOARD_MVP, BOARD_MVP_MAX, BOARD_RULE, BOARD_TITLE, boardLine, boardScore } from '../src/engine/leaderboard'
+import { computeAwards, leaguePool } from '../src/engine/me/nights'
 import { mvpNote } from '../src/engine/me/postmatch'
 import { Rng, hashStr } from '../src/engine/rng'
 import { emptyStats } from '../src/engine/types'
@@ -135,6 +136,11 @@ ok(means.every((m) => m >= 0.93 && m <= 1.1), `四个位置的平均评分都在
 const gap = mean(R['决斗者'].rt) - mean(R['控场'].rt)
 ok(gap >= 0.03 && gap <= 0.15, `决斗者比控场平均高 ${f2(gap)}（改前 −0.01；应在 0.03–0.15，别反过来一边倒）`)
 ok(Math.abs(mean(allRt) - 1) <= 0.03, `一线平均评分 ${f2(mean(allRt))}（应在 1.00 ± 0.03）`)
+// the coach's 「表现不合格」 is under the role's own par (me/coach.ts); the par has to be what the engine plays
+ok(ROLES.every((r) => Math.abs(ROLE_PAR[r] - mean(R[r].rt)) <= 0.03),
+  `教练用的各位置基准和实际平均相差不超过 0.03（${ROLES.map((r) => `${r} ${f2(ROLE_PAR[r])}/${f2(mean(R[r].rt))}`).join('、')}）`)
+ok(underPar(0.94, '控场') === false && underPar(0.94, '决斗者') === true && underPar(0.94, undefined) === true && underPar(0.96, undefined) === false,
+  `同样 0.94：控场不算不合格（基准 ${ROLE_PAR['控场']}），决斗者算（基准 ${ROLE_PAR['决斗者']}）；不知道位置时按 1.00 − ${UNDER_PAR}`)
 
 console.log('\n三、MVP：')
 ok(mvpWin / series >= 0.88, `MVP 出自胜方 ${pc(mvpWin / series)}（应不低于 88%）`)
@@ -169,6 +175,25 @@ ok(Math.abs(boardLine(state, mvpMan).mvpBonus - BOARD_MVP_MAX) < 1e-9 && BOARD_M
 const maxHonours = BOARD_TITLE.champions + 2 * BOARD_TITLE.masters + 3 * BOARD_TITLE.league + BOARD_MVP_MAX
 ok(maxHonours <= 0.3, `一季最多的荣誉加分 +${maxHonours.toFixed(2)}，不超过 0.3（赛季评分从 P10 到 P90 约差 0.22）`)
 ok(/评分为主/.test(BOARD_RULE) && /冠军/.test(BOARD_RULE) && /MVP/.test(BOARD_RULE), `榜单上写着规则：${BOARD_RULE}`)
+
+console.log('\n五、年度奖项和选手榜同一个排法：')
+{
+  const s = structuredClone(state)
+  const club = s.teams[s.myTeam]
+  const ids = [...new Set([s.me!.id, ...leaguePool(s, club).flatMap((t) => t.roster)])].filter((id) => s.players[id])
+  for (const id of ids) s.players[id].season = { ...emptyStats(), maps: 30, rounds: 700, kills: 460, deaths: 470, assists: 180, damage: 700 * 190 / 1.45, firstKills: 50, firstDeaths: 50, clutches: 10 }
+  const [hi, titled] = ids.filter((id) => id !== s.me!.id)
+  // hi: the better season line, no honours; titled: a little under it, with a 冠军赛 and a 大师赛
+  Object.assign(s.players[hi].season, { kills: 560, damage: 700 * 225 / 1.45 })
+  Object.assign(s.players[titled].season, { kills: 540, damage: 700 * 218 / 1.45, mvps: 5 })
+  s.players[titled].titles = [{ year: s.year, title: '2026 全球冠军赛' }, { year: s.year, title: '多伦多大师赛' }]
+  const aw = computeAwards(s)
+  const top = aw?.cats.find((c) => c.key === 'mvp')?.top ?? []
+  ok(performanceRating(s.players[hi].season) > performanceRating(s.players[titled].season) && top[0]?.id === titled,
+    `年度最佳选手给了评分略低、拿了冠军赛和大师赛的人（${f2(performanceRating(s.players[titled].season))} + 荣誉），不是评分最高却没冠军的人（${f2(performanceRating(s.players[hi].season))}）`)
+  ok(top.every((r, i) => i === 0 || boardScore(s, s.players[top[i - 1].id]) >= boardScore(s, s.players[r.id])), '入围三人按排名分排')
+  ok(/冠军/.test(AWARD_RULE) && /MVP/.test(AWARD_RULE) && /选手榜/.test(AWARD_RULE), `颁奖夜和奖项卡上写着规则：${AWARD_RULE}`)
+}
 
 console.log(`\n${((Date.now() - t0) / 1000).toFixed(1)}s`)
 if (bad) {

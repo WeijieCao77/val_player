@@ -31,6 +31,8 @@ export const BOARD_MVP_MAX = 0.06
 
 /** What the table says under its title, in words. */
 export const BOARD_RULE = '评分为主，本季冠军和整场 MVP 加分——冠军赛加得最多，其次大师赛、联赛、挑战者联赛，资格赛不算'
+/** The year-end awards read the same 排名分 (engine/me/nights.ts computeAwards); said on the night and on its card. */
+export const AWARD_RULE = '按这一季的评分评，本季拿的冠军和整场 MVP 另外加分，和选手榜同一个排法'
 /** The same rule with its sizes, for the tooltip. */
 export const BOARD_RULE_DETAIL = `排名分 = 本季评分 + 本季冠军（冠军赛 +${BOARD_TITLE.champions}，大师赛 +${BOARD_TITLE.masters}，`
   + `联赛 +${BOARD_TITLE.league}，挑战者联赛与晋级赛 +${BOARD_TITLE.chal}；资格赛不算）`

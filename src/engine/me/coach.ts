@@ -4,6 +4,7 @@ import { SEASON_DAYS } from '../calendar'
 import { ROLES, SQUAD_ROLE_CN } from '../types'
 import type { GameState, Player } from '../types'
 import { confidentRating } from '../world'
+import { underPar } from '../performance'
 import type { MeMatchRecord } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
@@ -613,7 +614,10 @@ export function afterMyMatch(state: GameState, rec: MeMatchRecord): void {
   const calling = myCall(state)
   // New box scores count utility and other real contributions. Being fifth in a good five
   // is not itself a poor performance. Old records retain their original rank-only meaning.
-  const underperformed = rec.performanceVersion !== 1 || rec.rating < 0.95
+  // 「Under」 is under his own role's par (engine/performance.ts ROLE_PAR), not one line for all:
+  // since kills weigh more (2026-09-25) a 控场 averages 0.98 and a 决斗者 1.04, and a flat 0.95
+  // docked the smoke player for the rating his role gets.
+  const underperformed = rec.performanceVersion !== 1 || underPar(rec.rating, rec.role ?? state.players[me.id]?.role)
 
   // one more of the club's matches against the contract's floor — played, or watched from
   // the bench: both are matches the club played. A cup or an exhibition is not one of them

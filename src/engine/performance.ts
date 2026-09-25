@@ -1,6 +1,6 @@
 import { ratingOf } from './player'
 import { clamp } from './rng'
-import type { MapLine, MapScore } from './types'
+import type { MapLine, MapScore, Role } from './types'
 
 /**
  * The match rating, from what a man actually did — never his role label or his
@@ -45,6 +45,23 @@ export function performanceRating(line: Partial<MapLine>): number {
     + RATING_OPENING * (rate(line.firstKills, 1) - rate(line.firstDeaths, 1))
     + RATING_CLUTCH * rate(line.clutches, 1), 0, 3)
 }
+
+/**
+ * Each role's par on this rating: its average over 1000 NPC tier-1 BO3s
+ * (scratchpad match-rating_tune; scripts/check_rating_fair.ts holds each one
+ * within 0.03 of what the engine plays). A kill-led rating is a little higher
+ * for the men who take the fights and a little lower for the smoke player, as
+ * a real VLR board is; what the coach calls 「表现不合格」 (me/coach.ts) is
+ * UNDER_PAR below his own role's par, so the rating's shape does not become a
+ * role's handicap. Before 2026-09-25 every role averaged about 1.00 and the
+ * line was a flat 0.95 — par less the same 0.05.
+ */
+export const ROLE_PAR: Record<Role, number> = {
+  决斗者: 1.04, 哨卫: 1.04, 自由人: 1.0, 控场: 0.98, 先锋: 0.96,
+}
+export const UNDER_PAR = 0.05
+export const underPar = (rating: number, role: Role | undefined): boolean =>
+  rating < (role ? ROLE_PAR[role] ?? 1 : 1) - UNDER_PAR
 
 /**
  * The winning side's nod in the MVP (engine/match.ts seriesMvp / mapMvp): the
