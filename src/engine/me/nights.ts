@@ -1,6 +1,7 @@
 import { clamp } from '../rng'
 import { AGENT_ROLE, MAP_META, agentCn, mapCn } from '../content'
 import { performanceRating } from '../performance'
+import { ceilingOf, recomputeOverall, refreshValue } from '../player'
 import { REGION_CN } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
 import type { CerDef, CerPick } from './ceremony'
@@ -60,12 +61,25 @@ function open(state: GameState, kind: NightKind, about: string): void {
 }
 
 /**
- * Training progress, without growth.ts (which imports ceremony.ts): rolls over at the next session.
+ * Training progress, without growth.ts (which imports ceremony.ts), with growth.ts addXp's rollover.
  * At my own ceiling it keeps nothing — it was a second, smaller 存点数 that landed after a break (me/bottleneck.ts).
+ * It used to leave a full bar to roll over "at the next session", and the next session is of whatever
+ * was clicked: a 版本发布会 +25 道具 on 90 sat at 「下一点 115 / 100」 with 道具 unchanged until 道具
+ * was trained again, while 本周成长 already counted it (reported 2026-09-24:「训练之后周增长是看得出来
+ * 变化，可实际数值不变」).
  */
 function bumpXp(p: Player, k: keyof Attrs, n: number): void {
   if (p.caps && p.attrs[k] >= p.caps[k]) return
-  p.xp[k] = Math.min((p.xp[k] ?? 0) + n, 199)
+  p.xp[k] = (p.xp[k] ?? 0) + n
+  let rose = false
+  while ((p.xp[k] ?? 0) >= 100 && (p.caps || p.overall < p.potential) && p.attrs[k] < ceilingOf(p, k)) {
+    p.xp[k] = (p.xp[k] ?? 0) - 100
+    p.attrs[k] += 1
+    rose = true
+  }
+  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = 0
+  else p.xp[k] = Math.min(p.xp[k] ?? 0, 99)
+  if (rose) { recomputeOverall(p); refreshValue(p) }
 }
 
 /* ------------------------------------------------------------------ */
