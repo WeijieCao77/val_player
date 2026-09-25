@@ -9,6 +9,7 @@ import type { Records } from '../../engine/dossier'
 import { spotlights } from '../../engine/me/stars'
 import type { MeMatch } from '../../engine/me/matchplay'
 import { DIM_CN, SLOT_CN, gapVerdict, nodeReadout, stakeWords } from '../../engine/me/nodes'
+import { cerMatchLine } from '../../engine/me/ceremony'
 import { ledgerNotes, mvpNote } from '../../engine/me/postmatch'
 import type { NodeLogEntry } from '../../engine/me/types'
 import type { Player, Role, RoundLog } from '../../engine/types'
@@ -201,6 +202,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
       .filter((id) => id !== me.id).map((id) => game.players[id]?.overall).filter((v): v is number => v != null)
     const fieldAll = others.length >= 10 ? [...others, mineNow].sort((x, y) => x - y) : null
     const fieldRank = 1 + others.filter((v) => v > mineNow).length
+    // said wherever the engine applies it (me/matchplay.ts reads cerMatchEdge on every map of these three days)
+    const warmLine = cerMatchLine(game, nums)
     return (
       <Modal title={`${mm.friendly ? mm.friendly.comp : (game.comps[f.comp]?.name ?? f.comp)} · ${f.label.replace(/^(KO|SW):\d+:/, '')} · BO${f.bo}`} onClose={skip} onBgClose={() => {}}>
         <div className="score-line">
@@ -215,6 +218,8 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
             <span className="muted" style={{ marginLeft: 8 }}>{verdict.d}</span>
           </p>
         )}
+        {/* the walk-out's warm-up is applied on the maps, not in the verdict above: say what it gave (me/ceremony.ts) */}
+        {warmLine && <p className="center tiny mp-warm" style={{ margin: '0 0 6px' }}>{warmLine}</p>}
         {fieldAll && (
           <p className="center tiny muted" style={{ margin: '0 0 6px' }}>
             {nums
