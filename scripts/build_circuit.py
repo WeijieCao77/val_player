@@ -54,6 +54,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import event_rosters  # noqa: E402
 import staff as staff_book  # noqa: E402
+import removed as removed_book  # noqa: E402  who is not in the game at all
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'src', 'data')
@@ -775,17 +776,22 @@ def event_sides(e: dict, hev: dict) -> tuple[dict[str, list[str]], dict[str, str
 
 
 def seats_to_staff(year: int, e: dict, hev: dict, rows: list[dict], carded_year: dict, staff: staff_book.Staff) -> dict[str, int]:
-    """How many of each side's seats at a circuit event went to someone on a staff that day.
+    """How many of each side's seats at a circuit event went to someone on a staff that day,
+    or to someone the author took out of the game (scripts/removed.py: his seats, as recorded).
 
     The side still took the field with five: build_timeline.py counts them when it asks whether
     a club fielded five that year, and gives the seat to nobody.
     """
+    out = REMOVED.seats(e['id'])
     cards, clubs = event_sides(e, hev)
     if not staff_at(staff, cards, rows, staff_book.day_of(year, e['start'])):
-        return {}
+        return out
     full = event_rosters.rosters_for(clubs, cards, rows, carded_year)
     kept = e.get('rosters') or {}
-    return {tid: len(ids) - len(kept.get(tid, [])) for tid, ids in full.items() if len(ids) > len(kept.get(tid, []))}
+    for tid, ids in full.items():
+        if len(ids) > len(kept.get(tid, [])):
+            out[tid] = out.get(tid, 0) + len(ids) - len(kept.get(tid, []))
+    return out
 
 
 def rosters_only(path: str, history: dict, stats: dict, carded: dict, staff: staff_book.Staff) -> int:
@@ -818,6 +824,9 @@ def rosters_only(path: str, history: dict, stats: dict, carded: dict, staff: sta
     return 0
 
 
+REMOVED = removed_book.Removed()
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser()
@@ -835,6 +844,10 @@ def main() -> int:
     # the statlines fill the rosters vlr's event pages leave out (scripts/event_rosters.py)
     stats_path = os.path.join(DATA, 'stats_history.json')
     stats = json.load(open(stats_path, encoding='utf-8')) if os.path.exists(stats_path) else {}
+    # the people the author took out of the game take no seat and fill no side (scripts/removed.py),
+    # whether or not the raw files on disk were scrubbed of them
+    REMOVED.scrub_history(history)
+    REMOVED.scrub_stats_history(stats)
     carded = event_rosters.carded_by_year(history)
     staff = staff_book.Staff(a.staff)
     if a.rosters_only:

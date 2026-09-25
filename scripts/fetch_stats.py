@@ -31,6 +31,8 @@ import time
 import urllib.error
 import urllib.request
 
+from removed import Removed
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, '.cache', 'vlr')
 RECORDS = os.path.join(ROOT, 'src', 'data', 'records.json')
@@ -167,6 +169,8 @@ def main() -> int:
             n = sum(len(v['rows']) for v in out.values())
             print(f'  {i}/{len(todo)}  有数据 {len(out)} 场 · {n} 条  新抓 {fresh}', flush=True)
 
+    # nobody the author took out of the game is written (scripts/removed.py)
+    Removed().scrub_stats_history(out)
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     people = {r['id'] for v in out.values() for r in v['rows']}

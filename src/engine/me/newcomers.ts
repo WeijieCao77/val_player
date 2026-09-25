@@ -3,6 +3,7 @@ import { regionIn } from '../era'
 import { importBlock } from '../imports'
 import { recomputeOverall, refreshValue } from '../player'
 import { PROSPECTS } from '../prospects'
+import { REMOVED_PLAYERS } from '../removedPlayers'
 import { Rng, clamp, hashStr } from '../rng'
 import { bookCovers, bookDebutants, bookHandles, hasPlace, isTimelineWorld, lastYearOf, reachOf, releaseForHistory, signForHistory } from '../timeline'
 import { ATTR_KEYS } from '../types'
@@ -82,6 +83,8 @@ function takenHandles(state: GameState): Set<string> {
   for (const p of (RAW_2021 as unknown as { players: { ign: string }[] }).players) add(p.ign)
   for (const p of PROSPECTS) add(p.ign)
   for (const p of Object.values(state.players)) add(p.ign)
+  // nor the handle of a man the author took out of the game: he is not in the book any more to be counted (engine/removedPlayers.ts)
+  for (const p of REMOVED_PLAYERS) add(p.ign)
   return out
 }
 

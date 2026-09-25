@@ -44,6 +44,10 @@ seat, and here his statlines from inside the stint count toward no rating and
 no year on record — so a player who became a coach retires the year he last
 played, not the year he last stood in.
 
+Someone the author took out of the game (scripts/removed.py, 2026-09-25: KovaQ)
+is in nothing at all — the raw files are read without him — and a side he
+played for still took the field with five, one seat short, as with a coach.
+
     python scripts/build_circuit.py --years 2021,2022,2023,2024,2025,2026
     python scripts/build_timeline.py
 """
@@ -375,9 +379,10 @@ def main() -> int:
         for day, cev, tier in evs:
             name, region, scene = cev['name'], cev['region'], cev.get('scene')
             rosters = cev.get('rosters') or {}
-            # a side whose coach stood in still took the field with five: a club that year, one seat short
+            # a side whose coach stood in, or whose man the author took out of the game (scripts/removed.py),
+            # still took the field with five: a club that year, one seat short
             stood_in = bc.seats_to_staff(Y, cev, history[cev['id']], raw_stats.get(cev['id'], {}).get('rows', []),
-                                         carded[Y], staff) if staff else {}
+                                         carded[Y], staff)
             sides = {x for x in cev['seeds'] if not x.startswith('N:')}
             sides |= {x for u in cev['units'] for nd in u.get('nodes', []) for x in nd['teams'] if not x.startswith('N:')}
             # the league seat, read off who played the league's own events —

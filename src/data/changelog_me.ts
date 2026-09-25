@@ -16,6 +16,13 @@ export interface ChangeEntry {
 
 export const CHANGELOG_ME: ChangeEntry[] = [
   {
+    date: '2026-09-25',
+    title: 'KovaQ 已从游戏中移出',
+    changes: [
+      { kind: '调整', text: '<b>KovaQ 已从游戏中移出。</b>名单、自由市场、搜索、数据榜、新闻和各种记录里都不再有他。他待过的俱乐部（ALTERNATE aTTaX、Albanian Eagle、CGN Esports、FunPlus Phoenix）少了一个人，换季时从自由人里补到五人。已经在打的存档读档时他会离开：别的队伍悄悄补人；如果他在你的队里，日志里有一句说明，俱乐部会从自由市场补人；以前的比赛记录和奖杯名单里，他的名字换成「已移出选手」，关于他的新闻不再显示。' },
+    ],
+  },
+  {
     date: '2026-09-24',
     title: '同位置的引援当替补轮换，其他位置照真实历史',
     changes: [

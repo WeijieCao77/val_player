@@ -8,6 +8,7 @@ import { bookClubsAt, openWorldAt } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
 import { setupSeason } from '../season'
+import { REMOVED_STAMP } from '../removedPlayers'
 import { STAFF_STAMP } from '../staffStints'
 import { Rng, clamp, hashStr } from '../rng'
 import { ATTR_KEYS, REGION_CN, emptyStats } from '../types'
@@ -300,6 +301,8 @@ export function createCareer(o: CareerOpts): GameState {
   // seat from the free agents on the day his real stint began — and a career read back would no longer be the one
   // that was played (scripts/check_reload.ts).
   state.staffSync = STAFF_STAMP
+  // the same for the people the author took out of the game: the book never had them, so nothing to bring up (me/staffMigrate.ts migrateRemoved)
+  state.removedSync = REMOVED_STAMP
 
   const attrs = buildAttrs(o.role, o.talents, o.originKey, rng)
   const model = Object.values(state.players).find((p) => p.role === o.role && p.region === region && (p.agentPool?.length ?? 0) >= 3)

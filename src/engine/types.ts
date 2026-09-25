@@ -946,6 +946,8 @@ export interface WorldState {
   callerSync?: string
   /** the staff stints (src/data/staff_stints.json) this save has been brought up to — see me/staffMigrate.ts */
   staffSync?: string
+  /** the list of people taken out of the game (src/data/removed_players.json) this save has been brought up to — see me/staffMigrate.ts migrateRemoved */
+  removedSync?: string
   /** which rulebook this career plays by — see engine/ruleset.ts; absent is vct-2025 */
   rulesetId?: 'vct-2025' | 'vct-2026'
   /** the ruler the world's real players are measured on — see engine/ruler.ts; absent is the builders' own scale */

@@ -1,3 +1,4 @@
+import { REMOVED_STAMP, removedPlayerIds, scrubNames } from '../removedPlayers'
 import { Rng, hashStr } from '../rng'
 import { ensureMinimumRosters } from '../season'
 import { STAFF_STAMP, dateOf, offPoolOn, staffPeople, staffPersonOf, staffStintOn } from '../staffStints'
@@ -88,5 +89,111 @@ export function migrateStaff(state: GameState): StaffMove | null {
   }
   if (out.mine.length) clubWeek(state, rng)
   state.staffSync = STAFF_STAMP
+  return out
+}
+
+export interface RemovedMove {
+  /** everyone who left the player pool, by handle */
+  gone: string[]
+  /** of them, the player's own team-mates */
+  mine: string[]
+  /** AI clubs that signed a free agent to a seat left empty */
+  filled: string[]
+  /** strings in the save's records that named one of them, now REMOVED_LABEL */
+  renamed: number
+  /** news items and log lines about one of them, let go */
+  dropped: number
+}
+
+/**
+ * A career saved while the game still had a man the author has since taken out of it
+ * (src/data/removed_players.json, engine/removedPlayers.ts; decided 2026-09-25), brought up to
+ * the list once as it loads.
+ *
+ * The way migrateStaff takes a coach out of the pool, and more quietly still: he is not
+ * retired — no farewell card, no line in the news — and nothing says who he was. An AI club
+ * that loses him fills the seat from the free agents the way the season's turn does
+ * (season.ts ensureMinimumRosters, quiet), and the caller and the five are picked again there.
+ * At the player's own club he leaves the way any team-mate leaves (me/club.ts leaveRoster), one
+ * line in 日志 says a seat has come free, and the club signs a free agent to it (clubWeek).
+ *
+ * What he was in the save besides a player goes with him: his place in the bonds, training,
+ * map sheets, a practice duel against him, the book's signings still to come to my club. What
+ * the save remembers — box scores, trophy rosters, awards, career moments — keeps its shape and
+ * says REMOVED_LABEL where it named him; a news item or a log line about him is let go. Run once
+ * per change of the list (WorldState.removedSync).
+ */
+export function migrateRemoved(state: GameState): RemovedMove | null {
+  if (state.removedSync === REMOVED_STAMP) return null
+  const me = state.me
+  const myClub = me?.phase === 'pro' && state.myTeam ? state.myTeam : null
+  const out: RemovedMove = { gone: [], mine: [], filled: [], renamed: 0, dropped: 0 }
+  const ids = new Set(removedPlayerIds().filter((id) => id !== me?.id))
+  const touched = new Set<string>()
+  let mineLeft = false
+  for (const id of ids) {
+    const p = state.players[id]
+    if (!p) continue
+    const team = p.teamId ? state.teams[p.teamId] : undefined
+    if (team && team.id === myClub) {
+      leaveRoster(state, p)
+      out.mine.push(p.ign)
+      mineLeft = true
+    } else if (team) {
+      releaseForHistory(state, p)
+      touched.add(team.id)
+    }
+    delete state.players[id]
+    out.gone.push(p.ign)
+  }
+  // a club that still names him — on a roster, in the five, as its caller — without the man himself
+  for (const t of Object.values(state.teams)) {
+    const had = t.roster.some((id) => ids.has(id)) || t.starters.some((id) => ids.has(id)) || (!!t.igl && ids.has(t.igl))
+    if (!had) continue
+    t.roster = t.roster.filter((id) => !ids.has(id))
+    t.starters = t.starters.filter((id) => !ids.has(id))
+    if (t.igl && ids.has(t.igl)) t.igl = null
+    if (t.id === myClub) mineLeft = true
+    else touched.add(t.id)
+  }
+  // what he was to the rest of the save, by his id
+  const pairOf = (k: string) => k.split('|').some((x) => ids.has(x))
+  for (const m of [state.bonds, state.feudSaid, state.argueSaid]) {
+    if (m) for (const k of Object.keys(m)) if (pairOf(k)) delete m[k]
+  }
+  for (const id of ids) delete state.training?.[id]
+  for (const sheet of [...Object.values(state.mapAgents ?? {}), ...Object.values(state.agentPicks ?? {})]) {
+    for (const id of ids) delete sheet[id]
+  }
+  if (state.retireFeed) state.retireFeed = state.retireFeed.filter((r) => !ids.has(r.id))
+  if (me) {
+    for (const id of ids) delete me.mates?.[id]
+    if (me.clubDepartures) me.clubDepartures = me.clubDepartures.filter((d) => !ids.has(d.playerId))
+    if (me.historyArrivals) me.historyArrivals.ids = me.historyArrivals.ids.filter((id) => !ids.has(id))
+    if (me.historyArrivals?.rot?.sub && ids.has(me.historyArrivals.rot.sub)) me.historyArrivals.rot.sub = null
+    if (me.mateHurt) me.mateHurt.ids = me.mateHurt.ids.filter((id) => !ids.has(id))
+    if (me.duelLive && ids.has(me.duelLive.himId)) me.duelLive = undefined
+  }
+  // what the save remembers: his handle out of every record, and the news and log lines about him gone
+  const named = scrubNames(state, [state.news, me?.log])
+  out.renamed = named.renamed
+  out.dropped = named.dropped
+  const rng = new Rng(hashStr(`removed:${state.seed}:${state.year}:${state.day}`))
+  if (touched.size) {
+    const before = new Map([...touched].map((id) => [id, state.teams[id]?.roster.length ?? 0]))
+    ensureMinimumRosters(state, rng, touched, true)
+    for (const id of touched) {
+      const t = state.teams[id]
+      if (!t) continue
+      if (t.roster.length > (before.get(id) ?? 0)) out.filled.push(t.name)
+      const top = t.roster.map((pid) => state.players[pid]?.overall ?? 0).sort((a, b) => b - a).slice(0, 5)
+      if (top.length) t.rating = Math.round(top.reduce((s, v) => s + v, 0) / top.length)
+    }
+  }
+  if (mineLeft && myClub) {
+    pushLog(state, 'team', '队伍名单上空出一个位置：一名队友已从游戏中移出。俱乐部会从自由市场补人。')
+    clubWeek(state, rng)
+  }
+  state.removedSync = REMOVED_STAMP
   return out
 }

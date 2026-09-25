@@ -7,7 +7,7 @@ import { adoptOldSave } from './saveInfo'
 import { OWNER, readSaveText, writeSaveTextGuarded, writeSaveTextNowGuarded } from './saveStore'
 import { migrateRuler } from './rulerMigrate'
 import { migrateRegionalRuler } from './regionalRulerMigrate'
-import { migrateStaff } from './staffMigrate'
+import { migrateRemoved, migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
 import type { SaveMeta } from './saveMeta'
 import { migrateToCny } from './cnyMigrate'
@@ -139,6 +139,8 @@ export function migratePlayerSave(state: GameState): GameState {
   normalizePitch(state)
   // a coach the roster book once had as a player leaves the player pool, once per change of the data (me/staffMigrate.ts)
   if (state.me) migrateStaff(state)
+  // a man the author took out of the game leaves the pool and the save's records, once per change of the list (me/staffMigrate.ts)
+  if (state.me) migrateRemoved(state)
   // a career from before the rating ruler is read onto it once, the player by his rank (me/rulerMigrate.ts)
   if (state.me) migrateRuler(state)
   if (state.me) migrateRegionalRuler(state)

@@ -1,4 +1,5 @@
 import raw from '../data/staff_stints.json'
+import { removedVlr } from './removedPlayers'
 import { hashStr } from './rng'
 
 /**
@@ -132,6 +133,8 @@ export const staffPersonOf = (vlr: string): StaffPerson | undefined => BY_PERSON
  * day is on or after that month; or a stint of his covers this day.
  */
 export function offPoolOn(vlr: string, date: string): boolean {
+  // a man the author took out of the game is off it on every day (engine/removedPlayers.ts)
+  if (removedVlr(vlr)) return true
   const who = BY_PERSON.get(vlr)
   if (who) {
     if (!who.played) return true

@@ -142,7 +142,7 @@ console.log('人数够不够')
     }
   }
   check(!short.length, `每个俱乐部每年的开季名单至少四人${short.length ? '：' + short.slice(0, 6).join('；') : ''}`)
-  check(four.length <= 8, `开季名单只有四人的 ${four.length} 家，都是替补上场的教练被拿掉：${four.join('、')}（读档和换季时引擎从自由人补到五人）`)
+  check(four.length <= 8, `开季名单只有四人的 ${four.length} 家，都是替补上场的教练、或作者移出游戏的选手（removed_players.json）被拿掉：${four.join('、')}（读档和换季时引擎从自由人补到五人）`)
   check(!leagueShort.length, `联赛席位俱乐部的开季名单都至少五人${leagueShort.length ? '：' + leagueShort.join('；') : ''}`)
   const lost: string[] = []
   let sides = 0

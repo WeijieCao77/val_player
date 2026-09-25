@@ -41,6 +41,8 @@ import urllib.parse
 import urllib.request
 from datetime import date
 
+from removed import Removed
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, '.cache', 'lp')
 HISTORY = os.path.join(ROOT, 'src', 'data', 'history.json')
@@ -267,6 +269,8 @@ def main() -> int:
             if n % 50 == 0:
                 print(f'  第二轮 {n}/{len(missing)}  累计命中 {len(out)}', flush=True)
 
+    # nobody the author took out of the game is written (scripts/removed.py)
+    Removed().scrub_by_id(out)
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=0)
 
