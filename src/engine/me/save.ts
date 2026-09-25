@@ -24,6 +24,7 @@ import { rememberFMVPs } from './fmvp'
 import { avatarData } from './avatar'
 import { pruneClubDepartures } from './clubDepartures'
 import { ensureGrowthWeek } from './growthWeek'
+import { stampTitleClubs } from './trophies'
 import { normalizePositionTraining } from './secondaryRole'
 
 /**
@@ -110,6 +111,8 @@ export function migratePlayerSave(state: GameState): GameState {
     repairPlayerCountries(state)
     repairPlayerBios(state)
     repairPlayerTeamNames(state)
+    // a title from before titles kept their club: the club, where the save can still say it (me/trophies.ts)
+    stampTitleClubs(state)
   }
   // a career kept in dollars before the four currencies: once, into RMB and its contracts' own currencies (me/cnyMigrate.ts)
   migrateToCny(state)

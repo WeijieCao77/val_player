@@ -156,17 +156,71 @@ function eventFor(year: number, title: string, comp: Competition | null): CEvent
  * different question and would be a guess dressed as a fact. So the card says no club there, `clubs` says which
  * clubs that year was spent at, and the detail says the season's own row for what it is.
  */
-function clubOf(state: GameState, year: number, title: string, comp: Competition | null): { id: string | null; name: string | null; clubs: string[] } {
+function clubOf(state: GameState, t: TitleRow, comp: Competition | null): { id: string | null; name: string | null; clubs: string[] } {
+  const clubs = yearClubs(state, t.year).map((id) => state.teams[id]?.name).filter((n): n is string => !!n)
+  // the title's own record first, under the name the club had that day (a club renamed since keeps its old name here)
+  if (t.teamId && (t.team || state.teams[t.teamId])) return { id: t.teamId, name: t.team ?? state.teams[t.teamId]!.name, clubs }
+  const id = titleClubOf(state, t, comp)
+  return { id, name: id ? state.teams[id]?.name ?? null : null, clubs }
+}
+
+type TitleRow = MeState['titles'][number]
+
+/**
+ * The clubs I could have lifted a trophy with in a year, off the club history. A club's line is only carried to a year
+ * at that year's end (engine/season.ts), so a club I left during the year still ends the year before — 2023–2023 NRG,
+ * then 2024 G2 for a man who won 2024 at NRG and moved that winter. The line just before one that opens this year is
+ * a club of this year too, unless it was left at the turn of the year; the history cannot tell which, so it counts.
+ */
+function yearClubs(state: GameState, year: number): string[] {
+  const hist = state.players[state.me!.id]?.clubHist ?? []
+  const out: string[] = []
+  hist.forEach((h, i) => {
+    const covers = h.from <= year && year <= h.to
+    const leftThisYear = h.to === year - 1 && hist.slice(i + 1).some((n) => n.from === year)
+    if ((covers || leftThisYear) && !out.includes(h.team)) out.push(h.team)
+  })
+  return out
+}
+
+/**
+ * The club a trophy was lifted with, where the save can say it for certain, for a title that did not write it down
+ * (every title before 2026-09-25). In this order: the competition is still on the books with its champion; the title's
+ * own card is still in the queue and wrote the club down (me/moments.ts); the year had only one club of mine; the men
+ * who lifted it with me — every man on the winning roster carries the title (engine/season.ts) — were, by a clear
+ * majority, at one of my clubs of that year. Otherwise null, and the case says it cannot tell.
+ */
+export function titleClubOf(state: GameState, t: { year: number; title: string }, comp: Competition | null = compOf(state, t.year, t.title)): string | null {
   const me = state.me!
-  const hist = (state.players[me.id]?.clubHist ?? []).filter((h) => h.from <= year && year <= h.to)
-  const clubs = hist.map((h) => state.teams[h.team]?.name).filter((n): n is string => !!n)
-  const one = (id: string | null): { id: string | null; name: string | null; clubs: string[] } =>
-    ({ id, name: id ? state.teams[id]?.name ?? null : null, clubs })
-  if (comp?.champion && state.teams[comp.champion]) return one(comp.champion)
-  const card = (me.moments ?? []).find((m) => m.kind === 'title' && m.year === year && m.comp === title && !!m.teamId)
-  if (card?.teamId && state.teams[card.teamId]) return one(card.teamId)
-  if (hist.length === 1 && state.teams[hist[0].team]) return one(hist[0].team)
-  return one(null)
+  if (comp?.champion && state.teams[comp.champion]) return comp.champion
+  const card = (me.moments ?? []).find((m) => m.kind === 'title' && m.year === t.year && m.comp === t.title && !!m.teamId)
+  if (card?.teamId && state.teams[card.teamId]) return card.teamId
+  const mine = yearClubs(state, t.year).filter((id) => !!state.teams[id])
+  if (mine.length === 1) return mine[0]
+  if (!mine.length) return null
+  const votes = new Map<string, number>()
+  for (const p of Object.values(state.players)) {
+    if (p.id === me.id || !p.titles?.some((x) => x.year === t.year && x.title === t.title)) continue
+    for (const id of mine) {
+      if ((p.clubHist ?? []).some((h) => h.team === id && h.from <= t.year && t.year <= h.to)) votes.set(id, (votes.get(id) ?? 0) + 1)
+    }
+  }
+  const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1])
+  return ranked.length && ranked[0][1] >= 2 && ranked[0][1] > (ranked[1]?.[1] ?? 0) * 2 ? ranked[0][0] : null
+}
+
+/**
+ * An older save's titles, stamped with the club where titleClubOf is certain (me/save.ts migratePlayerSave). The name
+ * is the club's name today: the name it had that day was never kept. A title it cannot pin stays as it was.
+ */
+export function stampTitleClubs(state: GameState): void {
+  const me = state.me
+  if (!me) return
+  for (const t of me.titles) {
+    if (t.teamId) continue
+    const id = titleClubOf(state, t)
+    if (id) t.teamId = id
+  }
 }
 
 /** One of my records of the event, in the case's own terms. */
@@ -203,11 +257,11 @@ function ladderFirstIn(me: MeState, year: number): string | null {
   return hit.length ? hit[hit.length - 1] : null
 }
 
-function trophyOf(state: GameState, t: { year: number; title: string; started: boolean; fmvp?: boolean }): Trophy {
+function trophyOf(state: GameState, t: TitleRow): Trophy {
   const me = state.me!
   const comp = compOf(state, t.year, t.title)
   const ev = eventFor(t.year, t.title, comp)
-  const club = clubOf(state, t.year, t.title, comp)
+  const club = clubOf(state, t, comp)
   const recs = me.matches.filter((m) => !m.friendly && m.year === t.year && m.comp === t.title)
   const matches = recs.map(matchOf)
   const season = me.seasons.find((s) => s.year === t.year) ?? null

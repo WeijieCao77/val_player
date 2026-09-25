@@ -24,8 +24,11 @@ import { compClass } from '../src/engine/me/compclass'
 import { compCn } from '../src/engine/me/compname'
 import { BIG_TIERS } from '../src/engine/me/moments'
 import {
-  TROPHY_RANK, careerTrophies, trophyNone, trophyOrder, trophyPart, trophyProse, trophyTier,
+  TROPHY_RANK, careerTrophies, stampTitleClubs, trophyNone, trophyOrder, trophyPart, trophyProse, trophyTier,
 } from '../src/engine/me/trophies'
+import { syncTitles } from '../src/engine/me/week'
+import { joinClub, makeDeal } from '../src/engine/me/contract'
+import { Rng } from '../src/engine/rng'
 import type { Trophy } from '../src/engine/me/trophies'
 import type { GameState } from '../src/engine/types'
 
@@ -88,6 +91,16 @@ function judgeShelf(label: string, state: GameState, list: Trophy[]): void {
 /*  every fact against the record it came from                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The clubs of a year, as the club history can hold them: a line covering it, or the line left during it — a club's
+ * line is only carried to a year at the year's end (engine/season.ts), so one left in the year ends the year before.
+ * Written out here on its own rather than imported, so the check does not grade the code with the code.
+ */
+function yearClubsOf(p: GameState['players'][string], year: number): string[] {
+  const hist = p.clubHist ?? []
+  return hist.filter((h, i) => (h.from <= year && year <= h.to) || (h.to === year - 1 && hist.slice(i + 1).some((n) => n.from === year))).map((h) => h.team)
+}
+
 function judgeFacts(label: string, state: GameState, list: Trophy[]): void {
   const me = state.me!
   const p = state.players[me.id]
@@ -117,11 +130,11 @@ function judgeFacts(label: string, state: GameState, list: Trophy[]): void {
 
     // the club
     if (t.clubId && !state.teams[t.clubId]) say(t, '俱乐部 id 不在这个世界里')
-    if (t.clubId && t.club !== state.teams[t.clubId]?.name) say(t, '俱乐部名字和 id 不是同一家')
+    // the name is the one the title wrote down the day it was won, else the club's name today
+    if (t.clubId && t.club !== (title.teamId === t.clubId && title.team ? title.team : state.teams[t.clubId]?.name)) say(t, '俱乐部名字和 id 不是同一家')
     if (t.clubId) {
       const comp = t.year === state.year ? Object.values(state.comps).find((c) => c.name === t.comp && c.champion === t.clubId) : undefined
-      const hist = (p.clubHist ?? []).filter((h) => h.from <= t.year && t.year <= h.to)
-      if (!comp && !hist.some((h) => h.team === t.clubId)) say(t, '这一年我不在这家俱乐部')
+      if (!comp && title.teamId !== t.clubId && !yearClubsOf(p, t.year).includes(t.clubId)) say(t, '这一年我不在这家俱乐部')
     }
     if (!t.clubId && t.club) say(t, '说了俱乐部却没有依据')
 
@@ -133,7 +146,7 @@ function judgeFacts(label: string, state: GameState, list: Trophy[]): void {
       if (t.stage === t.name) say(t, '赛段名和赛事名说了两遍')
     }
     // the clubs a year was spent at are the ones the player's own club history holds
-    for (const c of t.clubs) if (!(p.clubHist ?? []).some((h) => h.from <= t.year && t.year <= h.to && state.teams[h.team]?.name === c)) say(t, `「${c}」不是这一年待过的俱乐部`)
+    for (const c of t.clubs) if (!yearClubsOf(p, t.year).some((id) => state.teams[id]?.name === c)) say(t, `「${c}」不是这一年待过的俱乐部`)
     if (t.club && !t.clubs.includes(t.club) && t.clubs.length) say(t, '夺冠俱乐部不在这一年的俱乐部里')
     if (t.runnerUp) {
       const comp = Object.values(state.comps).find((c) => c.name === t.comp && !!c.champion)
@@ -327,6 +340,7 @@ check(ct.every((t) => !t.clubId || !!t.club), 'C：夺冠俱乐部读得出来')
   delete me.tally
   delete me.quals
   for (const s of me.seasons) { delete s.rewrites; delete s.retitled; delete s.intl; delete s.quals }
+  for (const t of me.titles) { delete t.teamId; delete t.team }
   const list = careerTrophies(old)
   const ok = list.length === me.titles.length
     && list.every((t) => t.matches.length === 0 && t.final === null && t.run === null && t.rewrite === null
@@ -334,6 +348,73 @@ check(ct.every((t) => !t.clubId || !!t.club), 'C：夺冠俱乐部读得出来')
   check(ok, `老存档（没有明细、没有国际赛记录、没有世界线、没有大事卡）照样每个冠军一张卡：${list.length} 张`)
   judgeShelf('老存档', old, list)
   judgeProse('老存档', old, list)
+}
+
+/* ---- a trophy keeps the club it was lifted with (reported 2026-09-24, 85f2b9e4) ---- */
+// 「2024年我在nrg夺冠，2025年我转会到g2夺冠后，成就界面会显示我2024年的冠军是在g2拿的」: a club's line in the club
+// history is carried to a year at that year's end, so the club left that winter still ended the year before, and the
+// only club of 2024 the history held was G2.
+{
+  const s = JSON.parse(JSON.stringify(B)) as GameState
+  const me = s.me!
+  const p = s.players[me.id]
+  const [nrg, g2] = Object.values(s.teams).filter((t) => t.id !== me.id && t.roster.length >= 5 && t.id !== s.myTeam).slice(0, 2)
+  const Y = s.year - 2
+  p.clubHist = [{ team: nrg.id, from: Y - 1, to: Y - 1 }, { team: g2.id, from: Y, to: Y + 1 }]
+  me.titles = [{ year: Y, title: '测试 · 第二赛段', started: true }, { year: Y + 1, title: '测试 · 第一赛段', started: true }]
+  me.moments = []
+  me.seasons = me.seasons.filter((x) => x.year !== Y)
+  me.seasons.push({ ...(B.me!.seasons[0] ?? {}), year: Y, team: g2.name, titles: ['测试 · 第二赛段'] } as never)
+  // the men who lifted it with me: they stayed, and their lines ran through the year
+  for (const id of nrg.roster.slice(0, 4)) {
+    const q = s.players[id]
+    q.titles = [...(q.titles ?? []), { year: Y, title: '测试 · 第二赛段' }]
+    q.clubHist = [{ team: nrg.id, from: Y - 1, to: Y + 1 }]
+  }
+  const find = (st: GameState, y: number) => careerTrophies(st).find((t) => t.year === y)!
+  check(find(s, Y).club === nrg.name && find(s, Y).clubId === nrg.id,
+    `转会前的冠军：${Y} 年的奖杯记在 ${nrg.name}，不是后来的 ${g2.name}（现在：${find(s, Y).club ?? '说不清'}）`)
+  check(find(s, Y + 1).club === g2.name, `转会后的冠军：${Y + 1} 年的奖杯记在 ${g2.name}`)
+  check(find(s, Y).clubs.includes(nrg.name) && find(s, Y).clubs.includes(g2.name), `${Y} 年待过的俱乐部两家都算：${find(s, Y).clubs.join('、')}`)
+  // an old save gets the club written onto the title once, where it can be told
+  stampTitleClubs(s)
+  check(me.titles[0].teamId === nrg.id && me.titles[1].teamId === g2.id, '老存档：读档时把夺冠俱乐部补写进冠军记录')
+  // and a club renamed since keeps the name it had that day, once the title wrote it down
+  me.titles[0].team = nrg.name
+  const was = nrg.name
+  s.teams[nrg.id].name = '改名以后'
+  check(find(s, Y).club === was, `俱乐部后来改了名，奖杯上还是当时的名字「${was}」`)
+  s.teams[nrg.id].name = was
+  // nobody to ask and two clubs in the year: it says it cannot tell, never the later club
+  const u = JSON.parse(JSON.stringify(s)) as GameState
+  for (const t of u.me!.titles) { delete t.teamId; delete t.team }
+  for (const id of nrg.roster.slice(0, 4)) u.players[id].titles = []
+  check(find(u, Y).club === null, `问不到队友、那一年又待过两家：说不清是哪家，不硬写成 ${g2.name}`)
+}
+{
+  // the move itself carries the club I leave through the year I played in it (me/contract.ts joinClub)
+  const s = JSON.parse(JSON.stringify(C)) as GameState
+  const me = s.me!
+  const p = s.players[me.id]
+  const from = s.myTeam
+  const to = Object.values(s.teams).find((t) => t.id !== from && !t.dormant && t.tier === s.teams[from].tier)!
+  p.clubHist = [{ team: from, from: s.year - 1, to: s.year - 1 }]
+  const deal = makeDeal(s, to.id, 'transfer', 'B', new Rng(1))
+  const why = joinClub(s, deal, { quiet: true })
+  check(!why && me.seasonStart.matches > 0 && yearClubsOf(p, s.year).includes(from) && p.clubHist.find((h) => h.team === from)!.to === s.year,
+    `年中转会：离开的 ${s.teams[from].name} 在履历里算到 ${s.year} 年（${JSON.stringify(p.clubHist)}${why ? `，${why}` : ''}）`)
+}
+{
+  // the day it is won, syncTitles writes the club and its name down (me/week.ts)
+  const s = JSON.parse(JSON.stringify(C)) as GameState
+  const me = s.me!
+  const got = me.titles[me.titles.length - 1]
+  me.titles = me.titles.filter((t) => t !== got)
+  syncTitles(s)
+  const t = me.titles.find((x) => x.year === got.year && x.title === got.title)!
+  const comp = Object.values(s.comps).find((c) => c.name === got.title && !!c.champion)
+  check(!!t.teamId && t.teamId === comp?.champion && t.team === s.teams[t.teamId]?.name,
+    `夺冠当天记下俱乐部：${t.team ?? '没记'}（冠军是 ${comp ? s.teams[comp.champion!]?.name : '?'}）`)
 }
 
 /* ---- a career that never won anything ---- */

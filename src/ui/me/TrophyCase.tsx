@@ -126,7 +126,8 @@ function TrophyDetail({ t, onClose }: { t: Trophy; onClose: () => void }) {
           </>
         )}
         {t.run && <p>{t.run.line}</p>}
-        {s && <p>{s.year} 赛季 · {s.team} · 出场 {s.starts}/{s.matches} · 综合 {s.overallFrom} → {s.overallTo}</p>}
+        {/* the season's row names the club the season ended at, which is not always the one that lifted this */}
+        {s && <p>{s.year} 赛季 · {t.club && s.team !== t.club ? `赛季结束时在 ${s.team}` : s.team} · 出场 {s.starts}/{s.matches} · 综合 {s.overallFrom} → {s.overallTo}</p>}
         {t.ladderFirst && <p>天梯：那一年你第一次打到{t.ladderFirst}。</p>}
       </div>
 
