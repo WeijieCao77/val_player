@@ -9,7 +9,7 @@ import type { Fixture, GameState, MapLine, Player, Role } from '../types'
 import { deskLine } from './press'
 import {
   CALL_TRUST_MISS, CALL_TRUST_OK, HINT_EDGE, KEY_MOMENTUM, WEAK_MISS_MUL, WEAK_SHARE,
-  autoChance, keyCandidates, keyRoundOdds, nodeChance, nodeHighlight, nodeReadout, nodeText, pickKeyNode,
+  autoChance, keyCandidates, keyRoundOdds, landedKills, nodeChance, nodeHighlight, nodeReadout, nodeText, pickKeyNode,
   weakCandidates, weakDim,
 } from './nodes'
 import { coachReads, pickHint } from './hints'
@@ -115,7 +115,10 @@ export class MeMatch {
    * had taken both of them, pinned on a round we lost, is what players sent in
    * (「做出正确选择显示我把人都杀完了，结果这个回合却输了」, 2026-09-12).
    */
-  private unresolved: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force: Side } | null = null
+  private unresolved: {
+    entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; force: Side
+    before: Record<string, { kills: number; damage: number; firstKills: number; clutches: number }>
+  } | null = null
   private seen = new Set<string>()
   /** the map's three key rounds, asked or not */
   private slots: Record<KeySlot, boolean> = { half1: false, half2: false, point: false, ot: false }
@@ -337,8 +340,36 @@ export class MeMatch {
     return 'round'
   }
 
+  /**
+   * Up to `need` of my side's kills in the round just played, moved onto my line from team-mates who made them — the
+   * kill, its damage and, where it was his only opening kill, the opening. Only who took it moves: the round's
+   * winner, its end, the deaths on both sides, the economy and every draw after it are the ones the engine played, so
+   * no chance anywhere changes. A man whose line the round's own highlight names — a quad, an ace, the 1vX — keeps
+   * his kills, so no line on the round contradicts the box. Returns how many moved.
+   */
+  private creditKills(m: MapSim, before: Record<string, { kills: number; damage: number; firstKills: number; clutches: number }>, need: number): number {
+    const meId = this.state.me!.id
+    const mine = m.lines[meId]
+    if (need <= 0 || !mine) return 0
+    let moved = 0
+    const donors = Object.keys(before).filter((id) => id !== meId && m.lines[id])
+      .map((id) => ({ id, l: m.lines[id], k: m.lines[id].kills - before[id].kills, hero: m.lines[id].clutches > before[id].clutches }))
+      .filter((d) => d.k > 0 && d.k < 4 && !d.hero)
+      .sort((a, b) => b.k - a.k || (a.id < b.id ? -1 : 1))
+    for (const d of donors) {
+      while (moved < need && d.k > 0) {
+        d.l.kills--; mine.kills++; d.k--; moved++
+        const dmg = Math.min(d.l.damage, 147)
+        d.l.damage -= dmg; mine.damage += dmg
+        if (d.l.firstKills > d.l.kills) { d.l.firstKills--; mine.firstKills++ }
+      }
+      if (moved >= need) break
+    }
+    return moved
+  }
+
   /** The line for a call, now that its round has been played, pinned on that round. */
-  private narrate(m: MapSim, call: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number }): void {
+  private narrate(m: MapSim, call: { entry: NodeLogEntry; node: NodeDef; idx: number; kills: number; before: Record<string, { kills: number; damage: number; firstKills: number; clutches: number }> }): void {
     this.unresolved = null
     const rl = m.rounds[m.rounds.length - 1]
     if (!rl) return
@@ -346,6 +377,8 @@ export class MeMatch {
     const meId = this.state.me!.id
     e.won = (rl.winner === 'A') === this.mineIsA
     e.kills = Math.max(0, (m.lines[meId]?.kills ?? 0) - call.kills)
+    // a landed call that was me taking the fight has my kill in it (me/nodes.ts landedKills)
+    if (e.ok) e.kills += this.creditKills(m, call.before, landedKills(call.node, call.idx, e.won) - e.kills)
     // the score this round left: what the call and the round actually did to the map
     e.after = Math.round(this.winProb() * 100)
     let text = nodeHighlight(call.node.id, call.idx, e.ok, { won: e.won, kills: e.kills })
@@ -425,9 +458,16 @@ export class MeMatch {
     }
     this.nodes.push(entry)
     // nothing is said yet: the line waits for the round (narrate)
+    // my side's lines as the round starts, so what each of us took in it can be read afterwards (creditKills)
+    const lines0: Record<string, { kills: number; damage: number; firstKills: number; clutches: number }> = {}
+    for (const p of (side === 'a' ? m.A : m.B).players) {
+      const l = m.lines[p.id]
+      if (l) lines0[p.id] = { kills: l.kills, damage: l.damage, firstKills: l.firstKills, clutches: l.clutches }
+    }
     this.unresolved = {
       entry, node: pend.node, idx,
       kills: m.lines[me.id]?.kills ?? 0,
+      before: lines0,
       force: won ? side : side === 'a' ? 'b' : 'a',
     }
     this.pending = null

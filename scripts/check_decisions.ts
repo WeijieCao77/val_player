@@ -45,7 +45,7 @@ const mem: Record<string, string> = {}
 
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { MeMatch, mapWinProb } from '../src/engine/me/matchplay'
-import { KEY_MOMENTUM, NODES, NODE_HINTS, NODE_HL, keyCandidates, nodeLine } from '../src/engine/me/nodes'
+import { KEY_MOMENTUM, NODES, NODE_HINTS, NODE_HL, keyCandidates, landedKills, nodeLine } from '../src/engine/me/nodes'
 import type { HlCell, HlOpt, NodeCtx, NodeDef, NodePhase } from '../src/engine/me/nodes'
 import { COLD_GAP, DUEL_GAP, FACT_CLARITY, FACT_KEYS, HOT_KILLS, HOT_RATE, PAIRS, RUN, TEAM_GAP } from '../src/engine/me/hints'
 import type { FactKey, Hint } from '../src/engine/me/hints'
@@ -289,7 +289,19 @@ function peekOnRecord(c: Call, rl: RoundLog, won: boolean): boolean {
   const mineIsA = c.mm.mineIsA
   if (b.won !== won || b.end !== rl.end || b.buyMine !== (mineIsA ? rl.buyA : rl.buyB) || b.buyTheirs !== (mineIsA ? rl.buyB : rl.buyA)) return false
   if (!c.alone) return true
-  return [...b.mine, ...b.theirs].every((x) => x.kills === c.m.lines[x.id].kills - c.pre[x.id].k && x.dead === c.m.lines[x.id].deaths > c.pre[x.id].d)
+  const real = (id: string) => c.m.lines[id].kills - c.pre[id].k
+  if (![...b.mine, ...b.theirs].every((x) => x.dead === c.m.lines[x.id].deaths > c.pre[x.id].d)) return false
+  if (!b.theirs.every((x) => x.kills === real(x.id))) return false
+  // a landed call that was me taking the fight has its kill moved onto my line from a team-mate's (me/matchplay.ts
+  // creditKills, 2026-09-25): my side's kills are the copy's, and only who took them may differ — toward me, by no
+  // more than the call's one kill
+  const need = c.e.ok ? landedKills(c.node, c.idx, won) : 0
+  const [meRow, ...mates] = b.mine
+  const gained = real(meRow.id) - meRow.kills
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0)
+  return sum(b.mine.map((x) => real(x.id))) === sum(b.mine.map((x) => x.kills))
+    && gained >= 0 && gained <= Math.max(0, need - meRow.kills)
+    && mates.every((x) => real(x.id) <= x.kills)
 }
 
 /**
