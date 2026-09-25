@@ -77,7 +77,7 @@ export interface RunOut {
   t1Weeks: number; ratingSum: number; proWeeks: number; fatigueSum: number; weeks: number
   spent: Record<string, number>; money: number; secs: number
   /** week by week, as the plan was drawn: where I was, whether I was in the five, and the rest it took (check_buy.ts pairs these) */
-  track: { club: string; starter: boolean; rest: number; train: number; played: number; started: number; fatigue: number; relief: number }[]
+  track: { club: string; starter: boolean; rest: number; train: number; played: number; started: number; fatigue: number; relief: number; overall: number }[]
 }
 
 /** autoWeek, with the shopping before the plan and the plan counted */
@@ -104,7 +104,7 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
     const club = me.phase === 'pro' ? state.myTeam : ''
     const starter = !!club && !!state.teams[club]?.starters.includes(me.id)
     autoPlan(state)
-    const row = { club, starter, rest: me.plan.rest ?? 0, train: ['aim', 'vod', 'util', 'ranked', 'scrim'].reduce((s, k) => s + (me.plan[k as keyof typeof me.plan] ?? 0), 0), played: 0, started: 0, fatigue: Math.round(before), relief: Math.round(relief) }
+    const row = { club, starter, rest: me.plan.rest ?? 0, train: ['aim', 'vod', 'util', 'ranked', 'scrim'].reduce((s, k) => s + (me.plan[k as keyof typeof me.plan] ?? 0), 0), played: 0, started: 0, fatigue: Math.round(before), relief: Math.round(relief), overall: p.overall }
     track.push(row)
     for (const [k, n] of Object.entries(me.plan)) hours[k] = (hours[k] ?? 0) + (n ?? 0)
     let stop = advanceWeek(state)
