@@ -558,7 +558,42 @@ const BOX_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; f
 
 const when = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ')
 
-function row(it, dupOf) {
+/* ---------- 批量（作者 2026-09-25：「我无法手动操作那么多条信箱建议的采纳和修改」）----------
+   一百多条一条一条点太慢，手机上更慢。每行一个勾，页底一条固定的动作条，一次表单 POST 改完所有勾上的。
+   · 只做可逆的：展示、不展示、已采纳、已修复、置顶、取消置顶。删除和合并仍然只能一条一条来。
+   · 规矩和单条按钮一模一样：已合并的回执不改（跳过并计数），每条仍是一条 st / pin 操作走 write()。
+   · 页面照旧零脚本：勾选框用 form="bulk" 挂到页底那个表单上；「全选本组 / 全不选」是 GET 提交同一个
+     表单，服务器按已勾的再加/减一组重新画页面，手动勾过的不会丢。 */
+const MAX_BULK = MAX_ITEMS
+const BULK = {
+  shown: ['st', 'shown', '展示'],
+  hidden: ['st', 'hidden', '不展示'],
+  taken: ['st', 'taken', '已采纳'],
+  fixed: ['st', 'fixed', '已修复'],
+  pin: ['pin', 1, '置顶'],
+  unpin: ['pin', 0, '取消置顶'],
+}
+/** 审核页上的三组（合并回执不能批量，没有勾） */
+const GROUPS = {
+  wait: (it) => it.state === 'pending',
+  live: (it) => PUBLIC_STATES.has(it.state),
+  away: (it) => it.state === 'hidden',
+}
+
+/** 一串 id：格式不对的丢掉、去重、最多 MAX_BULK 条；超出的另记一笔（整次不执行） */
+function pickIds(values) {
+  const ids = new Set()
+  let over = false
+  for (const v of values) {
+    if (typeof v !== 'string' || !ID_RE.test(v)) continue
+    if (ids.has(v)) continue
+    if (ids.size >= MAX_BULK) { over = true; break }
+    ids.add(v)
+  }
+  return { ids: [...ids], over }
+}
+
+function row(it, dupOf, picked) {
   const acts = []
   const btn = (act, label, extra = '', cls = '') =>
     `<form method="post"><input type="hidden" name="act" value="${act}"><input type="hidden" name="id" value="${esc(it.id)}">${extra}<button class="${cls}">${label}</button></form>`
@@ -573,7 +608,11 @@ function row(it, dupOf) {
   acts.push(btn('del', '删除', '', 'bad'))
   const target = it.state === 'merged' ? mergeTarget(it.mergedTo, ITEMS, it.id) : null
   const receipt = it.state === 'merged' ? `<br>原文仅原作者可见 · ${target ? `终点 #${esc(target.id)} · ${esc(STATE_CN[target.state])}<br>${esc(target.text)}` : '目标已删除或链路失效'}<br>合并于 ${esc(when(it.mergedAt))}` : ''
+  const pick = it.state === 'merged'
+    ? '<td class="pick"></td>'
+    : `<td class="pick"><label class="pk" title="勾上，用页底的动作条一起改"><input type="checkbox" class="pick" name="ids" value="${esc(it.id)}" form="bulk"${picked && picked.has(it.id) ? ' checked' : ''}></label></td>`
   return `<tr class="s-${esc(it.state)}">
+${pick}
 <td class="tx">${esc(it.text)}</td>
 <td class="num">${it.votes.size}</td>
 <td class="dim">${esc(STATE_CN[it.state] || it.state)}${it.pin ? ' · 置顶' : ''}<br>${esc(when(it.t))}<br>#${esc(it.id)} · ${it.dev ? esc(short(it.dev)) : '开张预置'}${dupOf ? `<br><b class="dup">疑似重复 #${esc(dupOf)}</b>` : ''}${receipt}</td>
@@ -581,7 +620,12 @@ function row(it, dupOf) {
 </tr>`
 }
 
-export function boxHtml() {
+/**
+ * view.picked：这次页面上预先勾好的 id（全选本组之后）；view.note：批量做完的那一行结果（只由数字和固定词拼成）。
+ */
+export function boxHtml(view = {}) {
+  const picked = view.picked instanceof Set ? view.picked : new Set()
+  const note = typeof view.note === 'string' ? view.note : ''
   const c = counts()
   const all = [...ITEMS.values()]
   // 全站同文的：后来的那条标一下，作者一眼看见能合并
@@ -596,8 +640,12 @@ export function boxHtml() {
   const away = all.filter((it) => it.state === 'hidden').sort((a, b) => b.t - a.t)
   const merged = all.filter((it) => it.state === 'merged').sort((a, b) => b.mergedAt - a.mergedAt)
   const table = (rows) => (rows.length
-    ? `<table><tr><th>建议</th><th class="num">赞</th><th>状态</th><th>动作</th></tr>${rows.map((it) => row(it, dupOf(it))).join('')}</table>`
+    ? `<table><tr class="hd"><th class="pick">选</th><th>建议</th><th class="num">赞</th><th>状态</th><th>动作</th></tr>${rows.map((it) => row(it, dupOf(it), picked)).join('')}</table>`
     : '<p class="dim">这一栏是空的。</p>')
+  // 「全选本组 / 全不选」：GET 提交页底那个表单（带上已经勾着的），服务器加/减这一组再画一遍，# 跳回这一组
+  const head = (key, title, rows) => `<h2 id="g-${key}"><span>${title}</span>${rows.length
+    ? `<span class="gsel"><button form="bulk" formmethod="get" formaction="/dash/box#g-${key}" name="sel" value="${key}">全选本组</button><button form="bulk" formmethod="get" formaction="/dash/box#g-${key}" name="unsel" value="${key}">全不选</button></span>`
+    : ''}</h2>`
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>val_player · 玩家信箱</title>
 <style>
@@ -623,6 +671,42 @@ button:hover{border-color:#5bc6cf}button.go{border-color:#3f7f5a;color:#8fe0ac}b
 input{background:#0b0f14;color:#dfe7f1;border:1px solid #2b3a4d;border-radius:6px;padding:3px 6px;font-size:12px}
 .dup{color:#c9a86a}
 .foot{margin-top:28px;color:#5d6c80;font-size:12px}
+/* 批量：勾选框、每组的全选、页底固定的动作条。勾了几条用 CSS 计数器数，不靠脚本 */
+body{counter-reset:picked;padding-bottom:96px}
+input.pick:checked{counter-increment:picked}
+th.pick,td.pick{width:44px;padding:0}
+.pk{display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;cursor:pointer}
+input.pick{width:20px;height:20px;margin:0;accent-color:#5bc6cf;cursor:pointer}
+tr:has(input.pick:checked),tr:has(input.pick:checked) td{background:#10212b}
+h2{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.gsel{display:inline-flex;gap:6px}
+.gsel button{padding:6px 12px;min-height:34px;font-size:12px}
+.ok{background:#11261b;border:1px solid #2f6b47;color:#a8e8bf;padding:10px 14px;border-radius:8px;margin:14px 0;font-size:13px}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;
+  background:rgba(14,20,28,.96);border-top:1px solid #2b3a4d;padding:10px 24px calc(10px + env(safe-area-inset-bottom))}
+.bar .cnt{display:flex;align-items:center;gap:12px;font-size:13px;color:#8fa2b8}
+.bar .cnt .n::before{content:'已勾 ' counter(picked) ' 条'}
+.bar .bb{display:flex;flex-wrap:wrap;gap:6px}
+.bar button{min-height:40px;padding:6px 14px;font-size:14px}
+body:not(:has(input.pick:checked)) .bar .bb button{opacity:.45;pointer-events:none}
+@media (max-width:640px){
+  body{padding:14px 12px 150px}
+  table,tbody,tr,td{display:block}
+  tr.hd{display:none}
+  tr{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:8px;padding:8px 0;border-bottom:1px solid #1f2b3a}
+  td{border:0;padding:2px 0;grid-column:2}
+  td.pick{grid-column:1;grid-row:1 / span 4;width:auto}
+  .pk{height:100%;align-items:flex-start;padding-top:8px;box-sizing:border-box}
+  input.pick{width:24px;height:24px}
+  td.tx{max-width:none}
+  td.num{text-align:left}td.num::after{content:' 赞'}
+  .acts{gap:6px}
+  .acts button{min-height:36px;padding:6px 12px;font-size:13px}
+  .bar{padding:8px 12px calc(8px + env(safe-area-inset-bottom));gap:6px}
+  .bar .cnt{width:100%;justify-content:space-between}
+  .bar .bb{display:grid;grid-template-columns:repeat(3,1fr);width:100%}
+  .bar button{min-height:44px;padding:6px 4px}
+}
 </style></head><body>
 <h1>val_player · 玩家信箱</h1>
 <div class="sub">玩家写的东西，你按「展示」之前只有他自己看得见 · <a href="/dash">回后台看板</a></div>
@@ -633,23 +717,33 @@ ${BOX.volatile ? `<div class="warn big">⚠ <b>没挂持久化卷：这些建议
 ${BOX.full ? '<div class="warn">⚠ 信箱达到容量上限，新的写入暂时受限。作者仍可删除旧条目清理；合并保留回执，不减少条目数，也不保证释放空间。失败会明确提示。</div>' : ''}
 ${c.total >= MAX_ITEMS ? `<div class="warn">⚠ 信箱到了 ${MAX_ITEMS} 条上限，新的投稿暂时收不进来（点赞照常）。删掉一些就好。</div>` : ''}
 <div class="grid"><div class="st"><div class="n">${c.pending}</div><div class="l">待审核</div></div><div class="st"><div class="n">${c.shown}</div><div class="l">榜上</div></div><div class="st"><div class="n">${c.total}</div><div class="l">一共</div></div></div>
-<h2>待审核（早的在上面）</h2>
+${note ? `<div class="ok">${note}</div>` : ''}
+${head('wait', '待审核（早的在上面）', wait)}
 ${table(wait)}
-<h2>榜上（按赞排）</h2>
+${head('live', '榜上（按赞排）', live)}
 ${table(live)}
-<h2>收起来的</h2>
+${head('away', '收起来的', away)}
 ${table(away)}
 <h2>合并回执（原文仅原作者可见，不进入公开榜）</h2>
 ${table(merged)}
 <div class="foot">「不展示」把已展示的收回，内容还在、随时能再展示；「删除」才是真的删掉。
 合并把来源的赞去重并入最终目标，保留来源正文、原提交时间和去向供原作者查看；回执也占用条目上限。目标公开时才向玩家展示目标内容和处理状态，私密目标不泄漏。回执不能再次审核、合并或投票，只能删除。<br>
-存在 ${esc(BOX.dir)}/box.jsonl · ${(c.bytes / 1024).toFixed(1)} KB · 不记 IP、不记 User-Agent，设备号只显示前 6 位哈希${c.errCount ? ` · 信箱内部错误 ${c.errCount} 次（最近：${esc(c.lastErr)}）` : ''}</div>
+存在 ${esc(BOX.dir)}/box.jsonl · ${(c.bytes / 1024).toFixed(1)} KB · 不记 IP、不记 User-Agent，设备号只显示前 6 位哈希${c.errCount ? ` · 信箱内部错误 ${c.errCount} 次（最近：${esc(c.lastErr)}）` : ''}<br>
+页底的动作条改的是所有勾上的（可以跨组勾）；已合并的回执不能批量改。删除和合并只能一条一条来。</div>
+<form id="bulk" class="bar" method="post" action="/dash/box">
+<div class="cnt"><span class="n"></span><a href="/dash/box">清空勾选</a></div>
+<div class="bb">${Object.entries(BULK).map(([k, [, , label]]) => `<button name="bulk" value="${k}"${k === 'shown' ? ' class="go"' : ''}>${label}</button>`).join('')}</div>
+</form>
 </body></html>`
 }
 
-/** 表单的 body（application/x-www-form-urlencoded），只认这几个字段 */
+/**
+ * 表单的 body（application/x-www-form-urlencoded）。别的字段只认第一个、截到 64 个字；
+ * 只有批量勾选的 ids 可以重复，另外收成一串（见 pickIds：格式不对的丢、去重、封顶）。
+ */
 function form(text) {
-  const out = {}
+  const f = {}
+  const raw = []
   for (const kv of String(text || '').split('&')) {
     const i = kv.indexOf('=')
     if (i < 0) continue
@@ -659,9 +753,76 @@ function form(text) {
       k = decodeURIComponent(kv.slice(0, i).replace(/\+/g, ' '))
       v = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' '))
     } catch { continue }
-    if (k.length <= 8 && !Object.hasOwn(out, k)) out[k] = v.slice(0, 64)
+    if (k === 'ids') { raw.push(v.slice(0, 64)); continue }
+    if (k.length <= 8 && !Object.hasOwn(f, k)) f[k] = v.slice(0, 64)
   }
-  return out
+  return { f, ...pickIds(raw) }
+}
+
+/** 审核页表单：600 个 id 大约 7.8 KB，给到 16 KB。超了不掐断连接（那样作者只看到一个断开的页面），
+    读完丢掉、回一句中文。能走到这里的请求已经过了钥匙和同源两道门。 */
+const ADMIN_BODY = 16 * 1024
+function readAdminBody(req) {
+  return new Promise((resolve) => {
+    let chunks = []
+    let len = 0
+    req.on('data', (c) => {
+      len += c.length
+      if (len > 64 * ADMIN_BODY) { req.destroy(); resolve(null); return }   // 1 MB 还没完：不再陪着读
+      if (len > ADMIN_BODY) { chunks = []; return }
+      chunks.push(c)
+    })
+    req.on('end', () => resolve(len > ADMIN_BODY ? null : Buffer.concat(chunks).toString('utf8')))
+    req.on('error', () => resolve(null))
+  })
+}
+
+const plain = (res, code, text) => {
+  res.writeHead(code, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+  res.end(text)
+}
+
+/** 批量：和单条按钮同一套规矩，一条一条走 write()；中途写不进去就停，说清楚改成了几条 */
+function bulkAdmin(res, pathname, kind, ids, over) {
+  if (!Object.hasOwn(BULK, kind)) return plain(res, 409, '没有识别到有效的批量动作，没有执行。')
+  if (over) return plain(res, 409, `一次最多勾 ${MAX_BULK} 条，这次一条都没有执行。分两次做。`)
+  if (!ids.length) return plain(res, 409, '一条都没有勾，没有执行。')
+  const [op, v] = BULK[kind]
+  let done = 0
+  let same = 0
+  let skip = 0
+  for (const id of ids) {
+    const it = ITEMS.get(id)
+    // 已合并的回执只能删，不许改回普通状态；不在信箱里的（刚被删掉）也跳过
+    if (!it || it.state === 'merged') { skip++; continue }
+    if (op === 'st' ? it.state === v : it.pin === v) { same++; continue }
+    if (!write(op === 'st' ? { o: 'st', id, s: v } : { o: 'pin', id, v })) {
+      return plain(res, 503, `批量操作没有全部保存，不能当作成功：勾了 ${ids.length} 条，前面 ${done} 条已经改好并保存，`
+        + `剩下的 ${ids.length - done - same - skip} 条都没有执行。请返回信箱看一下现在的状态再试；如果持续失败，请检查服务器存储空间和写入权限。`)
+    }
+    done++
+  }
+  res.writeHead(303, { location: `${pathname}?a=${kind}&done=${done}&same=${same}&skip=${skip}`, 'cache-control': 'no-store' })
+  res.end()
+}
+
+/** 审核页的 GET 参数：预先勾哪些（全选本组 / 全不选），上一次批量的结果。只认数字和固定词，不回显任何原文 */
+function viewOf(url) {
+  let q
+  try { q = new URL(String(url || '/'), 'http://box.local').searchParams } catch { return {} }
+  const { ids } = pickIds(q.getAll('ids'))
+  const picked = new Set(ids)
+  const group = (key) => (Object.hasOwn(GROUPS, key) ? [...ITEMS.values()].filter(GROUPS[key]) : [])
+  for (const it of group(q.get('sel'))) if (picked.size < MAX_BULK) picked.add(it.id)
+  for (const it of group(q.get('unsel'))) picked.delete(it.id)
+  let note = ''
+  const a = q.get('a')
+  const num = (k) => { const s = q.get(k) || '0'; return /^\d{1,4}$/.test(s) ? Number(s) : -1 }
+  const done = num('done'); const same = num('same'); const skip = num('skip')
+  if (a && Object.hasOwn(BULK, a) && done >= 0 && same >= 0 && skip >= 0) {
+    note = `批量「${BULK[a][2]}」做完了：改了 ${done} 条${same ? `，${same} 条本来就是这样` : ''}${skip ? `，${skip} 条跳过（已合并或已不在信箱里）` : ''}。`
+  }
+  return { picked, note }
 }
 
 /**
@@ -679,10 +840,11 @@ function sameOrigin(req) {
 /**
  * /dash/box。钥匙由 server.js 验过了（和 /dash 同一把），这里只管页面和六个动作。
  * 动作走 post/redirect/get：做完 303 回本页，刷新不会再执行一遍。
+ * 页底动作条的批量（bulk=<动作> + 多个 ids）303 回 /dash/box?a=…&done=…，页顶显示一行结果。
  */
 export async function handleBoxAdmin(req, res, pathname) {
   if (req.method === 'GET' || req.method === 'HEAD') {
-    const html = boxHtml()
+    const html = boxHtml(viewOf(req.url))
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': BOX_CSP })
     return res.end(req.method === 'HEAD' ? undefined : html)
   }
@@ -694,8 +856,12 @@ export async function handleBoxAdmin(req, res, pathname) {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
     return res.end('这个请求不是从后台页发出来的，没有执行。')
   }
-  const f = form(await readBody(req))
-  const id = typeof f.id === 'string' && ID_RE.test(f.id) ? f.id : ''
+  const body = await readAdminBody(req)
+  // 超过上限的表单（勾得太多）读不全：整次不执行，不按半截去改
+  if (body === null) return plain(res, 413, `这次提交太大了，没有执行。一次最多勾 ${MAX_BULK} 条。`)
+  const { f, ids, over } = form(body)
+  if (typeof f.bulk === 'string' && f.bulk) return bulkAdmin(res, pathname, f.bulk, ids, over)
+  const id =typeof f.id === 'string' && ID_RE.test(f.id) ? f.id : ''
   const it = id ? ITEMS.get(id) : null
   let written = true
   let invalid = ''

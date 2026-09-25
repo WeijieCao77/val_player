@@ -121,8 +121,19 @@ async function act(s: Srv, form: Record<string, string>, headers: Record<string,
   await r.text()
   return r.status
 }
-async function dashBox(s: Srv, headers: Record<string, string> = { authorization: AUTH }): Promise<{ status: number; html: string }> {
-  const r = await fetch(`http://127.0.0.1:${s.port}/dash/box`, { headers })
+/** 页底动作条：一次 POST，ids 重复出现（浏览器提交勾选框就是这个样子） */
+async function bulk(s: Srv, kind: string, ids: string[], headers: Record<string, string> = { authorization: AUTH }, raw = ''): Promise<{ status: number; loc: string; text: string }> {
+  const body = raw || [`bulk=${encodeURIComponent(kind)}`, ...ids.map((id) => `ids=${encodeURIComponent(id)}`)].join('&')
+  const r = await fetch(`http://127.0.0.1:${s.port}/dash/box`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin', ...headers },
+    body,
+  })
+  return { status: r.status, loc: r.headers.get('location') ?? '', text: await r.text() }
+}
+async function dashBox(s: Srv, headers: Record<string, string> = { authorization: AUTH }, query = ''): Promise<{ status: number; html: string }> {
+  const r = await fetch(`http://127.0.0.1:${s.port}/dash/box${query}`, { headers })
   return { status: r.status, html: r.status === 200 ? await r.text() : '' }
 }
 const lines = (data: string): string[] => {
@@ -360,6 +371,113 @@ try {
     const s2 = await boot(web, data)
     check(!(await list(s2, 'dev-M9')).items.some((i) => i.id === a!.id || i.id === b!.id), '重启以后删掉的也没有回来')
     await kill(s2)
+  }
+
+  /* ================= 十、批量 ================= */
+  // 作者 2026-09-25：「我无法手动操作那么多条信箱建议的采纳和修改」——一百多条一条一条点太慢
+  console.log('\n批量（勾好几条，页底一个按钮一起改）：')
+  {
+    const data = path.join(tmp, 'd-bulk')
+    let s = await boot(web, data)
+    const devs = ['dev-K1', 'dev-K2', 'dev-K3', 'dev-K4', 'dev-K5', 'dev-K6']
+    const k: string[] = []
+    for (const [i, d] of devs.entries()) k.push((await post(s, d, `批量测试的第 ${'一二三四五六'[i]} 条建议内容`)).j.item?.id ?? '')
+    check(k.every((id) => /^[0-9a-f]{8}$/.test(id)), '六条待审核')
+    /** 每条都从提交者自己的「我的」里读：待审核、未展示、已合并的也看得见 */
+    const snap = async (): Promise<Record<string, string>> => {
+      const out: Record<string, string> = {}
+      for (const [i, d] of devs.entries()) {
+        const it = (await list(s, d)).mine.find((x) => x.id === k[i])
+        out[k[i]] = it ? `${it.state}|${it.pin}|${it.votes}|${it.text}` : 'gone'
+      }
+      return out
+    }
+    const stateOf = async (i: number): Promise<string> => (await snap())[k[i]].split('|')[0]
+    const newLines = (from: number): Array<{ o: string; id: string }> => lines(data).slice(from).map((l) => JSON.parse(l))
+
+    let n0 = lines(data).length
+    const r1 = await bulk(s, 'shown', [k[0], k[1], k[2], k[3], k[4], 'zzzzzzzz', 'ABCDEF12', '../x', k[0], '0000beef'])
+    eq(r1.status, 303, '勾五条加几个坏 id，一次「展示」：303 回本页')
+    check(r1.loc.includes('a=shown') && r1.loc.includes('done=5') && r1.loc.includes('skip=1'), `回本页带着结果：${r1.loc}（坏格式的直接丢、重复的只算一次、不存在的算跳过）`)
+    const w1 = newLines(n0)
+    check(w1.length === 5 && w1.every((o) => o.o === 'st'), `落盘就是 5 条 st 操作，一条一行（实际 ${w1.length} 行）`)
+    eq(await stateOf(5), 'pending', '没勾的第六条还是待审核')
+
+    await vote(s, 'dev-V', k[0], true)
+    await vote(s, 'dev-V', k[1], true)
+    await vote(s, 'dev-W', k[0], true)
+    eq(await act(s, { act: 'merge', id: k[4], to: k[3] }), 303, '单条合并：第五条并进第四条')
+    const before = await snap()
+
+    n0 = lines(data).length
+    const r2 = await bulk(s, 'taken', [k[0], k[1], k[4], k[2]])
+    eq(r2.status, 303, '勾三条正常的加一条已合并的，一次「已采纳」')
+    check(r2.loc.includes('done=3') && r2.loc.includes('skip=1'), `已合并那条被跳过：${r2.loc}`)
+    const after = await snap()
+    check([0, 1, 2].every((i) => after[k[i]].startsWith('taken|')), '三条都成了已采纳')
+    eq(after[k[4]].split('|')[0], 'merged', '已合并的回执没有被改回普通状态')
+    eq(after[k[3]], before[k[3]], '没勾的第四条一个字没动')
+    eq(after[k[5]], before[k[5]], '没勾的第六条一个字没动')
+    check([0, 1, 2, 3, 4, 5].every((i) => after[k[i]].split('|').slice(2).join('|') === before[k[i]].split('|').slice(2).join('|')),
+      '票数和正文全都没变（批量只改状态）')
+    eq(newLines(n0).length, 3, '落盘 3 行，已合并那条一个字节都没写')
+
+    n0 = lines(data).length
+    const r3 = await bulk(s, 'taken', [k[0]])
+    check(r3.status === 303 && r3.loc.includes('done=0') && r3.loc.includes('same=1'), '本来就是已采纳的再标一次：不写，算「本来就是这样」')
+    eq(lines(data).length, n0, '盘上没多一行')
+
+    check((await bulk(s, 'pin', [k[0], k[2]])).status === 303 && (await bulk(s, 'unpin', [k[2]])).status === 303, '批量置顶两条，再取消其中一条')
+    const pins = await snap()
+    check(pins[k[0]].split('|')[1] === '1' && pins[k[2]].split('|')[1] === '0', '置顶的是第一条，第三条取消了')
+    const pinned = (await list(s, 'dev-Q')).items[0]
+    eq(pinned?.id, k[0], '榜上第一条就是批量置顶的那条')
+
+    // 封顶、门、坏动作：一条都不改
+    const frozen = await snap()
+    n0 = lines(data).length
+    const many = Array.from({ length: 601 }, (_, i) => (0x10000000 + i).toString(16))
+    const cap = await bulk(s, 'hidden', [k[5], ...many])
+    eq(cap.status, 409, `一次勾 601 条：409（「${cap.text.slice(0, 20)}…」）`)
+    const huge = await bulk(s, 'hidden', Array.from({ length: 1300 }, () => k[5]))
+    eq(huge.status, 413, '表单超过 16 KB：413，不按半截去改')
+    eq((await bulk(s, 'shown', [k[5]], { authorization: AUTH, 'sec-fetch-site': 'cross-site' })).status, 403, '跨站提交的批量：403')
+    eq((await bulk(s, 'shown', [k[5]], {})).status, 401, '没有钥匙的批量：401')
+    eq((await bulk(s, 'merged', [k[5]])).status, 409, '批量改成「已合并」：不认，409')
+    eq((await bulk(s, 'del', [k[5]])).status, 409, '批量删除：没有这个动作，409')
+    eq((await bulk(s, 'shown', [])).status, 409, '一条没勾就按：409')
+    eq((await bulk(s, 'shown', ['zzzzzzzz', 'NOTHEX00'])).status, 409, '勾的全是坏 id：409')
+    eq(lines(data).length, n0, '上面这些一行都没写')
+    check(JSON.stringify(await snap()) === JSON.stringify(frozen), '所有条目原样')
+
+    const dup = await bulk(s, 'hidden', Array.from({ length: 500 }, () => k[5]))
+    check(dup.status === 303 && dup.loc.includes('done=1'), '同一个 id 重复 500 次：只算一条')
+    eq(lines(data).length, n0 + 1, '只写了一行')
+
+    // 审核页：结果横条、全选本组、全不选
+    const page = (await dashBox(s, { authorization: AUTH }, `?a=taken&done=3&same=0&skip=1`)).html
+    check(page.includes('批量「已采纳」做完了：改了 3 条，1 条跳过'), '跳回来的审核页顶上有一行结果')
+    const junk = (await dashBox(s, { authorization: AUTH }, `?a=%3Cscript%3E&done=1&same=0&skip=0`)).html
+    check(!junk.includes('做完了') && !/<script/i.test(junk), '结果参数不对就不显示，不回显任何原文')
+    const nan = (await dashBox(s, { authorization: AUTH }, `?a=taken&done=abc`)).html
+    check(!nan.includes('做完了'), '数字不是数字：不显示')
+    const box = (id: string, html: string): boolean => html.includes(`value="${id}" form="bulk" checked`)
+    const selLive = (await dashBox(s, { authorization: AUTH }, `?ids=${k[5]}&sel=live`)).html
+    check(box(k[0], selLive) && box(k[1], selLive) && box(k[2], selLive) && box(k[3], selLive), '「榜上」全选本组：榜上的都勾上了')
+    check(box(k[5], selLive), '之前手动勾的收起来那条还勾着')
+    check(!selLive.includes(`value="${k[4]}" form="bulk"`), '已合并的回执没有勾选框')
+    const unsel = (await dashBox(s, { authorization: AUTH }, `?ids=${k[5]}&ids=${k[0]}&ids=${k[1]}&unsel=live`)).html
+    check(box(k[5], unsel) && !box(k[0], unsel) && !box(k[1], unsel), '「榜上」全不选：只去掉这一组，别组勾的留着')
+    const plainPage = (await dashBox(s)).html
+    check(!plainPage.includes('" form="bulk" checked') && !plainPage.includes('做完了'), '直接打开：一条都没勾，也没有结果横条')
+    check(!/<script/i.test(plainPage) && /form id="bulk"[^>]*method="post"/.test(plainPage), '页面还是零脚本，动作条是一个 POST 表单')
+    check(!/name="bulk" value="del"/.test(plainPage), '动作条上没有批量删除')
+
+    const final = await snap()
+    await kill(s)
+    s = await boot(web, data)
+    check(JSON.stringify(await snap()) === JSON.stringify(final), '硬杀重启：批量改过的状态、置顶、票数、正文一个不差')
+    await kill(s)
   }
 
   /* ================= 九、原来的几条路没动 ================= */
