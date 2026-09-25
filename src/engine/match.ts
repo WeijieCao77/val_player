@@ -9,7 +9,7 @@ import { callerOf, coachOr } from './roster'
 import { NEUTRAL, squadHarmony } from './bonds'
 import { deskOf, managedClub } from './desk'
 import { STANDIN_COST, callupPool } from './standin'
-import { aggregateLines, performanceRating, usesPerformanceRating } from './performance'
+import { PERFORMANCE_WIN_NOD, aggregateLines, performanceRating, usesPerformanceRating } from './performance'
 import type {
   EdgeBreakdown, GameState, MapLine, MapScore, MatchResult, Player, Role, RoundLog, StageKey, Team,
 } from './types'
@@ -105,6 +105,45 @@ const KILL_WEIGHT: Record<Role, number> = {
 const DEATH_WEIGHT: Record<Role, number> = {
   决斗者: 1.28, 先锋: 1.08, 自由人: 1.0, 控场: 0.9, 哨卫: 0.88,
 }
+/**
+ * The opening duel (2026-09-25). 「除决斗位的其他位置首杀高得不正常」: the first
+ * kill of a round was drawn with the same weights as every other kill, so over
+ * 600 NPC tier-1 BO3s a 控场 took 18.5% of his side's openings (0.093 a round)
+ * and a 决斗者 22.7% — near-even, where on a real VCT scoreboard the entry
+ * takes about 30% and the smoke player well under 15% (FKPR ~0.14 vs ~0.06).
+ * The opening kill and the opening death now lean on these on top of the gun
+ * and the ordinary weights; the rest of the round's kills do not.
+ *
+ * And the side that won the round took every opening — a map's first kills
+ * were exactly its rounds won. A real side that draws first blood wins about
+ * seven rounds in ten, so the side that goes on to lose the round opens it
+ * LOSER_OPEN + LOSER_OPEN_PER × (how many it took down) of the time, when it took
+ * any: about 28% over a map. Only who opens moves — the round's winner, its
+ * casualties and every kill count stay what they were.
+ */
+const ENTRY_KILL: Record<Role, number> = {
+  决斗者: 1.5, 自由人: 1.1, 先锋: 1.0, 哨卫: 0.85, 控场: 0.65,
+}
+const ENTRY_DEATH: Record<Role, number> = {
+  决斗者: 1.45, 自由人: 1.05, 先锋: 1.05, 控场: 0.8, 哨卫: 0.7,
+}
+/**
+ * The rest of a round's kills and deaths lean the other way by as much, so what
+ * moved is who opens, not how many a role takes over a map: each role's kills
+ * and deaths a round stay where KILL_WEIGHT / DEATH_WEIGHT put them (the K/D
+ * ceiling in scripts/smoke.ts, the season ranges in scripts/check_carry.ts).
+ * Without this a 决斗者 took 0.04 more kills a round and a 控场 0.025 fewer, and
+ * the gaps inside a losing five — what 赛后争执 reads (engine/bonds.ts) — widened
+ * by a fifth.
+ */
+const REST_KILL: Record<Role, number> = {
+  决斗者: 0.93, 自由人: 0.98, 先锋: 1.0, 哨卫: 1.025, 控场: 1.065,
+}
+const REST_DEATH: Record<Role, number> = {
+  决斗者: 0.95, 自由人: 0.99, 先锋: 0.99, 控场: 1.03, 哨卫: 1.04,
+}
+const LOSER_OPEN = 0.14
+const LOSER_OPEN_PER = 0.07
 
 export interface Lineup {
   team: Team
@@ -585,6 +624,10 @@ function allocateRound(
     if (!killers.length) return
     const vPool = victims.slice()
     for (let i = 0; i < count && vPool.length; i++) {
+      // The opening duel belongs to its actual killer/victim, not two other
+      // independent players who might finish the round with zero kills/deaths —
+      // and it leans on who goes in first (ENTRY_KILL / ENTRY_DEATH).
+      const opening = firstOf && i === 0
       // The flat term keeps role players on the scoreboard — even a star only
       // out-frags a support by roughly 1.5x over a season — but it used to be
       // most of the weight: a 96-aim controller fragged like a 67-aim
@@ -595,15 +638,12 @@ function allocateRound(
       const kw = killers.map(
         (p) => gunWeight(p.attrs.aim * 0.55 + p.attrs.reaction * 0.3 + p.attrs.clutch * 0.15) *
           KILL_WEIGHT[p.role] * (0.9 + p.form / 500) * (p.id === focusId ? 1.55 : 1) *
-          Math.exp(NIGHT_KILL * (night?.[p.id] ?? 0)),
+          Math.exp(NIGHT_KILL * (night?.[p.id] ?? 0)) * (opening ? ENTRY_KILL : REST_KILL)[p.role],
       )
       const dw = vPool.map(
         (p) => (120 - p.attrs.awareness * 0.35 - p.attrs.clutch * 0.2) * DEATH_WEIGHT[p.role] *
-          Math.exp(-NIGHT_DEATH * (night?.[p.id] ?? 0)),
+          Math.exp(-NIGHT_DEATH * (night?.[p.id] ?? 0)) * (opening ? ENTRY_DEATH : REST_DEATH)[p.role],
       )
-      // The opening duel belongs to its actual killer/victim, not two other
-      // independent players who might finish the round with zero kills/deaths.
-      const opening = firstOf && i === 0
       const killer = rng.weighted(killers, kw)
       const victim = rng.weighted(vPool, dw)
       const kl = ctx.lines[killer.id]
@@ -632,8 +672,11 @@ function allocateRound(
     }
   }
 
-  kill(winners, losers, losersLost, true)
-  kill(losers, winners, winnersLost, false)
+  // who drew first blood: usually the side that took the round, not always (LOSER_OPEN)
+  const loserOpens = winnersLost > 0 && losers.length > 0 &&
+    rng.chance(LOSER_OPEN + LOSER_OPEN_PER * winnersLost)
+  kill(winners, losers, losersLost, !loserOpens)
+  kill(losers, winners, winnersLost, loserOpens)
 
   // Chip damage is a large, fairly flat share of every player's output. Keeping
   // it independent of kills is what stops a star's ADR running away with their
@@ -1360,8 +1403,8 @@ export { ratingOf } from './player'
  * Historical ACS award preference, retained only when reading old matches.
  */
 export const MVP_WIN_NOD = 18
-/** New rating's units, deliberately only a modest preference for victory. */
-export const PERFORMANCE_WIN_NOD = 0.08
+/** New rating's units: the winning side's nod (engine/performance.ts). */
+export { PERFORMANCE_WIN_NOD }
 
 /**
  * Who gets the label: the highest ACS, with the winning side's nod on top,

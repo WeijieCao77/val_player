@@ -1,6 +1,8 @@
 import { clamp } from '../rng'
 import { AGENT_ROLE, MAP_META, agentCn, mapCn } from '../content'
 import { performanceRating } from '../performance'
+import { AWARD_RULE, boardScore } from '../leaderboard'
+import { ceilingOf, recomputeOverall, refreshValue } from '../player'
 import { REGION_CN } from '../types'
 import type { Attrs, GameState, Player, Team } from '../types'
 import type { CerDef, CerPick } from './ceremony'
@@ -60,19 +62,32 @@ function open(state: GameState, kind: NightKind, about: string): void {
 }
 
 /**
- * Training progress, without growth.ts (which imports ceremony.ts): rolls over at the next session.
+ * Training progress, without growth.ts (which imports ceremony.ts), with growth.ts addXp's rollover.
  * At my own ceiling it keeps nothing — it was a second, smaller 存点数 that landed after a break (me/bottleneck.ts).
+ * It used to leave a full bar to roll over "at the next session", and the next session is of whatever
+ * was clicked: a 版本发布会 +25 道具 on 90 sat at 「下一点 115 / 100」 with 道具 unchanged until 道具
+ * was trained again, while 本周成长 already counted it (reported 2026-09-24:「训练之后周增长是看得出来
+ * 变化，可实际数值不变」).
  */
 function bumpXp(p: Player, k: keyof Attrs, n: number): void {
   if (p.caps && p.attrs[k] >= p.caps[k]) return
-  p.xp[k] = Math.min((p.xp[k] ?? 0) + n, 199)
+  p.xp[k] = (p.xp[k] ?? 0) + n
+  let rose = false
+  while ((p.xp[k] ?? 0) >= 100 && (p.caps || p.overall < p.potential) && p.attrs[k] < ceilingOf(p, k)) {
+    p.xp[k] = (p.xp[k] ?? 0) - 100
+    p.attrs[k] += 1
+    rose = true
+  }
+  if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = 0
+  else p.xp[k] = Math.min(p.xp[k] ?? 0, 99)
+  if (rose) { recomputeOverall(p); refreshValue(p) }
 }
 
 /* ------------------------------------------------------------------ */
 /*  年度颁奖夜                                                          */
 /* ------------------------------------------------------------------ */
 
-interface AwardRow { id: string; ign: string; team: string; role: string; maps: number; rating: number; acs: number; rookie: boolean }
+interface AwardRow { id: string; ign: string; team: string; role: string; maps: number; rating: number; score: number; acs: number; rookie: boolean }
 export interface AwardCat { key: MeAward['key']; name: string; top: AwardRow[] }
 export interface AwardsResult { league: string; cats: AwardCat[]; mine: AwardRow | null }
 
@@ -121,9 +136,11 @@ function priorRounds(p: Player): number {
 
 /**
  * The year's honours, from the season lines as they stand in the off-season —
- * before the winter wipes them. Rating first, ACS to break a tie; a line is
- * judged once it has 60% of the league's median starter's maps (seasonBar).
- * Three names a category.
+ * before the winter wipes them. Ranked on the 选手榜's own 排名分 (engine/
+ * leaderboard.ts: the season's rating, with its titles and series MVPs on top;
+ * the author's call on 2026-09-25, so the table and the night never disagree),
+ * then the rating, then ACS to break a tie; a line is judged once it has 60% of
+ * the league's median starter's maps (seasonBar). Three names a category.
  */
 export function computeAwards(state: GameState): AwardsResult | null {
   const me = state.me!
@@ -140,13 +157,13 @@ export function computeAwards(state: GameState): AwardsResult | null {
     if (!p || !p.season.rounds) continue
     rows.push({
       id, ign: p.ign, team: p.teamId ? state.teams[p.teamId]?.name ?? '' : '', role: p.role,
-      maps: p.season.maps, rating: performanceRating(p.season), acs: (p.season.damage / p.season.rounds) * 1.45,
+      maps: p.season.maps, rating: performanceRating(p.season), score: boardScore(state, p), acs: (p.season.damage / p.season.rounds) * 1.45,
       rookie: id === me.id ? firstPro : p.age <= 21 && priorRounds(p) < 600,
     })
   }
   const need = seasonBar(state, pool)
   if (rows.length < 6 || need === null) return null
-  const field = rows.filter((r) => r.maps >= need).sort((a, b) => b.rating - a.rating || b.acs - a.acs)
+  const field = rows.filter((r) => r.maps >= need).sort((a, b) => b.score - a.score || b.rating - a.rating || b.acs - a.acs)
   if (field.length < 3) return null
   const cats: AwardCat[] = [{ key: 'mvp', name: '年度最佳选手', top: field.slice(0, 3) }]
   const role = field.filter((r) => r.role === mine.role)
@@ -413,7 +430,7 @@ export const NIGHTS: Record<NightKind, CerDef> = {
     story: (s, about) => {
       const list = thisYear(s)
       const lines = list.map((a) => `· ${a.name}：${a.nominees.join('、')}——${a.won ? '念出来的是你' : `是 ${a.winner}`}。`)
-      return `${about} · 年度颁奖夜。圈里的媒体办的，按这一季的数据评。\n${lines.join('\n')}\n${list.some((a) => a.won) ? '主持人把话筒递了过来。' : '镜头切到你，你得说两句。'}`
+      return `${about} · 年度颁奖夜。圈里的媒体办的，${AWARD_RULE}。\n${lines.join('\n')}\n${list.some((a) => a.won) ? '主持人把话筒递了过来。' : '镜头切到你，你得说两句。'}`
     },
     blurb: { gold: '一口气说完，没卡壳。', silver: '说完了，挑不出毛病。', bronze: '卡了壳，片段被剪出来传开了。' },
     after: (s, cer) => awardsAfter(s, cer.tier ?? 'silver'),
@@ -486,7 +503,7 @@ export function nightApply(state: GameState, kind: NightKind, tier: CerTier, ski
         : `${def.name}的致辞 <b>${TIER_WORD[tier]}</b>：${awardsAfter(state, tier)}`)
       // what was won gets its card once the night is over, so no card says the name before the stage does (me/moments.ts)
       for (const a of thisYear(state).filter((x) => x.won)) {
-        pushMoment(state, { kind: 'award', key: `award:${a.year}:${a.key}`, award: a.name, league: a.league, nominees: a.nominees, nomineeIds: a.nomineeIds, nomineeTeams: a.nomineeTeams })
+        pushMoment(state, { kind: 'award', key: `award:${a.year}:${a.key}`, award: a.name, league: a.league, nominees: a.nominees, nomineeIds: a.nomineeIds, nomineeTeams: a.nomineeTeams, rule: AWARD_RULE })
       }
       return
     }

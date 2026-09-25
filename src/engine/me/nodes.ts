@@ -919,6 +919,19 @@ export function nodeLine(id: string, option: number, ok: boolean, f: RoundFacts)
   return { text: t.k0, cell, kills: 0, fallback: false }
 }
 
+/**
+ * The kills a landed call puts in my line for its round: one, for an option that is me taking the fight — the gun,
+ * the first contact, the flank, the clutch, 「给我，我来」 — and whose landed lines count my kills (a KillSet).
+ * Reported 2026-09-24:「决策成功了击杀数也应该增加……成功绕后却一个人都不杀有点奇怪」. Hiding, faking, holding a
+ * line, a call on the voice and a team's move are not me taking the fight, and their k0 lines stay true as written.
+ */
+const FIGHT_DIMS: readonly string[] = ['aim', 'reaction', 'clutch', 'mental']
+export function landedKills(node: NodeDef, option: number, won: boolean): number {
+  const opt = node.a[option]
+  const t = NODE_HL[node.id]?.[option]?.[won ? 'okWin' : 'okLoss']
+  return opt && FIGHT_DIMS.includes(opt.dim) && !!t && typeof t === 'object' ? 1 : 0
+}
+
 export function nodeHighlight(id: string, option: number, ok: boolean, f: RoundFacts): string {
   return nodeLine(id, option, ok, f).text
 }

@@ -29,7 +29,7 @@ await new Promise(r => server.listen(0, '127.0.0.1', r))
 const origin = `http://127.0.0.1:${server.address().port}`
 let browser
 try {
-  browser = await chromium.launch({ headless: true })
+  browser = await chromium.launch({ headless: true, args: ['--mute-audio'] })
   for (const width of [320, 390, 1440]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } }), errors = [], blocked = []
     page.on('pageerror', e => errors.push(e.message))
@@ -46,9 +46,15 @@ try {
     assert.match(await page.locator('.weekly-growth').innerText(), /旧档从本次开始记录，不代表整周/)
     assert.doesNotMatch(await page.locator('.growth-eight').innerText(), /\d/)
     assert.equal(await page.locator('.growth-eight progress').count(), 0, 'words mode hides numeric progress')
+    // 2026-09-24「训练之后周增长是看得出来变化，可实际数值不变」: a bar that has not filled says the number did not move
+    assert.match(await page.locator('.growth-eight').innerText(), /属性未变/)
+    assert.match(await page.locator('.growth-eight').innerText(), /进度在涨，还没满一点/)
+    assert.doesNotMatch(await page.locator('.growth-eight').innerText(), /有所成长/)
+    assert.match(await page.locator('.weekly-growth > summary').innerText(), /属性都没变，.*在攒进度/)
     await page.getByRole('button', { name: '数值 关', exact: true }).click()
     assert.match(await page.locator('.quick-eight').innerText(), /\d/)
-    assert.match(await page.locator('.growth-eight').innerText(), /\+0\./)
+    assert.match(await page.locator('.growth-eight').innerText(), /本周进度 \+\d+（满 100 升一点）/)
+    assert.doesNotMatch(await page.locator('.growth-eight').innerText(), /净增/)
     assert.equal(await page.locator('.growth-eight progress').count(), 8)
     assert.match(await page.locator('.growth-eight').innerText(), /下一点 .* \/ 100/)
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no page overflow')

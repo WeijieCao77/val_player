@@ -118,9 +118,10 @@ export const CEREMONIES: Record<CerKind, CerDef> = {
     kind: 'final', name: '决赛入场', game: 'react',
     story: (_s, about) => `${about}。通道里很吵，但你听不见。最后一次热身，靶场里只有你和准星。`,
     blurb: {
-      gold: '手是热的。这一场每张图开局就占优，临场决策也更容易成。',
+      // what cerMatchEdge really does: the opening rounds of each map and the calls, not the two sides' strength (cerMatchLine)
+      gold: '手是热的。这一场每张图的前几个回合更顺手，关键回合的决策也更容易成；两队的实力对比不会因此改变。',
       silver: '热身正常，按平时打。',
-      bronze: '找不到手感。这一场每张图开局吃亏一点。',
+      bronze: '找不到手感。这一场每张图的前几个回合吃亏一点，关键回合的决策也难成一点。',
     },
   },
   media: {
@@ -444,6 +445,26 @@ export function cerMatchEdge(state: GameState): { nudge: number; node: number } 
   const m = state.me?.cerMatch
   if (!m || m.until < state.day) return { nudge: 0, node: 0 }
   return { nudge: m.nudge, node: m.node }
+}
+
+/**
+ * What the walk-out's warm-up gave tonight, for the pre-match card. The card's 实力碾压 … 差距过大 reads the two
+ * fives alone since 2026-09-24, so a gold warm-up left it at 劣势 and read as nothing (reported 2026-09-24:
+ * 「不是决赛热身没有用呀，进去还是劣势啊」). It is applied (me/matchplay.ts, on every map's first round, and on
+ * every call): the edge on the opening rounds fades as a decision's swing does (engine/match.ts, ×0.7 a round) and
+ * is gone within four or five, so it moves the kickoff estimate by about five points and the series hardly at all —
+ * measured over 1500 paired BO3s against a side two points better, series won 45.1% without and 45.3% with it.
+ * So the line says what it is and what it is not.
+ */
+export function cerMatchLine(state: GameState, nums: boolean): string | null {
+  const { nudge, node } = cerMatchEdge(state)
+  if (!nudge && !node) return null
+  const pct = Math.round(Math.abs(node) * 100)
+  if (nudge > 0 || node > 0) {
+    return `决赛入场的热身打出了金档：每张图的前几个回合更顺手，关键回合的决策更容易成${nums && node ? `（成功率 +${pct}%）` : ''}。`
+      + '上面的局势只看两边五个人，热身改变不了两队的实力对比。'
+  }
+  return `决赛入场的热身没找到手感：每张图的前几个回合吃亏一点，关键回合的决策难成一点${nums && node ? `（成功率 −${pct}%）` : ''}。`
 }
 
 /** How much faster (or slower) the body comes back this week. */

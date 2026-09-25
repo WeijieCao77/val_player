@@ -9,6 +9,8 @@
 .growth-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .growth-cell span, .growth-cell small { color: var(--muted); font-size: var(--t-tiny); }
 .growth-cell b { font-size: var(--t-small); }
+.growth-cell b.up { color: var(--win); }
+.growth-cell b.down { color: var(--loss); }
 .growth-cell progress { width: 100%; height: 5px; accent-color: var(--accent); }
 .growth-previous { margin-top: 12px; }
 .growth-previous .growth-eight { margin-top: 8px; }

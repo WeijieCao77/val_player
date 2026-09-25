@@ -141,15 +141,18 @@ function cardOf(g: GameState, m: MomentItem): Card {
         // a night from before the ids were kept says the names in a line
         body: !ids.length && m.nominees?.length ? `入围：${m.nominees.join('、')}。` : undefined,
         extra: ids.length ? (
-          <ul className="mo-list">
-            {ids.map((id, i) => (
-              <li key={id} className={[i === 0 ? 'win' : '', g.me?.id === id ? 'me' : ''].filter(Boolean).join(' ')}>
-                <Face id={id} name={m.nominees?.[i]} size={26} />
-                <span><b>{m.nominees?.[i] ?? g.players[id]?.ign ?? ''}</b><small>{m.nomineeTeams?.[i] ?? ''}</small></span>
-                {i === 0 && <em>得奖</em>}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="mo-list">
+              {ids.map((id, i) => (
+                <li key={id} className={[i === 0 ? 'win' : '', g.me?.id === id ? 'me' : ''].filter(Boolean).join(' ')}>
+                  <Face id={id} name={m.nominees?.[i]} size={26} />
+                  <span><b>{m.nominees?.[i] ?? g.players[id]?.ign ?? ''}</b><small>{m.nomineeTeams?.[i] ?? ''}</small></span>
+                  {i === 0 && <em>得奖</em>}
+                </li>
+              ))}
+            </ul>
+            {m.rule && <p className="mo-real">{m.rule}。</p>}
+          </>
         ) : undefined,
       }
     }

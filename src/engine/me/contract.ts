@@ -364,8 +364,12 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean; ben
       // the old club's five is the engine's business again
       from.starters = from.starters.slice()
     }
-    const hist = p.clubHist?.find((h) => h.team === from.id && h.to === state.year)
-    if (hist) hist.to = state.year
+    // A club's line is carried to a year at the year's end (engine/season.ts), so a club left during the year still
+    // ended the year before: a man who won 2024 at NRG and moved to G2 that winter had NRG 2023–2023 and G2 from 2024,
+    // and his 2024 trophy read as G2's (reported 2026-09-24). A year I played in here is a year here. It looked for a
+    // line already ending this year and set it to this year, which never changed anything.
+    const hist = [...(p.clubHist ?? [])].reverse().find((h) => h.team === from.id)
+    if (hist && hist.to < state.year && me.seasonStart.year === state.year && me.seasonStart.matches > 0) hist.to = state.year
     // the buyout still owed, out of the buyer's budget and into the seller's, as the world's own moves pay (me/market.ts)
     const fee = d.kind === 'transfer' && from.id !== to.id ? buyoutDue(state) : 0
     if (fee) {

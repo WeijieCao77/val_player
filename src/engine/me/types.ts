@@ -705,6 +705,8 @@ export interface MomentItem {
   nominees?: string[]
   nomineeIds?: string[]
   nomineeTeams?: string[]
+  /** award: how it was judged, in words, as said on the night — absent for a night from before 2026-09-25 */
+  rule?: string
   /** rank: 「神话 1」, its tier and division, the server, the place on its board */
   rank?: string
   tier?: string
@@ -974,7 +976,9 @@ export interface MeState {
   achievements: string[]
   /** achievement rewards already paid (by key), how far the unlock card has shown, the 称号 picked — me/achievements.ts; absent in older saves */
   achState?: { paid: string[]; seen: number; worn?: string }
-  titles: { year: number; title: string; started: boolean; fmvp?: boolean }[]
+  /** `teamId` / `team`: the club it was lifted with and its name that day (me/week.ts syncTitles); older saves have them
+   * where me/trophies.ts stampTitleClubs could tell, and nothing where it could not */
+  titles: { year: number; title: string; started: boolean; fmvp?: boolean; teamId?: string; team?: string }[]
   /** qualifiers won — 出线, not titles (me/compclass.ts isQualifier); absent in older saves */
   quals?: { year: number; title: string; started: boolean }[]
   ending?: { key: string; title: string; text: string; year: number; marks?: import('./careerMarks').CareerMark[] }

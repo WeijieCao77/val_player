@@ -655,7 +655,12 @@ export function syncTitles(state: GameState): void {
     }
     if (me.titles.some((x) => x.year === t.year && x.title === t.title)) continue
     const started = startedIn(state, t.title, t.year)
-    me.titles.push({ year: t.year, title: t.title, started })
+    // the club it was lifted with, and its name that day: read later off the club history it was the club of the
+    // year's last move — 2024 at NRG then a winter move to G2 showed the 2024 trophy as G2's (reported 2026-09-24)
+    const won = Object.values(state.comps).find((c) => c.name === t.title && !!c.champion && !!state.teams[c.champion]?.roster.includes(me.id))
+    const teamId = won?.champion ?? (me.phase === 'pro' ? state.myTeam : '')
+    const team = teamId ? state.teams[teamId]?.name : undefined
+    me.titles.push({ year: t.year, title: t.title, started, ...(teamId && team ? { teamId, team } : {}) })
     rememberFMVPs(state)
     const fmvp = started && finalMvp(state, t.title, t.year)
     // whoever was in the room shares it
@@ -666,7 +671,6 @@ export function syncTitles(state: GameState): void {
     if (started) coachAfterTitle(state, compClass(t.title), fmvp)
     // and gets its card (me/moments.ts): the full screen for one I started in, the event card for one won from the bench.
     // The club that won it goes on the card, for the card's 「真实历史里，这座奖杯属于 X」 once the year has turned (me/worldline.ts)
-    const won = Object.values(state.comps).find((c) => c.name === t.title && !!c.champion && !!state.teams[c.champion]?.roster.includes(me.id))
     pushMoment(state, { kind: 'title', key: `title:${t.year}:${t.title}`, comp: t.title, fmvp, bench: !started, teamId: won?.champion ?? state.myTeam })
     pushLog(state, 'good', `冠军：${compCn(t.title)}${started ? (fmvp ? '，决赛 MVP 是你' : '') : '（你没有出场）'}。`)
     // 夺冠之夜 — the manager wants my interview first, 「今晚所有人都想要你一块」 — is the night of a man who played
