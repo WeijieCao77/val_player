@@ -1,8 +1,7 @@
 import { duoBonded } from '../bonds'
-import { ageDrift } from '../player'
+import { ageLoss, trainAgeMul } from '../player'
 import { bookCovers, isTimelineWorld } from '../timeline'
 import type { GameState, Player, Team } from '../types'
-import { trainAgeMul } from './growth'
 
 /**
  * The small things in a week that are not matches (作者 2026-09-12：「队友的生日这些小事件都要有」).
@@ -13,7 +12,7 @@ import { trainAgeMul } from './growth'
  *
  *  - my age when the year turns — 破晓 main.ts preLog「…赛季开始，你 N 岁了」 —
  *    with the one thing that changes at that age, read off the numbers the game
- *    itself uses (player.ts ageDrift, me/growth.ts trainAgeMul)
+ *    itself uses (player.ts ageLoss, trainAgeMul)
  *  - my club's run of five — 破晓 main.ts noteForm「五连胜 / 五连败」, once a
  *    season each way
  *  - a team-mate on a hot or cold run — 破晓 form.ts formNews, cut to my own
@@ -184,11 +183,11 @@ export function lifeDay(state: GameState, newYear: boolean): void {
 
 /** What changes at this age, in the game's own numbers, or nothing worth saying. */
 function ageSign(age: number): string {
-  const was = ageDrift({ age: age - 1 } as Player)
-  const now = ageDrift({ age } as Player)
-  if (now < 0 && was >= 0) return '这个冬天起属性开始下滑，枪法和反应最先。'
-  if (now < 0 && now < was) return '下滑得比去年快了。'
-  if (trainAgeMul(age) < trainAgeMul(age - 1)) return '同样的训练，涨得比去年慢一点。'
+  const was = ageLoss(age - 1, 'aim')
+  const now = ageLoss(age, 'aim')
+  if (now > 0 && was <= 0) return '过了巅峰期：枪法和反应开始慢慢往下走，练也补不回原来的高度；意识还在涨。'
+  if (now > was) return '枪法和反应掉得比去年快了，意识还在涨。'
+  if (trainAgeMul(age) < trainAgeMul(age - 1)) return age <= 26 ? '同样的训练，涨得比去年慢一点；正是巅峰的年纪。' : '同样的训练，涨得比去年慢一点。'
   return ''
 }
 

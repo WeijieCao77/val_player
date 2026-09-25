@@ -109,14 +109,59 @@ export function statLine(s: Stats) {
 
 export const AGE_PEAK = 24
 
-/** Yearly attribute drift: growth for the young, decline for veterans. */
-export function ageDrift(p: Player): number {
+/**
+ * The age curve, one for the whole world (asked 2026-09-25, the mailbox's top item at 95 votes:
+ * 「能力值提升太慢了」「到22 23岁就该迈入巅峰了然后再往后的话可以掉能力值」「总是二十岁菜四十岁练成了天下无敌」).
+ *
+ * Measured before (16 careers from 2021, 按推荐做完, the role's preset): 综合 80 at 20, 86 at 23,
+ * 90 at 26 and still 91 at 30, the peak at 29 (26–31), 枪法 at 30 above 枪法 at 25 — a decline of
+ * a chance at one point a winter that practice filled straight back in, because the ceiling never
+ * came down. Now the young learn faster, the peak is 23–26, and from 27 the hands fade for real:
+ * each winter takes 枪法 and 反应 and the ceiling they sit under with them, and practice on them
+ * counts for less; 意识 keeps growing. The career player and every club's players share it
+ * (engine/training.ts trainPlayer and seasonRollover, me/growth.ts gainBase).
+ */
+/** the last age of the peak: from the winter after it the hands go first */
+export const PEAK_END = 26
+
+/** How much a week of practice is worth at this age. */
+export const trainAgeMul = (age: number): number =>
+  age <= 19 ? 1.7 : age <= 21 ? 1.5 : age <= 23 ? 1.25 : age <= PEAK_END ? 0.9 : age <= 29 ? 0.5 : 0.4
+
+/** and how much of it an attribute takes: past the peak the hands learn slower than the head */
+export const ageAttrMul = (age: number, k: keyof Attrs): number =>
+  age <= PEAK_END ? 1 : k === 'aim' || k === 'reaction' ? 0.5 : k === 'clutch' ? 0.75 : 1
+
+/**
+ * Points a winter takes from an attribute at the age just turned, on average (engine/training.ts
+ * seasonRollover rolls the fraction). 枪法 and 反应 first, 残局 later and less; 意识, 道具, 协同,
+ * 沟通 and 指挥 do not fade.
+ */
+export function ageLoss(age: number, k: keyof Attrs): number {
+  if (k === 'aim' || k === 'reaction') return age <= PEAK_END ? 0 : age === 27 ? 1 : age === 28 ? 1.5 : age <= 30 ? 2 : 2.5
+  if (k === 'clutch') return age <= 27 ? 0 : age === 28 ? 0.5 : 1
+  return 0
+}
+
+/**
+ * Ceiling points the winter he turns this age gives every attribute: a body still growing into
+ * the game. Room only — practice fills it — so a player who does not work gets nothing from it.
+ */
+export const youthLoosens = (age: number): number => (age >= 19 && age <= 21 ? 1 : 0)
+
+/** The 上限 a player's own ceilings add up to (me/bottleneck.ts ceilingPotential, which the card reads). */
+export function ceilingSum(p: Pick<Player, 'role' | 'attrs' | 'caps' | 'stageBonus'>): number {
+  const w = weightsFor(p)
+  const v = ATTR_KEYS.reduce((s, k) => s + Math.max(p.attrs[k], p.caps?.[k] ?? p.attrs[k]) * w[k], p.stageBonus ?? 0)
+  return Math.round(clamp(v, 30, 99))
+}
+
+/** Yearly attribute growth for the young; the decline is ageLoss. */
+export function ageDrift(p: Pick<Player, 'age'>): number {
   if (p.age <= 21) return 1.0
-  if (p.age <= 24) return 0.65
-  if (p.age <= 26) return 0.3
-  if (p.age <= 28) return -0.25
-  if (p.age <= 30) return -0.9
-  return -1.6
+  if (p.age <= 23) return 0.65
+  if (p.age <= PEAK_END) return 0.3
+  return 0
 }
 
 /** The role's colour as a CSS token, so it follows the page's ground: the

@@ -1,7 +1,8 @@
 import { Rng, clamp, dayStream } from './rng'
 import { absentPlayer } from './me/absence'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { recomputeOverall, refreshValue, ageDrift, ageAttrMul, ageLoss, ceilingSum, trainAgeMul, youthLoosens, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { pushLog } from './me/log'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
 import { growLoyalty } from './attachment'
@@ -90,7 +91,8 @@ function trainPlayer(state: GameState, p: Player, team: Team, rng: Rng, mods?: C
 
   const coach = (coachOr(team, 'development') - 55 + (mods?.devHelp ?? 0)) / 100
   const facility = (team.facilities - 55) / 130
-  const age = p.age <= 20 ? 1.35 : p.age <= 23 ? 1.1 : p.age <= 26 ? 0.8 : 0.45
+  // the world's one age curve (engine/player.ts), the same the career player's own hours are priced on
+  const age = trainAgeMul(p.age) * ageAttrMul(p.age, attr)
   const tired = p.fatigue > 70 ? 0.5 : p.fatigue > 45 ? 0.8 : 1
   const motivated = 0.75 + p.morale / 200
 
@@ -342,6 +344,16 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
       }
     }
     const drift = ageDrift(p)
+    // the 上限 his own ceilings add up to, before the winter moves any (me/bottleneck.ts ceilingPotential)
+    const pot0 = p.caps ? ceilingSum(p) : 0
+    // Still growing: the winters he turns 19 to 21 loosen every ceiling of his own by a point, and
+    // every other man's room with it. Only room — practice still has to fill it (engine/player.ts).
+    const youth = youthLoosens(p.age)
+    let loosened = 0
+    if (youth) {
+      if (p.caps) for (const k of ATTR_KEYS) { if (p.caps[k] < 99) loosened++; p.caps[k] = Math.min(99, p.caps[k] + youth) }
+      else p.potential = Math.min(99, p.potential + youth)
+    }
     // Captured before a single attribute moves. It used to sit further down,
     // which was fine while recomputeOverall was called exactly once at the
     // bottom — the moment the growth loop started recomputing as it went, a
@@ -361,10 +373,18 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
           if (atOwnCeiling(p, k)) p.xp[k] = 0
           recomputeOverall(p)
         }
-      } else if (rng.chance(Math.abs(drift) * 0.5)) {
-        // aim and reaction go first
-        const hit = k === 'aim' || k === 'reaction' ? 2 : 1
-        p.attrs[k] = clamp(p.attrs[k] - rng.int(0, hit), 20, 99)
+      } else {
+        // Past the peak, aim and reaction go first, and the ceiling they sit under goes with them
+        // (engine/player.ts ageLoss). It was a chance at a point a winter with the ceiling left
+        // where it was, so practice filled it straight back in and a 30-year-old out-aimed himself
+        // at 25 (reported 2026-09-25: 「年纪大了掉的少年纪轻涨的慢，这合理吗？」).
+        const loss = ageLoss(p.age, k)
+        if (loss <= 0) continue
+        const n = Math.min(p.attrs[k] - 20, Math.floor(loss) + (rng.chance(loss % 1) ? 1 : 0))
+        if (n <= 0) continue
+        p.attrs[k] -= n
+        // his own ceiling (me/bottleneck.ts) comes down by as much: what the body lost, practice does not buy back
+        if (p.caps) p.caps[k] = Math.max(p.attrs[k], p.caps[k] - n)
       }
     }
     // Experience keeps rising even as the mechanics fade — but not past the
@@ -375,10 +395,27 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     // addXp refuses to work on anybody at his ceiling. Read after the decline
     // above, so a fading veteran still trades aim for reading the game.
     recomputeOverall(p)
+    // what the winter's fading took from the one number, so a club's man without ceilings of his own loses the room with it
+    const faded = drift > 0 ? 0 : Math.max(0, before - p.overall)
     if (p.age >= 25 && p.overall < p.potential) {
       p.attrs.awareness = clamp(p.attrs.awareness + (rng.chance(0.4) ? 1 : 0), 20, Math.max(p.attrs.awareness, ceilingOf(p, 'awareness')))
       if (p.isIgl) p.attrs.igl = clamp(p.attrs.igl + (rng.chance(0.5) ? 1 : 0), 20, Math.max(p.attrs.igl, ceilingOf(p, 'igl')))
     }
+    recomputeOverall(p)
+    if (p.caps) {
+      // His 上限 moves by what the ceilings moved, and so does the book that compares against it
+      // (me/bottleneck.ts settle): a scout's re-rating above still reads as the lift it is, and the
+      // winter's own loosening or fading is never read as one.
+      const d = ceilingSum(p) - pot0
+      if (d) {
+        p.potential = clamp(p.potential + d, 30, 99)
+        const bn = state.me && p.id === state.me.id ? state.me.bottleneck : undefined
+        if (bn) bn.pot += d
+      }
+      if (loosened && state.me && p.id === state.me.id) {
+        pushLog(state, 'good', `${p.age} 岁，还在长的年纪：冬训后${loosened === ATTR_KEYS.length ? '八项' : `${loosened} 项还没到 99 的`}瓶颈各松了 ${youth} 点，练上去才算数。`)
+      }
+    } else if (faded > 0) p.potential = Math.max(p.overall, p.potential - faded)
 
     recomputeOverall(p)
     refreshValue(p)
