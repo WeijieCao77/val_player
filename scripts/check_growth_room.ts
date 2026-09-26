@@ -272,7 +272,7 @@ console.log('\n七、私人教练（2026-09-26）：界面显示的每点收益�
   check(ratios.length === 0, `请了私教：枪法训练、复盘、道具与跑图的预览正好 ×${COACH_MUL}，排位、训练赛不变${ratios.length ? `（${ratios.slice(0, 5).join('；')}）` : ''}`)
   check(mismatches.length === 0, `请了私教，5 种角色 × 5 类训练的预览仍与实际收益一致${mismatches.length ? `（${mismatches.slice(0, 5).join('；')}）` : ''}`)
   const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/engine/training.ts'), 'utf8')
-  check(!/me\/crew|coachMul|COACH_MUL/.test(src), '俱乐部训练（engine/training.ts trainPlayer）不读私教：NPC 的训练不变')
+  check(!/from '\.\/me\/crew'|coachMul\(|COACH_MUL/.test(src), '俱乐部训练（engine/training.ts trainPlayer）不读私教：NPC 的训练不变')
 }
 
 function sPlayer(s: GameState): Player {

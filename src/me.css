@@ -751,7 +751,7 @@ table.box td.rt.up { color: var(--win); } table.box td.rt.dn { color: var(--loss
 .shop-row > button.sm, .shop-row > .buy { grid-column: 4; justify-self: end; }
 /* the next tier's models (2026-09-26): a picker and its button, kept together and allowed to wrap as one */
 .shop-row > .buy { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; max-width: 100%; }
-.shop-row > .buy select { min-width: 0; max-width: 100%; }
+.shop-row > .buy select { width: auto; min-width: 0; max-width: 100%; padding: 3px 6px; }
 @container (max-width: 38em) {
   .shop-row { grid-template-columns: 3.6em 3.8em minmax(0, 1fr); }
   .shop-row .md { white-space: normal; overflow-wrap: anywhere; }

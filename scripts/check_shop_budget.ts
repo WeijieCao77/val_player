@@ -63,7 +63,8 @@ facts.push([`训练营那一周按 ${CAMP_MUL} 份计（≤ 2）；练出来的�
   for (const f of ['src/engine/me/shop.ts', 'src/engine/me/crew.ts', 'src/engine/me/outlets.ts']) {
     const lines = strip(readFileSync(resolve(ROOT, f), 'utf8')).split('\n')
     lines.forEach((l, i) => {
-      if (/\bcaps\b[^=\n]*(?<![=!<>])=(?!=)|\.potential\s*[+-]?=(?!=)|stageBonus\s*[+-]?=(?!=)|MECH_VALUE_MAX\s*=/.test(l)) writes.push(`${f}:${i + 1} ${l.trim().slice(0, 80)}`)
+      // an assignment straight onto caps, caps[k] or caps.k (a comparison like `>= p.caps[k]` is a read)
+      if (/\bcaps(?:!?\??\.\w+|!?\[[^\]]*\])*\s*[+-]?=(?!=)|\.potential\s*[+-]?=(?!=)|stageBonus\s*[+-]?=(?!=)|MECH_VALUE_MAX\s*=/.test(l)) writes.push(`${f}:${i + 1} ${l.trim().slice(0, 80)}`)
     })
   }
   facts.push([`商城、教练与团队、钱的出口里没有一行写瓶颈或上限${writes.length ? `（${writes.join(' | ')}）` : ''}`, writes.length === 0])

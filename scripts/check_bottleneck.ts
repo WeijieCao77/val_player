@@ -322,7 +322,7 @@ if (stuck.me!.log.slice(logged).some((l) => l.text.includes('练到瓶颈了')))
   camp.me!.flags.campWeek = camp.me!.week
   const reads = (s: GameState) => (['awareness', 'utility', 'reaction', 'teamwork', 'clutch'] as K[]).map((k) => breakCount(s, k)?.week ?? 0)
   const [pw, cw] = [reads(plain), reads(camp)]
-  if (!(cw[0] === pw[0] * 2 && cw[1] === pw[1] * 2 && cw[2] === pw[2] * 2 && cw[3] === pw[3] * 2 && cw[4] === pw[4])) fail(`训练营那周的计数没有正好翻倍（排位、复盘、道具、训练赛），或残局也跟着翻了：${pw} → ${cw}`)
+  if (!(cw[0] === pw[0] * 2 && cw[1] === pw[1] * 2 && cw[2] === pw[2] * 2 && cw[3] === pw[3] * 2 && cw[4] === pw[4])) fail(`训练营那周的计数没有正好翻倍（复盘、道具、排位、训练赛），或残局也跟着翻了：${pw} → ${cw}`)
   bottleneckWeek(plain)
   bottleneckWeek(camp)
   const counted = (s: GameState) => (['awareness', 'utility', 'reaction', 'teamwork'] as K[]).map((k) => s.me!.bottleneck!.count[k] ?? 0)
@@ -336,7 +336,7 @@ if (stuck.me!.log.slice(logged).some((l) => l.text.includes('练到瓶颈了')))
   // and a week later, it is an ordinary week again
   camp.me!.week++
   if (campMul(camp) !== 1) fail('训练营只算那一周')
-  console.log(`  训练营：那一周计数 ${pw.join('/')} → ${cw.join('/')}（排位/复盘/道具/训练赛翻倍，残局不翻），计入后 ${counted(plain).join('/')} → ${counted(camp).join('/')}；突破总额仍是每项 ${MECH_VALUE_MAX}`)
+  console.log(`  训练营：那一周计数 ${pw.join('/')} → ${cw.join('/')}（复盘/道具/排位/训练赛翻倍，残局不翻），计入后（复盘/道具/排位/训练赛） ${counted(plain).join('/')} → ${counted(camp).join('/')}；突破总额仍是每项 ${MECH_VALUE_MAX}`)
 }
 
 console.log(bad
