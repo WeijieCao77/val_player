@@ -1,7 +1,7 @@
 import { Rng, clamp, hashStr } from '../rng'
 import { importBlock } from '../imports'
-import { squadOf } from '../roster'
-import { CLUB_CEILING, feeOf, floorBlock, joinRoster, leaveRoster } from './club'
+import { feeOf, floorBlock, leaveRoster } from './club'
+import { MATE_SIGN_BONUS, bringIn, closeFormerMate, pinOut } from './recruit'
 import { duoBonded } from '../bonds'
 import type { GameState, Player, Team } from '../types'
 import { formatOf, regionIn } from '../era'
@@ -197,6 +197,8 @@ export function doList(state: GameState, targetId: string): string {
     return floor
   }
   leaveRoster(state, target, true)
+  // and he stays gone: history does not sign him back to this club (engine/timeline.ts pinsOf, 2026-09-26)
+  pinOut(state, target.id)
   state.news.push({ year: state.year, day: state.day, kind: 'transfer', important: true, text: `${team.name} 与 ${target.ign} 解约，该选手成为自由人。` })
   me.coachTrust = clamp(me.coachTrust - 4, 0, 100)
   for (const id of team.roster) if (id !== me.id) duoBonded(state, me.id, id, -6)
@@ -223,11 +225,16 @@ export function canSign(state: GameState): Gate {
   // the club's own window (me/window.ts); the other club's is asked of each name (signTargets, doSign)
   const shut = windowBlock(state)
   if (shut) return { ok: false, why: `${shut}。签不了人。` }
-  if ((me.cloutCd?.sign ?? 0) > 0) return { ok: false, why: `本赛季已经提过，${me.cloutCd!.sign} 个赛段后再说。` }
+  // the cooldown is SIGN_COOLDOWN stages; it said 「本赛季已经提过」, which is not the rule (破晓's own slip, carried over)
+  if ((me.cloutCd?.sign ?? 0) > 0) return { ok: false, why: `刚提过一次，${me.cloutCd!.sign} 个赛段后再说。` }
   return { ok: true }
 }
 
-export interface SignTarget { id: string; ign: string; role: string; overall: number; teamName: string; away: '外赛区' | '国外俱乐部' | ''; fee: number }
+export interface SignTarget {
+  id: string; ign: string; role: string; overall: number; teamName: string; away: '外赛区' | '国外俱乐部' | ''; fee: number
+  /** a former team-mate I am still 很铁 with (me/recruit.ts closeFormerMate) */
+  mate?: boolean
+}
 
 /**
  * The word on a name's club, from my club's side, the way a card puts one on a club for me (me/prepro.ts awayWord;
@@ -260,22 +267,37 @@ export function signTargets(state: GameState): SignTarget[] {
   // so an unaffordable name on this list would be a request that quietly puts
   // the club in the red rather than one the manager turns down
   const purse = myTeam.budget
+  // Nobody at my own position (2026-09-26): whether I start is between me and the coach, and a man I asked for
+  // there would be one I sat behind — the same-position rotation (me/coach.ts rotationCall) is history's
+  // signings' alone. Nor a man my own ask sent away from this club.
+  const myRole = state.players[me.id].role
+  const gone = new Set(me.pinned?.club === myTeam.id ? me.pinned.out : [])
+  const askable = (q: Player) => q.role !== myRole && !q.retiring && !gone.has(q.id) && !importBlock(state, myTeam.id, q)
   const band = Object.values(state.players)
     // and his club has to be free to let him go: its window open, its roster not locked (me/window.ts)
-    .filter((q) => q.teamId && q.teamId !== myTeam.id && !q.retiring && clubOpen(state, q.teamId))
+    .filter((q) => q.teamId && q.teamId !== myTeam.id && askable(q) && clubOpen(state, q.teamId))
     .map((q) => ({ q, a: attrAvg(q) }))
     .filter((x) => x.a <= reach + 4 && x.a >= teamAvg - 1 && feeOf(x.q) <= purse)
     .sort((a, b) => b.a - a.a)
-  if (!band.length) return []
   const pick = band.length <= SIGN_SLOTS
     ? band
     : Array.from({ length: SIGN_SLOTS }, (_, i) => band[Math.round(i * (band.length - 1) / (SIGN_SLOTS - 1))])
-  return pick.map(({ q }) => ({
+  const row = (q: Player, mate: boolean): SignTarget => ({
     id: q.id, ign: q.ign, role: q.role, overall: q.overall,
-    teamName: state.teams[q.teamId!]?.name ?? '—',
-    away: awayFrom(state, myTeam, state.teams[q.teamId!]),
+    teamName: q.teamId ? state.teams[q.teamId]?.name ?? '—' : '自由人',
+    away: awayFrom(state, myTeam, q.teamId ? state.teams[q.teamId] : undefined),
     fee: feeOf(q),
-  }))
+    ...(mate ? { mate: true } : {}),
+  })
+  // and a former team-mate I am still 很铁 with, wherever his level is — at a club that can let him go, or free
+  // (the author, 2026-09-26: 老队友可以点名)
+  const old = Object.keys(me.mates ?? {})
+    .filter((id) => closeFormerMate(state, id))
+    .map((id) => state.players[id])
+    .filter((q) => askable(q) && clubOpen(state, q.teamId) && feeOf(q) <= purse && !(q.teamId ?? '').startsWith('CUP_'))
+  const out = pick.map(({ q }) => row(q, old.includes(q)))
+  for (const q of old) if (!out.some((x) => x.id === q.id)) out.push(row(q, true))
+  return out
 }
 
 export function signOdds(state: GameState, target: Player): number {
@@ -293,6 +315,8 @@ export function signOdds(state: GameState, target: Player): number {
   // A club of my own league from another country pays half, the way such a club weighs half in a draw (me/prepro.ts MATE_SHARE).
   const away = myTeam ? awayFrom(state, myTeam, state.teams[target.teamId ?? '']) : ''
   p -= away === '外赛区' ? 0.12 : away === '国外俱乐部' ? 0.06 : 0
+  // a former team-mate I am still 很铁 with picks up the phone (the author, 2026-09-26)
+  if (closeFormerMate(state, target.id)) p += MATE_SIGN_BONUS
   return clamp(p, 0.1, 0.82)
 }
 
@@ -304,6 +328,7 @@ export function doSign(state: GameState, targetId: string): string {
   const target = state.players[targetId]
   const myTeam = state.teams[state.players[me.id].teamId ?? '']
   if (!target || !myTeam) return '找不到这个人。'
+  if (target.role === state.players[me.id].role) return '他和你打同一个位置——你自己的位置，靠你自己去争，不找经理要人。'
   // his club's window too: a club under a roster lock lets nobody go (me/window.ts)
   if (!windowAt(state, target.teamId ?? undefined).open) return `${state.teams[target.teamId ?? '']?.name ?? '他的俱乐部'}现在放不了人：${windowBlock(state, target.teamId ?? undefined)}。`
 
@@ -332,41 +357,37 @@ export function doSign(state: GameState, targetId: string): string {
     const cur = leagueCurOf(myTeam.region)
     return `俱乐部出不起这个价（要 ${worldMoney(fee, cur, state.year)}，队里只有 ${worldMoney(Math.max(0, myTeam.budget), cur, state.year)}）。`
   }
-  const seller = state.teams[target.teamId ?? '']
-  // One for one when the roster is full, the way 破晓's clubs deal: the club's
-  // weakest man in that job goes the other way.
-  const full = myTeam.roster.length >= CLUB_CEILING
-  const out = full
-    ? squadOf(state, myTeam.id)
-      .filter((q) => q.id !== me.id && (q.roles ?? [q.role]).includes(target.role))
-      .sort((a, b) => a.overall - b.overall)[0]
-    : undefined
-  if (!seller || importBlock(state, myTeam.id, target) || (full && !out)) {
+  // One for one when the roster is full, the way 破晓's clubs deal: the club's weakest man in that job goes the
+  // other way. In a year history has the rosters for, both stay where the ask put them (me/recruit.ts bringIn,
+  // engine/timeline.ts pinsOf; the author, 2026-09-26: 「类似俱乐部去挖人」).
+  const moved = bringIn(state, target, myTeam, rng)
+  if (!moved.ok) {
     // a full roster with nobody in that job to send back, or the import limit
     me.cloutCd.sign = 0
-    return '俱乐部去谈了，但这笔转会办不下来（名单已满或名额受限）。'
+    return `俱乐部去谈了，但这笔转会办不下来：${moved.why}`
   }
-  if (out) joinRoster(state, out, seller, rng)
-  joinRoster(state, target, myTeam, rng)
-  myTeam.budget -= fee
-  seller.budget += fee
+  const cur = leagueCurOf(myTeam.region)
+  const seller = moved.from
   state.news.push({ year: state.year,
     day: state.day, kind: 'transfer', important: true,
-    text: `${myTeam.name} 以 ${worldMoney(fee, leagueCurOf(myTeam.region), state.year)} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${out ? `，${out.ign} 去了 ${seller.name}` : ''}。`,
+    text: seller
+      ? `${myTeam.name} 以 ${worldMoney(fee, cur, state.year)} 的转会费从 ${seller.name} 签下 ${target.ign}（${target.overall}）${moved.out ? `，${moved.out.ign} 去了 ${seller.name}` : ''}。`
+      : `${myTeam.name} 签下自由人 ${target.ign}（${target.overall}）。`,
   })
   me.gmTrust = clamp(me.gmTrust - 3, 0, 100)
-  pushLog(state, 'team', `俱乐部按你说的，把 <b>${target.ign}</b> 签来了。<b>人是你要的。</b>`)
-  return `${target.ign} 来了。`
+  pushLog(state, 'team', `俱乐部按你说的，把 <b>${target.ign}</b> 签来了${seller ? `（从 ${seller.name}，转会费 ${worldMoney(fee, cur, state.year)}）` : ''}。<b>人是你要的。</b>`)
+  return seller ? `${target.ign} 从 ${seller.name} 来了，转会费 ${worldMoney(fee, cur, state.year)}。` : `${target.ign} 来了。`
 }
 
 /* ------------------------------------------------------------------ */
 
-/** Both cooldowns tick down a stage at a time. */
+/** The cooldowns tick down a stage at a time: 推荐替补首发's (me/recruit.ts) is once a stage, so one tick clears it. */
 export function cloutStage(state: GameState): void {
   const me = state.me
   if (!me?.cloutCd) return
   me.cloutCd.list = Math.max(0, me.cloutCd.list - 1)
   me.cloutCd.sign = Math.max(0, me.cloutCd.sign - 1)
+  if (me.cloutCd.push) me.cloutCd.push = Math.max(0, me.cloutCd.push - 1)
 }
 
 /** A line for the career card and the club screen. */

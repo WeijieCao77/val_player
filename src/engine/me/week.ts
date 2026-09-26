@@ -21,6 +21,8 @@ import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { wageCny } from './paytable'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
 import { cloutStage } from './clout'
+import { gmStage } from './gmTrust'
+import { subPushStage } from './recruit'
 import { TRUST_DOWN, TRUST_UP, coachAfterTitle, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
 import { MeMatch } from './matchplay'
@@ -689,6 +691,9 @@ function onStageChange(state: GameState, rng: Rng, newYear = false): void {
   // a stage at a strong club or beside a veteran loosens a ceiling; read before noteScoutInterest clears the stage's counts
   bottleneckStage(state)
   if (me.phase !== 'pro') return
+  // the manager reads the stage's results (me/gmTrust.ts, 2026-09-26), and a 推荐替补首发 kept to the stage's end ends with it
+  gmStage(state)
+  subPushStage(state)
   // Champions has just been settled? then whoever lost the final is written down
   // on the timeline Champions is 「2026 全球冠军赛」, not a comp keyed 'champions': the old lookup never found it, so 无冕之王 never came
   const champs = Object.values(state.comps).find((c) => !!c.champion && compClass(c.name) === 'champions' && c.finished?.[1] === state.myTeam)

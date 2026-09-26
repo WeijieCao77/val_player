@@ -248,6 +248,16 @@ export function coachStarters(state: GameState, room = true): string[] {
     if (drop) five[five.indexOf(drop)] = igl
   }
 
+  // 推荐替补首发 (me/recruit.ts, 2026-09-26): the man I recommended plays in place of the starter at his
+  // position for his trial, and to the stage's end once it went well. Never my seat — neither of them is at
+  // my position — and my own trial, promise and held seat below still come first.
+  const push = me?.subPush
+  if (push && push.club === team.id) {
+    const sub = squad.find((p) => p.id === push.sub)
+    const at = five.findIndex((p) => p.id === push.out)
+    if (sub && at >= 0 && !five.includes(sub) && sub.injuredUntil <= state.day) five[at] = sub
+  }
+
   // on trial: I play, in place of the man I beat in practice
   if (me?.trial) {
     const mine = state.players[me.id]

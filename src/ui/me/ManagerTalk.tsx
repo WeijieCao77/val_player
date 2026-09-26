@@ -44,7 +44,7 @@ export default function ManagerTalk() {
         {trustDisplay} · {signTargetDisplay}{signReached ? '（已达标）' : '（未达标）'}
       </p>
       <p className="tiny muted" style={{ margin: '0 0 6px' }}>
-        比赛胜利和夺冠主要影响教练信任与威望；经理关系另有判定，也可主动沟通恢复。
+        每个赛段结束，经理会按这段的战绩、拿没拿冠军和你的人气重新看你一次；时间久了，好感和不满都会慢慢淡下来。也可以主动沟通。
       </p>
       <p className="tiny muted" style={{ margin: '0 0 6px' }}>
         每次沟通消耗 {MANAGER_TALK_AP} 点行动。{gainCapDisplay}。两次沟通之间需要等待 {MANAGER_TALK_WEEKS} 个生涯周。
