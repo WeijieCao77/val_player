@@ -204,6 +204,20 @@ export function reachOf(state: GameState): { club: string | null; people: Set<st
 }
 
 /**
+ * What the player's own asks did to his club, which history leaves alone (me/recruit.ts; the author, 2026-09-26:
+ * 「类似俱乐部去挖人」, as 破晓's tlIn / tlOut): `in`, the men 点名要人 or 提议补强 brought in and still here — no
+ * other club's book signs them back, and his club's book does not let them go; `out`, the men his asks sent
+ * away — his club's book does not bring them back. Empty at any other club than the one they were made at.
+ */
+export function pinsOf(state: GameState): { in: Set<string>; out: Set<string> } {
+  const me = state.me
+  const p = me?.phase === 'pro' ? me.pinned : undefined
+  if (!p || p.club !== state.myTeam) return { in: new Set(), out: new Set() }
+  const roster = new Set(state.teams[p.club]?.roster ?? [])
+  return { in: new Set(p.ids.filter((id) => roster.has(id))), out: new Set(p.out) }
+}
+
+/**
  * Is this club's roster history's this season — the book has it this year, and the year is not past the book?
  * The player's club then makes no market moves of its own (me/club.ts clubWindow, clubWinter): history's
  * signings and departures are its moves, and one of the club's own would only be undone at the next event.
@@ -258,13 +272,15 @@ function bookRosterOf(state: GameState, rosters: Record<string, string[]>, teamI
 function followBook(state: GameState, t: Team, ids: string[], year: number, rng: Rng, whole: boolean): boolean {
   const me = state.me
   if (!me || me.phase !== 'pro') return false
-  const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && p.id !== me.id)
+  // the men my asks sent away stay away, and the men they brought stay (pinsOf)
+  const pins = pinsOf(state)
+  const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && p.id !== me.id && !pins.out.has(p.id))
   // Before an event, a side sharing fewer than three men with the club is not the club moving players but a
   // second five history entered under its name: Xi Lai Gaming played 2025's 中国进化系列赛 第二幕、第三幕 with
   // its reserves. At anybody else's club they come and go by the event; at mine they would swap the five I
   // play in twice in a fortnight. His club plays those with its own (a probe of five 2021 careers, 2026-09-24).
   if (!whole && want.length >= 3 && want.filter((p) => p.teamId === t.id).length < 3) return false
-  const keep = new Set([...want.map((p) => p.id), me.id])
+  const keep = new Set([...want.map((p) => p.id), me.id, ...pins.in])
   let moved = false
   if (whole) {
     for (const pid of [...t.roster]) {
@@ -291,7 +307,7 @@ function followBook(state: GameState, t: Team, ids: string[], year: number, rng:
     }
   }
   arrivals.ids = arrivals.ids.filter((id) => t.roster.includes(id))
-  const brought = new Set(want.map((p) => p.id))
+  const brought = new Set([...want.map((p) => p.id), ...pins.in])
   const out = (pool: Player[]) => pool.sort((a, b) => Number(t.starters.includes(a.id)) - Number(t.starters.includes(b.id)) || a.overall - b.overall)[0]
   let guard = 0
   while (t.roster.length > MY_CEILING && guard++ < 8) {
@@ -856,11 +872,13 @@ export function syncYear(state: GameState, year: number): YearSync {
   }
 
   const ownBefore = mine ? [...(state.teams[mine]?.roster ?? [])] : []
+  // a man the player's own ask brought to his club is his club's now: no book signs him back (pinsOf)
+  const pinned = pinsOf(state).in
   for (const [vlr, ids] of Object.entries(Y.rosters)) {
     if (mine && state.heirs?.[clubId(vlr)] === mine) continue
     const t = state.teams[clubId(vlr)]
     if (!t || t.id === mine) continue
-    const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && !people.has(p.id))
+    const want = ids.map((x) => ensurePlayer(state, x, year, t.region)).filter((p): p is Player => !!p && !people.has(p.id) && !pinned.has(p.id))
     const keep = new Set(want.map((p) => p.id))
     for (const pid of [...t.roster]) if (!keep.has(pid)) release(state, state.players[pid])
     for (const p of want) {
@@ -966,6 +984,8 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
   const ownBefore = mine ? [...(state.teams[mine]?.roster ?? [])] : []
   const ownIds = mine && state.teams[mine] ? bookRosterOf(state, rosters, mine) : undefined
   if (ownIds) followBook(state, state.teams[mine!], ownIds, year, rng, false)
+  // a man the player's own ask brought to his club plays for it: no other side's event roster takes him back (pinsOf)
+  const pinned = pinsOf(state).in
   for (const [vlr, ids] of Object.entries(rosters)) {
     const id = clubId(vlr)
     if (id === mine || (mine && state.heirs?.[id] === mine)) continue
@@ -979,7 +999,7 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
       founded.push(c.n)
     }
     const team = t
-    const want = ids.map((x) => ensurePlayer(state, x, year, team.region)).filter((p): p is Player => !!p && !people.has(p.id))
+    const want = ids.map((x) => ensurePlayer(state, x, year, team.region)).filter((p): p is Player => !!p && !people.has(p.id) && !pinned.has(p.id))
     wake(state, team)
     let moved = false
     for (const p of want) {

@@ -843,8 +843,7 @@ export interface MeState {
    * and rotates in (me/coach.ts rotationCall), counted from `since`, the week I started holding it. Absent
    * in older saves and at a club history has not signed anyone for.
    */
-  historyArrivals?: { club: string; ids: string[]; seat?: boolean; since?: number; rot?: { week: number; sub: string | null; why: 'tired' | 'form' | 'turn' } }
-  /** official starts at this club since I joined it — with the coach's trust, how a starter becomes his own (me/coach.ts earnProven); absent in older saves */
+  historyArrivals?: { club: string; ids: string[]; seat?: boolean; since?: number; rot?: { week: number; sub: string | null; why: 'tired' | 'form' | 'turn' } }  /** official starts at this club since I joined it — with the coach's trust, how a starter becomes his own (me/coach.ts earnProven); absent in older saves */
   startsHere?: number
   /** official starts left, after a title won as a starter, in which a bad run costs no place (me/coach.ts coachAfterTitle) */
   graceMatches?: number
@@ -868,8 +867,28 @@ export interface MeState {
   money: number
   /** my contract as signed, in its league's currency; the world's copy (player.salary) is in dollars */
   pay?: PayTerms
-  /** 话语权的两个动作各自的冷却，按赛段计 — see me/clout.ts */
-  cloutCd?: { list: number; sign: number }
+  /** 话语权的两个动作各自的冷却，按赛段计 — see me/clout.ts; `push` 推荐替补首发's once a stage (me/recruit.ts) */
+  cloutCd?: { list: number; sign: number; push?: number }
+  /**
+   * What my own asks did to my club's roster, which history leaves alone (engine/timeline.ts followBook,
+   * syncYear, syncEvent; the author, 2026-09-26: 「类似俱乐部去挖人」): `ids`, the men 点名要人 or 提议补强
+   * brought in — history never takes them back or lets them go; `out`, the men 提出换人 or a one-for-one sent
+   * away — history never brings them back to this club. By club: at another club it means nothing. Absent in
+   * older saves and until the first ask lands (me/recruit.ts).
+   */
+  pinned?: { club: string; ids: string[]; out: string[] }
+  /** 提议补强: the transfer period (me/window.ts periodKey) it was last asked in — once a period (me/recruit.ts) */
+  reinforceAsked?: number
+  /**
+   * 推荐替补首发 (me/recruit.ts): `sub` starts in place of `out` for `left` more official matches; `good`, how
+   * many of them went well; `kept`, the trial passed and he keeps the seat to the stage's end.
+   */
+  subPush?: { club: string; sub: string; out: string; left: number; good: number; kept?: boolean }
+  /**
+   * The manager's stage settlement (me/gmTrust.ts gmStage): the day the last one was made, and how many of
+   * my titles it had already counted. Absent in older saves: the first settlement only records them.
+   */
+  gmBook?: { year: number; day: number; seen: number }
   /** the eight ceilings' book; absent in saves from before them, filled at the next settlement */
   bottleneck?: BottleneckState
   /** the ceremony on screen right now */

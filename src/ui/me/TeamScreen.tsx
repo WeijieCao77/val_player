@@ -13,6 +13,10 @@ import {
   canList, canSign, cloutBreakdown, cloutTier,
   doList, doSign, listOdds, signTargets,
 } from '../../engine/me/clout'
+import {
+  PUSH_AP, PUSH_MATCHES, REINFORCE_AP, doPush, doReinforce, pushGate, pushOptions,
+  reinforceGate, reinforceOdds, reinforceOptions, seasonWinRate,
+} from '../../engine/me/recruit'
 import { worldMoney } from './common'
 import { leagueCurOf } from '../../engine/me/currency'
 import { useState } from 'react'
@@ -239,29 +243,64 @@ function RoomPanel() {
  */
 function CloutPanel() {
   const { game, commit, toast } = useGame()
+  const [nums] = useNumbers()
   const me = game.me!
-  const [open, setOpen] = useState<'' | 'list' | 'sign'>('')
+  const [open, setOpen] = useState<'' | 'list' | 'sign' | 'push' | 'reinforce'>('')
   const { total } = cloutBreakdown(game)
   const tier = cloutTier(total)
   const listGate = canList(game)
   const signGate = canSign(game)
+  const pushGateNow = pushGate(game)
+  const reinGate = reinforceGate(game)
   const team = game.teams[game.myTeam]
   const mates = team.roster.map((id) => game.players[id]).filter((x) => x && x.id !== me.id)
   const targets = signGate.ok ? signTargets(game) : []
+  const pushes = pushGateNow.ok ? pushOptions(game) : []
+  const reinforce = reinGate.ok ? reinforceOptions(game) : []
+  const reinOdds = reinforceOdds(game)
+  const word = (p: number) => (nums ? `${Math.round(p * 100)}%` : p >= 0.6 ? '有把握' : p >= 0.35 ? '看运气' : '希望不大')
+  const cur = leagueCurOf(team.region)
 
   const act = (line: string) => { toast(line); setOpen(''); commit() }
+  const toggle = (k: typeof open) => setOpen(open === k ? '' : k)
+  // an ask that spends action points is final, as 「与经理沟通」 is (ManagerTalk): it seals the week's undoable actions
+  const sure = (ap: number) => window.confirm(`这次要花 ${ap} 点行动，提了就不能撤回，本周此前可撤回的行动也会一起确定。`)
 
   return (
     <Panel title="话语权" actions={<span className={`tag${total >= 62 ? ' t1' : ''}`}>{tier.name}</span>}>
       <p className="small" style={{ marginTop: 0 }}>{tier.blurb}</p>
       <ManagerTalk />
 
+      {/* to the coach: the five, then the roster; to the manager: a position, then a name — each greyed with its reason */}
+      <p className="tiny muted" style={{ margin: '10px 0 4px' }}>找教练</p>
       <div className="row wrap" style={{ gap: 8 }}>
-        <button className="sm" disabled={!listGate.ok} onClick={() => setOpen(open === 'list' ? '' : 'list')}>提出换人</button>
-        <button className="sm" disabled={!signGate.ok} onClick={() => setOpen(open === 'sign' ? '' : 'sign')}>要求签人</button>
+        <button className="sm" disabled={!pushGateNow.ok} onClick={() => toggle('push')}>推荐替补首发</button>
+        <button className="sm" disabled={!listGate.ok} onClick={() => toggle('list')}>提出换人</button>
       </div>
-      {!listGate.ok && <p className="tiny muted" style={{ margin: '6px 0 0' }}>提出换人：{listGate.why}</p>}
-      {!signGate.ok && <p className="tiny muted" style={{ margin: '4px 0 0' }}>要求签人：{signGate.why}</p>}
+      {!pushGateNow.ok && <p className="tiny muted" style={{ margin: '6px 0 0' }}>推荐替补首发：{pushGateNow.why}</p>}
+      {!listGate.ok && <p className="tiny muted" style={{ margin: '4px 0 0' }}>提出换人：{listGate.why}</p>}
+      <p className="tiny muted" style={{ margin: '10px 0 4px' }}>找经理</p>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <button className="sm" disabled={!reinGate.ok} onClick={() => toggle('reinforce')}>提议补强</button>
+        <button className="sm" disabled={!signGate.ok} onClick={() => toggle('sign')}>点名要人</button>
+      </div>
+      {!reinGate.ok && <p className="tiny muted" style={{ margin: '6px 0 0' }}>提议补强：{reinGate.why}</p>}
+      {!signGate.ok && <p className="tiny muted" style={{ margin: '4px 0 0' }}>点名要人：{signGate.why}</p>}
+      <p className="tiny faint" style={{ margin: '6px 0 0' }}>这几件事托管不会替你提。经理和教练都不会按你的意思往你自己的位置上添人。</p>
+
+      {open === 'push' && (
+        <div className="clout-list">
+          <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+            跟教练推荐一个替补，顶同位置的首发打 {PUSH_MATCHES} 场正赛（花 {PUSH_AP} 点行动，每个赛段一次）。<b>被换下的人会知道是你提的；试用没打出来，教练对你的信任会掉一点。</b>
+          </p>
+          {pushes.length ? pushes.map((o) => (
+            <div key={o.sub.id} className="clout-row">
+              <span><b>{o.sub.ign}</b> <span className="muted">{o.sub.role} · 综合 {o.sub.overall}{o.out ? ` · 顶 ${o.out.ign}` : ''}{o.why ? ` · ${o.why}` : ''}</span></span>
+              <button className="sm" disabled={!!o.why} onClick={() => { if (sure(PUSH_AP)) act(doPush(game, o.sub.id)) }}>推荐</button>
+            </div>
+          )) : <p className="small muted" style={{ margin: 0 }}>替补席上现在没有人。</p>}
+        </div>
+      )}
 
       {open === 'list' && (
         <div className="clout-list">
@@ -280,14 +319,28 @@ function CloutPanel() {
         </div>
       )}
 
+      {open === 'reinforce' && (
+        <div className="clout-list">
+          <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
+            跟经理说哪个位置缺人，由他去找（花 {REINFORCE_AP} 点行动，每个转会期一次），可能是自由人，也可能从别的俱乐部买。把握{word(reinOdds)}{seasonWinRate(game) != null && seasonWinRate(game)! < 0.45 ? '——这个赛季输得多，经理更舍得花钱' : ''}。<b>说不动，经理对你的信任会掉一点。</b>
+          </p>
+          {reinforce.map((o) => (
+            <div key={o.role} className="clout-row">
+              <span><b>{o.role}</b> <span className="muted">{o.why ?? `经理有人选${o.fee ? ` · 转会费约 ${worldMoney(o.fee, cur, game.year)}` : ' · 自由人'}`}</span></span>
+              <button className="sm" disabled={!!o.why} onClick={() => { if (sure(REINFORCE_AP)) act(doReinforce(game, o.role)) }}>提</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {open === 'sign' && (
         <div className="clout-list">
           <p className="tiny muted" style={{ margin: '8px 0 4px' }}>
-            你能开口要的人就这几个——档次跟着你的威望和经理对你的信任走。<b>谈崩了，经理对你的信任会掉一截。</b>
+            你能开口要的人就这几个——档次跟着你的威望和经理对你的信任走；处得很铁的老队友也能点名。<b>谈崩了，经理对你的信任会掉一截。</b>
           </p>
           {targets.length ? targets.map((t) => (
             <div key={t.id} className="clout-row">
-              <span><b>{t.ign}</b> <span className="muted">{t.role} · 综合 {t.overall} · {t.teamName}{t.away ? ` · ${t.away}` : ''} · 身价 {worldMoney(t.fee, leagueCurOf(team.region), game.year)}</span></span>
+              <span><b>{t.ign}</b>{t.mate ? <span className="tag" style={{ marginLeft: 4 }}>老队友</span> : null} <span className="muted">{t.role} · 综合 {t.overall} · {t.teamName}{t.away ? ` · ${t.away}` : ''}{t.fee ? ` · 身价 ${worldMoney(t.fee, cur, game.year)}` : ''}</span></span>
               <button className="sm" onClick={() => act(doSign(game, t.id))}>要</button>
             </div>
           )) : <p className="small muted" style={{ margin: 0 }}>现在没有你够得着、又比队里现有的人强的目标。</p>}

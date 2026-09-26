@@ -395,6 +395,9 @@ export function joinClub(state: GameState, d: Deal, opts: { quiet?: boolean; ben
   me.phase = 'pro'
   me.coachTrust = 50 + (d.role === 'star' ? 12 : d.role === 'starter' ? 6 : 0)
   me.gmTrust = 55
+  // the manager reads this club's results from today (me/gmTrust.ts gmStage), and what I asked of the last one is its business
+  me.gmBook = { year: state.year, day: state.day, seen: me.titles.length }
+  me.subPush = undefined
   me.proven = d.role === 'star'
   me.edge = 0
   me.trial = undefined

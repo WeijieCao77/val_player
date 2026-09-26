@@ -19,6 +19,7 @@ import { dateCn, lockDoing, lockLifts, moveBlock, nextPeriodAbs, todayAbs, windo
 import type { WindowState } from './window'
 import { pitchBook, pitchBookMut, tallyOf } from './pitchbook'
 import { countOffer, countPitchWhy } from './telemetry'
+import { closeFormerMate } from './recruit'
 
 /**
  * 自荐 and 主动接触: writing to a club instead of waiting to be called.
@@ -70,6 +71,12 @@ export const GAP_DOWN = 30
 export const NEED_BONUS = { hole: 15, beat: 10, place: 5 } as const
 /** what makes a name: 神话 or 辐能战魂 as the ladder screen shows them, a following past the invitation line, a professional past */
 export const FAME = { immortal: 3, radiant: 6, fans: 3, pro: 4 } as const
+/**
+ * a former team-mate I am still 很铁 with on their roster (me/recruit.ts closeFormerMate; the author, 2026-09-26): a
+ * word put in, not a need — the smallest of the need bonuses, a place open under six, and half of out-rating
+ * their starter. It is one voice in the room, and the club's bar and its need still decide.
+ */
+export const MATE_BONUS = 5
 /** a buyer whose budget does not cover my buyout */
 export const BUYOUT_SHORT = 30
 export const ODDS_MIN = 2
@@ -176,7 +183,7 @@ export const neverPro = (state: GameState): boolean => state.me!.phase !== 'pro'
 /* ------------------------------------------------------------------ */
 
 export interface PitchPart {
-  key: 'base' | 'gap' | 'hole' | 'beat' | 'place' | 'rank' | 'fans' | 'pro' | 'buyout'
+  key: 'base' | 'gap' | 'hole' | 'beat' | 'place' | 'rank' | 'fans' | 'pro' | 'buyout' | 'mate'
   label: string
   /** percent points */
   v: number
@@ -229,6 +236,9 @@ export function pitchOdds(state: GameState, team: Team, ctx: OddsCtx = ctxOf(sta
   else if (ctx.rank.tier === '神话') parts.push({ key: 'rank', label: ctx.rank.name, v: FAME.immortal })
   if (ctx.fans) parts.push({ key: 'fans', label: '粉丝过邀请线', v: FAME.fans })
   if (!ctx.never) parts.push({ key: 'pro', label: '打过职业', v: FAME.pro })
+  // a former team-mate I am still 很铁 with, on their roster, puts in a word (the author, 2026-09-26)
+  const mate = team.roster.find((id) => closeFormerMate(state, id))
+  if (mate) parts.push({ key: 'mate', label: `老队友 ${state.players[mate].ign} 在这`, v: MATE_BONUS })
   const short = ctx.fee > 0 && team.budget < ctx.fee
   if (short) parts.push({ key: 'buyout', label: '付不起违约金', v: -BUYOUT_SHORT })
   const raw = parts.reduce((s, x) => s + x.v, 0)
@@ -283,6 +293,9 @@ export function pitchExplanation(o: PitchOdds, numbers: boolean): string[] {
     default:
       out.push('他们现在没有明显的岗位需求，这不会加分。')
   }
+
+  const mate = o.parts.find((x) => x.key === 'mate')
+  if (mate) out.push(`${mate.label}：你们以前处得很铁，他会替你说句话，这是加分项。`)
 
   // 首次职业投一线
   if (o.nevpro) {
