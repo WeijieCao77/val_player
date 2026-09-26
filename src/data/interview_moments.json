@@ -1097,9 +1097,7 @@
     "event": "VCT 2021 雷克雅未克大师赛",
     "stage": "masters1",
     "round": "",
-    "teams": [
-      "TL"
-    ],
+    "teams": [],
     "who": "ScreaM",
     "team": "TL",
     "when": "pre",
@@ -1176,9 +1174,7 @@
     "event": "VALORANT Champions 2021 柏林",
     "stage": "champions",
     "round": "小组赛",
-    "teams": [
-      "GMB"
-    ],
+    "teams": [],
     "who": "Chronicle",
     "team": "GMB",
     "when": "pre",
@@ -1254,9 +1250,7 @@
     "event": "VCT 2023 EMEA 联赛 季后赛",
     "stage": "stage1",
     "round": "",
-    "teams": [
-      "FNC"
-    ],
+    "teams": [],
     "who": "Boaster",
     "team": "FNC",
     "when": "pre",
