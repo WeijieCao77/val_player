@@ -62,6 +62,10 @@ interface Scn { label: string; region: string; start: StartPoint; year: number; 
 const SCN: Scn[] = [
   { label: '2026 中国 · VCT 第六人', region: 'China', start: 't1', year: 2026, years: 3 },
   { label: '2021 欧洲 · 强队第六人', region: 'Europe', start: 't1', year: 2021, years: 3 },
+  // A third club, so the sample does not ride on one career's luck (2026-09-26): the veto fix moved the dice and
+  // the European sixth man's club stopped reaching 2021's Masters and Champions — six cards where there had been
+  // twelve, nothing wrong with any of them. Korea's league sends a club to an international most seasons.
+  { label: '2026 韩国 · VCT 第六人', region: 'Korea', start: 't1', year: 2026, years: 2 },
 ]
 
 /** one international of one year and one club I was at, as the last day I was at that club saw it */
