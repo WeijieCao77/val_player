@@ -602,7 +602,18 @@ function said(state: GameState, text: string): void {
   book(state).last = { year: state.year, day: state.day, text }
 }
 
-/** Answer a pre- or post-match interview. `choice` out of range is the first answer — the one that costs nothing. */
+/**
+ * Answer a pre- or post-match interview. `choice` out of range is the first answer — the one that costs nothing.
+ *
+ * `auto` (托管, and the × on the card) says the first answer and leaves it there: nothing moves — no trust, no
+ * following, no team-mate, no real line's bonus — the way a skipped night lands on 银档 and changes nothing
+ * (me/ceremony.ts). Found 2026-09-26 on check_igl 七: the first answer's small gains (a point of the coach's
+ * trust, the real line's heat, the MVP's nod to a team-mate) on every key match of a 托管 career moved its world
+ * — six seasons at other clubs, about one start in nine more — and the balanced duelist's 💢 lines went from
+ * 18.6 to 30.3 a career over twelve seeds, though no interview writes one. Said and left alone, the same twelve
+ * average 17.7; what still differs from a career without interviews is only the generic press cards they keep
+ * away for a month (ivQuiet).
+ */
 export function ivAnswer(state: GameState, id: string, choice: number, auto = false): string[] {
   const me = state.me
   if (!me) return []
@@ -613,33 +624,37 @@ export function ivAnswer(state: GameState, id: string, choice: number, auto = fa
   const i = Number.isInteger(choice) && choice >= 0 && choice < card.opts.length ? choice : 0
   const opt = card.opts[i]
   const rng = new Rng(hashStr(`iv:answer:${state.seed}:${id}`))
-  const lines = applyEffect(state, opt.e, rng)
+  // said for me: said, and nothing more (see above) — the first answer is 稳, which takes nothing either way
+  const i0 = auto ? 0 : i
+  const lines = auto ? [] : applyEffect(state, opt.e, rng)
   if (card.pre) {
     const pre = b.pre!
-    pre.tone = opt.tone
-    pre.line = opt.t
+    pre.tone = card.opts[i0].tone
+    pre.line = card.opts[i0].t
     if (auto) pre.auto = 1
     const q = BANK.find((x) => x.id === pre.q)
-    if (pre.tone === 'bold') {
+    if (!auto && pre.tone === 'bold') {
       b.edge = { fx: pre.fx, node: IV_BOLD_NODE, until: state.day + 3 }
       lines.push('这场关键回合更敢打')
-    } else if (pre.tone === 'att') {
+    } else if (!auto && pre.tone === 'att') {
       lines.push(...attitude(state, q?.a[2].to ?? 'opp', pre.pal, pre.foe, 1))
     }
-    lines.push(...momentBonus(state, pre.moment, pre.tone))
+    if (!auto) lines.push(...momentBonus(state, pre.moment, pre.tone))
     const trait = auto ? null : addAxis(state, pre.tone === 'steady' ? 'grind' : pre.tone === 'bold' ? 'show' : q?.a[2].to === 'mate' ? 'warm' : 'hard')
     if (trait) lines.push(`你成了「${trait}」`)
     const text = `${pre.about}前的采访，你说：「${pre.line}」`
     pushLog(state, 'event', `${text}${lines.length ? `（${lines.join('，')}）` : ''}`)
     said(state, text)
-    // a line that is never read against a result is still a line
-    remember(state, pre.line, pre.about, '赛前', score(pre.kind, pre.tone === 'bold' ? 1.5 : pre.tone === 'att' ? 1.3 : 1, !!intlOf(state, pre.fx)))
+    // a line that is never read against a result is still a line — one I said myself
+    if (!auto) remember(state, pre.line, pre.about, '赛前', score(pre.kind, pre.tone === 'bold' ? 1.5 : pre.tone === 'att' ? 1.3 : 1, !!intlOf(state, pre.fx)))
     return lines
   }
   const post = b.post!
   const def = POST[post.out]
-  lines.push(...attitude(state, def.to[i], post.pal, post.foe, post.out === 'ate' && i === 2 ? -1.6 : post.out === 'mvp' && i === 2 ? -0.6 : 1))
-  lines.push(...momentBonus(state, post.moment, opt.tone))
+  if (!auto) {
+    lines.push(...attitude(state, def.to[i], post.pal, post.foe, post.out === 'ate' && i === 2 ? -1.6 : post.out === 'mvp' && i === 2 ? -0.6 : 1))
+    lines.push(...momentBonus(state, post.moment, opt.tone))
+  }
   const pre = b.pre?.fx === post.fx ? b.pre : undefined
   const text = post.out === 'kept' ? `${post.about}，赛前的话说到做到。赛后你说：「${opt.t}」`
     : post.out === 'ate' ? `${post.about}，赛前的话被翻了出来。赛后你说：「${opt.t}」`
@@ -648,8 +663,8 @@ export function ivAnswer(state: GameState, id: string, choice: number, auto = fa
   pushLog(state, 'event', `${text}${lines.length ? `（${lines.join('，')}）` : ''}`)
   said(state, text)
   const intl = !!intlOf(state, post.fx)
-  if (pre?.line && (post.out === 'kept' || post.out === 'ate')) remember(state, pre.line, pre.about, post.out === 'kept' ? '赛前 · 说到做到' : '赛前 · 打脸', score(post.kind, post.out === 'kept' ? 3 : 2, intl))
-  if (i > 0 && (post.out === 'kept' || post.out === 'mvp')) remember(state, opt.t, post.about, post.out === 'mvp' ? '赛后 · MVP' : '赛后', score(post.kind, i === 2 ? 2.2 : 1.8, intl))
+  if (!pre?.auto && pre?.line && (post.out === 'kept' || post.out === 'ate')) remember(state, pre.line, pre.about, post.out === 'kept' ? '赛前 · 说到做到' : '赛前 · 打脸', score(post.kind, post.out === 'kept' ? 3 : 2, intl))
+  if (!auto && i > 0 && (post.out === 'kept' || post.out === 'mvp')) remember(state, opt.t, post.about, post.out === 'mvp' ? '赛后 · MVP' : '赛后', score(post.kind, i === 2 ? 2.2 : 1.8, intl))
   b.post = undefined
   return lines
 }

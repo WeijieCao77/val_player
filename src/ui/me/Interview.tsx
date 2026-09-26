@@ -16,9 +16,10 @@ export default function InterviewModal({ id, onDone }: { id: string; onDone: () 
   const { game, commit } = useGame()
   const card = ivCard(game, id)
   if (!card) { pop(game, 'interview', id); onDone(); return null }
-  const choose = (i: number) => {
+  const choose = (i: number, skip = false) => {
     const pick = card.opts[i] ?? card.opts[0]
-    const lines = ivAnswer(game, card.id, i)
+    // the × is 托管's answer: the first, said for me, and nothing moves (engine/me/interview.ts ivAnswer)
+    const lines = ivAnswer(game, card.id, i, skip)
     const close = () => { holdCard(null); onDone() }
     holdCard(
       <Modal title={card.title} art={<Scene kind="media" />} onClose={close} onBgClose={close}>
@@ -35,7 +36,7 @@ export default function InterviewModal({ id, onDone }: { id: string; onDone: () 
     commit()
   }
   return (
-    <Modal title={card.title} art={<Scene kind="media" />} onClose={() => choose(0)} onBgClose={() => {}}>
+    <Modal title={card.title} art={<Scene kind="media" />} onClose={() => choose(0, true)} onBgClose={() => {}}>
       <p className="tiny muted iv-kind" style={{ margin: '0 0 4px' }}>🎙️ {card.about}</p>
       <p className="q ev-q">{card.q}</p>
       {card.ctx.map((c) => <p key={c} className="muted small iv-ctx" style={{ margin: '0 0 4px' }}>{c}</p>)}
@@ -48,7 +49,7 @@ export default function InterviewModal({ id, onDone }: { id: string; onDone: () 
           </button>
         ))}
       </div>
-      <p className="tiny faint" style={{ textAlign: 'center', margin: '10px 0 0' }}>不想说也行：关掉就按第一个回答，不花任何代价。</p>
+      <p className="tiny faint" style={{ textAlign: 'center', margin: '10px 0 0' }}>不想说也行：关掉就按第一个回答应付过去，什么都不变。</p>
     </Modal>
   )
 }
