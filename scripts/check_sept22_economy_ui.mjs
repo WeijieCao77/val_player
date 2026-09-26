@@ -46,7 +46,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 
 let browser;
 try {
- browser=await chromium.launch({headless:true});
+ browser=await chromium.launch({headless:true,args:['--mute-audio']});
  for(const width of [320,390,1440]){
   const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],blocked=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -127,7 +127,42 @@ try {
   await modal.getByRole('button',{name:/关闭/}).click();await modal.waitFor({state:'hidden'});
   await input.fill('');await rows.first().waitFor({state:'attached'});assert.equal(await rows.count(),expected.length);
   assert.equal(await snapshot(),beforeTransfer);assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);
-  console.log('PASS '+width+'px: fan up/flat/down; '+expected.filter(r=>!r.why).length+' eligible explanations both modes, blocked reasons, search/roster, full-state purity/no overflow/network');
+  // 2026-09-26: the gear's six rows with their model pickers, the kits' lines, 训练与团队, 租房, 买车 and 公益捐款 —
+  // on a phone first: nothing wider than its panel, no row broken alone, locked buttons greyed with their reason
+  await page.getByRole('button',{name:'Economy',exact:true}).click();
+  await page.evaluate(()=>{window.game.me.money=300000;window.refresh()});
+  const gearPanel=page.locator('.panel').filter({has:page.getByText('外设',{exact:true})});
+  const crewPanel=page.locator('.panel').filter({has:page.getByText('训练与团队',{exact:true})});
+  await crewPanel.waitFor();
+  assert.equal(await gearPanel.locator('.shop-row').count(),6,'six gear rows, the mousepad among them');
+  const gearText=await gearPanel.innerText();
+  for(const s of ['鼠标垫','瞄准套件（鼠标和鼠标垫都换成旗舰）：换上后枪法训练满 4 次，枪法 +1（离上限还有空间才算）','反应套件','耳机（换成旗舰）：换上后复盘满 4 次，意识 +1'])assert.ok(gearText.includes(s),'gear panel says '+s);
+  const rowsFit=await gearPanel.locator('.shop-row').evaluateAll(rs=>rs.map(r=>({w:r.scrollWidth<=r.clientWidth+1,kids:[...r.children].every(c=>c.getBoundingClientRect().right<=r.getBoundingClientRect().right+1)})));
+  assert.ok(rowsFit.every(r=>r.w&&r.kids),'every gear row fits its panel '+width+' '+JSON.stringify(rowsFit));
+  // the rows break together: all one line, or all the button under the model
+  const layouts=await gearPanel.locator('.shop-row').evaluateAll(rs=>rs.map(r=>{const b=r.querySelector('.buy');const m=r.querySelector('.md');return b&&m?b.getBoundingClientRect().top>m.getBoundingClientRect().bottom-2:null}).filter(x=>x!==null));
+  assert.ok(layouts.every(x=>x===layouts[0]),'gear rows lay out alike '+width+' '+JSON.stringify(layouts));
+  const crewText=await crewPanel.innerText();
+  for(const s of ['私人教练','自己练习的收获 ×1.1','休赛期训练营','有了职业合同再说','康复与体能团队','24 岁起才请','都不抬高瓶颈'])assert.ok(crewText.includes(s),'crew panel says '+s);
+  assert.equal(await crewPanel.getByRole('button',{name:/去集训/}).isDisabled(),true,'camp greyed without a contract');
+  assert.equal(await crewPanel.getByRole('button',{name:/请团队/}).isDisabled(),true,'health team greyed under 24');
+  const outText=await page.locator('main').innerText();
+  for(const s of ['租房','买车','比亚迪 汉','特斯拉 Model Y','保时捷 911','公益捐款'])assert.ok(outText.includes(s),'economy says '+s);
+  await overflow('Economy with the new rows');
+  await gearPanel.screenshot({path:resolve(output,width+'-gear.png')});await crewPanel.screenshot({path:resolve(output,width+'-crew.png')});
+  // pick the mousepad's second model and buy it: the row shows it, and the diary says it through moneyfmt
+  const padRow=gearPanel.locator('.shop-row').filter({hasText:'鼠标垫'});
+  await padRow.locator('select').selectOption({index:1});
+  const second='ZOWIE G-SR';
+  await padRow.getByRole('button',{name:/换上/}).click();
+  assert.ok((await padRow.innerText()).includes(second),'the picked model is the one bought');
+  assert.equal(await page.evaluate(()=>window.game.me.gear.pad),1);
+  // hire the coach: the row says so, the button lets him go
+  await crewPanel.getByRole('button',{name:/请私教/}).click();
+  assert.ok((await crewPanel.innerText()).includes('现在：请着'),'coach hired');
+  assert.equal(await page.evaluate(()=>window.game.me.flags.coach),1);
+  await overflow('Economy after buying');assert.deepEqual(errors,[]);
+  console.log('PASS '+width+'px: fan up/flat/down; '+expected.filter(r=>!r.why).length+' eligible explanations both modes, blocked reasons, search/roster, full-state purity/no overflow/network; gear ×6 with pickers, kits, 训练与团队, 租房/买车/公益 fit and grey with reasons');
   await page.close();
  }
 }finally{await browser?.close();await new Promise(r=>server.close(r))}

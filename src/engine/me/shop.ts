@@ -140,8 +140,8 @@ export function kitLine(state: GameState, kit: Kit): string {
   const r = kitRead(state, kit)
   const cn = ATTR_CN[kit.attr]
   const card = ACTION_BY_KEY[kit.action].label
-  const parts = kit.slots.map((s) => GEAR_SLOTS.find((g) => g.key === s)!.name).join('和')
-  const head = `${kit.name}（${parts}都换成旗舰）：配合${card}练 ${KIT_SESSIONS} 次后${cn} +1（离上限还有空间才算）${r.max > 1 ? `，再练 ${KIT_MORE} 次再 +1` : ''}`
+  const parts = kit.slots.length > 1 ? `${kit.slots.map((s) => GEAR_SLOTS.find((g) => g.key === s)!.name).join('和')}都换成旗舰` : '换成旗舰'
+  const head = `${kit.name}（${parts}）：换上后${card}满 ${KIT_SESSIONS} 次，${cn} +1（离上限还有空间才算）${r.max > 1 ? `；再满 ${KIT_MORE} 次，再 +1` : ''}`
   if (r.up >= r.max) return `${head}。已经上手了。`
   if (!r.complete) return `${head}。还差：${kit.slots.filter((s) => (state.me!.gear[s] ?? 0) < 2).map((s) => GEAR_SLOTS.find((g) => g.key === s)!.name).join('、')}。`
   const have = Math.min(r.sessions, r.need)

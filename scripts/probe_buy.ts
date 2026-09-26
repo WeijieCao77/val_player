@@ -4,8 +4,9 @@
  * one thing alone) — so the gap in peak 综合 can be put down to what caused it.
  *
  *   npx tsx scripts/probe_buy.ts run <variants> <seeds> <seasons> <start> <out.jsonl>
- *     variants: none | all | only:<part>[+<part>] | no:<part>[+<part>], comma-separated
- *     parts:    gear review psych talk lang flat physio trip agent
+ *     variants: none | all | old | only:<part>[+<part>] | no:<part>[+<part>], comma-separated
+ *     parts:    gear pad review psych talk lang flat physio trip agent coach camp health
+ *     old:      the shop before 2026-09-26 (OLD_PARTS): no mousepad, no coach, camp or health team
  *   npx tsx scripts/probe_buy.ts summary <a.jsonl,...>
  *
  * 「Everything」 is a player who buys whatever the shop sells the moment he can
@@ -20,8 +21,10 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import type { StartPoint } from '../src/engine/me/career'
 import { autoPlan, autoResolve } from '../src/engine/me/auto'
 import { advanceWeek } from '../src/engine/me/week'
+import { ACTION_BY_KEY } from '../src/engine/me/actions'
 import { MeMatch } from '../src/engine/me/matchplay'
-import { COURSES, GEAR_PRICE, GEAR_SLOTS, RELAX, buyCourse, buyGear, buyRelax, hireAgent } from '../src/engine/me/shop'
+import { COURSES, GEAR_SLOTS, RELAX, buyCourse, buyGear, buyRelax, gearPrice, hireAgent } from '../src/engine/me/shop'
+import { campLocked, campPrice, coachLocked, coachWeekly, goCamp, healthLocked, healthPrice, setCoach, setHealth } from '../src/engine/me/crew'
 import { injuryHelpedBy, injuryStatus } from '../src/engine/me/injury'
 import { ATTR_KEYS } from '../src/engine/types'
 import type { GameState, Region, Role } from '../src/engine/types'
@@ -33,12 +36,15 @@ const mem: Record<string, string> = {}
 } as unknown as Storage
 ;(globalThis as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error('offline'))
 
-export const PARTS = ['gear', 'review', 'psych', 'talk', 'lang', 'flat', 'physio', 'trip', 'agent'] as const
+export const PARTS = ['gear', 'pad', 'review', 'psych', 'talk', 'lang', 'flat', 'physio', 'trip', 'agent', 'coach', 'camp', 'health'] as const
 export type Part = typeof PARTS[number]
+/** what the shop sold before 2026-09-26: 「old」 buys only these (scripts/check_buy.ts holds it to the old bounds) */
+export const OLD_PARTS: Part[] = ['gear', 'review', 'psych', 'talk', 'lang', 'flat', 'physio', 'trip', 'agent']
 
 export function partsOf(variant: string): Set<Part> {
   if (variant === 'none') return new Set()
   if (variant === 'all') return new Set(PARTS)
+  if (variant === 'old') return new Set(OLD_PARTS)
   const [how, list] = variant.split(':')
   const named = new Set(list.split('+') as Part[])
   return how === 'only' ? named : new Set(PARTS.filter((x) => !named.has(x)))
@@ -53,11 +59,15 @@ export function shopAll(state: GameState, parts: Set<Part>): void {
   const p = state.players[me.id]
   const can = (n: number) => me.money - n >= KEEP
   if (parts.has('agent') && me.phase === 'pro' && me.agentTier < 2 && can(30000)) hireAgent(state, 2)
-  if (parts.has('gear')) {
-    for (const s of GEAR_SLOTS) {
-      while ((me.gear[s.key] ?? 0) < 2 && can(GEAR_PRICE[(me.gear[s.key] ?? 0) + 1])) buyGear(state, s.key)
-    }
+  for (const s of GEAR_SLOTS) {
+    // the mousepad is its own part: without it the old five slots are what the shop sold before 2026-09-26
+    if (!parts.has(s.key === 'pad' ? 'pad' : 'gear')) continue
+    while ((me.gear[s.key] ?? 0) < 2 && can(gearPrice(s.key, (me.gear[s.key] ?? 0) + 1))) buyGear(state, s.key)
   }
+  // 训练与团队 (me/crew.ts): hired the moment they can be, and kept
+  if (parts.has('coach') && !me.flags.coach && !coachLocked(state) && can(coachWeekly(state))) setCoach(state, true)
+  if (parts.has('health') && !me.flags.healthOn && !healthLocked(state) && can(healthPrice(state))) setHealth(state, true)
+  if (parts.has('camp') && !campLocked(state) && can(campPrice(state))) goCamp(state)
   for (const c of COURSES) if (parts.has(c.key as Part) && !me.courses.includes(c.key) && can(c.price)) buyCourse(state, c.key)
   if (parts.has('flat') && !me.flags.relax_flat && can(price('flat'))) buyRelax(state, 'flat')
   for (let i = 0; i < 2 && me.relaxUsed < 2; i++) {
@@ -77,7 +87,7 @@ export interface RunOut {
   t1Weeks: number; ratingSum: number; proWeeks: number; fatigueSum: number; weeks: number
   spent: Record<string, number>; money: number; secs: number
   /** week by week, as the plan was drawn: where I was, whether I was in the five, and the rest it took (check_buy.ts pairs these) */
-  track: { club: string; starter: boolean; rest: number; train: number; played: number; started: number; fatigue: number; relief: number; overall: number }[]
+  track: { club: string; starter: boolean; rest: number; train: number; trainAp: number; played: number; started: number; fatigue: number; relief: number; overall: number; plan: Record<string, number> }[]
 }
 
 /** autoWeek, with the shopping before the plan and the plan counted */
@@ -104,7 +114,10 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
     const club = me.phase === 'pro' ? state.myTeam : ''
     const starter = !!club && !!state.teams[club]?.starters.includes(me.id)
     autoPlan(state)
-    const row = { club, starter, rest: me.plan.rest ?? 0, train: ['aim', 'vod', 'util', 'ranked', 'scrim'].reduce((s, k) => s + (me.plan[k as keyof typeof me.plan] ?? 0), 0), played: 0, started: 0, fatigue: Math.round(before), relief: Math.round(relief), overall: p.overall }
+    const practice = ['aim', 'vod', 'util', 'ranked', 'scrim'] as const
+    const row = { club, starter, rest: me.plan.rest ?? 0, train: practice.reduce((s, k) => s + (me.plan[k] ?? 0), 0),
+      // the same practice in action points: what the week's time went on (me/actions.ts prices each card by it)
+      trainAp: practice.reduce((s, k) => s + (me.plan[k] ?? 0) * ACTION_BY_KEY[k].cost, 0), played: 0, started: 0, fatigue: Math.round(before), relief: Math.round(relief), overall: p.overall, plan: { ...me.plan } as Record<string, number> }
     track.push(row)
     for (const [k, n] of Object.entries(me.plan)) hours[k] = (hours[k] ?? 0) + (n ?? 0)
     let stop = advanceWeek(state)
@@ -136,7 +149,7 @@ export function runCareer(seed: number, variant: string, region: Region, role: R
   const sum = (o?: Partial<Record<string, number>>) => Object.values(o ?? {}).reduce((s: number, v) => s + (v ?? 0), 0)
   const spent: Record<string, number> = {}
   const led = me.ledger!
-  for (const k of ['gear', 'course', 'relax', 'agent']) spent[k] = (led.cur.out[k as keyof typeof led.cur.out] ?? 0)
+  for (const k of ['gear', 'course', 'relax', 'agent', 'crew']) spent[k] = (led.cur.out[k as keyof typeof led.cur.out] ?? 0)
   const pro = me.seasons.filter((s) => s.tier > 0)
   return {
     seed, variant, region, role, start, seasons,

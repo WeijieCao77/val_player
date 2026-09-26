@@ -8,8 +8,8 @@
  */
 import assert from 'node:assert/strict'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { PEAK_END, ageAttrMul, ageLoss, trainAgeMul, youthLoosens } from '../src/engine/player'
-import { seasonRollover } from '../src/engine/training'
+import { HEALTH_LOSS_MUL, PEAK_END, ageAttrMul, ageLoss, trainAgeMul, youthLoosens } from '../src/engine/player'
+import { healthCovered, seasonRollover } from '../src/engine/training'
 import { bottleneckWeek, breakthrough, ceilingPotential, ensureCeilings, pathDead } from '../src/engine/me/bottleneck'
 import { ageNote } from '../src/engine/me/growth'
 import { Rng } from '../src/engine/rng'
@@ -94,6 +94,50 @@ console.log('四、俱乐部选手也一样')
   const was = { aim: q.attrs.aim, overall: q.overall }
   seasonRollover(s, new Rng(5))
   ok(q.attrs.aim < was.aim && q.potential <= Math.max(q.overall, was.overall), `NPC 30 岁：枪法 ${was.aim} → ${q.attrs.aim}，潜力随之降到 ${q.potential}，不会练回去`)
+}
+
+console.log('五之前、康复与体能团队（2026-09-26）：只作用于生涯玩家，27 岁起掉点 ×0.8')
+{
+  // the same winter, the same dice, with and without a health team paid for the year: seven ages, eleven seeds
+  const world = career()
+  ensureCeilings(world)
+  const winter = (age: number, seed: number, health: boolean) => {
+    const s = structuredClone(world)
+    const p = me(s)
+    p.age = age
+    for (const k of ATTR_KEYS) { p.attrs[k] = 85; p.caps![k] = 85; p.xp[k] = 0 }
+    p.potential = ceilingPotential(p)
+    s.me!.bottleneck!.pot = p.potential
+    if (health) s.me!.flags.healthYear = s.year
+    const npc = Object.values(s.players).find((x) => x.id !== s.me!.id && !x.caps && x.attrs.aim > 70)!
+    npc.age = age
+    seasonRollover(s, new Rng(seed))
+    return { aim: 85 - p.attrs.aim, reaction: 85 - p.attrs.reaction, capAim: p.caps!.aim, attrAim: p.attrs.aim, capReact: p.caps!.reaction, attrReact: p.attrs.reaction,
+      clutch: p.attrs.clutch, npc: JSON.stringify(npc.attrs), world: JSON.stringify(Object.values(s.players).filter((x) => x.id !== s.me!.id).map((x) => x.attrs)) }
+  }
+  let lostWith = 0, lostWithout = 0, npcSame = true, capsFollow = true, clutchSame = true, youngSame = true
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+    for (const age of [26, 27, 28, 29, 30, 31, 32]) {
+      const a = winter(age, seed, false)
+      const b = winter(age, seed, true)
+      if (a.world !== b.world || a.npc !== b.npc) npcSame = false
+      if (b.capAim !== b.attrAim || b.capReact !== b.attrReact) capsFollow = false
+      if (a.clutch !== b.clutch) clutchSame = false
+      if (age === 26 && (a.aim !== b.aim || a.reaction !== b.reaction)) youngSame = false
+      if (age >= 27) { lostWith += b.aim + b.reaction; lostWithout += a.aim + a.reaction }
+    }
+  }
+  ok(youngSame, '26 岁的冬天（转 27 岁之前）请不请都一样：还没到掉的年纪')
+  ok(lostWith < lostWithout && Math.abs(lostWith / lostWithout - HEALTH_LOSS_MUL) < 0.08, `27–32 岁、11 个种子：枪法反应一共掉 ${lostWithout} → ${lostWith} 点（${(lostWith / lostWithout).toFixed(2)}，约 ×${HEALTH_LOSS_MUL}）`)
+  ok(capsFollow, '瓶颈按实际掉的点降，不多不少')
+  ok(clutchSame, '残局照常：康复团队只管枪法和反应')
+  ok(npcSame, '同一个冬天，其他所有选手（NPC）的属性一模一样：康复团队只作用于生涯玩家，不改变骰子')
+  const s = career()
+  const npc = Object.values(s.players).find((x) => x.id !== s.me!.id)!
+  s.me!.flags.healthYear = s.year
+  ok(!healthCovered(s, npc) && healthCovered(s, me(s)), '只认当年付过钱的生涯玩家本人')
+  s.me!.flags.healthYear = s.year - 1
+  ok(!healthCovered(s, me(s)), '去年付的，管不到今年冬天')
 }
 
 console.log('五、说给玩家听')

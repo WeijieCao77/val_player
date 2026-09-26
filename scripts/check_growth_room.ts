@@ -7,7 +7,11 @@
  *
  *   npx tsx scripts/check_growth_room.ts
  */
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
+import { COACH_ACTIONS, COACH_MUL, setCoach } from '../src/engine/me/crew'
 import { ACTION_BY_KEY } from '../src/engine/me/actions'
 import { addXp, gainBase, hourValues, roomMul, runAction, weekGain } from '../src/engine/me/growth'
 import { injuryTrainMul } from '../src/engine/me/injury'
@@ -237,6 +241,38 @@ console.log('\n六、点击再撤回，整份可保存状态逐字节复原')
   const undone = undoAction(s, 'util')
   check(!did && moved && !undone && whole(s) === before,
     '道具与跑图点击后确实改变状态；撤回后 packState 逐字节回到点击前')
+}
+
+console.log('\n七、私人教练（2026-09-26）：界面显示的每点收益把 ×1.1 算进去，和实际训练一致；排位、训练赛和俱乐部训练不变')
+{
+  const mismatches: string[] = []
+  const ratios: string[] = []
+  for (const [ri, role] of ROLES.entries()) {
+    for (const [ai, action] of PRACTICE.entries()) {
+      const s = career(role, 900 + ri * 10 + ai)
+      const p = sPlayer(s)
+      withRoom(p)
+      s.me!.trainWeek = { week: s.me!.week, g: 10 }
+      const plain = hourValues(s).find((h) => h.key === action)
+      s.me!.money = 1_000_000
+      setCoach(s, true)
+      const g = weekGain(s)
+      const shown = hourValues(s).find((h) => h.key === action)
+      if (!shown || !plain) { mismatches.push(`${role}/${action}:预览缺失`); continue }
+      const want = COACH_ACTIONS.includes(action) ? COACH_MUL : 1
+      if (!near(shown.perPoint, plain.perPoint * want, 1e-9)) ratios.push(`${role}/${action} ×${(shown.perPoint / plain.perPoint).toFixed(4)}`)
+      const before = { ...p.xp }
+      runAction(s, action)
+      const w = weightsFor(p)
+      const weightedXp = ATTR_KEYS.reduce((sum, k) => sum + ((p.xp[k] ?? 0) - (before[k] ?? 0)) * w[k], 0)
+      const actual = weightedXp / g / ACTION_BY_KEY[action].cost
+      if (!near(actual, shown.perPoint, 1e-8)) mismatches.push(`${role}/${action}:${actual.toFixed(8)}≠${shown.perPoint.toFixed(8)}`)
+    }
+  }
+  check(ratios.length === 0, `请了私教：枪法训练、复盘、道具与跑图的预览正好 ×${COACH_MUL}，排位、训练赛不变${ratios.length ? `（${ratios.slice(0, 5).join('；')}）` : ''}`)
+  check(mismatches.length === 0, `请了私教，5 种角色 × 5 类训练的预览仍与实际收益一致${mismatches.length ? `（${mismatches.slice(0, 5).join('；')}）` : ''}`)
+  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/engine/training.ts'), 'utf8')
+  check(!/me\/crew|coachMul|COACH_MUL/.test(src), '俱乐部训练（engine/training.ts trainPlayer）不读私教：NPC 的训练不变')
 }
 
 function sPlayer(s: GameState): Player {
