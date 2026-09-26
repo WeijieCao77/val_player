@@ -44,7 +44,7 @@ export default function InterviewModal({ id, onDone }: { id: string; onDone: () 
         {card.opts.map((o, i) => (
           <button key={i} onClick={() => choose(i)}>
             <span>{o.t}</span>
-            <span className="m">{[describeEffect(o.e, game), ...o.notes].filter(Boolean).join(' · ')}{i === 0 ? ' · 按推荐' : ''}</span>
+            <span className="m">{[o.tag, describeEffect(o.e, game), ...o.notes].filter(Boolean).join(' · ')}{i === 0 ? ' · 按推荐' : ''}</span>
           </button>
         ))}
       </div>

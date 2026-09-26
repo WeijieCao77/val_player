@@ -439,7 +439,14 @@ function pickQuestion(state: GameState, f: Fixture, kind: IvKind, foe: boolean, 
 
 // ------------------------------------------------------------------ the cards
 
-export interface IvOpt { t: string; tone: IvTone | 'x'; e: EffectSpec; notes: string[] }
+export interface IvOpt {
+  t: string
+  tone: IvTone
+  e: EffectSpec
+  notes: string[]
+  /** what kind of answer it is, said first on the button: 认错 / 嘴硬 / 甩锅 */
+  tag?: string
+}
 export interface IvCard {
   id: string
   pre: boolean
@@ -542,12 +549,11 @@ function postCard(state: GameState, post: IvPost): IvCard {
   const opts: IvOpt[] = def.a.map(([t, e, tag], i) => {
     const to = def.to[i]
     const notes: string[] = []
-    if (tag) notes.push(tag)
     if (i === 0) notes.push('没有风险')
     if (post.out === 'ate' && i === 2) notes.push(palIgn ? `和 ${palIgn} 远一点` : '队里有人会听到')
     else if (to === 'mate' && palIgn) notes.push(`和 ${palIgn} 近一点`)
     if (to === 'opp' && foeIgn) notes.push(`和 ${foeIgn} 的火药味更重`)
-    return { t: t.replace(/\{pal\}/g, palIgn ?? '队友'), tone: i === 0 ? 'steady' : i === 1 ? 'bold' : 'att', e, notes }
+    return { t: t.replace(/\{pal\}/g, palIgn ?? '队友'), tone: i === 0 ? 'steady' : i === 1 ? 'bold' : 'att', e, notes, ...(tag ? { tag } : {}) }
   })
   const ctx: string[] = [`${post.about} · ${post.score} ${post.won ? '赢了' : '输了'}${post.mvp ? '，你是这场的 MVP' : ''}`]
   if (said && (post.out === 'kept' || post.out === 'ate' || pre?.tone)) ctx.push(`赛前你说：「${said}」`)
@@ -608,7 +614,7 @@ export function ivAnswer(state: GameState, id: string, choice: number, auto = fa
   const lines = applyEffect(state, opt.e, rng)
   if (card.pre) {
     const pre = b.pre!
-    pre.tone = opt.tone as IvTone
+    pre.tone = opt.tone
     pre.line = opt.t
     if (auto) pre.auto = 1
     const q = BANK.find((x) => x.id === pre.q)
@@ -631,7 +637,7 @@ export function ivAnswer(state: GameState, id: string, choice: number, auto = fa
   const post = b.post!
   const def = POST[post.out]
   lines.push(...attitude(state, def.to[i], post.pal, post.foe, post.out === 'ate' && i === 2 ? -1.6 : post.out === 'mvp' && i === 2 ? -0.6 : 1))
-  lines.push(...momentBonus(state, post.moment, opt.tone as IvTone))
+  lines.push(...momentBonus(state, post.moment, opt.tone))
   const pre = b.pre?.fx === post.fx ? b.pre : undefined
   const text = post.out === 'kept' ? `${post.about}，赛前的话说到做到。赛后你说：「${opt.t}」`
     : post.out === 'ate' ? `${post.about}，赛前的话被翻了出来。赛后你说：「${opt.t}」`

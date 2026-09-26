@@ -194,7 +194,7 @@ check('四 狠 + a win is 说到做到; 狠 + a loss is 打脸 with 认错 / 嘴
   assert.equal(t.me!.iv!.post!.out, 'ate')
   assert.equal(t.me!.fans - fans1, IV_ATE.fans)
   const ate = ivCard(t, `post:${g.id}`)!
-  assert.deepEqual(ate.opts.map((o) => o.notes[0]), ['认错', '嘴硬', '甩锅'])
+  assert.deepEqual(ate.opts.map((o) => o.tag), ['认错', '嘴硬', '甩锅'])
   results.push(`打脸：${ate.q} → ${ate.opts.map((o) => o.t).join(' / ')}`)
   const pal = t.me!.iv!.post!.pal
   ivAnswer(t, `post:${g.id}`, 2)
