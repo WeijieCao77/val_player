@@ -19,6 +19,7 @@ import { checkAchievements } from './achievements'
 import { activeAbsence } from './absence'
 import { familyVisitBlocked, FAMILY_VISIT_EVENTS } from './familyVisit'
 import { onFloor } from './story'
+import { ivQuiet } from './interview'
 
 export interface EventOpt {
   t: string
@@ -160,7 +161,8 @@ export const EVENTS: EventDef[] = [
   { id: 'after_title', w: 0, max: 6, when: pro, rec: 0,
     q: '夺冠之夜。队友要去庆功，经理要你先接采访。', ctx: '今晚所有人都想要你一块。',
     a: [{ t: '先采访再庆功', g: 'show', e: { heat: 60, gmTrust: 4, fatigue: 6 } }, { t: '跟队友走', g: 'warm', e: { bond: 12, heat: 25, gmTrust: -2 } }, { t: '回房间睡觉', g: 'grind', e: { fatigue: -10, heat: 10 } }] },
-  { id: 'after_upset', w: 0, max: 6, when: pro, rec: 1,
+  // a key match already had its press (me/interview.ts): the reporters at the door are that card's, not a second one
+  { id: 'after_upset', w: 0, max: 6, when: (s) => pro(s) && ivQuiet(s), rec: 1,
     q: '你们爆冷赢了一支强队，热搜上有你的名字。', ctx: '记者在门口。',
     a: [{ t: '说几句狠的', g: 'hard', e: { heat: 50, coachTrust: -2 } }, { t: '把功劳给队友', g: 'warm', e: { heat: 25, bond: 6 } }] },
   { id: 'after_skid', w: 0, max: 6, when: pro, rec: 1,
@@ -196,8 +198,10 @@ export const EVENTS: EventDef[] = [
   { id: 'gear_broke', w: 5, max: 4, when: () => true, rec: 0,
     q: '鼠标坏了，比赛在三天后。', ctx: '临时换设备手会生。',
     a: [{ t: '买同款', g: 'grind', e: { money: -700 } }, { t: '趁机升级', g: 'show', e: { money: -1300, mental: 1 } }, { t: '借队友的先用', g: 'warm', e: { form: -2, bond: 2 } }] },
-  // 赛后采访 is for a man who played the match (me/story.ts onFloor): drawn for the whole roster, it came to the bench too
-  { id: 'interview', w: 5, max: 5, when: (s) => onFloor(s) && famous(s, 100), rec: 1,
+  // 赛后采访 is for a man who played the match (me/story.ts onFloor): drawn for the whole roster, it came to the bench too.
+  // The key matches have their own before and after (me/interview.ts, 2026-09-26): this one keeps to the weeks
+  // without one, so the same question is not asked twice in a month
+  { id: 'interview', w: 5, max: 5, when: (s) => onFloor(s) && famous(s, 100) && ivQuiet(s), rec: 1,
     q: '赛后采访，记者问你怎么看对面的指挥。', ctx: '镜头对着你。',
     a: [{ t: '说他今天没打好', g: 'hard', e: { heat: 30, gmTrust: -3 } }, { t: '夸一句', g: 'warm', e: { heat: 10, gmTrust: 2 } }, { t: '「我们只看自己」', g: 'grind', e: { heat: 5 } }] },
   { id: 'ranked_flame', w: 6, max: 5, when: pre, rec: 1,

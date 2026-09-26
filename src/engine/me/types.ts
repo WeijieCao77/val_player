@@ -670,8 +670,8 @@ export interface IglBook {
 }
 
 export interface PendingItem {
-  /** 'pitch': a club's no to a 自荐 or a contact (me/selfpitch.ts) */
-  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt' | 'igl' | 'pitch'
+  /** 'pitch': a club's no to a 自荐 or a contact (me/selfpitch.ts); 'interview': `pre:<fixture>` / `post:<fixture>` (me/interview.ts) */
+  kind: 'cup' | 'invite' | 'tryout' | 'deal' | 'stream' | 'event' | 'trait' | 'season' | 'ending' | 'released' | 'ceremony' | 'folding' | 'hurt' | 'igl' | 'pitch' | 'interview'
   id?: string
   day: number
 }
@@ -882,6 +882,8 @@ export interface MeState {
   cerRest?: { until: number; mul: number }
   /** 决赛入场 left something on the next match */
   cerMatch?: { fixture: string; nudge: number; node: number; until: number }
+  /** 赛前 / 赛后采访 on the key matches — me/interview.ts; absent in older saves and until the first */
+  iv?: import('./interview').IvBook
   /** categories I was up for at awards nights; absent in older saves */
   awards?: MeAward[]
   /** the lay-off I am in, by kind - see me/injury.ts; absent when healthy and in saves from before it */

@@ -20,6 +20,7 @@ import { hurtBeforeMatch, mateInjuryWeek } from './hurtplay'
 import { addMoney, ledgerRotate, prizeWeek } from './money'
 import { wageCny } from './paytable'
 import { ceremonyBeforeMatch, ceremonyTick } from './ceremony'
+import { interviewBeforeMatch } from './interview'
 import { cloutStage } from './clout'
 import { TRUST_DOWN, TRUST_UP, coachAfterTitle, refreshMyRounds, runDuel, weeklyLineup } from './coach'
 import type { DuelResult } from './coach'
@@ -560,6 +561,8 @@ function runDays(state: GameState, days: number, turn: boolean): WeekStop {
     // and the next run plays it (dueToday).
     const today = r.pendingMine && pro ? r.pendingMine : undefined
     if (today) {
+      // a key match on the five: the pre-match interview first, then a final's walk-out (me/interview.ts)
+      if (!activeAbsence(state)) interviewBeforeMatch(state, today)
       if (!activeAbsence(state)) ceremonyBeforeMatch(state, today.label, state.comps[today.comp]?.name ?? today.comp)
       // hurt on a day the coach would start me: play through it or sit it out (me/hurtplay.ts)
       hurtBeforeMatch(state, today)

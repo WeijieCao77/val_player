@@ -17,6 +17,7 @@ import type { Hint } from './hints'
 import { landCall, roundBranches } from './keyround'
 import type { BranchKey, RoundBranch } from './keyround'
 import { cerMatchEdge } from './ceremony'
+import { interviewAfterMatch, ivEdge } from './interview'
 import { hurtBook, hurtMap, injuryAfterMatch } from './hurtplay'
 import { finishMedicalFinal } from './absenceFinal'
 import { activeAbsence } from './absence'
@@ -410,7 +411,7 @@ export class MeMatch {
     const hint = pend.fav < 0 ? 0 : idx === pend.fav ? HINT_EDGE : -HINT_EDGE
     const manual = clamp01(
       nodeChance(this.state, opt, this.myTeamId, this.oppTeamId) + cerMatchEdge(this.state).node +
-      rivalNodeEdge(this.state, this.oppTeamId) + hint,
+      rivalNodeEdge(this.state, this.oppTeamId) + hint + (this.friendly ? 0 : ivEdge(this.state, this.fixture.id)),
     )
     const base = this.roundProb()
     // nobody in the chair: less than the coach's pick, and never a call that pays on average (me/nodes.ts autoChance)
@@ -618,6 +619,8 @@ export class MeMatch {
         ? `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} · 你 ${sum.kills}/${sum.deaths}/${sum.assists} · ACS ${rec.acs} · 评分 ${rec.rating.toFixed(2)}${rec.mvp ? ' · MVP' : ''}${rec.carried ? ' · 输了比赛但你全队最高' : ''}`
         : `${compCn(rec.comp)} ${rec.label} vs ${rec.oppTag} ${score} ${drawn ? '平' : won ? '胜' : '负'} —— ${activeAbsence(state) ? `你因${activeAbsence(state)!.label}缺席了这场。` : '你在替补席看完了这场。'}`
       pushLog(state, 'match', line)
+      // what was said before it meets the result; the post-match card goes up first (me/interview.ts)
+      interviewAfterMatch(state, rec)
       afterMyMatch(state, rec)
       // a map called is a lesson in calling (me/igl.ts)
       iglAfterMatch(state, rec)

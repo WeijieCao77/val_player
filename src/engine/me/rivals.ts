@@ -125,6 +125,18 @@ function meet(e: RivalEntry, rec: MeMatchRecord): void {
   else if (!rec.drawn) e.l++
 }
 
+/**
+ * Something said about him in front of the cameras (me/interview.ts 态度): the temperature rises as a meeting's
+ * would. Only the heat — no meeting is counted and nothing is declared here: a name becomes a rival by the same
+ * rule as everywhere, at a meeting (rivalAfterMatch), and cools the same way week by week.
+ */
+export function stokeRival(state: GameState, p: Player, d: number): void {
+  const e = entry(state, p)
+  warm(e, d)
+  e.lastYear = state.year
+  e.lastDay = state.day
+}
+
 /** The one-line why. */
 export function rivalReason(e: RivalEntry): string {
   const k = e.why?.k

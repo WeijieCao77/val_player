@@ -26,6 +26,7 @@ import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
 import { expectOf, tryoutSkill } from './prepro'
 import { CEREMONIES, cerSkip } from './ceremony'
+import { ivAuto } from './interview'
 import { compCn } from './compname'
 import { injuryHelpedBy, injuryStatus } from './injury'
 import { autoHurt, autoSitsOut } from './hurtplay'
@@ -488,6 +489,8 @@ export function autoResolve(state: GameState, item: PendingItem): string {
       closePitchReply(state, item.id ?? '')
       return r ? `${state.teams[r.teamId]?.name ?? '俱乐部'} 回绝了你的${r.kind === 'contact' ? '接触' : '自荐'}` : ''
     }
+    // a key match's interview (me/interview.ts): the first answer, which costs nothing
+    case 'interview': return ivAuto(state, item)
     case 'trait': pop(state, 'trait', item.id); return ''
     case 'released': pop(state, 'released'); return ''
     // never on autopilot: the clock stops on it (see runAutoPilot's on())
@@ -512,7 +515,7 @@ export function runAutoPilot(state: GameState): string[] {
   const on = (item: PendingItem): boolean => {
     // the coach's offer to call is a career decision (me/igl.ts)
     if (item.kind === 'igl') return me.auto.career
-    if (item.kind === 'event' || item.kind === 'trait') return me.auto.daily
+    if (item.kind === 'event' || item.kind === 'trait' || item.kind === 'interview') return me.auto.daily
     if (item.kind === 'stream') return me.auto.biz
     // a cup's entry is the dial's; its rounds are matches, and a press hands them to me as it does my club's
     if (item.kind === 'cup') return me.auto.biz && !isCupRound(state, item)
