@@ -116,12 +116,142 @@ export function setFamily(state: GameState, tier: number): string | null {
 /** With the weekly pay slip: sent while there is a wage and the money on hand to send it. Never a debt. */
 export function outletWeek(state: GameState): void {
   const me = state.me!
+  rentWeek(state)
   const o = me.out
   if (!o?.family || me.phase !== 'pro') return
   const n = familyWeekly(state, o.family)
   if (!n || me.money < n) return
   addMoney(state, 'family', -n)
   o.familySent += n
+}
+
+/* ------------------------------------------------------------------ */
+/*  2026-09-26: 租房、买车、公益 — money only, nothing in the match     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A flat near the base, rented by the month and paid with the weekly slip. It is not 电竞公寓 (me/shop.ts RELAX),
+ * which is the one that sleeps better: this is the room itself — heat when I move in, a line in the diary and
+ * the ending, and nothing on the body, the eight or a match.
+ */
+export interface Flat { tier: number; name: string; share: number; floor: number; heat: number; line: string }
+export const FLATS: Flat[] = [
+  { tier: 0, name: '住俱乐部宿舍', share: 0, floor: 0, heat: 0, line: '' },
+  { tier: 1, name: '基地旁的两居室', share: 0.015, floor: 4000, heat: 2, line: '你在基地旁边租了套两居室，爸妈来看比赛时有地方住。' },
+  { tier: 2, name: '带训练室的大平层', share: 0.03, floor: 8000, heat: 4, line: '你在基地附近租的大平层里，训练室的墙上挂满了队服。' },
+]
+/** a month's rent of this tier, on the wage I am on now (RMB, to the hundred) */
+export const flatMonthly = (state: GameState, tier: number): number => {
+  const f = FLATS[tier]
+  return f?.share ? Math.max(f.floor, Math.round((wage(state) * f.share) / 12 / 100) * 100) : 0
+}
+/** what the weekly slip takes for it */
+export const rentWeekly = (state: GameState, tier: number): number => Math.round((flatMonthly(state, tier) * 12) / 52)
+
+export function flatLocked(state: GameState, tier: number): string | null {
+  const me = state.me!
+  if ((me.flags.rent ?? 0) === tier) return '现在就住这里'
+  if (tier === 0) return null
+  if (me.phase !== 'pro') return '有了职业合同再说'
+  // the first month up front
+  return short(me, flatMonthly(state, tier))
+}
+
+export function setFlat(state: GameState, tier: number): string | null {
+  const f = FLATS[tier]
+  if (!f) return '没有这一档。'
+  const why = flatLocked(state, tier)
+  if (why) return `${why}。`
+  sealWeek(state)
+  const me = state.me!
+  if (!tier) {
+    delete me.flags.rent
+    pushLog(state, 'money', '退了租，搬回俱乐部宿舍。')
+    return null
+  }
+  me.flags.rent = tier
+  me.flags.rentEver = Math.max(me.flags.rentEver ?? 0, tier)
+  me.heat += f.heat
+  pushLog(state, 'money', `搬进了${f.name}，每月房租 ${usd(flatMonthly(state, tier))}。`)
+  return null
+}
+
+/** paid with the slip while there is the money; a month that cannot be paid, I move back to the dorm */
+function rentWeek(state: GameState): void {
+  const me = state.me!
+  const tier = me.flags.rent ?? 0
+  if (!tier) return
+  const n = rentWeekly(state, tier)
+  if (me.phase === 'retired' || me.money < n) {
+    delete me.flags.rent
+    if (me.phase !== 'retired') pushLog(state, 'bad', '房租交不上了，退了租，搬回俱乐部宿舍。')
+    return
+  }
+  addMoney(state, 'rent', -n)
+}
+
+/** Cars really bought in China, at their real prices (RMB, 暂定): the one I drive is the last one bought. */
+export interface Car { key: number; name: string; price: number; line: string }
+export const CARS: Car[] = [
+  { key: 1, name: '比亚迪 汉', price: 200_000, line: '比亚迪 汉' },
+  { key: 2, name: '特斯拉 Model Y', price: 260_000, line: '特斯拉 Model Y' },
+  { key: 3, name: '保时捷 911', price: 1_500_000, line: '保时捷 911' },
+]
+
+export function carLocked(state: GameState, c: Car): string | null {
+  const me = state.me!
+  if (me.flags.car === c.key) return '现在开的就是这辆'
+  if (me.phase !== 'pro') return '有了职业合同再说'
+  return short(me, c.price)
+}
+
+export function buyCar(state: GameState, key: number): string | null {
+  const c = CARS.find((x) => x.key === key)
+  if (!c) return '没有这一辆。'
+  const why = carLocked(state, c)
+  if (why) return `${why}。`
+  sealWeek(state)
+  const me = state.me!
+  addMoney(state, 'car', -c.price)
+  const had = CARS.find((x) => x.key === me.flags.car)
+  me.flags.car = c.key
+  me.flags.cars = (me.flags.cars ?? 0) + 1
+  pushLog(state, 'money', `买了一辆${c.name}（${usd(c.price)}）${had ? `，${had.name}留给了家里` : ''}。`)
+  return null
+}
+
+/** Once a year, in my own name: a share of the wage to a cause, heat and a little following — the scholarship's way. */
+export interface Gift { share: number; name: string; heat: number; fans: number }
+export const GIFTS: Gift[] = [
+  { share: 0.05, name: '捐一点', heat: 8, fans: 3 },
+  { share: 0.10, name: '捐一笔', heat: 15, fans: 6 },
+  { share: 0.20, name: '捐一大笔', heat: 25, fans: 10 },
+]
+export const giftPrice = (state: GameState, g: Gift): number => Math.max(1000, round1k(wage(state) * g.share))
+
+export function giftLocked(state: GameState, g: Gift): string | null {
+  const me = state.me!
+  if (me.phase !== 'pro') return '有了职业合同再说'
+  if (me.flags.charityYear === state.year) return '今年捐过了'
+  return short(me, giftPrice(state, g))
+}
+
+export function giveCharity(state: GameState, share: number): string | null {
+  const g = GIFTS.find((x) => x.share === share)
+  if (!g) return '没有这一档。'
+  const why = giftLocked(state, g)
+  if (why) return `${why}。`
+  sealWeek(state)
+  const me = state.me!
+  const price = giftPrice(state, g)
+  addMoney(state, 'charity', -price)
+  me.flags.charityYear = state.year
+  me.flags.charityYears = (me.flags.charityYears ?? 0) + 1
+  me.flags.charityTotal = (me.flags.charityTotal ?? 0) + price
+  me.heat += g.heat
+  me.fans += g.fans
+  pushLog(state, 'money', `以你的名义捐了 ${usd(price)}，给山区学校添了电脑和网络。`)
+  return null
 }
 
 /* ------------------------------------------------------------------ */
@@ -210,7 +340,7 @@ export const breakPrice = (state: GameState, b: Break): number =>
  * play November's qualifier. Read once a day.
  */
 const SEASON = new WeakMap<GameState, { key: string; left: 'playing' | 'maybe' | null }>()
-function seasonLeft(state: GameState): 'playing' | 'maybe' | null {
+export function seasonLeft(state: GameState): 'playing' | 'maybe' | null {
   const club = state.myTeam
   if (!club || !state.teams[club]) return 'playing'
   const comps = Object.values(state.comps)
@@ -402,7 +532,14 @@ export function outletLines(state: GameState): string[] {
   else if (met) lines.push(`你自己掏钱办过 ${met} 场见面会。`)
   const trips = o.breaks.filter((b) => b.key === 'family').length
   if (trips >= 2) lines.push(`休赛期你带爸妈出去走过 ${trips} 次。`)
-  return lines.slice(0, 3)
+  // 2026-09-26: what the rest of the money became, one line each at most, after the above
+  const f = state.me?.flags
+  if (f?.charityTotal) lines.push(`这些年你以自己的名义捐了 ${big(f.charityTotal)}${(f.charityYears ?? 0) >= 3 ? `，捐了 ${f.charityYears} 年` : ''}。`)
+  const flat = FLATS[f?.rentEver ?? 0]
+  if (flat?.line) lines.push(flat.line)
+  const car = CARS.find((c) => c.key === f?.car)
+  if (car) lines.push(`退役那天，你开着${car.line}回了一趟老家。`)
+  return lines.slice(0, 4)
 }
 
 /** The retirement night's recap: what the career earned and where some of it went, in one line. */
@@ -413,6 +550,7 @@ export function outletRecap(state: GameState): string | null {
   const parts: string[] = []
   if (o.familySent) parts.push(`往家里寄了 ${big(o.familySent)}`)
   if (o.scholar.length) parts.push(`出了 ${o.scholar.length} 年奖学金`)
+  if (me.flags.charityTotal) parts.push(`捐了 ${big(me.flags.charityTotal)}`)
   const met = o.meets.length
   if (met) parts.push(`办了 ${met} 场见面会`)
   if (o.cafe) parts.push('合伙开过网咖')

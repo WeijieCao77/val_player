@@ -36,6 +36,9 @@ import { offerOf, payBand, payOf } from '../src/engine/me/paytable'
 import { ROLE_PAY } from '../src/engine/me/contract'
 import { expectedSalary } from '../src/engine/player'
 import { weekReport } from '../src/engine/me/press'
+import { buyGear } from '../src/engine/me/shop'
+import { crewSeason, crewWeek, goCamp, setCoach, setHealth } from '../src/engine/me/crew'
+import { buyCar, giveCharity, outletWeek, setFlat } from '../src/engine/me/outlets'
 import estimates from '../src/data/prize_estimates_me.json'
 import type { Competition, GameState, Player, Team } from '../src/engine/types'
 
@@ -308,6 +311,36 @@ fmtFacts.push([`旧存档换算：存款 $12,345 → ¥${Math.round(12_345 * k).
   first && lm.money === Math.round(12_345 * k) && lm.upkeep === Math.round(120 * k) && lm.ledger!.lifetimeIn === Math.round(7500 * k)
   && lm.deals[0].cur === 'CNY' && lm.pay?.cur === 'CNY' && lm.pay.salary > 0 && !!lm.flags[CNY_FLAG]])
 fmtFacts.push(['旧存档换算只做一次：再读一遍什么都不变', second === false && JSON.stringify(legacy.me) === once])
+
+// 2026-09-26: the new places money goes — 教练与团队, 房租, 车, 公益捐款 — each through the one door, on its own row
+{
+  const s = createCareer({ name: 'Outlets', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed })
+  const m = s.me!
+  m.money = 5_000_000
+  s.players[m.id].age = 25
+  // the season over: nothing left to play, so the camp can be gone to
+  s.fixtures = []
+  s.comps = {}
+  const start = m.money
+  const in0 = m.ledger!.lifetimeIn, out0 = m.ledger!.lifetimeOut
+  const refused = [
+    buyGear(s, 'pad', 1), buyGear(s, 'pad', 2), setCoach(s, true), goCamp(s), setHealth(s, true), setFlat(s, 2), buyCar(s, 3), giveCharity(s, 0.2),
+  ].filter(Boolean)
+  outletWeek(s)
+  m.week++
+  crewWeek(s)
+  m.flags.healthYear = s.year - 1
+  crewSeason(s)
+  const led = m.ledger!
+  const rows = ['crew', 'rent', 'car', 'charity', 'gear'] as const
+  const booked = rows.filter((k) => (led.cur.out[k] ?? 0) > 0)
+  const balanced = m.money === start + (led.lifetimeIn - in0) - (led.lifetimeOut - out0)
+  fmtFacts.push([`新的花钱地方都过同一个入账口：${rows.map((k) => `${KIND_CN[k]} ${cny(led.cur.out[k] ?? 0)}`).join('、')}，余额对得上${refused.length ? `（没买成：${refused.join(' | ')}）` : ''}`,
+    !refused.length && booked.length === rows.length && balanced && rows.every((k) => !!KIND_CN[k])])
+  // and their prices are said through me/moneyfmt.ts (the scan above covers the files; the diary lines too)
+  const lines = m.log.slice(-12).map((l) => l.text).filter((t) => /私人教练|训练营|康复|搬进|买了一辆|捐了|鼠标垫/.test(t))
+  fmtFacts.push([`日记里的新金额都走 moneyfmt：${lines.slice(0, 4).join(' / ')}`, lines.length >= 6 && lines.every((t) => !/[$€₩]\d/.test(t) && /¥[\d.,]+( 万)?/.test(t))])
+}
 
 console.log('')
 for (const [what, ok] of [...facts, ...fmtFacts]) console.log(`${ok ? '✓' : '✗'} ${what}`)

@@ -11,7 +11,8 @@ import { ACTIONS, ACTION_BY_KEY } from './actions'
 import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { traitMul } from './traits'
-import { FLAT_RELIEF, RELIEF_FLOOR, courseMul, psychMul } from './shop'
+import { FLAT_RELIEF, RELIEF_FLOOR, courseMul, kitSession, psychMul } from './shop'
+import { coachMul } from './crew'
 import { ladderLabel, playRanked } from './prepro'
 import { contentGross, payMedia, streamIncome, streamWeekMul, streamerHeatMul } from './stream'
 import { questProgress } from './quests'
@@ -176,6 +177,8 @@ export function hourValues(state: GameState): HourValue[] {
     const attrs = (Object.keys(split) as (keyof Attrs)[]).filter(open)
     let v = attrs.reduce((s, k) => s + (split[k] ?? 0) * worth(k), 0) * mul
     if (key === 'vod' && open('igl')) { v += (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY) * EXTRA * worth('igl'); attrs.push('igl') }
+    // a private coach (me/crew.ts): the whole session, as runAction books it
+    v *= coachMul(state, key)
     out.push({ key, perPoint: v / ACTIONS.find((a) => a.key === key)!.cost, attrs })
   }
   const top3 = ATTR_KEYS.slice().sort((a, b) => w[b] - w[a]).slice(0, 3).filter(open)
@@ -304,9 +307,11 @@ export function runAction(state: GameState, key: MeAction): string {
       const split = practiceSplit(p, key)
       // without a club the hours are mine alone: no team practice underneath them
       const alone = pro ? 1 : 1.6
-      for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) bump(k, g * EXTRA * share * alone)
+      // a private coach makes my own practice go further (me/crew.ts COACH_MUL); hourValues shows the same
+      const coach = coachMul(state, key)
+      for (const [k, share] of Object.entries(split) as [keyof Attrs, number][]) bump(k, g * EXTRA * share * alone * coach)
       // and 指挥 on top, twice as fast for the man who calls (IGL_STUDY)
-      if (key === 'vod') bump('igl', g * EXTRA * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY))
+      if (key === 'vod') bump('igl', g * EXTRA * (p.isIgl ? IGL_CALL_STUDY : IGL_STUDY) * coach)
       // 复盘方法 (me/shop.ts): a loss looked at properly is a loss put down; the hours train what they always did
       if (key === 'vod' && me.courses.includes('review')) me.tilt = clamp(me.tilt - 2, 0, 100)
       questProgress(state, 'train', 1)
@@ -379,6 +384,9 @@ export function runAction(state: GameState, key: MeAction): string {
     line += up
     pushLog(state, 'train', up)
   }
+  // a flagship kit settling in: counted on its card, its point landing under the ceiling (me/shop.ts KITS)
+  const kit = kitSession(state, key)
+  if (kit) line += kit
   return `${line}体力 ${was} → ${Math.round(100 - p.fatigue)}。`
 }
 

@@ -1,7 +1,7 @@
-import { Rng, clamp, dayStream } from './rng'
+import { Rng, clamp, dayStream, hashStr } from './rng'
 import { absentPlayer } from './me/absence'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, ageAttrMul, ageLoss, ceilingSum, trainAgeMul, youthLoosens, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { recomputeOverall, refreshValue, ageDrift, ageAttrMul, ageLoss, ceilingSum, trainAgeMul, youthLoosens, weightsFor, ceilingOf, atOwnCeiling, HEALTH_LOSS_MUL } from './player'
 import { pushLog } from './me/log'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
@@ -315,6 +315,14 @@ export function applyMatchFatigue(
   }
 }
 
+/**
+ * The career player, with a health team paid for the year that is ending (me/crew.ts): the winter's loss of 枪法
+ * and 反应 is HEALTH_LOSS_MUL of what it would be. Read on the year before the turn — seasonRollover runs before
+ * engine/season.ts moves state.year on — and never for anybody else.
+ */
+export const healthCovered = (state: GameState, p: Pick<Player, 'id'>): boolean =>
+  !!state.me && p.id === state.me.id && state.me.flags.healthYear === state.year
+
 /** End-of-season ageing: growth for prospects, decline for veterans. */
 export function seasonRollover(state: GameState, rng: Rng): string[] {
   const notes: string[] = []
@@ -360,6 +368,8 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     // late reading made the winter's growth invisible in the digest, and
     // audit_feedback.ts caught it as 「2 silent days」.
     const before = p.overall
+    // what the winter took from the hands, point by point, for the health team to give some back below
+    const lost: Partial<Record<keyof Attrs, number>> = {}
 
     for (const k of ATTR_KEYS) {
       if (drift > 0) {
@@ -385,6 +395,7 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
         p.attrs[k] -= n
         // his own ceiling (me/bottleneck.ts) comes down by as much: what the body lost, practice does not buy back
         if (p.caps) p.caps[k] = Math.max(p.attrs[k], p.caps[k] - n)
+        lost[k] = n
       }
     }
     // Experience keeps rising even as the mechanics fade — but not past the
@@ -400,6 +411,22 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
     if (p.age >= 25 && p.overall < p.potential) {
       p.attrs.awareness = clamp(p.attrs.awareness + (rng.chance(0.4) ? 1 : 0), 20, Math.max(p.attrs.awareness, ceilingOf(p, 'awareness')))
       if (p.isIgl) p.attrs.igl = clamp(p.attrs.igl + (rng.chance(0.5) ? 1 : 0), 20, Math.max(p.attrs.igl, ceilingOf(p, 'igl')))
+    }
+    // The career player's health team, in a year he paid for it (me/crew.ts, 2026-09-26): each point the winter
+    // took from 枪法 and 反应 is kept with a chance of 1 − HEALTH_LOSS_MUL, on dice of its own, and the ceiling
+    // with it — ×0.8 of the loss on average. Only after everything above has rolled the world's dice exactly as
+    // it would have without one, so every other man ages as he did (scripts/check_age_curve.ts).
+    if (healthCovered(state, p)) {
+      for (const k of ['aim', 'reaction'] as const) {
+        const n = lost[k] ?? 0
+        if (!n) continue
+        const own = new Rng(hashStr(`health:${state.seed}:${state.year}:${k}`))
+        let kept = 0
+        for (let i = 0; i < n; i++) if (own.chance(1 - HEALTH_LOSS_MUL)) kept++
+        if (!kept) continue
+        p.attrs[k] += kept
+        if (p.caps) p.caps[k] = Math.min(99, p.caps[k] + kept)
+      }
     }
     recomputeOverall(p)
     if (p.caps) {

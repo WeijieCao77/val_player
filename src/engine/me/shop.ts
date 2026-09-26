@@ -1,5 +1,9 @@
 import { clamp } from '../rng'
-import type { GameState } from '../types'
+import { ATTR_CN } from '../types'
+import type { Attrs, GameState, Player } from '../types'
+import { recomputeOverall, refreshValue, weightsFor } from '../player'
+import { ACTION_BY_KEY } from './actions'
+import type { MeAction, MeState } from './types'
 import { pushLog } from './log'
 import { addMoney } from './money'
 import { injuryRelax } from './injury'
@@ -32,10 +36,18 @@ import { sealWeek } from './undo'
  *
  * And a VCT salary, which bought the whole shop inside its first season, gets
  * somewhere to go that is not strength at all: LIFESTYLE below.
+ *
+ * 2026-09-26, the author's rule changed with the research (「花了钱想看到属性涨
+ * 一点」, 24 votes): money only speeds reaching a ceiling or slows a ceiling's
+ * fall; it never raises one. So the flagship kits settle in (KITS below: a point
+ * each, only under the ceiling), and a coach, a camp and a health team can be
+ * paid for (me/crew.ts). Paid recovery still stops at RELIEF_FLOOR — the old leak
+ * stays shut, and scripts/check_buy.ts holds an 「old shop only」 career to the
+ * old bounds so it cannot come back under the new ones.
  */
 export const GEAR_SLOTS: { key: string; name: string }[] = [
-  { key: 'mouse', name: '鼠标' }, { key: 'keyboard', name: '键盘' }, { key: 'headset', name: '耳机' },
-  { key: 'monitor', name: '显示器' }, { key: 'chair', name: '椅子' },
+  { key: 'mouse', name: '鼠标' }, { key: 'pad', name: '鼠标垫' }, { key: 'keyboard', name: '键盘' },
+  { key: 'monitor', name: '显示器' }, { key: 'headset', name: '耳机' }, { key: 'chair', name: '椅子' },
 ]
 /**
  * price of one slot by tier (1, 2), RMB: the five kits of each tier at their
@@ -46,24 +58,125 @@ export const GEAR_SLOTS: { key: string; name: string }[] = [
  * five times the kit.
  */
 export const GEAR_PRICE = [0, 2000, 5500]
+/** a mousepad costs what a mousepad costs (暂定, RMB): G640 about ¥250, Artisan 零 FX about ¥500 */
+export const PAD_PRICE = [0, 250, 500]
+export const gearPrice = (slot: string, tier: number): number => (slot === 'pad' ? PAD_PRICE : GEAR_PRICE)[tier] ?? 0
 export const GEAR_TIER_CN = ['入门', '职业级', '旗舰']
 
 /**
  * What each tier is on the desk: kit VCT players really buy, not a tier word —
  * 「这些外设没有代入感，要用一些真实的品牌和型号」 (2026-09-11). The effect is the
- * tier's; the name is what the player sees.
+ * tier's; the name is what the player sees. From 2026-09-26 each bought tier has
+ * two or three to choose from (「外设能不能自己选」), all alike in what they do —
+ * the first of each is the one an older save already owns (me.flags gm_<slot>).
  */
-export const GEAR_MODELS: Record<string, [string, string, string]> = {
-  mouse: ['罗技 G102', '罗技 G PRO X SUPERLIGHT 2', '雷蛇 毒蝰 V3 Pro'],
-  keyboard: ['雷柏 V500 PRO', '罗技 G PRO X TKL', 'Wooting 60HE+'],
-  headset: ['HyperX Cloud Stinger 2', 'HyperX Cloud III', '罗技 G PRO X 2'],
-  monitor: ['AOC 24G2 144Hz', 'ZOWIE XL2546K 240Hz', 'ZOWIE XL2586X 540Hz'],
-  chair: ['西昊 M57', 'Secretlab TITAN Evo', 'Herman Miller × 罗技 G Embody'],
+export const GEAR_CHOICES: Record<string, [string[], string[], string[]]> = {
+  mouse: [['罗技 G102'], ['罗技 G PRO X SUPERLIGHT 2', 'ZOWIE EC2-CW', 'Pulsar X2V2'], ['雷蛇 毒蝰 V3 Pro', '雷蛇 炼狱蝰蛇 V3 Pro', 'Finalmouse UltralightX']],
+  pad: [['罗技 G240'], ['罗技 G640', 'ZOWIE G-SR'], ['Artisan 零 FX', 'Artisan 飞燕 FX', 'Lethal Gaming Gear Saturn Pro']],
+  keyboard: [['雷柏 V500 PRO'], ['罗技 G PRO X TKL', 'HyperX Alloy Origins 60'], ['Wooting 60HE+', '赛睿 Apex Pro TKL', '雷蛇 猎魂光蛛 V3 Pro']],
+  monitor: [['AOC 24G2 144Hz'], ['ZOWIE XL2546K 240Hz', '华硕 ROG Strix XG259QN'], ['ZOWIE XL2586X 540Hz', '华硕 ROG Swift PG248QP 540Hz']],
+  headset: [['HyperX Cloud Stinger 2'], ['HyperX Cloud III', '赛睿 Arctis Nova 5'], ['罗技 G PRO X 2', '雷蛇 旋风黑鲨 V2 Pro', '赛睿 Arctis Nova Pro']],
+  chair: [['西昊 M57'], ['Secretlab TITAN Evo', 'AndaSeat Kaiser 3'], ['Herman Miller × 罗技 G Embody', 'Herman Miller Aeron']],
 }
-export const gearModel = (slot: string, tier: number): string => GEAR_MODELS[slot]?.[tier] ?? GEAR_TIER_CN[tier] ?? ''
+export const GEAR_MODELS: Record<string, [string, string, string]> = Object.fromEntries(
+  Object.entries(GEAR_CHOICES).map(([k, t]) => [k, [t[0][0], t[1][0], t[2][0]]]),
+) as Record<string, [string, string, string]>
+export const gearChoices = (slot: string, tier: number): string[] => GEAR_CHOICES[slot]?.[tier] ?? []
+export const gearModel = (slot: string, tier: number, pick = 0): string =>
+  GEAR_CHOICES[slot]?.[tier]?.[pick] ?? GEAR_MODELS[slot]?.[tier] ?? GEAR_TIER_CN[tier] ?? ''
+/** the model on my desk now */
+export const myGearModel = (me: MeState, slot: string): string => gearModel(slot, me.gear[slot] ?? 0, me.flags[`gm_${slot}`] ?? 0)
 
-/** What gear does, in the shop's words (me/injury.ts GEAR_GUARD): the body, not the practice or the match. */
-export const GEAR_EFFECT = '外设不加训练收益，比赛里的判断也不看外设。好外设护的是身体：鼠标和键盘护手腕，椅子护腰背，显示器和耳机护眼睛；职业级每件让对应伤病的几率低一成，旗舰低近两成。'
+/** What gear does, in the shop's words (me/injury.ts GEAR_GUARD, KITS below): the body, and a flagship kit's one point. */
+export const GEAR_EFFECT = '好外设护身体：鼠标和键盘护手腕，椅子护腰背，显示器和耳机护眼睛；职业级每件让对应伤病的几率低一成，旗舰低近两成。比赛里的判断不看外设。同一档的几款型号效果一样，只是手感不同。'
+
+/**
+ * 外设上手 (2026-09-26). A flagship kit takes some getting used to, and then it
+ * shows: after KIT_SESSIONS sessions of its card, the attribute it serves goes up
+ * a point — once, and only while that attribute is under its ceiling; at the
+ * ceiling the point waits for room and says so. The kit the role leans on most
+ * (mainKit) gives a second point after KIT_MORE more. It never touches a ceiling:
+ * it is a point of the room that practice would have filled anyway, filled
+ * sooner. At most KIT_BUDGET of 综合 for any role (scripts/check_shop_budget.ts).
+ *
+ * The cards: 枪法训练 for the aim kit (mouse and pad), 打排位 for the reaction kit
+ * (a 540Hz monitor and a rapid-trigger keyboard — Wooting's stop is real), 复盘
+ * for the headset (the steps and the abilities, heard again). Counted in
+ * me.flags, which the week's 撤回 puts back with everything else (me/undo.ts).
+ */
+export interface Kit { key: 'aim' | 'react' | 'ear'; name: string; slots: string[]; attr: keyof Attrs; action: MeAction }
+export const KITS: Kit[] = [
+  { key: 'aim', name: '瞄准套件', slots: ['mouse', 'pad'], attr: 'aim', action: 'aim' },
+  { key: 'react', name: '反应套件', slots: ['monitor', 'keyboard'], attr: 'reaction', action: 'ranked' },
+  { key: 'ear', name: '耳机', slots: ['headset'], attr: 'awareness', action: 'vod' },
+]
+export const KIT_SESSIONS = 4
+export const KIT_MORE = 8
+/** the most 综合 the kits may add for any role, both points of the main kit included */
+export const KIT_BUDGET = 1.0
+
+/** the kit whose attribute this role weighs most: the one that gives a second point */
+export const mainKit = (p: Pick<Player, 'role'>): Kit => {
+  const w = weightsFor(p)
+  return KITS.reduce((best, k) => (w[k.attr] > w[best.attr] ? k : best), KITS[0])
+}
+export const kitMax = (p: Pick<Player, 'role'>, kit: Kit): number => (kit.key === mainKit(p).key ? 2 : 1)
+/** sessions counted since the kit was complete that the next point needs */
+export const kitNeed = (up: number): number => (up ? KIT_SESSIONS + KIT_MORE : KIT_SESSIONS)
+export const kitComplete = (me: MeState, kit: Kit): boolean => kit.slots.every((s) => (me.gear?.[s] ?? 0) >= 2)
+/** room for the kit's point under his own ceiling (or, without ceilings, under his 上限) */
+const kitRoom = (p: Player, k: keyof Attrs): boolean => (p.caps ? p.attrs[k] < p.caps[k] : p.overall < p.potential && p.attrs[k] < 99)
+
+export interface KitRead { kit: Kit; complete: boolean; sessions: number; up: number; max: number; need: number; room: boolean }
+export function kitRead(state: GameState, kit: Kit): KitRead {
+  const me = state.me!
+  const p = state.players[me.id]
+  const up = me.flags[`kitUp_${kit.key}`] ?? 0
+  return { kit, complete: kitComplete(me, kit), sessions: me.flags[`kitN_${kit.key}`] ?? 0, up, max: kitMax(p, kit), need: kitNeed(up), room: kitRoom(p, kit.attr) }
+}
+
+/** One kit's line for the gear panel, in words: what is missing, how far along, or why the point is waiting. */
+export function kitLine(state: GameState, kit: Kit): string {
+  const r = kitRead(state, kit)
+  const cn = ATTR_CN[kit.attr]
+  const card = ACTION_BY_KEY[kit.action].label
+  const parts = kit.slots.length > 1 ? `${kit.slots.map((s) => GEAR_SLOTS.find((g) => g.key === s)!.name).join('和')}都换成旗舰` : '换成旗舰'
+  const head = `${kit.name}（${parts}）：换上后${card}满 ${KIT_SESSIONS} 次，${cn} +1（离上限还有空间才算）${r.max > 1 ? `；再满 ${KIT_MORE} 次，再 +1` : ''}`
+  if (r.up >= r.max) return `${head}。已经上手了。`
+  if (!r.complete) return `${head}。还差：${kit.slots.filter((s) => (state.me!.gear[s] ?? 0) < 2).map((s) => GEAR_SLOTS.find((g) => g.key === s)!.name).join('、')}。`
+  const have = Math.min(r.sessions, r.need)
+  if (have >= r.need && !r.room) return `${head}。练够了，但${cn}到瓶颈了：这 1 点等离上限有空间时再算。`
+  return `${head}。现在 ${have}/${r.need}。`
+}
+
+/**
+ * A session of the card a flagship kit is for (me/growth.ts runAction): counted, and the point lands
+ * the first session there is room for it. Returns the line to say, or null.
+ */
+export function kitSession(state: GameState, action: MeAction): string | null {
+  const me = state.me!
+  const p = state.players[me.id]
+  let said: string | null = null
+  for (const kit of KITS) {
+    if (kit.action !== action || !kitComplete(me, kit)) continue
+    const up = me.flags[`kitUp_${kit.key}`] ?? 0
+    if (up >= kitMax(p, kit)) continue
+    const need = kitNeed(up)
+    const n = me.flags[`kitN_${kit.key}`] ?? 0
+    if (n < need) me.flags[`kitN_${kit.key}`] = n + 1
+    if (n + 1 < need || !kitRoom(p, kit.attr)) continue
+    const k = kit.attr
+    p.attrs[k] += 1
+    // reaching the ceiling keeps no progress over (no 存点数, me/bottleneck.ts)
+    if (p.caps && p.attrs[k] >= p.caps[k]) p.xp[k] = 0
+    recomputeOverall(p)
+    refreshValue(p)
+    me.flags[`kitUp_${kit.key}`] = up + 1
+    said = `新${kit.name}${up ? '用顺手了' : '上手了'}：${ATTR_CN[k]} +1。`
+    pushLog(state, 'train', said)
+  }
+  return said
+}
 
 export interface Course { key: string; name: string; price: number; blurb: string }
 export const COURSES: Course[] = [
@@ -147,19 +260,24 @@ export function buyLifestyle(state: GameState, key: string): string | null {
 export const lifeLines = (state: GameState): string[] =>
   LIFESTYLE.filter((x) => state.me?.flags[lifeFlag(x.key)]).map((x) => x.line)
 
-export function buyGear(state: GameState, slot: string): string | null {
+/** Up a tier, as the model picked from that tier's choices (GEAR_CHOICES; the first when none is picked). */
+export function buyGear(state: GameState, slot: string, pick = 0): string | null {
   const me = state.me!
+  if (!GEAR_SLOTS.some((s) => s.key === slot)) return '没有这一件。'
   const cur = me.gear[slot] ?? 0
-  if (cur >= 2) return `已经是${gearModel(slot, 2)}了。`
-  const price = GEAR_PRICE[cur + 1]
+  if (cur >= 2) return `已经是${myGearModel(me, slot)}了。`
+  const price = gearPrice(slot, cur + 1)
   if (me.money < price) return `要 ${cny(price)}，钱不够。`
+  const choice = Math.max(0, Math.min(pick, gearChoices(slot, cur + 1).length - 1))
   // A purchase stays made. Replaying earlier training must not refund its cost
   // while leaving the gear (or courses, agent and treatment below) in place.
   sealWeek(state)
   addMoney(state, 'gear', -price)
   me.gear[slot] = cur + 1
+  if (choice) me.flags[`gm_${slot}`] = choice
+  else delete me.flags[`gm_${slot}`]
   const name = GEAR_SLOTS.find((s) => s.key === slot)?.name ?? slot
-  pushLog(state, 'money', `换了${name}：${gearModel(slot, cur + 1)}（${GEAR_TIER_CN[cur + 1]}，${cny(price)}）。`)
+  pushLog(state, 'money', `换了${name}：${gearModel(slot, cur + 1, choice)}（${GEAR_TIER_CN[cur + 1]}，${cny(price)}）。`)
   return null
 }
 

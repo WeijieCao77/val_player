@@ -4,7 +4,8 @@ import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { doAction, undoAction, undoWeek } from '../src/engine/me/week'
 import { canUndo } from '../src/engine/me/undo'
 import { buyCourse, buyGear, buyLifestyle, buyRelax, hireAgent } from '../src/engine/me/shop'
-import { buyStudio, fundScholar, holdMeet, openCafe, setFamily, takeBreak } from '../src/engine/me/outlets'
+import { buyCar, buyStudio, fundScholar, giveCharity, holdMeet, openCafe, setFamily, setFlat, takeBreak } from '../src/engine/me/outlets'
+import { goCamp, setCoach, setHealth } from '../src/engine/me/crew'
 import { packState, unpackState } from '../src/engine/save'
 import type { GameState } from '../src/engine/types'
 
@@ -15,6 +16,8 @@ base.me!.ap = base.me!.apMax
 // The season is over for this fixture: no time advancement or simulation is needed.
 base.fixtures = []
 base.comps = {}
+// old enough for a health team (me/crew.ts HEALTH_AGE)
+base.players[base.me!.id].age = 25
 
 const whole = (s: GameState): string => {
   const copy = structuredClone(s)
@@ -36,6 +39,15 @@ const cases: [string, (s: GameState) => string | null][] = [
   ['回家休假', s => takeBreak(s, 'home')],
   ['直播间', buyStudio],
   ['网咖', openCafe],
+  // 2026-09-26: 训练与团队 (me/crew.ts) and the money-only outlets (me/outlets.ts)
+  ['鼠标垫', s => buyGear(s, 'pad', 1)],
+  ['请私教', s => setCoach(s, true)],
+  ['不请私教', s => { s.me!.flags.coach = 1; s.me!.flags.coachPaid = s.me!.week; return setCoach(s, false) }],
+  ['训练营', goCamp],
+  ['康复团队', s => setHealth(s, true)],
+  ['租房', s => setFlat(s, 2)],
+  ['买车', s => buyCar(s, 1)],
+  ['公益捐款', s => giveCharity(s, 0.05)],
 ]
 for (const [label, purchase] of cases) {
   const s = structuredClone(base)
@@ -56,7 +68,7 @@ for (const [label, purchase] of cases) {
   console.log(`✓ ${label}`)
 }
 
-for (const [label, purchase] of cases.filter(([label]) => !['寄钱安排', '回家休假'].includes(label))) {
+for (const [label, purchase] of cases.filter(([label]) => !['寄钱安排', '回家休假', '不请私教'].includes(label))) {
   const s = structuredClone(base)
   s.me!.money = 0
   assert.equal(doAction(s, 'aim'), null)
@@ -66,4 +78,4 @@ for (const [label, purchase] of cases.filter(([label]) => !['寄钱安排', '回
   assert.equal(whole(s), before, `${label}: refused purchase changes nothing`)
   assert.equal(undoAction(s, 'aim'), null)
 }
-console.log('✓ 13 economic operations seal only on success; failed purchases preserve undo.')
+console.log(`✓ ${cases.length} economic operations seal only on success; failed purchases preserve undo.`)

@@ -296,6 +296,18 @@ export interface BreakPath {
 /** What each counted path needs: sessions, clutches or maps at the ceiling. */
 const NEED: Partial<Record<K, number>> = { reaction: 12, awareness: 6, utility: 6, clutch: 5, teamwork: 4, igl: 8 }
 
+/**
+ * 休赛期训练营 (me/crew.ts, 2026-09-26): the week of the camp, the week board's sessions count this many times
+ * toward the paths they break — 排位, 复盘, 道具与跑图, 训练赛, and a week of 枪法 for as many weeks of the streak.
+ * Only the count: what a break opens is still planBreak's, out of the same MECH_VALUE_MAX, so a camp opens a
+ * ceiling sooner and never further (scripts/check_bottleneck.ts, check_shop_budget.ts).
+ */
+export const CAMP_MUL = 2
+export const campMul = (state: GameState): number => {
+  const me = state.me
+  return me && me.flags.campWeek !== undefined && me.flags.campWeek === me.week ? CAMP_MUL : 1
+}
+
 export interface BreakCount {
   /** counted at the settlements so far — the number the break is judged on */
   have: number
@@ -319,10 +331,12 @@ export function breakCount(state: GameState, k: K): BreakCount | null {
   const p = state.players[me.id]
   const bn = me.bottleneck
   const pro = me.phase === 'pro'
-  const week = k === 'reaction' ? me.plan.ranked ?? 0
-    : k === 'awareness' ? me.plan.vod ?? 0
-      : k === 'utility' ? me.plan.util ?? 0
-        : k === 'teamwork' ? (pro ? me.plan.scrim ?? 0 : 0)
+  // a camp's week counts the board's sessions twice (CAMP_MUL); what a match gave counts once
+  const camp = campMul(state)
+  const week = k === 'reaction' ? (me.plan.ranked ?? 0) * camp
+    : k === 'awareness' ? (me.plan.vod ?? 0) * camp
+      : k === 'utility' ? (me.plan.util ?? 0) * camp
+        : k === 'teamwork' ? (pro ? me.plan.scrim ?? 0 : 0) * camp
           : k === 'clutch' ? (bn ? Math.max(0, p.career.clutches - bn.clutchMark) : 0)
             : bn && pro && p.isIgl ? Math.max(0, p.career.maps - bn.mapsMark) : 0
   return { have: bn?.count[k] ?? 0, need, week }
@@ -655,7 +669,8 @@ export function bottleneckWeek(state: GameState): void {
   const aimed = me.plan.aim ?? 0
   const was = bn.aimStreak
   const chaseAim = chasing(state, 'aim')
-  bn.aimStreak = aimed >= 2 ? was + 1 : 0
+  // a camp's week of 枪法 counts as CAMP_MUL weeks of the streak
+  bn.aimStreak = aimed >= 2 ? was + campMul(state) : 0
   if (chaseAim && aimed >= 2 && bn.aimStreak < 3) say(state, 'info', `冲击枪法瓶颈：这周练了 ${aimed} 次（每周要 2 次），已经连续 ${bn.aimStreak}/3 周。`)
   else if (chaseAim && aimed < 2 && was > 0) say(state, 'bad', `冲击枪法瓶颈的连续周数断了：这周只练了 ${aimed} 次，要每周至少 2 次、连着 3 周，从头算。枪法本身不会因为少练而掉。`)
 

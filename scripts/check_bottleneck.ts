@@ -29,7 +29,7 @@ import type { MeAction } from '../src/engine/me/types'
 import { recomputeOverall } from '../src/engine/player'
 import { addXp as clubXp } from '../src/engine/training'
 import { addXp as myXp } from '../src/engine/me/growth'
-import { bottleneckWeek, breakCount, breakInfo, ceilingNote, ceilingPotential, ensureCeilings } from '../src/engine/me/bottleneck'
+import { CAMP_MUL, MECH_VALUE_MAX, bottleneckWeek, breakCount, breakInfo, campMul, ceilingNote, ceilingPotential, ensureCeilings } from '../src/engine/me/bottleneck'
 
 const mem: Record<string, string> = {}
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -304,6 +304,40 @@ if (sp.potential !== sp.overall || sp.caps!.aim !== 99) fail('卡在上限的老
 const logged = stuck.me!.log.length
 autoWeek(stuck)
 if (stuck.me!.log.slice(logged).some((l) => l.text.includes('练到瓶颈了'))) fail('老存档读进来的第一周把早就卡住的几项又报了一遍')
+
+// 休赛期训练营 (me/crew.ts, 2026-09-26): the camp's week counts the board's sessions CAMP_MUL times toward the paths;
+// what a break opens and the pool it comes from are untouched — a ceiling opens sooner, never further
+{
+  if (MECH_VALUE_MAX !== 1.2 || CAMP_MUL !== 2) fail(`训练营不该动突破的总额：MECH_VALUE_MAX ${MECH_VALUE_MAX}，CAMP_MUL ${CAMP_MUL}`)
+  const camp = structuredClone(a)
+  const cp = camp.players[camp.me!.id]
+  ensureCeilings(camp)
+  camp.me!.phase = 'pro'
+  for (const k of ATTR_KEYS) cp.attrs[k] = cp.caps![k]
+  recomputeOverall(cp)
+  camp.me!.plan = { vod: 2, util: 1, ranked: 3, scrim: 1, aim: 2 } as Partial<Record<MeAction, number>>
+  // a streak from nothing: one week of 枪法 is one of three, the camp's is two
+  camp.me!.bottleneck!.aimStreak = 0
+  const plain = structuredClone(camp)
+  camp.me!.flags.campWeek = camp.me!.week
+  const reads = (s: GameState) => (['awareness', 'utility', 'reaction', 'teamwork', 'clutch'] as K[]).map((k) => breakCount(s, k)?.week ?? 0)
+  const [pw, cw] = [reads(plain), reads(camp)]
+  if (!(cw[0] === pw[0] * 2 && cw[1] === pw[1] * 2 && cw[2] === pw[2] * 2 && cw[3] === pw[3] * 2 && cw[4] === pw[4])) fail(`训练营那周的计数没有正好翻倍（复盘、道具、排位、训练赛），或残局也跟着翻了：${pw} → ${cw}`)
+  bottleneckWeek(plain)
+  bottleneckWeek(camp)
+  const counted = (s: GameState) => (['awareness', 'utility', 'reaction', 'teamwork'] as K[]).map((k) => s.me!.bottleneck!.count[k] ?? 0)
+  // a count that filled breaks and starts over, so what the camp's week put in is read against the plain week's
+  const opened = (s: GameState) => ATTR_KEYS.reduce((n, k) => n + (s.me!.bottleneck!.mechV?.[k] ?? 0), 0)
+  if (opened(camp) + 1e-9 < opened(plain)) fail('训练营那周反而开得少了')
+  if (plain.me!.bottleneck!.aimStreak !== 1 || camp.me!.bottleneck!.aimStreak !== 2) fail(`训练营那周的枪法连续周数没有按两周算：${plain.me!.bottleneck!.aimStreak} → ${camp.me!.bottleneck!.aimStreak}`)
+  // the pool: however many breaks the camp's counts bring, no attribute's practice pool passes MECH_VALUE_MAX
+  const over = ATTR_KEYS.filter((k) => (camp.me!.bottleneck!.mechV?.[k] ?? 0) > MECH_VALUE_MAX + 1e-9)
+  if (over.length) fail(`训练营让练习的突破超过了总额：${over.join('、')}`)
+  // and a week later, it is an ordinary week again
+  camp.me!.week++
+  if (campMul(camp) !== 1) fail('训练营只算那一周')
+  console.log(`  训练营：那一周计数 ${pw.join('/')} → ${cw.join('/')}（复盘/道具/排位/训练赛翻倍，残局不翻），计入后（复盘/道具/排位/训练赛） ${counted(plain).join('/')} → ${counted(camp).join('/')}；突破总额仍是每项 ${MECH_VALUE_MAX}`)
+}
 
 console.log(bad
   ? `\n✗ ${bad} 处不对`
