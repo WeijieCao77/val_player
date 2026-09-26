@@ -418,7 +418,7 @@ export function forfeitCup(state: GameState, rng: Rng): CupRun | null {
 }
 
 /** The run is over — lost, won, or given up on: the prize for the rounds won, the heat, what a five taught me. */
-function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, rng: Rng): CupRun {
+function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, rng: Rng, withdrawn = false): CupRun {
   const me = state.me!
   const run = me.pre.cup!
   dropTempTeams(state)
@@ -435,14 +435,16 @@ function endRun(state: GameState, cup: CupDef, won: boolean, forfeit: boolean, r
   const at = cup.rounds[Math.min(reached, cup.rounds.length - 1)].label
   const line = rec.won
     ? `${cup.name}冠军！奖金 ${cny(prize)}。`
-    : forfeit
+    : withdrawn
+      ? `退出了${cup.name}，${at}不打了${prize ? `，已赢轮次的奖金 ${cny(prize)}照发` : ''}。`
+      : forfeit
       ? `${cup.name}${at}弃权，到此为止${prize ? `，奖金 ${cny(prize)}` : ''}。`
       : `${cup.name}止步${at}${prize ? `，奖金 ${cny(prize)}` : ''}。`
   pushLog(state, rec.won ? 'good' : 'cup', line)
   // and the deeper the run, the likelier a club's call (me/prepro.ts cupInvite). Once the run is over, as
   // 破晓 has it (cup.ts: a call in the middle of one had players signing at the semi-final and skipping the rest).
   // Not for a man under contract: a cup played between his club's events is for the prize and the crowd (clubCupBlock)
-  if (me.phase !== 'pro') cupInvite(state, rec, rng)
+  if (me.phase !== 'pro' && !withdrawn) cupInvite(state, rec, rng)
   return rec
 }
 
@@ -480,10 +482,19 @@ export function resumeCup(state: GameState): void {
     return
   }
   if (me.phase === 'retired' || (me.phase === 'pro' && run.club !== state.myTeam)) {
-    dropTempTeams(state)
-    me.pre.cup = undefined
-    pop(state, 'cup', run.key)
-    pushLog(state, 'cup', `退出了${cupFor(state, run.key)?.name ?? '杯赛'}。`)
+    const cup = cupFor(state, run.key)
+    if (!cup) {
+      dropTempTeams(state)
+      me.pre.cup = undefined
+      pop(state, 'cup', run.key)
+      pushLog(state, 'cup', '退出了杯赛。')
+      return
+    }
+    // Withdrawn, but the rounds already won stand: written down and paid, as a forfeit is. The run used to
+    // vanish — a ladder player who won three rounds, signed before the final and found no line on the
+    // cup's page and no prize for them (check_cup 「练强了再报」, found 2026-09-26 when the veto moved the dice)
+    run.results.push(`${cup.rounds[Math.min(run.round, cup.rounds.length - 1)].label} 退赛`)
+    endRun(state, cup, false, true, cupRng(state, 'withdraw'), true)
     return
   }
   if (me.phase === 'pro') {

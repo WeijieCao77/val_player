@@ -416,6 +416,10 @@ console.log(`\n三、弃权、签约退赛、老存档 · ${secs()}`)
     resumeCup(w)
     if (w.me!.pre.cup || cupCards(w).length) fail('签约之后杯赛没有退出')
     else console.log('  两轮之间签了约：下一次推进退出杯赛')
+    // and the rounds already played stay on the record, paid like a forfeit's (found 2026-09-26: the run used to vanish)
+    const wrec = w.me!.pre.cups.find((c) => c.key === 'city' && c.year === w.year)
+    if (!wrec?.forfeit) fail('签约退赛之后没有记下这次杯赛')
+    else if (wrec.prize !== (cupFor(w, 'city')!.prize[wrec.reached] ?? 0)) fail(`签约退赛的奖金 $${wrec.prize}，按已赢轮次应是 $${cupFor(w, 'city')!.prize[wrec.reached]}`)
     // a save from the blocking model: the run's card in front and no dates — or, the old dead save, no card at all
     for (const shape of ['card', 'nocard'] as const) {
       const o = clone(entry)
@@ -639,9 +643,16 @@ const clubNext = (s: GameState): { day: number | null; what: string } => {
       }
       return { rows, why: null }
     }
-    // a draw of team-mates that wins its first round, so the weeks between rounds are a club man's ordinary weeks too
+    // a draw of team-mates that wins its first round, so the weeks between rounds are a club man's ordinary weeks too.
+    // The draw alone is not enough to get out of a bad day: the round's own dice are the day's (cupRng, the match id),
+    // and eight draws of ±4 team-mates all lost the same 1-2 on 2026-09-26 once the veto changed which maps came up.
+    // So if no draw wins, the man gets a little stronger again — what is under test is the week between rounds, not the odds.
     let draw = 1
-    for (let k = 1; k <= 8; k++) if ((play(clone(s), k).rows[0]?.won)) { draw = k; break }
+    let found = false
+    for (let extra = 0; extra <= 12 && !found; extra += 6) {
+      if (extra) stronger(s, 6)
+      for (let k = 1; k <= 8; k++) if ((play(clone(s), k).rows[0]?.won)) { draw = k; found = true; break }
+    }
     const r = play(s, draw)
     if (r.why) fail(`${tag}：报不了名：${r.why}`)
     else {
