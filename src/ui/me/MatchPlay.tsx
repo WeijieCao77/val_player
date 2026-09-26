@@ -213,7 +213,7 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
         </div>
         <p className="center small muted" style={{ marginTop: -4 }}>地图：{mm.sim.maps.map((m, i) => {
           // whose pick each map was, so the order reads as the veto made it (reported 2026-09-26)
-          const by = mm.sim.pickedBy[i]
+          const by = mm.sim.pickedBy?.[i]
           const who = by === undefined || !mm.side ? '' : by === null ? '决胜图' : by === mm.side ? '你们选' : '对手选'
           return who ? `${mapCn(m)}（${who}）` : mapCn(m)
         }).join(' / ')}</p>
