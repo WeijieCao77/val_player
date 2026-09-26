@@ -132,9 +132,12 @@ try {
     await page.evaluate(() => { window.game.me.coachTrust = 80; window.refresh() })
     if ((await page.evaluate(() => window.api.pushGate())).ok) {
       await btn('推荐替补首发').click()
+      await panel.getByText('跟教练推荐一个替补').waitFor()
       const pr = panel.locator('.clout-row')
-      assert.ok(await pr.count() > 0, 'the bench is listed')
       const n = await pr.count()
+      const bench = await page.evaluate(() => { const t = window.game.teams[window.game.myTeam]; return t.roster.filter((id) => !t.starters.includes(id) && id !== window.game.me.id).length })
+      assert.equal(n, bench, 'every man on the bench is listed')
+      if (!n) assert.ok((await panel.innerText()).includes('替补席上现在没有人'))
       for (let i = 0; i < n; i++) {
         const row = pr.nth(i)
         const txt = await row.innerText()
