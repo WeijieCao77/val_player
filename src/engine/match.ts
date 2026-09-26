@@ -476,6 +476,40 @@ export function vetoOrder(bo: 1 | 2 | 3 | 5): ('ban' | 'pick')[] {
 }
 
 /**
+ * Who opens the veto, and whether it is a grand final's upper-bracket hand — me/veto.ts reads it off the
+ * fixture. Without one, side A opens (the higher seed, as the fixture is written) and the two alternate.
+ */
+export interface VetoLead {
+  /** the side that bans first and picks the first map */
+  side: 'a' | 'b'
+  /**
+   * The upper-bracket finalist's hand at a 2022-on international, a 2023-on VCT league or a 2024-on
+   * Ascension: both bans are his, then the picks alternate from him — maps one and three are his, two
+   * and four the other side's, the last one left is the decider. vlr.gg's veto lines, e.g. Masters
+   * Madrid 2024 (vlr.gg/312779): 「GEN ban Lotus; GEN ban Sunset; GEN pick Breeze; SEN pick Bind;
+   * GEN pick Ascent; SEN pick Split; Icebox remains」.
+   */
+  both: boolean
+  /** came through the upper bracket: said on the match screen and at the head of the veto record */
+  upper: boolean
+}
+
+/**
+ * The veto as a list of steps, each with the side that takes it. Alternating from the lead's side,
+ * or, for an upper-bracket BO5 hand, both bans to the lead and then alternating picks from it.
+ */
+export function vetoSteps(bo: 1 | 2 | 3 | 5, lead?: VetoLead): { act: 'ban' | 'pick'; by: 'a' | 'b' }[] {
+  const first = lead?.side ?? 'a'
+  const second = first === 'a' ? 'b' : 'a'
+  const order = vetoOrder(bo)
+  if (lead?.both && bo === 5) {
+    const by: ('a' | 'b')[] = [first, first, first, second, first, second]
+    return order.map((act, i) => ({ act, by: by[i] }))
+  }
+  return order.map((act, i) => ({ act, by: i % 2 === 0 ? first : second }))
+}
+
+/**
  * What the AI would do with this board, right now.
  *
  * The same judgement runVeto makes, exposed one step at a time so the
@@ -503,26 +537,47 @@ export function runVeto(
   bo: 1 | 2 | 3 | 5,
   pool: string[],
   rng: Rng,
-): { maps: string[]; log: string[] } {
+  lead?: VetoLead,
+): { maps: string[]; log: string[]; pickedBy: ('a' | 'b' | null)[] } {
   const a = state.teams[aId]
   const b = state.teams[bId]
   let remaining = pool.slice()
   const picked: string[] = []
+  const pickedBy: ('a' | 'b' | null)[] = []
   const log: string[] = []
   // Careers in early 2021 have only five/six released maps. Drop surplus
   // bans from the tail; never run out of maps before a BO5 can be decided.
-  const order = vetoOrder(bo)
-  let excess = Math.max(0, order.filter(a => a === 'ban').length - Math.max(0, pool.length - bo))
-  for (let i = order.length - 1; i >= 0 && excess > 0; i--) {
-    if (order[i] === 'ban') { order.splice(i, 1); excess-- }
+  // What is left alternates from the side that opens, as 2021 did it: a
+  // six-map BO5 was one ban, then picks from the other side (vlr.gg/25200,
+  // 「XSET ban Bind; SEN pick Haven; XSET pick Breeze; …」). An upper-bracket
+  // hand keeps its pattern, only a surplus ban of his goes.
+  const steps = vetoSteps(bo, lead)
+  let excess = Math.max(0, steps.filter(s => s.act === 'ban').length - Math.max(0, pool.length - bo))
+  for (let i = steps.length - 1; i >= 0 && excess > 0; i--) {
+    if (steps[i].act === 'ban') { steps.splice(i, 1); excess-- }
+  }
+  if (!(lead?.both && bo === 5)) {
+    const first = lead?.side ?? 'a'
+    steps.forEach((s, i) => { s.by = i % 2 === 0 ? first : first === 'a' ? 'b' : 'a' })
   }
 
-  const prefOf = (t: Team, m: string) => (t.mapPrefs[m] ?? 50) + rng.range(-6, 6)
+  // Each side's read of each map, taken once for the whole veto. The noise used
+  // to be drawn afresh at every comparison, so a side could rank its own maps
+  // differently from one step to the next and leave its best map on the board.
+  const read = new Map<string, number>()
+  for (const t of [a, b]) for (const m of pool) read.set(`${t.id}|${m}`, (t.mapPrefs[m] ?? 50) + rng.range(-4, 4))
+  const prefOf = (t: Team, m: string) => read.get(`${t.id}|${m}`) ?? (t.mapPrefs[m] ?? 50)
+  if (lead?.upper) {
+    const up = lead.side === 'a' ? a : b
+    log.push(lead.both
+      ? `${up.name} 从胜者组晋级：两张禁图都由他们来，第一张图也由他们选`
+      : `${up.name} 从胜者组晋级：由他们先手禁选`)
+  }
 
-  for (let i = 0; i < order.length && remaining.length > 1; i++) {
-    const actor = i % 2 === 0 ? a : b
-    const other = i % 2 === 0 ? b : a
-    const action = order[i]
+  for (let i = 0; i < steps.length && remaining.length > 1; i++) {
+    const actor = steps[i].by === 'a' ? a : b
+    const other = steps[i].by === 'a' ? b : a
+    const action = steps[i].act
     let target: string
     if (action === 'ban') {
       // ban whatever the opponent likes most and we like least
@@ -531,8 +586,13 @@ export function runVeto(
       )
       log.push(`${actor.name} 禁图：${mapCn(target)}`)
     } else {
-      target = remaining.reduce((best, m) => (prefOf(actor, m) > prefOf(actor, best) ? m : best))
+      // our own best map, weighed against how well they play it: a pick used to
+      // read our side alone, and one in four first maps was one the other side
+      // played better (reported 2026-09-26: 「打的第一张图是劣势地图」)
+      const worth = (m: string) => prefOf(actor, m) - prefOf(other, m) * 0.5
+      target = remaining.reduce((best, m) => (worth(m) > worth(best) ? m : best))
       picked.push(target)
+      pickedBy.push(steps[i].by)
       log.push(`${actor.name} 选图：${mapCn(target)}`)
     }
     remaining = remaining.filter((m) => m !== target)
@@ -542,10 +602,11 @@ export function runVeto(
   while (picked.length < need && remaining.length) {
     const decider = remaining[rng.int(0, remaining.length - 1)]
     picked.push(decider)
+    pickedBy.push(null)
     remaining = remaining.filter((m) => m !== decider)
     log.push(`决胜图：${mapCn(decider)}`)
   }
-  return { maps: picked.slice(0, bo), log }
+  return { maps: picked.slice(0, bo), log, pickedBy: pickedBy.slice(0, bo) }
 }
 
 // ---------------------------------------------------------------- economy
@@ -1130,10 +1191,15 @@ export class MatchSim {
   private seenB = new Set<string>()
 
   readonly format: 'first13' | 'full24'
+  /** who chose each map in `maps`: a side, or null for the decider — empty when nobody vetoed here */
+  readonly pickedBy: ('a' | 'b' | null)[] = []
+  /** who opened the veto, when the fixture gave one (me/veto.ts) */
+  readonly lead?: VetoLead
 
   constructor(
     state: GameState, aId: string, bId: string, bo: 1 | 2 | 3 | 5, rng: Rng,
     agreed?: { map: string; format: 'first13' | 'full24' },
+    lead?: VetoLead,
   ) {
     this.state = state
     this.aId = aId
@@ -1142,6 +1208,7 @@ export class MatchSim {
     this.bo = bo
     this.need = Math.ceil(bo / 2)
     this.format = agreed?.format ?? 'first13'
+    this.lead = agreed ? undefined : lead
     if (agreed) {
       // a scrim has no veto — both sides agreed the map when booking it
       const legal = !state.me || mapAvailableOn(agreed.map, state.year, state.day)
@@ -1157,9 +1224,10 @@ export class MatchSim {
       this.vetoLog = state.me ? this.maps.map(map => `沿用已确定地图：${mapCn(map)}`) : state.vetoPlan.log.slice()
     } else {
       const pool = poolFor(state)
-      const { maps, log } = runVeto(state, aId, bId, bo, pool, rng)
+      const { maps, log, pickedBy } = runVeto(state, aId, bId, bo, pool, rng, lead)
       this.maps = maps
       this.vetoLog = log
+      this.pickedBy = pickedBy
     }
   }
 
@@ -1365,8 +1433,9 @@ export function simulateMatch(
   bo: 1 | 2 | 3 | 5,
   rng: Rng,
   agreed?: { map: string; format: 'first13' | 'full24' },
+  lead?: VetoLead,
 ): MatchResult {
-  return new MatchSim(state, aId, bId, bo, rng, agreed).runOut()
+  return new MatchSim(state, aId, bId, bo, rng, agreed, lead).runOut()
 }
 
 /** Roll the match's per-map lines into a player's season + career totals. */

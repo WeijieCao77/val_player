@@ -35,6 +35,7 @@ import { pushLog } from './log'
 import { questProgress } from './quests'
 import { compCn } from './compname'
 import { psychMul } from './shop'
+import { vetoLeadOf } from './veto'
 
 export type StepKind = 'node' | 'round' | 'map-start' | 'map-end' | 'done'
 
@@ -144,7 +145,7 @@ export class MeMatch {
     } else {
       this.friendly = null
       this.fixture = src
-      this.sim = new MatchSim(state, src.teamA, src.teamB, src.bo, fixtureRng(state, src), src.scrim)
+      this.sim = new MatchSim(state, src.teamA, src.teamB, src.bo, fixtureRng(state, src), src.scrim, vetoLeadOf(state, src))
       this.side = this.sim.sideOf(state.myTeam)
     }
     this.nodeRng = new Rng(hashStr(`node:${state.seed}:${state.year}:${this.fixture.id}`))

@@ -41,6 +41,7 @@ import {
   mastersSeeds, swissDone, swissNext, swissOutcome, templateDone, MASTERS_8, TRIPLE_12, TRIPLE_12_PLACES, STAGE_8, STAGE_8_PLACES, swissRoundOf, SWISS_ROUNDS, swissRecord
 } from './bracket'
 import { SEASON_DAYS } from './calendar'
+import { vetoLeadOf } from './me/veto'
 
 /**
  * The year in days, and a day as a date: engine/calendar.ts, which holds them
@@ -1166,7 +1167,7 @@ export function advanceDay(state: GameState, opts: AdvanceOpts = {}): DayReport 
         // a second of our own due today: played here without us, unless held for tomorrow
         if (opts.holdMine) continue
       }
-      const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim)
+      const result = simulateMatch(state, f.teamA, f.teamB, f.bo, fixtureRng(state, f), f.scrim, vetoLeadOf(state, f))
       commitFixture(state, f, result, notes)
       if (isMine) playedMine.push(f)
     }

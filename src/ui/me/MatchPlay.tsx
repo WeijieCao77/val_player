@@ -211,7 +211,19 @@ export default function MatchPlay({ mm, onDone }: { mm: MeMatch; onDone: () => v
           <div className="s muted" style={{ fontSize: 22 }}>VS</div>
           <div className="t" title={b?.name}><Crest id={f.teamB} size={30} /><span>{b?.tag}</span></div>
         </div>
-        <p className="center small muted" style={{ marginTop: -4 }}>地图：{mm.sim.maps.map(mapCn).join(' / ')}</p>
+        <p className="center small muted" style={{ marginTop: -4 }}>地图：{mm.sim.maps.map((m, i) => {
+          // whose pick each map was, so the order reads as the veto made it (reported 2026-09-26)
+          const by = mm.sim.pickedBy[i]
+          const who = by === undefined || !mm.side ? '' : by === null ? '决胜图' : by === mm.side ? '你们选' : '对手选'
+          return who ? `${mapCn(m)}（${who}）` : mapCn(m)
+        }).join(' / ')}</p>
+        {mm.sim.lead?.upper && mm.side && (
+          <p className="center tiny" style={{ margin: '-2px 0 6px' }}>
+            {mm.sim.lead.side === mm.side
+              ? (mm.sim.lead.both ? '胜者组晋级：两张禁图都归你们，第一张图也由你们选。' : '胜者组晋级：禁图、选图都由你们先手。')
+              : (mm.sim.lead.both ? '对手从胜者组晋级：两张禁图都归他们，第一张图也由他们选。' : '对手从胜者组晋级：禁图、选图由他们先手。')}
+          </p>
+        )}
         {verdict && (
           <p className="center small" style={{ margin: '4px 0 8px' }}>
             <span className={verdictTag(verdict.k)}>{verdict.t}</span>
