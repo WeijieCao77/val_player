@@ -12,7 +12,8 @@
     "when": "post",
     "tone": "att",
     "quote": "they looked pretty sloppy, so I knew we had a good chance",
-    "cn": "他们（败者组那两场）打得挺拉的，我就知道我们机会很大。",
+    "cn": "他们打得挺拉的，我就知道我们机会很大。",
+    "note": "说的是 FNC 在败者组那两场的表现",
     "result": "SEN 3-0 FNC，说到做到",
     "source": ["https://nerdstreet.com/news/2021/5/sentinels-valorant-masters-reykjavik-iceland-champions"]
   },
