@@ -1,7 +1,7 @@
 import { Rng, clamp, dayStream } from './rng'
 import { absentPlayer } from './me/absence'
 import { INJURIES } from './content'
-import { recomputeOverall, refreshValue, ageDrift, ageAttrMul, ageLoss, ceilingSum, trainAgeMul, youthLoosens, weightsFor, ceilingOf, atOwnCeiling } from './player'
+import { recomputeOverall, refreshValue, ageDrift, ageAttrMul, ageLoss, ceilingSum, trainAgeMul, youthLoosens, weightsFor, ceilingOf, atOwnCeiling, HEALTH_LOSS_MUL } from './player'
 import { pushLog } from './me/log'
 import { coachOr } from './roster'
 import { weeklyBonds } from './bonds'
@@ -315,6 +315,14 @@ export function applyMatchFatigue(
   }
 }
 
+/**
+ * The career player, with a health team paid for the year that is ending (me/crew.ts): the winter's loss of 枪法
+ * and 反应 is HEALTH_LOSS_MUL of what it would be. Read on the year before the turn — seasonRollover runs before
+ * engine/season.ts moves state.year on — and never for anybody else.
+ */
+export const healthCovered = (state: GameState, p: Pick<Player, 'id'>): boolean =>
+  !!state.me && p.id === state.me.id && state.me.flags.healthYear === state.year
+
 /** End-of-season ageing: growth for prospects, decline for veterans. */
 export function seasonRollover(state: GameState, rng: Rng): string[] {
   const notes: string[] = []
@@ -378,7 +386,9 @@ export function seasonRollover(state: GameState, rng: Rng): string[] {
         // (engine/player.ts ageLoss). It was a chance at a point a winter with the ceiling left
         // where it was, so practice filled it straight back in and a 30-year-old out-aimed himself
         // at 25 (reported 2026-09-25: 「年纪大了掉的少年纪轻涨的慢，这合理吗？」).
-        const loss = ageLoss(p.age, k)
+        // the career player's health team, in a year he paid for it, takes a fifth off the hands' loss (HEALTH_LOSS_MUL);
+        // the dice below are rolled the same either way, so the rest of the world ages exactly as it did
+        const loss = ageLoss(p.age, k) * ((k === 'aim' || k === 'reaction') && healthCovered(state, p) ? HEALTH_LOSS_MUL : 1)
         if (loss <= 0) continue
         const n = Math.min(p.attrs[k] - 20, Math.floor(loss) + (rng.chance(loss % 1) ? 1 : 0))
         if (n <= 0) continue

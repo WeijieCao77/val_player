@@ -47,6 +47,7 @@ import { quietClub, releaseForHistory } from '../timeline'
 import { rivalWeek } from './rivals'
 import { storyWeek } from './storyweek'
 import { outletSeason, outletWeek } from './outlets'
+import { crewSeason, crewWeek } from './crew'
 import { compClass, isQualifier } from './compclass'
 import { lifeDay, lifeWeek } from './life'
 import { rememberFMVPs } from './fmvp'
@@ -816,6 +817,8 @@ export function settleWeek(state: GameState): void {
   me.duoWith = undefined
   me.ap = apFor(state)
   me.apMax = me.ap
+  // the new week's coach, paid a week ahead (me/crew.ts)
+  crewWeek(state)
   refreshMyRounds(state)
   beginWeek(state)
 }
@@ -892,6 +895,8 @@ function onSeasonEnd(state: GameState, year: number, rng: Rng, before?: Attrs, l
   }
   // the café's year and a word from home, before the question of whether there is a next one (me/outlets.ts)
   outletSeason(state, year)
+  // the health team for the new year, after the winter it softened (me/crew.ts)
+  crewSeason(state)
   retirementTick(state, rng)
   if (me.phase !== 'retired') push(state, { kind: 'season', id: String(year) })
 }

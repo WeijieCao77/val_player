@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useGame } from './ctx'
 import { Panel, money, moneyFull, moneyIn } from './common'
 import { KIND_CN, LEDGER_IN, LEDGER_OUT, ledgerSum, prizeRows } from '../../engine/me/money'
@@ -8,13 +9,15 @@ import { prizeNote } from '../../engine/me/prizes'
 import { compCn } from '../../engine/me/compname'
 import type { MeState } from '../../engine/me/types'
 import type { GameState } from '../../engine/types'
-import { AGENTS, COURSES, GEAR_EFFECT, GEAR_PRICE, GEAR_SLOTS, GEAR_TIER_CN, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearModel, hireAgent, lifeFlag, lifestyleLocked } from '../../engine/me/shop'
+import { AGENTS, COURSES, GEAR_EFFECT, GEAR_SLOTS, GEAR_TIER_CN, KITS, LIFESTYLE, RELAX, buyCourse, buyGear, buyLifestyle, buyRelax, gearChoices, gearPrice, hireAgent, kitLine, lifeFlag, lifestyleLocked, myGearModel } from '../../engine/me/shop'
 import { STREAM_TIERS, streamCut } from '../../engine/me/stream'
 import { fanOutlook, fansCn, fanTier } from '../../engine/me/fans'
-import OutletPanels from './OutletPanels'
+import OutletPanels, { CarRow, CrewPanel, FlatRow } from './OutletPanels'
 
 export default function EconomyScreen() {
   const { game, commit, toast } = useGame()
+  // which model of the next tier each slot's picker shows; only read when the button is pressed
+  const [picks, setPicks] = useState<Record<string, number>>({})
   const me = game.me!
   const p = game.players[me.id]
   const act = (why: string | null) => { if (why) toast(why); commit() }
@@ -69,22 +72,36 @@ export default function EconomyScreen() {
       </div>
       <div>
         <Panel title="外设">
-          {/* five rows in one set of columns, one line each where the panel has the room and two lines each where it
+          {/* six rows in one set of columns, one line each where the panel has the room and two lines each where it
               has not (me.css .shop-list) — never one row broken alone */}
           <div className="shop-list">
             {GEAR_SLOTS.map((s) => {
               const t = me.gear[s.key] ?? 0
-              const now = gearModel(s.key, t)
+              const now = myGearModel(me, s.key)
+              const next = gearChoices(s.key, t + 1)
+              const pick = Math.min(picks[s.key] ?? 0, Math.max(0, next.length - 1))
               return (
                 <div key={s.key} className="shop-row">
                   <span className="nm">{s.name}</span>
                   <span className="tag">{GEAR_TIER_CN[t]}</span>
                   <span className="small md" title={now}>{now}</span>
-                  {t < 2 && <button className="sm" onClick={() => act(buyGear(game, s.key))}>换成 {gearModel(s.key, t + 1)} {money(GEAR_PRICE[t + 1])}</button>}
+                  {t < 2 && (
+                    <span className="buy">
+                      {/* the tier's two or three real models, alike in what they do (engine/me/shop.ts GEAR_CHOICES) */}
+                      {next.length > 1 && (
+                        <select className="sm" aria-label={`${s.name}换成哪一款`} value={pick} onChange={(e) => setPicks({ ...picks, [s.key]: Number(e.target.value) })}>
+                          {next.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                        </select>
+                      )}
+                      <button className="sm" onClick={() => act(buyGear(game, s.key, pick))}>{next.length > 1 ? '换上' : `换成 ${next[0]}`} {money(gearPrice(s.key, t + 1))}</button>
+                    </span>
+                  )}
                 </div>
               )
             })}
           </div>
+          {/* 外设上手: each flagship kit's line, in words — what is missing, how far along, or why its point waits */}
+          {KITS.map((k) => <p key={k.key} className="tiny muted" style={{ margin: '6px 0 0' }}>{kitLine(game, k)}</p>)}
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>{GEAR_EFFECT}</p>
         </Panel>
         <Panel title="课程">
@@ -96,6 +113,7 @@ export default function EconomyScreen() {
             </div>
           ))}
         </Panel>
+        <CrewPanel />
         <Panel title="放松与住处">
           {RELAX.map((r) => (
             <div key={r.key} className="row" style={{ gap: 10, padding: '4px 0' }}>
@@ -104,6 +122,7 @@ export default function EconomyScreen() {
               {r.once && me.flags[`relax_${r.key}`] ? <span className="tag win">已有</span> : <button className="sm" onClick={() => act(buyRelax(game, r.key))}>{money(r.price)}</button>}
             </div>
           ))}
+          <FlatRow />
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>不占行动点；理疗和旅行每周最多两次。</p>
         </Panel>
         <Panel title="家人与生活">
@@ -117,6 +136,7 @@ export default function EconomyScreen() {
               </div>
             )
           })}
+          <CarRow />
           <p className="tiny faint" style={{ margin: '6px 0 0' }}>不改变任何能力和比赛。办过的事，退役时写进你的结局。</p>
         </Panel>
         <OutletPanels />

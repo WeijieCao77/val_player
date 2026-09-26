@@ -2,10 +2,15 @@ import type { ReactNode } from 'react'
 import { useGame } from './ctx'
 import { Panel, money, moneyFull } from './common'
 import {
-  BREAKS, CAFE_PRICE, FAMILY_TIERS, MEETS, STUDIO,
-  breakLocked, breakPrice, buyStudio, cafeLocked, familyLocked, familyWeekly, fundScholar, holdMeet,
-  meetLocked, openCafe, readOut, scholarLocked, scholarPrice, setFamily, studioLocked, takeBreak,
+  BREAKS, CAFE_PRICE, CARS, FAMILY_TIERS, FLATS, GIFTS, MEETS, STUDIO,
+  breakLocked, breakPrice, buyCar, buyStudio, cafeLocked, carLocked, familyLocked, familyWeekly, flatLocked, flatMonthly,
+  fundScholar, giftLocked, giftPrice, giveCharity, holdMeet,
+  meetLocked, openCafe, readOut, scholarLocked, scholarPrice, setFamily, setFlat, studioLocked, takeBreak,
 } from '../../engine/me/outlets'
+import {
+  COACH_MUL, HEALTH_AGE, campLocked, campPrice, coachLocked, coachWeekly, goCamp, healthLocked, healthPaid, healthPrice,
+  inCamp, setCoach, setHealth,
+} from '../../engine/me/crew'
 
 /** Four columns on a phone: RMB, big prices in 万, a smaller price to the yuan. */
 const price = (x: number): string => (x >= 10_000 ? money(x) : moneyFull(x))
@@ -91,6 +96,16 @@ export default function OutletPanels() {
             return <button key={b.key} className="sm" style={wrapBtn} disabled={!!why} title={why ?? b.blurb} onClick={() => act(takeBreak(game, b.key))}>{b.name} {cost ? price(cost) : '免费'}</button>
           })}
         </Outlet>
+        <Outlet
+          name="公益捐款"
+          note={`以你的名义捐给公益项目，热度和粉丝涨一点。${me.flags.charityYear === year ? '今年捐过了。' : ''}${me.flags.charityTotal ? `一共捐了 ${price(me.flags.charityTotal)}。` : ''}`}
+          lock={lockLine(GIFTS.map((g) => ({ name: g.name, why: giftLocked(game, g) })), ['今年捐过了'])}
+        >
+          {GIFTS.map((g) => {
+            const why = giftLocked(game, g)
+            return <button key={g.share} className="sm" style={wrapBtn} disabled={!!why} title={why ?? `工资的 ${Math.round(g.share * 100)}%`} onClick={() => act(giveCharity(game, g.share))}>工资的 {Math.round(g.share * 100)}% {price(giftPrice(game, g))}</button>
+          })}
+        </Outlet>
         <p className="tiny faint" style={{ margin: '6px 0 0' }}>都不改变能力和比赛。办过的事，退役时写进你的结局。</p>
       </Panel>
       <Panel title="家用与置办">
@@ -122,5 +137,96 @@ export default function OutletPanels() {
         </Outlet>
       </Panel>
     </>
+  )
+}
+
+/**
+ * 训练与团队 (engine/me/crew.ts, 2026-09-26): three rows, each saying what it does in words and what it costs
+ * on the wage I am on now; a button that cannot be pressed stays on screen, greyed, with the reason under it.
+ */
+export function CrewPanel() {
+  const { game, commit, toast } = useGame()
+  const me = game.me!
+  const act = (why: string | null) => { if (why) toast(why); commit() }
+  const hired = !!me.flags.coach
+  const coachWhy = coachLocked(game)
+  const campWhy = campLocked(game)
+  const campDone = me.flags.campYear === game.year
+  const healthOn = !!me.flags.healthOn
+  const healthWhy = healthLocked(game)
+  return (
+    <Panel title="训练与团队">
+      <Outlet
+        first
+        name="私人教练"
+        note={`自己练习的收获 ×${COACH_MUL}：枪法训练、复盘、道具与跑图；排位和训练赛不变。每周付，随时可以停。${hired ? '现在：请着。' : ''}`}
+        lock={hired ? null : coachWhy}
+      >
+        {hired
+          ? <button className="sm primary" style={wrapBtn} onClick={() => act(setCoach(game, false))}>不请了（每周 {price(coachWeekly(game))}）</button>
+          : <button className="sm" style={wrapBtn} disabled={!!coachWhy} onClick={() => act(setCoach(game, true))}>请私教 每周 {price(coachWeekly(game))}</button>}
+      </Outlet>
+      <Outlet
+        name="休赛期训练营"
+        note={`一年一次，休赛期去集训一周，这周照常练：练的次数算进「怎么破」时算两份，突破能开的总量不变。${campDone ? (inCamp(game) ? '这周就在训练营。' : '今年去过了。') : ''}`}
+        lock={campDone ? null : campWhy}
+      >
+        <button className="sm" style={wrapBtn} disabled={!!campWhy} onClick={() => act(goCamp(game))}>去集训 {price(campPrice(game))}</button>
+      </Outlet>
+      <Outlet
+        name="康复与体能团队"
+        note={`${HEALTH_AGE} 岁起能请，按年付。27 岁起每个休赛期枪法、反应少掉两成，瓶颈也跟着少降；26 岁以前不起作用。${healthOn ? '现在：请着，每年年初续一年。' : healthPaid(game) ? '今年付过了，管到年底。' : ''}`}
+        lock={healthOn ? null : healthWhy}
+      >
+        {healthOn
+          ? <button className="sm primary" style={wrapBtn} onClick={() => act(setHealth(game, false))}>明年不续了（每年 {price(healthPrice(game))}）</button>
+          : <button className="sm" style={wrapBtn} disabled={!!healthWhy} onClick={() => act(setHealth(game, true))}>请团队 每年 {price(healthPrice(game))}</button>}
+      </Outlet>
+      <p className="tiny faint" style={{ margin: '6px 0 0' }}>这三样只让你更快够到瓶颈，或者让瓶颈掉得慢一点，都不抬高瓶颈。价钱跟着工资走。</p>
+    </Panel>
+  )
+}
+
+/** 租房 (engine/me/outlets.ts FLATS): under 放松与住处, the rent a month on the wage I am on now. */
+export function FlatRow() {
+  const { game, commit, toast } = useGame()
+  const me = game.me!
+  const act = (why: string | null) => { if (why) toast(why); commit() }
+  const rent = me.flags.rent ?? 0
+  return (
+    <Outlet
+      name="租房"
+      note={`现在：${FLATS[rent]?.name ?? FLATS[0].name}${rent ? ` · 每月 ${price(flatMonthly(game, rent))}` : ''}。只是住得体面：不回体力，也不改变能力和比赛。`}
+      lock={lockLine(FLATS.filter((f) => f.tier).map((f) => ({ name: f.name, why: flatLocked(game, f.tier) })), ['现在就住这里'])}
+    >
+      {FLATS.map((f) => {
+        const why = flatLocked(game, f.tier)
+        return (
+          <button key={f.tier} className={`sm${rent === f.tier ? ' primary' : ''}`} style={wrapBtn} disabled={!!why} onClick={() => act(setFlat(game, f.tier))}>
+            {f.tier ? `${f.name} 每月 ${price(flatMonthly(game, f.tier))}` : f.name}
+          </button>
+        )
+      })}
+    </Outlet>
+  )
+}
+
+/** 买车 (engine/me/outlets.ts CARS): under 家人与生活, real cars at real prices, the diary and the ending only. */
+export function CarRow() {
+  const { game, commit, toast } = useGame()
+  const me = game.me!
+  const act = (why: string | null) => { if (why) toast(why); commit() }
+  const car = CARS.find((c) => c.key === me.flags.car)
+  return (
+    <Outlet
+      name="买车"
+      note={`${car ? `现在开的是${car.name}。` : ''}只进日记和结局，比赛里什么都不变。`}
+      lock={lockLine(CARS.map((c) => ({ name: c.name, why: carLocked(game, c) })), ['现在开的就是这辆'])}
+    >
+      {CARS.map((c) => {
+        const why = carLocked(game, c)
+        return <button key={c.key} className={`sm${car?.key === c.key ? ' primary' : ''}`} style={wrapBtn} disabled={!!why} title={why ?? undefined} onClick={() => act(buyCar(game, c.key))}>{c.name} {price(c.price)}</button>
+      })}
+    </Outlet>
   )
 }

@@ -16,6 +16,8 @@ export type LogKind = 'match' | 'train' | 'team' | 'money' | 'info' | 'good' | '
 export type MoneyKind =
   | 'salary' | 'prize' | 'sign' | 'media' | 'biz' | 'inother'
   | 'agent' | 'living' | 'upkeep' | 'gear' | 'course' | 'relax' | 'life' | 'family' | 'public' | 'asset' | 'fee' | 'fine' | 'outother'
+  // 2026-09-26: 训练与团队 (me/crew.ts); 房租, 车 and 公益捐款 (me/outlets.ts)
+  | 'crew' | 'rent' | 'car' | 'charity'
 
 /** The nights that are not matches - see me/ceremony.ts, and me/nights.ts for the last five. */
 export type CerKind = 'draw' | 'depart' | 'final' | 'media' | 'rehab' | 'farewell'

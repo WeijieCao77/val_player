@@ -21,7 +21,8 @@ import { acceptDeal, declineDeal } from './contract'
 import { answerStreamOffer } from './stream'
 import { eventOf, resolveEvent } from './events'
 import { takeIgl } from './igl'
-import { COURSES, FLAT_RELIEF, GEAR_PRICE, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel } from './shop'
+import { COURSES, FLAT_RELIEF, RELAX, RELIEF_FLOOR, buyCourse, buyGear, buyRelax, GEAR_SLOTS, gearModel, gearPrice } from './shop'
+import { autoCrew } from './crew'
 import { autoOutlets } from './outlets'
 import { fanCap } from './fans'
 import { expectOf, tryoutSkill } from './prepro'
@@ -551,13 +552,15 @@ export function autoBuy(state: GameState): string[] {
   if (injuryHelpedBy(state, 'trip') && me.money - relax('trip') >= reserve * 2 && !buyRelax(state, 'trip')) out.push('出去散了两天心')
   for (const s of GEAR_SLOTS) {
     if ((me.gear[s.key] ?? 0) >= 1) continue
-    if (me.money - GEAR_PRICE[1] < reserve) break
+    if (me.money - gearPrice(s.key, 1) < reserve) break
     if (!buyGear(state, s.key)) out.push(`${s.name}换成了${gearModel(s.key, 1)}`)
   }
   if (me.phase === 'pro') {
     if (me.tilt >= 40 && me.money - course('psych') >= reserve && !buyCourse(state, 'psych')) out.push('报了运动心理课')
     if (me.abroad && !me.courses.includes('lang') && me.money - course('lang') >= reserve && !buyCourse(state, 'lang')) out.push('报了语言课')
   }
+  // the coach, the health team and the off-season camp, out of real savings, so the autopilot is not the weaker career (me/crew.ts)
+  out.push(...autoCrew(state))
   // where the rest goes: home, a meetup, a scholarship, the winter's holiday, a studio for a streamer (me/outlets.ts)
   out.push(...autoOutlets(state))
   return out

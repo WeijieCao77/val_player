@@ -144,6 +144,13 @@ export function ageLoss(age: number, k: keyof Attrs): number {
 }
 
 /**
+ * 康复与体能团队 (me/crew.ts, 2026-09-26): the career player's own winter loss of 枪法 and 反应 is this much of
+ * ageLoss in a year he paid for one, and his ceilings come down by what he really lost. Nobody else's: a club's
+ * men age as they always have (engine/training.ts seasonRollover, scripts/check_age_curve.ts).
+ */
+export const HEALTH_LOSS_MUL = 0.8
+
+/**
  * Ceiling points the winter he turns this age gives every attribute: a body still growing into
  * the game. Room only — practice fills it — so a player who does not work gets nothing from it.
  */
