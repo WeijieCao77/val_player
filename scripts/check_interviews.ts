@@ -10,18 +10,25 @@
  * 五 bounded: only 心态, 状态, followers, heat, trust and bonds move; 狠's edge is this match's calls only, and the
  *    series it moves by at most two points, measured on paired simulations (the same fixture, the same draws)
  * 六 a save round-trip keeps the waiting card and what was said
- * 七 the real lines: each has a source, a date, and a short quote; one is found for its own match and round
- * 八 a long 托管 career: never more than IV_CAP a season, every one on a start, the generic press card kept apart
+ * 七 the real lines: at least 50, each with a source, a date, situation tags and a short quote; one is found for its
+ *    own match and round, and that exact line comes before any 类似的时刻
+ * 七b a moment with no line of its own gets one said at a moment like it, never twice in a career until every line
+ *    for that kind of moment has been shown
+ * 八 a long 托管 career: never more than IV_CAP a season, every one on a start, the generic press card kept apart;
+ *    no question asked twice in a season, pre-match or post-match, and no pre-match question twice in the career
+ *    (the author, 2026-09-26: 「不然玩家很快就会发现重复」)
  *
- *   npx tsx scripts/check_interviews.ts [pairs=800] [seasons=3]
+ *   npx tsx scripts/check_interviews.ts [pairs=800] [seasons=4]
  */
 import assert from 'node:assert/strict'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
-import { autoWeek, autoResolve } from '../src/engine/me/auto'
+import { autoPlan, autoResolve } from '../src/engine/me/auto'
+import { advanceWeek } from '../src/engine/me/week'
 import {
   IV_ATE, IV_BOLD_NODE, IV_CAP, IV_KEPT, IV_KEPT_BIG, IV_MOMENTS, IV_BANK_SIZE,
-  interviewAfterMatch, interviewBeforeMatch, ivAnswer, ivCard, ivCount, ivEdge, ivQuiet, keyKind, momentFor,
+  interviewAfterMatch, interviewBeforeMatch, ivAnswer, ivCard, ivCount, ivEdge, ivQuiet, keyKind, likeMoment, momentFor,
 } from '../src/engine/me/interview'
+import type { IvSituation } from '../src/engine/me/interview'
 import { MeMatch } from '../src/engine/me/matchplay'
 import { packState, unpackState } from '../src/engine/save'
 import { eventOf } from '../src/engine/me/events'
@@ -36,7 +43,7 @@ const mem: Record<string, string> = {}
 ;(globalThis as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error('offline'))
 
 const PAIRS = Number(process.argv[2] ?? 800)
-const SEASONS = Number(process.argv[3] ?? 3)
+const SEASONS = Number(process.argv[3] ?? 4)
 const t0 = Date.now()
 let checks = 0
 const check = (label: string, run: () => void) => { run(); checks++; console.log(`OK ${label}`) }
@@ -317,8 +324,11 @@ check('六 a save round-trip keeps the waiting card and what was said', () => {
   assert.equal(ivEdge(old, f.id), 0)
 })
 
-check('七 the real lines: sourced, dated, short; found for their own match', () => {
-  assert.ok(IV_MOMENTS.length >= 8 && IV_MOMENTS.length <= 12, `${IV_MOMENTS.length}`)
+const SITS: IvSituation[] = ['final', 'elim', 'comeback', 'intl_debut', 'vs_former', 'heavy_loss', 'mvp', 'retire', 'rookie', 'rivalry', 'upset', 'champion', 'runner_up', 'any_win', 'any_loss', 'pressure']
+check('七 the real lines: at least 50, sourced, dated, tagged, short; found for their own match first', () => {
+  assert.ok(IV_MOMENTS.length >= 50, `${IV_MOMENTS.length} lines`)
+  const byYear = new Set(IV_MOMENTS.map((m) => m.year))
+  for (const y of [2021, 2022, 2023, 2024, 2025, 2026]) assert.ok(byYear.has(y), `no line from ${y}`)
   const ids = new Set<string>()
   for (const m of IV_MOMENTS) {
     assert.ok(!ids.has(m.id), m.id); ids.add(m.id)
@@ -330,9 +340,13 @@ check('七 the real lines: sourced, dated, short; found for their own match', ()
     assert.ok(cjk ? cjk <= 20 : words <= 15, `${m.id} quote too long`)
     assert.ok((m.cn.match(/[一-鿿]/g) ?? []).length <= 20, `${m.id} cn too long`)
     assert.ok(['steady', 'bold', 'att'].includes(m.tone) && ['pre', 'post'].includes(m.when), m.id)
-    assert.equal(m.teams.length, 2, m.id)
-    assert.ok(m.teams.includes(m.team), m.id)
+    // a match's two sides, or none for a line said away from one (a retirement, a press day)
+    assert.ok(m.teams.length === 2 || m.teams.length === 0, m.id)
+    if (m.teams.length) assert.ok(m.teams.includes(m.team), m.id)
+    assert.ok(m.tags?.length && m.tags.every((t) => SITS.includes(t)), `${m.id} tags`)
   }
+  // every kind of moment the cards ask for has lines
+  for (const t of SITS) assert.ok(IV_MOMENTS.some((m) => m.tags.includes(t)), `no line tagged ${t}`)
   // the world reaches Toronto's final with the same two sides: f0rsakeN's line is on the card
   const s = createCareer({ name: '采访', region: 'Pacific', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 't1', seed: 3, year: 2025 })
   const tag = (t: string) => Object.values(s.teams).find((x) => x.tag === t)!.id
@@ -340,8 +354,50 @@ check('七 the real lines: sourced, dated, short; found for their own match', ()
   const f: Fixture = { id: 'TOR', day: s.day, stage: 'masters2', comp: comp.key, teamA: tag('PRX'), teamB: tag('FNC'), bo: 5, label: 'KO:6:总决赛', played: false }
   assert.equal(momentFor(s, f, 'pre')?.id, 'toronto25_f0rsaken')
   assert.equal(momentFor(s, { ...f, label: 'KO:1:胜者组第一轮' }, 'pre'), undefined)
+  // and on the card it is that line, as this very match — not a 类似的时刻, even with those still unseen
+  const me = s.me!
+  me.phase = 'pro'
+  s.myTeam = tag('PRX')
+  s.players[me.id].teamId = s.myTeam
+  const t = s.teams[s.myTeam]
+  t.roster = [...new Set([me.id, ...t.roster])]
+  t.starters = [me.id, ...t.starters.filter((id) => id !== me.id).slice(0, 4)]
+  me.seasonStart.starts = 3
+  me.flags.ivDebut = s.year
+  me.flags.ivIntl = s.year
+  me.pending = []
+  s.fixtures.push(f)
+  assert.ok(interviewBeforeMatch(s, f))
+  assert.equal(me.iv!.pre!.moment, 'toronto25_f0rsaken')
+  assert.equal(me.iv!.pre!.like, undefined)
+  const card = ivCard(s, 'pre:TOR')!
+  assert.ok(card.moment!.includes('就是这一场') && !card.moment!.includes('类似的时刻'), card.moment)
+  // a lower-bracket final with no line of its own: one said at a moment like it, as 类似的时刻
+  ivAnswer(s, 'pre:TOR', 0)
+  me.pending = []
+  const g: Fixture = { ...f, id: 'TOR2', label: 'KO:4:败者组决赛' }
+  s.fixtures.push(g)
+  assert.ok(interviewBeforeMatch(s, g))
+  assert.equal(me.iv!.pre!.like, 1)
+  assert.ok(ivCard(s, 'pre:TOR2')!.moment!.includes('类似的时刻'))
   s.year = 2024
   assert.equal(momentFor(s, f, 'pre'), undefined, 'another year is another event')
+})
+
+check('七b 类似的时刻: never twice in a career until the kind of moment has run out of lines', () => {
+  for (const sits of [['final'], ['elim', 'pressure'], ['vs_former', 'rivalry'], ['retire'], ['mvp']] as IvSituation[][]) {
+    const s = started(fresh())
+    const pool = IV_MOMENTS.filter((m) => m.tags.some((t) => sits.includes(t))).map((m) => m.id)
+    const got: string[] = []
+    for (let i = 0; i < pool.length; i++) got.push(likeMoment(s, sits, i % 2 ? 'pre' : 'post', `c${i}`)!.id)
+    assert.equal(new Set(got).size, pool.length, `${sits.join('+')}: ${pool.length} lines, a repeat before all were shown`)
+    assert.deepEqual([...got].sort(), [...pool].sort())
+    // run out, it starts again from the one shown longest ago
+    assert.equal(likeMoment(s, sits, 'pre', 'again')!.id, got[0])
+    // and survives a save
+    const back = unpackState(packState(s))
+    assert.deepEqual(back.me!.iv!.real, s.me!.iv!.real)
+  }
 })
 
 check(`八 a ${SEASONS}-season 托管 career: at most ${IV_CAP} a season, every one on a start`, () => {
@@ -349,31 +405,56 @@ check(`八 a ${SEASONS}-season 托管 career: at most ${IV_CAP} a season, every 
   const s = createCareer({ name: '采访', region: 'Europe', role: '决斗者', talents: emptyTalents(), originKey: 'netcafe', start: 'chal', seed: 7 })
   const me = s.me!
   const y0 = s.year
-  const per = new Map<number, number>()
   let generic = 0
   let lastLen = 0
   let guard = 0
-  const preFx: string[] = []
+  // every card as it comes up, read before 托管 answers it: the week run by hand, the way me/auto.ts autoWeek runs it
+  const cards: { year: number; pre: boolean; key: string; fx: string; real: string }[] = []
+  const clear = () => {
+    let g = 0
+    while (me.pending.length && g++ < 30) {
+      const it = me.pending[0]
+      if (it.kind === 'interview') {
+        const c = ivCard(s, it.id!)
+        if (c) cards.push({ year: s.year, pre: c.pre, key: c.pre ? me.iv!.pre!.q : `${me.iv!.post!.out}:${me.iv!.post!.ask}`, fx: it.id!.slice(it.id!.indexOf(':') + 1), real: c.moment ?? '' })
+      }
+      autoResolve(s, it)
+    }
+  }
   while (s.year - y0 < SEASONS && guard++ < 60 * SEASONS) {
-    const n0 = me.iv?.total ?? 0
-    const pre0 = me.iv?.pre?.fx
-    const stop = autoWeek(s)
-    if (me.iv && me.iv.total !== n0) {
-      if (me.iv.pre && me.iv.pre.fx !== pre0) preFx.push(me.iv.pre.fx)
+    clear()
+    if (me.phase === 'retired' || s.gameOver) break
+    autoPlan(s)
+    let stop = advanceWeek(s)
+    let g = 0
+    while (stop.kind !== 'week-end' && stop.kind !== 'game-over' && g++ < 40) {
+      if (stop.kind === 'match') new MeMatch(s, stop.fixture).runOut()
+      else clear()
+      stop = advanceWeek(s)
     }
     generic += me.log.slice(lastLen).filter((l) => l.text.startsWith('赛后采访，记者问你')).length
     lastLen = me.log.length
     if (stop.kind === 'game-over') break
   }
-  for (const l of me.log) if (l.text.includes('前的采访，你说')) per.set(l.year, (per.get(l.year) ?? 0) + 1)
+  clear()
+  const pres = cards.filter((c) => c.pre)
+  const posts = cards.filter((c) => !c.pre)
+  const per = new Map<number, number>()
+  for (const c of pres) per.set(c.year, (per.get(c.year) ?? 0) + 1)
   const counts = [...per.entries()].sort((a, b) => a[0] - b[0])
-  console.log(`   每季采访：${counts.map(([y, n]) => `${y} ${n}`).join(' · ') || '无'}；共 ${me.iv?.total ?? 0} 次；通用赛后采访 ${generic} 次`)
-  assert.ok((me.iv?.total ?? 0) > 0, 'no interview in a whole career')
+  const repeats = (xs: typeof cards, bySeason: boolean) => xs.length - new Set(xs.map((c) => `${bySeason ? c.year : ''}:${c.key}`)).size
+  const reals = cards.filter((c) => c.real).map((c) => c.real)
+  console.log(`   每季采访：${counts.map(([y, n]) => `${y} ${n}`).join(' · ') || '无'}；共 ${pres.length} 场；通用赛后采访 ${generic} 次`)
+  console.log(`   赛前问题 ${pres.length} 次、不同 ${new Set(pres.map((c) => c.key)).size} 个（同季重复 ${repeats(pres, true)}，生涯重复 ${repeats(pres, false)}）；赛后问题 ${posts.length} 次、不同 ${new Set(posts.map((c) => c.key)).size} 个（同季重复 ${repeats(posts, true)}，生涯重复 ${repeats(posts, false)}）；真实的话 ${reals.length} 次、不同 ${new Set(reals).size} 句`)
+  assert.ok(pres.length > 0, 'no interview in a whole career')
   for (const [, n] of counts) assert.ok(n <= IV_CAP, `${n} in a season`)
+  assert.equal(repeats(pres, true), 0, 'a pre-match question twice in one season')
+  assert.equal(repeats(posts, true), 0, 'a post-match question twice in one season')
+  assert.equal(repeats(pres, false), 0, 'a pre-match question twice in one career while others were left')
   // every interviewed match that was played: I started it
-  for (const id of preFx) {
-    const m = me.matches.find((x) => x.fixtureId === id)
-    if (m) assert.ok(m.started, `interviewed for ${id} and did not start`)
+  for (const c of pres) {
+    const m = me.matches.find((x) => x.fixtureId === c.fx)
+    if (m) assert.ok(m.started, `interviewed for ${c.fx} and did not start`)
   }
   assert.equal(pendingIv(s).length, 0, 'nothing left waiting')
 })
