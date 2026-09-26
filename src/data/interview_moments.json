@@ -6,7 +6,10 @@
     "stage": "masters1",
     "event": "VCT 2021 雷克雅未克大师赛",
     "round": "总决赛",
-    "teams": ["SEN", "FNC"],
+    "teams": [
+      "SEN",
+      "FNC"
+    ],
     "who": "zombs",
     "team": "SEN",
     "when": "post",
@@ -15,7 +18,14 @@
     "cn": "他们打得挺拉的，我就知道我们机会很大。",
     "note": "说的是 FNC 在败者组那两场的表现",
     "result": "SEN 3-0 FNC，说到做到",
-    "source": ["https://nerdstreet.com/news/2021/5/sentinels-valorant-masters-reykjavik-iceland-champions"]
+    "source": [
+      "https://nerdstreet.com/news/2021/5/sentinels-valorant-masters-reykjavik-iceland-champions"
+    ],
+    "tags": [
+      "final",
+      "champion",
+      "rivalry"
+    ]
   },
   {
     "id": "copenhagen22_ange1",
@@ -24,7 +34,10 @@
     "stage": "masters2",
     "event": "VCT 2022 哥本哈根大师赛",
     "round": "总决赛",
-    "teams": ["FPX", "PRX"],
+    "teams": [
+      "FPX",
+      "PRX"
+    ],
     "who": "ANGE1",
     "team": "FPX",
     "when": "post",
@@ -32,7 +45,13 @@
     "quote": "at this moment, we are the best team in the world",
     "cn": "此刻我们就是世界最强。",
     "result": "FPX 3-2 PRX",
-    "source": ["https://nerdstreet.com/news/2022/7/funplus-phoenix-fpx-win-valorant-vct-masters-copenhagen"]
+    "source": [
+      "https://nerdstreet.com/news/2022/7/funplus-phoenix-fpx-win-valorant-vct-masters-copenhagen"
+    ],
+    "tags": [
+      "final",
+      "champion"
+    ]
   },
   {
     "id": "champions23_demon1",
@@ -41,7 +60,10 @@
     "stage": "champions",
     "event": "VALORANT Champions 2023 洛杉矶",
     "round": "总决赛",
-    "teams": ["EG", "PRX"],
+    "teams": [
+      "EG",
+      "PRX"
+    ],
     "who": "Demon1",
     "team": "EG",
     "when": "post",
@@ -49,7 +71,14 @@
     "quote": "I'm the best player in this game.",
     "cn": "我就是这游戏最强的。",
     "result": "EG 3-1 PRX",
-    "source": ["https://www.vlr.gg/267863/evil-geniuses-conquer-champions-on-home-soil"]
+    "source": [
+      "https://www.vlr.gg/267863/evil-geniuses-conquer-champions-on-home-soil"
+    ],
+    "tags": [
+      "final",
+      "champion",
+      "mvp"
+    ]
   },
   {
     "id": "champions24_nobody",
@@ -58,7 +87,10 @@
     "stage": "champions",
     "event": "VALORANT Champions 2024 首尔",
     "round": "总决赛",
-    "teams": ["EDG", "TH"],
+    "teams": [
+      "EDG",
+      "TH"
+    ],
     "who": "nobody",
     "team": "EDG",
     "when": "pre",
@@ -66,7 +98,13 @@
     "quote": "This time, I will realize my dreams.",
     "cn": "这一次，我要实现梦想。",
     "result": "EDG 3-2 TH，说到做到",
-    "source": ["https://www.vlr.gg/398101/edward-gaming-conquer-champions-2024-in-historic-win-for-china"]
+    "source": [
+      "https://www.vlr.gg/398101/edward-gaming-conquer-champions-2024-in-historic-win-for-china"
+    ],
+    "tags": [
+      "final",
+      "pressure"
+    ]
   },
   {
     "id": "champions24_zmjjkk",
@@ -75,7 +113,10 @@
     "stage": "champions",
     "event": "VALORANT Champions 2024 首尔",
     "round": "总决赛",
-    "teams": ["EDG", "TH"],
+    "teams": [
+      "EDG",
+      "TH"
+    ],
     "who": "ZmjjKK",
     "team": "EDG",
     "when": "post",
@@ -83,7 +124,14 @@
     "quote": "Why can't we get the championship?",
     "cn": "我们凭什么不能拿冠军？",
     "result": "EDG 3-2 TH",
-    "source": ["https://www.vlr.gg/398101/edward-gaming-conquer-champions-2024-in-historic-win-for-china"]
+    "source": [
+      "https://www.vlr.gg/398101/edward-gaming-conquer-champions-2024-in-historic-win-for-china"
+    ],
+    "tags": [
+      "final",
+      "champion",
+      "mvp"
+    ]
   },
   {
     "id": "bangkok25_stax",
@@ -92,7 +140,10 @@
     "stage": "masters1",
     "event": "VCT 2025 曼谷大师赛",
     "round": "总决赛",
-    "teams": ["T1", "G2"],
+    "teams": [
+      "T1",
+      "G2"
+    ],
     "who": "stax",
     "team": "T1",
     "when": "post",
@@ -100,7 +151,13 @@
     "quote": "before coming into today's grand final, I knew that we had what it takes.",
     "cn": "决赛之前，我就知道我们有这个实力。",
     "result": "T1 3-2 G2",
-    "source": ["https://www.vlr.gg/457753/t1-outlasts-g2-to-lift-masters-bangkok-trophy"]
+    "source": [
+      "https://www.vlr.gg/457753/t1-outlasts-g2-to-lift-masters-bangkok-trophy"
+    ],
+    "tags": [
+      "final",
+      "champion"
+    ]
   },
   {
     "id": "toronto25_siufat_unlucky",
@@ -109,7 +166,10 @@
     "stage": "masters2",
     "event": "VCT 2025 多伦多大师赛",
     "round": "瑞士轮 第1轮",
-    "teams": ["SEN", "WOL"],
+    "teams": [
+      "SEN",
+      "WOL"
+    ],
     "who": "SiuFatBB",
     "team": "WOL",
     "when": "post",
@@ -117,7 +177,15 @@
     "quote": "谁抽到我们，unlucky。",
     "cn": "谁抽到我们，unlucky。",
     "result": "WOL 0-2 SEN；下一场 WOL 2-0 TH",
-    "source": ["https://m.thepaper.cn/newsDetail_forward_31063058", "https://www.163.com/dy/article/K3AF19770514R9P4.html"]
+    "source": [
+      "https://m.thepaper.cn/newsDetail_forward_31063058",
+      "https://www.163.com/dy/article/K3AF19770514R9P4.html"
+    ],
+    "tags": [
+      "any_loss",
+      "heavy_loss",
+      "intl_debut"
+    ]
   },
   {
     "id": "toronto25_siufat_believe",
@@ -126,7 +194,10 @@
     "stage": "masters2",
     "event": "VCT 2025 多伦多大师赛",
     "round": "胜者组第二轮",
-    "teams": ["WOL", "GEN"],
+    "teams": [
+      "WOL",
+      "GEN"
+    ],
     "who": "SiuFatBB",
     "team": "WOL",
     "when": "post",
@@ -134,7 +205,14 @@
     "quote": "我任何队伍都可以阅读，只要你们相信我。",
     "cn": "我任何队伍都可以阅读，只要你们相信我。",
     "result": "WOL 2-0 GEN，两张图都是翻盘",
-    "source": ["https://www.163.com/dy/article/K3AF19770514R9P4.html"]
+    "source": [
+      "https://www.163.com/dy/article/K3AF19770514R9P4.html"
+    ],
+    "tags": [
+      "comeback",
+      "upset",
+      "any_win"
+    ]
   },
   {
     "id": "toronto25_f0rsaken",
@@ -143,7 +221,10 @@
     "stage": "masters2",
     "event": "VCT 2025 多伦多大师赛",
     "round": "总决赛",
-    "teams": ["PRX", "FNC"],
+    "teams": [
+      "PRX",
+      "FNC"
+    ],
     "who": "f0rsakeN",
     "team": "PRX",
     "when": "pre",
@@ -151,7 +232,13 @@
     "quote": "The train is coming.",
     "cn": "列车要来了。",
     "result": "PRX 3-1 FNC，说到做到",
-    "source": ["https://www.vlr.gg/507868/paper-rex-wins-masters-toronto-as-the-train-reaches-final-destination"]
+    "source": [
+      "https://www.vlr.gg/507868/paper-rex-wins-masters-toronto-as-the-train-reaches-final-destination"
+    ],
+    "tags": [
+      "final",
+      "pressure"
+    ]
   },
   {
     "id": "champions25_boaster",
@@ -160,7 +247,10 @@
     "stage": "champions",
     "event": "VALORANT Champions 2025 巴黎",
     "round": "总决赛",
-    "teams": ["FNC", "NRG"],
+    "teams": [
+      "FNC",
+      "NRG"
+    ],
     "who": "Boaster",
     "team": "FNC",
     "when": "pre",
@@ -169,6 +259,1667 @@
     "cn": "NRG，我们来了。",
     "note": "败者组决赛赢下 DRX 后的赛后采访，冲着第二天总决赛的对手说的",
     "result": "决赛 FNC 2-3 NRG，从 0-2 追到 2-2",
-    "source": ["https://www.vlr.gg/565608/fnatic-returns-to-another-grand-final-with-3-1-victory-over-drx", "https://m.hupu.com/bbs/635047958"]
+    "source": [
+      "https://www.vlr.gg/565608/fnatic-returns-to-another-grand-final-with-3-1-victory-over-drx",
+      "https://m.hupu.com/bbs/635047958"
+    ],
+    "tags": [
+      "final",
+      "rivalry"
+    ]
+  },
+  {
+    "id": "zmjjkk_kickoff24_chew_bones",
+    "date": "2024-03-02",
+    "year": 2024,
+    "event": "VCT 2024 揭幕赛 中国",
+    "stage": "kickoff",
+    "round": "总决赛",
+    "teams": [
+      "EDG",
+      "FPX"
+    ],
+    "who": "ZmjjKK",
+    "team": "EDG",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "final",
+      "champion",
+      "any_win",
+      "rivalry"
+    ],
+    "quote": "can all chew your bones to pieces.",
+    "cn": "这两支队都能把你们骨头嚼碎",
+    "result": "EDG 3-1 FPX 夺得揭幕赛冠军，两队同赴马德里；被问对其他赛区想说什么时的回答",
+    "source": [
+      "https://www.dexerto.com/valorant/edgs-star-valorant-player-claims-chinese-teams-will-dominate-vct-masters-madrid-2567285/",
+      "https://www.vlr.gg/298835/funplus-phoenix-vs-edward-gaming-champions-tour-2024-china-kickoff-gf"
+    ]
+  },
+  {
+    "id": "chichoo_champs24_only_title",
+    "date": "2024-08-18",
+    "year": 2024,
+    "event": "VALORANT Champions 2024 首尔",
+    "stage": "champions",
+    "round": "胜者组半决赛",
+    "teams": [
+      "EDG",
+      "SEN"
+    ],
+    "who": "CHICHOO",
+    "team": "EDG",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win",
+      "pressure"
+    ],
+    "quote": "这次来这边后唯一的想法就是夺冠",
+    "cn": "这次来这边后唯一的想法就是夺冠",
+    "result": "EDG 2-0 SEN 晋级胜者组决赛",
+    "source": [
+      "https://m.hupu.com/bbs/627655186.html"
+    ]
+  },
+  {
+    "id": "chichoo_champs24_confidence_back",
+    "date": "2024-08-25",
+    "year": 2024,
+    "dateNote": "夺冠后群访，虎扑发布于 2024-08-26",
+    "event": "VALORANT Champions 2024 首尔",
+    "stage": "champions",
+    "round": "总决赛",
+    "teams": [
+      "EDG",
+      "TH"
+    ],
+    "who": "CHICHOO",
+    "team": "EDG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "champion",
+      "comeback"
+    ],
+    "quote": "把信心打得有点没了，但现在打回来了",
+    "cn": "信心打没了，但现在打回来了",
+    "result": "EDG 夺得 2024 全球冠军赛冠军；此前几个月状态低迷",
+    "source": [
+      "https://m.hupu.com/bbs/627764354.html",
+      "https://bbs.hupu.com/627764354.html"
+    ]
+  },
+  {
+    "id": "whzy_champs23_respect_nrg",
+    "date": "2023-08-13",
+    "year": 2023,
+    "event": "VALORANT Champions 2023 洛杉矶",
+    "stage": "champions",
+    "round": "小组赛 决胜局",
+    "teams": [
+      "BLG",
+      "NRG"
+    ],
+    "who": "whzy",
+    "team": "BLG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "upset",
+      "intl_debut",
+      "any_win"
+    ],
+    "quote": "我们不会说因为我们赢了他们就觉得他们不行",
+    "cn": "赢过他们，不代表他们不行",
+    "result": "BLG 2-0 NRG 再次击败 NRG 晋级季后赛，把主场的 NRG 送回家",
+    "source": [
+      "https://m.hupu.com/bbs/61659739-2.html",
+      "https://www.vlr.gg/247098/bilibili-gaming-vs-nrg-esports-valorant-champions-2023-group-stage-decider-c"
+    ]
+  },
+  {
+    "id": "whzy_s1_25_for_kangge",
+    "date": "2025-05-03",
+    "year": 2025,
+    "event": "VCT CN 2025 第一赛段",
+    "stage": "stage1",
+    "round": "败者组半决赛",
+    "teams": [
+      "BLG",
+      "EDG"
+    ],
+    "who": "whzy",
+    "team": "BLG",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "elim",
+      "rivalry",
+      "any_win"
+    ],
+    "quote": "肯定是替康哥把这个冠军给拿回来",
+    "cn": "替康哥把这个冠军拿回来",
+    "result": "BLG 2-1 EDG 拿到多伦多大师赛名额，赛后安慰了落败的 ZmjjKK",
+    "source": [
+      "https://m.hupu.com/bbs/632343208.html"
+    ]
+  },
+  {
+    "id": "whzy_champs25_my_fault",
+    "date": "2025-09-20",
+    "year": 2025,
+    "dateNote": "vlr 记为北美时间 9 月 20 日；虎扑发布于 2025-09-21",
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "小组赛 败者组",
+    "teams": [
+      "BLG",
+      "RRQ"
+    ],
+    "who": "whzy",
+    "team": "BLG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "any_loss"
+    ],
+    "quote": "我没有把自己的事情做好",
+    "cn": "我没有把自己的事情做好",
+    "result": "BLG 1-2 RRQ 小组赛出局",
+    "source": [
+      "https://m.hupu.com/bbs/634890895.html",
+      "https://www.vlr.gg/542203/bilibili-gaming-vs-rex-regum-qeon-valorant-champions-2025-elim-b"
+    ]
+  },
+  {
+    "id": "biank_s2_25_vs_old_team",
+    "date": "2025-07-27",
+    "year": 2025,
+    "event": "VCT CN 2025 第二赛段",
+    "stage": "stage2",
+    "round": "常规赛",
+    "teams": [
+      "TE",
+      "BLG"
+    ],
+    "who": "Biank",
+    "team": "TE",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "vs_former",
+      "any_win"
+    ],
+    "quote": "能顺利去到巴黎，一场不输",
+    "cn": "顺利去到巴黎，一场不输",
+    "result": "TE 2-1 BLG（Biank 老东家），图三关键残局翻身，自称“图三赎罪了”",
+    "source": [
+      "https://m.hupu.com/bbs/633981970.html"
+    ]
+  },
+  {
+    "id": "heybay_bangkok25_reset",
+    "date": "2025-02-21",
+    "year": 2025,
+    "dateNote": "vlr 记为 2 月 21 日；虎扑发布于 2025-02-22",
+    "event": "VCT 2025 曼谷大师赛",
+    "stage": "masters1",
+    "round": "瑞士轮 第1轮",
+    "teams": [
+      "TE",
+      "G2"
+    ],
+    "who": "heybay",
+    "team": "TE",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_loss",
+      "heavy_loss"
+    ],
+    "quote": "把状态调整好了，就大概率能拿下下一场比赛",
+    "cn": "状态调好，大概率能拿下下一场",
+    "result": "TE 0-2 G2 瑞士轮首战落败",
+    "source": [
+      "https://bbs.hupu.com/630710196.html",
+      "https://www.vlr.gg/448597/g2-esports-vs-trace-esports-champions-tour-2025-masters-bangkok-r1"
+    ]
+  },
+  {
+    "id": "spiritz1_kickoff25_debut_ace",
+    "date": "2025-01-12",
+    "year": 2025,
+    "event": "VCT CN 2025 启点赛",
+    "stage": "kickoff",
+    "round": "胜者组第一轮",
+    "teams": [
+      "DRG",
+      "JDG"
+    ],
+    "who": "SpiritZ1",
+    "team": "DRG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "rookie",
+      "mvp",
+      "any_win"
+    ],
+    "quote": "没想到第一次上台就能拿到五杀",
+    "cn": "没想到第一次上台就能拿到五杀",
+    "result": "DRG 2-1 JDG，SpiritZ1 职业首秀拿下 2025 赛季第一个五杀",
+    "source": [
+      "https://m.hupu.com/bbs/629954150.html",
+      "https://wiki.biligame.com/valorant/SpiritZ1",
+      "https://www.vlr.gg/430839/jdg-esports-vs-dragon-ranger-gaming-champions-tour-2025-china-kickoff-ur1"
+    ]
+  },
+  {
+    "id": "spring_toronto25_too_eager",
+    "date": "2025-06-21",
+    "year": 2025,
+    "dateNote": "多伦多当地 6 月 21 日；虎扑发布于 2025-06-22",
+    "event": "VCT 2025 多伦多大师赛",
+    "stage": "masters2",
+    "round": "败者组决赛",
+    "teams": [
+      "WOL",
+      "FNC"
+    ],
+    "who": "Spring",
+    "team": "WOL",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "intl_debut",
+      "any_loss"
+    ],
+    "quote": "当更接近冠军的时候，我们会显得有些着急",
+    "cn": "越接近冠军，我们越显得着急",
+    "result": "WOL 1-3 FNC 止步季军，世界赛首秀创队史最佳",
+    "source": [
+      "https://m.hupu.com/bbs/633344815.html",
+      "https://www.vlr.gg/498634/wolves-esports-vs-fnatic-valorant-masters-toronto-2025-lbf"
+    ]
+  },
+  {
+    "id": "life_leaving_fpx",
+    "date": "2026-04-08",
+    "year": 2026,
+    "dateNote": "虎扑专访发布日期，非单场赛后",
+    "event": "VCT CN 2026 第一赛段",
+    "stage": "stage1",
+    "round": "",
+    "teams": [],
+    "who": "Life",
+    "team": "DRG",
+    "when": "pre",
+    "tone": "steady",
+    "tags": [
+      "vs_former"
+    ],
+    "quote": "我觉得离开我的FPX可能会变得更好",
+    "cn": "离开我，FPX可能会变得更好",
+    "result": "Life 从 FPX 转会 DRG 后接受专访，谈离开老东家",
+    "source": [
+      "https://bbs.hupu.com/638327964.html"
+    ]
+  },
+  {
+    "id": "nicc_s1_26_backs_life",
+    "date": "2026-05-09",
+    "year": 2026,
+    "event": "VCT CN 2026 第一赛段",
+    "stage": "stage1",
+    "round": "败者组半决赛",
+    "teams": [
+      "DRG",
+      "AG"
+    ],
+    "who": "Nicc",
+    "team": "DRG",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "elim",
+      "any_win"
+    ],
+    "quote": "让我看到了以前在FPX那个最猛的Life",
+    "cn": "我看到了FPX时最猛的Life",
+    "result": "DRG 2-1 AG 晋级败者组决赛并拿到伦敦大师赛名额",
+    "source": [
+      "https://bbs.hupu.com/639137365.html"
+    ]
+  },
+  {
+    "id": "zmjjkk_kickoff26_break_from_hell",
+    "date": "2026-02-05",
+    "year": 2026,
+    "event": "VCT CN 2026 启点赛",
+    "stage": "kickoff",
+    "round": "败者组第三轮",
+    "teams": [
+      "EDG",
+      "JDG"
+    ],
+    "who": "ZmjjKK",
+    "team": "EDG",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "comeback",
+      "elim",
+      "any_win"
+    ],
+    "quote": "我们一定会从地狱杀出来的",
+    "cn": "我们一定会从地狱杀出来的",
+    "result": "EDG 2-1 JDG 败者组续命；原话前半句为“EDG又不是第一次 break from hell”",
+    "source": [
+      "https://www.sina.cn/news/detail/5263091233466966.html",
+      "https://bbs.hupu.com/637379396.html"
+    ]
+  },
+  {
+    "id": "zmjjkk_santiago26_fresh_start",
+    "date": "2026-03-03",
+    "year": 2026,
+    "event": "VCT 2026 圣地亚哥大师赛",
+    "stage": "masters1",
+    "round": "瑞士轮 第2轮",
+    "teams": [
+      "EDG",
+      "T1"
+    ],
+    "who": "ZmjjKK",
+    "team": "EDG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "heavy_loss",
+      "elim",
+      "any_loss"
+    ],
+    "quote": "我觉得我们一定会越来越好",
+    "cn": "我觉得我们一定会越来越好",
+    "result": "EDG 0-2 T1（首图 1-13）两战皆负出局，一张图未赢",
+    "source": [
+      "https://bbs.hupu.com/637733401.html",
+      "https://www.vlr.gg/626532/edward-gaming-vs-t1-valorant-masters-santiago-2026-r2-0-1"
+    ]
+  },
+  {
+    "id": "zmjjkk_london26_im_the_champ",
+    "date": "2026-06-13",
+    "year": 2026,
+    "event": "VCT 2026 伦敦大师赛",
+    "stage": "masters2",
+    "round": "胜者组第一轮",
+    "teams": [
+      "EDG",
+      "FUT"
+    ],
+    "who": "ZmjjKK",
+    "team": "EDG",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "comeback",
+      "any_win"
+    ],
+    "quote": "他可能不知道我是谁，我是24年冠军啊",
+    "cn": "他可能不知道我是谁，我是24年冠军",
+    "result": "EDG 2-1 FUT 逆转；被问 FUT 决斗位的压制力时的回答",
+    "source": [
+      "https://csgo.5eplay.com/article/260614s6ipm1",
+      "https://www.vlr.gg/670465/edward-gaming-vs-fut-esports-valorant-masters-london-2026-ubqf"
+    ]
+  },
+  {
+    "id": "neth_cr_reykjavik21_defeated",
+    "date": "2021-05-26",
+    "year": 2021,
+    "event": "VCT 2021 雷克雅未克大师赛",
+    "stage": "masters1",
+    "round": "败者组第一轮",
+    "teams": [
+      "CR",
+      "X10"
+    ],
+    "who": "neth",
+    "team": "CR",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "intl_debut",
+      "heavy_loss",
+      "any_loss"
+    ],
+    "quote": "…in a lot of ways, I was defeated. It's frustrating. I'm sorry.",
+    "cn": "很多方面我都输了。很不甘心，对不起。",
+    "result": "0-2 负 X10，首次国际赛一图未赢即出局",
+    "source": [
+      "https://upcomer.com/crazy-raccoon-valorant-carries-the-weight-of-their-region/",
+      "https://www.vlr.gg/19081/x10-esports-vs-crazy-raccoon-valorant-champions-tour-stage-2-masters-reykjavik-main-event-lr1"
+    ],
+    "dateNote": "Japanese-broadcast interview, English translation as printed by Upcomer (2021-09-17)",
+    "via": "日语采访的英译"
+  },
+  {
+    "id": "k1ng_vs_berlin21_small_region",
+    "date": "2021-09-11",
+    "year": 2021,
+    "event": "VCT 2021 柏林大师赛",
+    "stage": "masters2",
+    "round": "小组赛",
+    "teams": [
+      "VS",
+      "PRX"
+    ],
+    "who": "k1Ng",
+    "team": "VS",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "intl_debut",
+      "any_win",
+      "pressure"
+    ],
+    "quote": "we're not a region to be looked down upon and ignored.",
+    "cn": "我们不是能被小看、被无视的赛区。",
+    "result": "2-0 胜 PRX，国际赛首胜",
+    "source": [
+      "https://www.dexerto.com/valorant/vision-strikers-k1ng-valorant-interview-vct-masters-berlin-1651291/",
+      "https://www.vlr.gg/34947/vision-strikers-vs-paper-rex-valorant-champions-tour-stage-3-masters-berlin-opening-a"
+    ]
+  },
+  {
+    "id": "stax_vs_champs21_above_them",
+    "date": "2021-12-01",
+    "year": 2021,
+    "event": "VALORANT Champions 2021 柏林",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "VS",
+      "FS"
+    ],
+    "who": "stax",
+    "team": "VS",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "any_win",
+      "rivalry"
+    ],
+    "quote": "we proved today through our match that we are actually above them.",
+    "cn": "今天这场证明了，我们确实在他们之上。",
+    "result": "2-0 胜 FULL SENSE，世界赛揭幕战",
+    "source": [
+      "https://www.oneesports.gg/valorant/vision-strikers-stax-i-am-breach/",
+      "https://www.vlr.gg/51282/vision-strikers-vs-full-sense-valorant-champions-opening-d"
+    ]
+  },
+  {
+    "id": "jinggg_prx_cph22_just_shoot",
+    "date": "2022-07-14",
+    "year": 2022,
+    "event": "VCT 2022 哥本哈根大师赛",
+    "stage": "masters2",
+    "round": "胜者组第一轮",
+    "teams": [
+      "PRX",
+      "GLD"
+    ],
+    "who": "Jinggg",
+    "team": "PRX",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win"
+    ],
+    "quote": "I don't know. I just shoot them. That's it.",
+    "cn": "不知道。我就是开枪打他们，就这样。",
+    "result": "2-0 胜 Guild",
+    "source": [
+      "https://upcomer.com/paper-rex-are-in-copenhagen-to-have-fun/",
+      "https://en.wikipedia.org/wiki/Valorant_Masters_Copenhagen_2022"
+    ]
+  },
+  {
+    "id": "mindfreak_prx_champs22_we_learn",
+    "date": "2022-08-31",
+    "year": 2022,
+    "event": "VALORANT Champions 2022 伊斯坦布尔",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "PRX",
+      "EDG"
+    ],
+    "who": "mindfreak",
+    "team": "PRX",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_win"
+    ],
+    "quote": "If we win, then good, but if we lose, then we learn.",
+    "cn": "赢了就好，输了就学。",
+    "result": "2-1 胜 EDG，小组首战",
+    "source": [
+      "https://nerdstreet.com/news/2022/8/paper-rex-mindfreak-comments-on-team-at-valorant-champions",
+      "https://en.wikipedia.org/wiki/2022_Valorant_Champions"
+    ]
+  },
+  {
+    "id": "stax_drx_champs22_not_masters_champs",
+    "date": "2022-09-09",
+    "year": 2022,
+    "event": "VALORANT Champions 2022 伊斯坦布尔",
+    "stage": "champions",
+    "round": "胜者组四分之一决赛",
+    "teams": [
+      "DRX",
+      "FPX"
+    ],
+    "who": "stax",
+    "team": "DRX",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "upset",
+      "any_win"
+    ],
+    "quote": "We didn't treat them like the Masters champions.",
+    "cn": "我们没把他们当大师赛冠军看。",
+    "result": "2-0 胜哥本哈根大师赛冠军 FPX",
+    "source": [
+      "https://www.oneesports.gg/valorant/drx-defeat-fpx-valorant-champions-2022/",
+      "https://en.wikipedia.org/wiki/2022_Valorant_Champions"
+    ]
+  },
+  {
+    "id": "buzz_drx_tokyo23_bring_back_istanbul",
+    "date": "2023-06-18",
+    "year": 2023,
+    "event": "VCT 2023 东京大师赛",
+    "stage": "masters1",
+    "round": "败者组第一轮",
+    "teams": [
+      "DRX",
+      "NRG"
+    ],
+    "who": "BuZz",
+    "team": "DRX",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "any_loss",
+      "heavy_loss"
+    ],
+    "quote": "We can bring back the 2022 Istanbul DRX back and have a really great run.",
+    "cn": "我们能找回 2022 伊斯坦布尔的 DRX。",
+    "result": "0-2 负 NRG，止步东京",
+    "source": [
+      "https://www.oneesports.gg/valorant/drx-valorant-masters-tokyo-buzz-interview/",
+      "https://www.vlr.gg/229470/nrg-stay-alive-at-tokyo-after-eliminating-drx"
+    ],
+    "dateNote": "interview published 2023-06-18, same day as the elimination; exact recording time not stated"
+  },
+  {
+    "id": "jinggg_prx_champs23_win_we_win",
+    "date": "2023-08-24",
+    "year": 2023,
+    "event": "VALORANT Champions 2023 洛杉矶",
+    "stage": "champions",
+    "round": "胜者组决赛",
+    "teams": [
+      "PRX",
+      "EG"
+    ],
+    "who": "Jinggg",
+    "team": "PRX",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "any_win",
+      "pressure"
+    ],
+    "quote": "I mean, if we win, we win, if we lose, we lose.",
+    "cn": "赢了就赢了，输了就输了。",
+    "result": "2-1 胜 EG 进总决赛（总决赛后负 EG）",
+    "source": [
+      "https://sg.news.yahoo.com/singapore-paper-rex-a-dream-run-at-valorant-champions-080010844.html"
+    ]
+  },
+  {
+    "id": "laz_zeta_retire24_different_way",
+    "date": "2024-08-26",
+    "year": 2024,
+    "event": "ZETA DIVISION 退役声明",
+    "stage": "other",
+    "round": "",
+    "teams": [],
+    "who": "Laz",
+    "team": "ZETA",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "retire"
+    ],
+    "quote": "I still want to contribute to the competitive scene, but in a different way.",
+    "cn": "我仍想为赛场出力，只是换一种方式。",
+    "result": "宣布退役，留队转型内容创作者",
+    "source": [
+      "https://www.vlr.gg/398781/zeta-division-s-laz-announces-retirement"
+    ]
+  },
+  {
+    "id": "munchkin_gen_toronto25_bad_decision",
+    "date": "2025-06-17",
+    "year": 2025,
+    "event": "VCT 2025 多伦多大师赛",
+    "stage": "masters2",
+    "round": "败者组第二轮",
+    "teams": [
+      "GEN",
+      "G2"
+    ],
+    "who": "Munchkin",
+    "team": "GEN",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "pressure",
+      "any_loss"
+    ],
+    "quote": "when you look at the results, it looks like it was a bad decision.",
+    "cn": "看结果的话，那是个错误决定。",
+    "result": "1-2 负 G2，太平洋一号种子出局",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/munchkin-interview-vct-toronto-masters",
+      "https://www.vlr.gg/498631/gen-g-vs-g2-esports-valorant-masters-toronto-2025-lr2"
+    ],
+    "dateNote": "Hotspawn lists the series as 0-2; VLR records 1-2 (G2 won Lotus and Icebox)"
+  },
+  {
+    "id": "jemkin_rrq_stage2_25_disaster",
+    "date": "2025-07-17",
+    "year": 2025,
+    "event": "VCT 2025 太平洋联赛 第二赛段",
+    "stage": "stage2",
+    "round": "常规赛",
+    "teams": [
+      "RRQ",
+      "GE"
+    ],
+    "who": "Jemkin",
+    "team": "RRQ",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "heavy_loss",
+      "any_loss"
+    ],
+    "quote": "Disaster, I think. I don't know.",
+    "cn": "灾难吧。我也不知道。",
+    "result": "0-2 负 GE",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/jemkin-interview-vct-pacific-stage-2",
+      "https://www.vlr.gg/508819/rex-regum-qeon-vs-global-esports-vct-2025-pacific-stage-2-w1"
+    ]
+  },
+  {
+    "id": "monyet_rrq_stage2_25_not_over",
+    "date": "2025-08-15",
+    "year": 2025,
+    "event": "VCT 2025 太平洋联赛 第二赛段",
+    "stage": "stage2",
+    "round": "败者组第一轮",
+    "teams": [
+      "RRQ",
+      "GEN"
+    ],
+    "who": "Monyet",
+    "team": "RRQ",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "comeback",
+      "elim",
+      "any_win"
+    ],
+    "quote": "We just said we still need to believe—it's not over yet.",
+    "cn": "我们只说：还得相信，还没结束。",
+    "result": "2-1 胜 Gen.G，决胜图 2-10 翻盘 13-11",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/rrq-monyet-interview-vct-pacific-stage-2",
+      "https://www.vlr.gg/530359/rex-regum-qeon-vs-gen-g-vct-2025-pacific-stage-2-lr1"
+    ]
+  },
+  {
+    "id": "mako_drx_champs25_no_luck",
+    "date": "2025-10-04",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "败者组决赛",
+    "teams": [
+      "DRX",
+      "FNC"
+    ],
+    "who": "MaKo",
+    "team": "DRX",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "pressure",
+      "any_loss"
+    ],
+    "quote": "…I think I am not getting the luck.",
+    "cn": "我觉得运气就是不站我这边。",
+    "result": "1-3 负 FNC，止步第三",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/drx-mako-interview-valorant-champions-2025",
+      "https://www.vlr.gg/542279/fnatic-vs-drx-valorant-champions-2025-lbf"
+    ]
+  },
+  {
+    "id": "autumn_ge_stage1_26_geng_not_as_good",
+    "date": "2026-04-03",
+    "year": 2026,
+    "event": "VCT 2026 太平洋联赛 第一赛段",
+    "stage": "stage1",
+    "round": "常规赛",
+    "teams": [
+      "GE",
+      "GEN"
+    ],
+    "who": "Autumn",
+    "team": "GE",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "any_win",
+      "upset"
+    ],
+    "quote": "I don't think Gen.G is as good as they were previously.",
+    "cn": "Gen.G 已经没有以前那么强了。",
+    "result": "2-0 胜 Gen.G，首周开门红",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/ge-autumn-interview-vct-pacific-stage-1",
+      "https://www.vlr.gg/644652/gen-g-vs-global-esports-vct-2026-pacific-stage-1-w1"
+    ]
+  },
+  {
+    "id": "meteor_t1_stage2_26_vs_former_geng",
+    "date": "2026-08-29",
+    "year": 2026,
+    "event": "VCT 2026 太平洋联赛 第二赛段",
+    "stage": "stage2",
+    "round": "败者组第二轮",
+    "teams": [
+      "T1",
+      "GEN"
+    ],
+    "who": "Meteor",
+    "team": "T1",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "vs_former",
+      "elim",
+      "any_win"
+    ],
+    "quote": "…my former team Gen.G, it's a bit of a bittersweet feeling, honestly.",
+    "cn": "打老东家 Gen.G，说实话五味杂陈。",
+    "result": "2-0 淘汰老东家 Gen.G",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/t1-meteor-interview-vct-pacific-stage-2",
+      "https://www.vlr.gg/742485/gen-g-vs-t1-vct-2026-pacific-stage-2-lr2"
+    ]
+  },
+  {
+    "id": "scream_rkv21_anyone_can_win",
+    "date": "2021-05-24",
+    "dateNote": "赛前新闻发布会，报道发布于当日",
+    "year": 2021,
+    "event": "VCT 2021 雷克雅未克大师赛",
+    "stage": "masters1",
+    "round": "",
+    "teams": [
+      "TL"
+    ],
+    "who": "ScreaM",
+    "team": "TL",
+    "when": "pre",
+    "tone": "steady",
+    "tags": [
+      "intl_debut",
+      "pressure"
+    ],
+    "quote": "So, anyone can win this tournament.",
+    "cn": "所以，谁都有可能拿下这个冠军。",
+    "result": "首个国际线下赛前的发布会发言",
+    "source": [
+      "https://www.oneesports.gg/valorant/team-liquid-scream-no-one-is-good-enough-to-dominate-the-whole-scene/"
+    ]
+  },
+  {
+    "id": "nats_berlin21_no_pressure",
+    "date": "2021-09-16",
+    "year": 2021,
+    "event": "VCT 2021 柏林大师赛",
+    "stage": "masters2",
+    "round": "小组赛",
+    "teams": [
+      "GMB",
+      "CR"
+    ],
+    "who": "nAts",
+    "team": "GMB",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_win",
+      "pressure"
+    ],
+    "quote": "I guess we will have no pressure and we will be fully confident",
+    "cn": "我们不会有压力，会充满信心。",
+    "result": "小组决胜战 2-0 胜 CR 晋级；次日 2-1 胜 VS，最终夺冠",
+    "source": [
+      "https://www.dexerto.com/valorant/gambit-star-nats-laughs-off-pressure-fears-berlin-masters-playoffs-1654999/"
+    ]
+  },
+  {
+    "id": "sheydos_berlin21_na_who",
+    "date": "2021-09-19",
+    "year": 2021,
+    "event": "VCT 2021 柏林大师赛",
+    "stage": "masters2",
+    "round": "总决赛",
+    "teams": [
+      "GMB",
+      "NV"
+    ],
+    "who": "sheydos",
+    "team": "GMB",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "final",
+      "champion",
+      "rivalry"
+    ],
+    "quote": "I can say only this: NA who?",
+    "cn": "我只能说一句：北美是谁？",
+    "result": "总决赛 3-0 横扫 Envy 夺冠",
+    "source": [
+      "https://nerdstreet.com/news/2021/9/gambit-esports-exorcise-el-diablo-beat-envy-valorant-masters-berlin-final"
+    ]
+  },
+  {
+    "id": "chronicle_champs21_luck_wont_help",
+    "date": "2021-11-28",
+    "dateNote": "赛前专访发布日期，Champions 12 月初开赛",
+    "year": 2021,
+    "event": "VALORANT Champions 2021 柏林",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "GMB"
+    ],
+    "who": "Chronicle",
+    "team": "GMB",
+    "when": "pre",
+    "tone": "att",
+    "tags": [
+      "pressure"
+    ],
+    "quote": "Good luck, but this luck won't help you.",
+    "cn": "祝好运，但运气帮不了你们。",
+    "result": "赛前寄语全体对手；Gambit 最终总决赛 2-3 负 Acend 获亚军",
+    "source": [
+      "https://upcomer.com/gambit-esports-champions-interview/"
+    ]
+  },
+  {
+    "id": "cned_champs21_lan_gods",
+    "date": "2021-12-11",
+    "year": 2021,
+    "event": "VALORANT Champions 2021 柏林",
+    "stage": "champions",
+    "round": "半决赛",
+    "teams": [
+      "ACE",
+      "TL"
+    ],
+    "who": "cNed",
+    "team": "ACE",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win",
+      "rivalry"
+    ],
+    "quote": "We are LAN gods. We can say it.",
+    "cn": "我们就是线下之神，这话可以说。",
+    "result": "半决赛 2-0 胜 Team Liquid；次日决赛 3-2 胜 Gambit 夺冠",
+    "source": [
+      "https://upcomer.com/acend-team-liquid-champions-interview/"
+    ]
+  },
+  {
+    "id": "boaster_lockin23_get_me_the_pistol",
+    "date": "2023-03-04",
+    "year": 2023,
+    "event": "VCT 2023 LOCK//IN 圣保罗",
+    "stage": "lockin",
+    "round": "总决赛",
+    "teams": [
+      "FNC",
+      "LOUD"
+    ],
+    "who": "Boaster",
+    "team": "FNC",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "final",
+      "comeback",
+      "champion"
+    ],
+    "quote": "Right, boys, get me the pistol, and I'll IGL us to victory.",
+    "cn": "手枪局给我，我来指挥大家赢下来。",
+    "result": "决胜图 3-11 落后逆转，3-2 胜 LOUD 夺冠",
+    "source": [
+      "https://www.dexerto.com/valorant/at-vct-lock-in-boaster-finally-got-the-valorant-trophy-hed-long-been-chasing-2077839/"
+    ]
+  },
+  {
+    "id": "boaster_emea23_win_anything",
+    "date": "2023-05-23",
+    "dateNote": "采访按 URL 日期；页面显示的更新日期为 2025-06-17",
+    "year": 2023,
+    "event": "VCT 2023 EMEA 联赛 季后赛",
+    "stage": "stage1",
+    "round": "",
+    "teams": [
+      "FNC"
+    ],
+    "who": "Boaster",
+    "team": "FNC",
+    "when": "pre",
+    "tone": "bold",
+    "tags": [
+      "pressure"
+    ],
+    "quote": "as long as we're communicating well, we can win anything.",
+    "cn": "只要沟通到位，我们什么都能赢。",
+    "result": "季后赛前采访；FNC 最终拿下 EMEA 联赛冠军",
+    "source": [
+      "https://esports-news.co.uk/2023/05/23/boaster-vct-2023-emea-playoffs/"
+    ]
+  },
+  {
+    "id": "boaster_toronto25_how_much_longer",
+    "date": "2025-06-17",
+    "year": 2025,
+    "event": "VCT 2025 多伦多大师赛",
+    "stage": "masters2",
+    "round": "败者组",
+    "teams": [
+      "FNC",
+      "SEN"
+    ],
+    "who": "Boaster",
+    "team": "FNC",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "retire",
+      "elim",
+      "any_win"
+    ],
+    "quote": "I don't know how much longer I've got left in the scene",
+    "cn": "不知道自己还能在赛场待多久。",
+    "result": "败者组 2-1 淘汰 Sentinels；最终总决赛 1-3 负 PRX 获亚军",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/boaster-interview-masters-toronto"
+    ]
+  },
+  {
+    "id": "alfajer_emea25s2_best_team_world",
+    "date": "2025-08-01",
+    "year": 2025,
+    "event": "VCT 2025 EMEA 联赛 第二赛段",
+    "stage": "stage2",
+    "round": "常规赛",
+    "teams": [
+      "FNC",
+      "NAVI"
+    ],
+    "who": "Alfajer",
+    "team": "FNC",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win"
+    ],
+    "quote": "We are the best team in the world right now.",
+    "cn": "我们现在就是世界最强的队。",
+    "result": "小组赛 2-1 胜 NAVI",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/alfajer-interview-vct-emea-stage-2",
+      "https://www.vlr.gg/511566/natus-vincere-vs-fnatic-vct-2025-emea-stage-2-w3"
+    ]
+  },
+  {
+    "id": "alfajer_champs25_wont_throw_final",
+    "date": "2025-09-18",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "FNC",
+      "MIBR"
+    ],
+    "who": "Alfajer",
+    "team": "FNC",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win",
+      "pressure"
+    ],
+    "quote": "we are not going to throw that final this time.",
+    "cn": "这次决赛我们不会再送了。",
+    "result": "小组赛 2-1 胜 MIBR 晋级季后赛；总决赛 2-3 负 NRG 获亚军",
+    "source": [
+      "https://www.thespike.gg/valorant/news/trust-us-that-we-are-not-going-to-throw-that-final-this-time-alfajer-on-fnatic-s-qualification-to-champions-paris-playoffs/6798"
+    ]
+  },
+  {
+    "id": "miniboo_champs25_iconic_vs_edg",
+    "date": "2025-09-18",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "TH",
+      "T1"
+    ],
+    "who": "MiniBoo",
+    "team": "TH",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win",
+      "rivalry"
+    ],
+    "quote": "I think it would be iconic to play against them.",
+    "cn": "再和他们打一场会很有纪念意义。",
+    "result": "小组赛 2-0 胜 T1 晋级季后赛；想在季后赛重遇去年决赛对手 EDG",
+    "source": [
+      "https://www.thespike.gg/valorant/news/last-year-s-champs-run-was-more-chaotic-this-year-s-is-more-composed-miniboo-on-team-heretics-qualification-to-champions-paris-playoffs/6816"
+    ]
+  },
+  {
+    "id": "westside_champs25_nrg_would_be_fun",
+    "date": "2025-09-22",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "小组赛",
+    "teams": [
+      "GX",
+      "XLG"
+    ],
+    "who": "westside",
+    "team": "GX",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "rookie",
+      "intl_debut",
+      "any_win"
+    ],
+    "quote": "I would be looking to rematch against PRX, but NRG would be fun as well.",
+    "cn": "想找 PRX 复仇，打 NRG 也挺好玩。",
+    "result": "小组决胜战 2-0 胜 XLG，新军 GIANTX 晋级季后赛",
+    "source": [
+      "https://www.thespike.gg/valorant/news/playing-nrg-in-playoffs-would-be-fun-westside-gives-his-thoughts-on-qualifying-for-champions-paris-playoffs/6820"
+    ]
+  },
+  {
+    "id": "kaajak_champs25_fun_big_stage",
+    "date": "2025-10-03",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "胜者组决赛",
+    "teams": [
+      "FNC",
+      "NRG"
+    ],
+    "who": "kaajak",
+    "team": "FNC",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_loss",
+      "rookie"
+    ],
+    "quote": "It was fun to play on the big stage.",
+    "cn": "能在大舞台上比赛，挺开心的。",
+    "result": "胜者组决赛 0-2 负 NRG；两天后总决赛 2-3 再负 NRG",
+    "source": [
+      "https://www.thespike.gg/valorant/news/kaajak-champions-paris-interview-abyss-opinion/6886"
+    ]
+  },
+  {
+    "id": "derke_london26_this_form",
+    "date": "2026-06-06",
+    "year": 2026,
+    "event": "VCT 2026 伦敦大师赛",
+    "stage": "masters2",
+    "round": "瑞士轮",
+    "teams": [
+      "VIT",
+      "DRG"
+    ],
+    "who": "Derke",
+    "team": "VIT",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win"
+    ],
+    "quote": "If we keep showing this form, we can definitely win.",
+    "cn": "保持这状态，我们肯定能夺冠。",
+    "result": "瑞士轮首轮 2-0 胜 DRG；最终败者组 0-2 负 LEV 出局",
+    "source": [
+      "https://www.thespike.gg/valorant/news/vitality-derke-interview-group-stage-masters-london-2026/8196"
+    ]
+  },
+  {
+    "id": "s0pp_london26_real_opponent",
+    "date": "2026-06-08",
+    "year": 2026,
+    "event": "VCT 2026 伦敦大师赛",
+    "stage": "masters2",
+    "round": "瑞士轮",
+    "teams": [
+      "FUT",
+      "VIT"
+    ],
+    "who": "s0pp",
+    "team": "FUT",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "intl_debut",
+      "any_loss"
+    ],
+    "quote": "I'm waiting for a real opponent.",
+    "cn": "我在等一个真正的对手。",
+    "result": "瑞士轮 1-2 负 Vitality；FUT 随后 2-1 胜 NRG 晋级季后赛",
+    "source": [
+      "https://www.thespike.gg/valorant/news/fut-s0pp-masters-london-groups-interview/8210"
+    ]
+  },
+  {
+    "id": "chronicle_london26_not_think_winning",
+    "date": "2026-06-15",
+    "dateNote": "采访发布于 2026-06-17",
+    "year": 2026,
+    "event": "VCT 2026 伦敦大师赛",
+    "stage": "masters2",
+    "round": "胜者组半决赛",
+    "teams": [
+      "VIT",
+      "PRX"
+    ],
+    "who": "Chronicle",
+    "team": "VIT",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_loss",
+      "pressure"
+    ],
+    "quote": "I do not even want to think about winning.",
+    "cn": "我现在连夺冠都不想去想。",
+    "result": "胜者组半决赛 1-2 负 PRX 掉入败者组；次日 2-0 胜 FUT",
+    "source": [
+      "https://www.thespike.gg/valorant/news/vitality-chronicle-interview-vct-masters-london-playoffs/8256"
+    ]
+  },
+  {
+    "id": "victor_optc_reykjavik22_final",
+    "date": "2022-04-24",
+    "year": 2022,
+    "event": "VCT 2022 雷克雅未克大师赛",
+    "stage": "masters1",
+    "round": "总决赛",
+    "teams": [
+      "OPTC",
+      "LOUD"
+    ],
+    "who": "Victor",
+    "team": "OPTC",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "champion",
+      "comeback"
+    ],
+    "quote": "We know what it feels like to lose in the grand finals",
+    "cn": "我们知道总决赛输掉是什么滋味",
+    "result": "OpTiC 3-0 横扫 LOUD 夺冠（此前以 Envy 身份在柏林大师赛决赛 0-3 失利）",
+    "source": [
+      "https://nerdstreet.com/news/2022/4/optic-gaming-win-valorant-masters-reykjavik"
+    ]
+  },
+  {
+    "id": "sacy_loud_champs22_two_titles",
+    "date": "2022-09-18",
+    "year": 2022,
+    "event": "VALORANT Champions 2022 伊斯坦布尔",
+    "stage": "champions",
+    "round": "总决赛",
+    "teams": [
+      "LOUD",
+      "OPTC"
+    ],
+    "who": "Sacy",
+    "team": "LOUD",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "final",
+      "champion"
+    ],
+    "quote": "we are going to see a team that wins two international titles",
+    "cn": "明年会有一支队拿两座国际冠军",
+    "result": "LOUD 3-1 OpTiC，夺得世界冠军；Sacy 接着说“希望是我们”",
+    "source": [
+      "https://nerdstreet.com/news/2022/9/loud-win-valorant-champions-2022"
+    ]
+  },
+  {
+    "id": "boostio_eg_champs23_most_fun",
+    "date": "2023-08-26",
+    "year": 2023,
+    "event": "VALORANT Champions 2023 洛杉矶",
+    "stage": "champions",
+    "round": "总决赛",
+    "teams": [
+      "EG",
+      "PRX"
+    ],
+    "who": "Boostio",
+    "team": "EG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "champion"
+    ],
+    "quote": "It's the most fun I've ever had in a match",
+    "cn": "这是我打过最开心的一场",
+    "result": "EG 3-1 Paper Rex，主场观众前夺得世界冠军",
+    "source": [
+      "https://nerdstreet.com/news/2023/8/evil-geniuses-win-valorant-champions-2023"
+    ]
+  },
+  {
+    "id": "zellsis_sen_madrid24_party",
+    "date": "2024-03-24",
+    "year": 2024,
+    "event": "VCT 2024 马德里大师赛",
+    "stage": "masters1",
+    "round": "总决赛",
+    "teams": [
+      "SEN",
+      "GEN"
+    ],
+    "who": "Zellsis",
+    "team": "SEN",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "final",
+      "champion",
+      "comeback"
+    ],
+    "quote": "The party is going to start when we take a shot out of that trophy",
+    "cn": "用奖杯喝上一口，派对才算开始",
+    "result": "Sentinels 从败者组杀回，决赛 3-2 击败 Gen.G 夺冠",
+    "source": [
+      "https://www.vlr.gg/322297/sentinels-triumph-at-masters-madrid"
+    ]
+  },
+  {
+    "id": "spike_lev_london26_childhood_friends",
+    "date": "2026-06-21",
+    "year": 2026,
+    "event": "VCT 2026 伦敦大师赛",
+    "stage": "masters2",
+    "round": "总决赛",
+    "teams": [
+      "LEV",
+      "PRX"
+    ],
+    "who": "spike",
+    "team": "LEV",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "champion",
+      "comeback"
+    ],
+    "quote": "with this team, I'm playing with childhood friends",
+    "cn": "在这支队，我和儿时好友并肩作战",
+    "result": "Leviatán 败者组一路打上来，决赛首图 2-13 落后后 3-2 逆转 PRX，队史首个国际冠军",
+    "source": [
+      "https://www.vlr.gg/704013/leviat-n-earns-first-masters-title-in-3-2-victory-over-prx"
+    ]
+  },
+  {
+    "id": "brawk_nrg_champs25_odin",
+    "date": "2025-10-05",
+    "dateNote": "决赛日；采访稿发表于 2025-10-08",
+    "year": 2025,
+    "event": "VALORANT Champions 2025 巴黎",
+    "stage": "champions",
+    "round": "总决赛",
+    "teams": [
+      "NRG",
+      "FNC"
+    ],
+    "who": "brawk",
+    "team": "NRG",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "mvp",
+      "rookie",
+      "intl_debut",
+      "champion"
+    ],
+    "quote": "Right now, I think teams just don't know how to deal with it.",
+    "cn": "现在各队根本不知道怎么应付它",
+    "result": "NRG 3-2 FNATIC 夺冠；新秀 brawk 首个国际赛即拿 MVP，说的是他的奥丁",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/nrg-brawk-odin-valorant-champions"
+    ]
+  },
+  {
+    "id": "valyn_g2_bangkok25_losses",
+    "date": "2025-03-02",
+    "year": 2025,
+    "event": "VCT 2025 曼谷大师赛",
+    "stage": "masters1",
+    "round": "总决赛",
+    "teams": [
+      "G2",
+      "T1"
+    ],
+    "who": "valyn",
+    "team": "G2",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "final",
+      "runner_up",
+      "any_loss"
+    ],
+    "quote": "There's no life without losses in everything you do.",
+    "cn": "做什么都一样，人生总有失败",
+    "result": "G2 2-3 T1，后两图都进加时，屈居亚军",
+    "source": [
+      "https://www.vlr.gg/457753/t1-outlasts-g2-to-lift-masters-bangkok-trophy"
+    ]
+  },
+  {
+    "id": "tenz_sen_lcq23_sad",
+    "date": "2023-07-18",
+    "year": 2023,
+    "event": "VCT 2023 美洲 最后机会预选赛",
+    "stage": "other",
+    "round": "",
+    "teams": [
+      "SEN",
+      "LEV"
+    ],
+    "who": "TenZ",
+    "team": "SEN",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "elim",
+      "any_loss"
+    ],
+    "quote": "I'm a bit sad. But life moves on.",
+    "cn": "有点难过，但日子还得过",
+    "result": "Sentinels 0-2 Leviatán，无缘 Champions 2023",
+    "source": [
+      "https://www.dexerto.com/valorant/tenz-talks-sentinels-hectic-season-after-lcq-elimination-2217968/"
+    ]
+  },
+  {
+    "id": "zellsis_sen_homeground24_xeppaa",
+    "date": "2024-09-29",
+    "dateNote": "采访稿发表日，赛事期间",
+    "year": 2024,
+    "event": "Red Bull Home Ground #5 北美资格赛",
+    "stage": "other",
+    "round": "",
+    "teams": [
+      "SEN",
+      "C9"
+    ],
+    "who": "Zellsis",
+    "team": "SEN",
+    "when": "pre",
+    "tone": "att",
+    "tags": [
+      "rivalry"
+    ],
+    "quote": "He needs to beat MxS first, I don't know why he's piping up",
+    "cn": "他先赢了 MxS 再说吧，急什么",
+    "result": "回应 C9 Xeppaa 的放话，当时 C9 首战还没打",
+    "source": [
+      "https://www.vlr.gg/408817/zellsis-we-both-know-that-he-aint-gonna-be-yelling-s-t"
+    ]
+  },
+  {
+    "id": "saadhak_loud_champs23_liars",
+    "date": "2023-08-16",
+    "year": 2023,
+    "event": "VALORANT Champions 2023 洛杉矶",
+    "stage": "champions",
+    "round": "胜者组首轮",
+    "teams": [
+      "LOUD",
+      "FNC"
+    ],
+    "who": "saadhak",
+    "team": "LOUD",
+    "when": "post",
+    "tone": "att",
+    "tags": [
+      "rivalry",
+      "any_win"
+    ],
+    "quote": "A lot of media said that our team was over. Liars.",
+    "cn": "好多媒体说我们完了。骗子。",
+    "result": "LOUD 2-0 FNATIC，报了 LOCK//IN 决赛被翻盘的仇",
+    "source": [
+      "https://www.vlr.gg/259505/loud-avenge-lock-in-finals-in-2-0-over-fnatic"
+    ]
+  },
+  {
+    "id": "vanity_c9_lcq21_former_v1",
+    "date": "2021-08-31",
+    "dateNote": "采访稿发表日，北美最后机会预选赛之前",
+    "year": 2021,
+    "event": "VCT 2021 北美 最后机会预选赛",
+    "stage": "other",
+    "round": "",
+    "teams": [
+      "C9",
+      "V1"
+    ],
+    "who": "vanity",
+    "team": "C9",
+    "when": "pre",
+    "tone": "bold",
+    "tags": [
+      "vs_former"
+    ],
+    "quote": "the baseline of both teams is pretty similar but our ceiling on Cloud9 is higher",
+    "cn": "两队底子差不多，但 C9 上限更高",
+    "result": "vanity 刚从 Version1 转会 Cloud9 Blue，拿新队和老东家比较",
+    "source": [
+      "https://www.dexerto.com/valorant/vanity-believes-cloud9-blue-have-a-higher-ceiling-than-version1-in-valorant-1643225/"
+    ]
+  },
+  {
+    "id": "trent_g2_toronto25_rookies",
+    "date": "2025-06-06",
+    "year": 2025,
+    "event": "VCT 2025 多伦多大师赛",
+    "stage": "masters2",
+    "round": "",
+    "teams": [],
+    "who": "trent",
+    "team": "G2",
+    "when": "pre",
+    "tone": "steady",
+    "tags": [
+      "rookie"
+    ],
+    "quote": "I hope these rookies are better than we were.",
+    "cn": "希望这批新人比当年的我们强",
+    "result": "赛前发布会，回忆 G2 首次国际赛（雷克雅未克）“完全不知道自己在干什么”",
+    "source": [
+      "https://www.vlr.gg/495312/all-teams-speak-at-masters-toronto-press-conference"
+    ]
+  },
+  {
+    "id": "tenz_sen_retire24",
+    "date": "2024-09-14",
+    "year": 2024,
+    "event": "VCT 2024 休赛期",
+    "stage": "other",
+    "round": "",
+    "teams": [],
+    "who": "TenZ",
+    "team": "SEN",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "retire"
+    ],
+    "quote": "I'm still SEN TenZ at the end of the day.",
+    "cn": "说到底，我还是 SEN 的 TenZ",
+    "result": "宣布退出职业比赛，留在 Sentinels 做内容",
+    "source": [
+      "https://www.gosugamers.net/valorant/news/73127-sentinels-tenz-announces-retirement-from-competitive-valorant"
+    ]
+  },
+  {
+    "id": "jawgemo_eg_americas23_five_half",
+    "date": "2023-04-03",
+    "dateNote": "采访稿发表日，美洲联赛开幕周",
+    "year": 2023,
+    "event": "VCT 2023 美洲联赛",
+    "stage": "stage1",
+    "round": "常规赛",
+    "teams": [
+      "EG",
+      "C9"
+    ],
+    "who": "jawgemo",
+    "team": "EG",
+    "when": "post",
+    "tone": "steady",
+    "tags": [
+      "any_loss"
+    ],
+    "quote": "I'm going to give myself a solid five and a half today.",
+    "cn": "今天给自己打个五分半吧",
+    "result": "EG 负 Cloud9，赛前还遇到技术问题",
+    "source": [
+      "https://www.thespike.gg/valorant/news/i-m-going-to-give-myself-a-solid-five-and-a-half-today-i-wasn-t-really-feeling-it-jawgemo-on-individual-performance-in-evil-geniuses-loss/3329"
+    ]
+  },
+  {
+    "id": "aspas_mibr_ewc26q_myself",
+    "date": "2026-05-27",
+    "year": 2026,
+    "event": "2026 电竞世界杯 美洲预选赛",
+    "stage": "other",
+    "round": "",
+    "teams": [
+      "MIBR",
+      "KRÜ"
+    ],
+    "who": "aspas",
+    "team": "MIBR",
+    "when": "pre",
+    "tone": "steady",
+    "tags": [
+      "pressure"
+    ],
+    "quote": "At this moment, I just want to go back to being myself.",
+    "cn": "现在我只想找回原来的自己",
+    "result": "MIBR 本季开赛赛和第一赛段早早出局，赛前对阵 KRÜ",
+    "source": [
+      "https://www.thespike.gg/valorant/news/mibr-aspas-interview-vct-stage-1-2026-exit/8167"
+    ]
+  },
+  {
+    "id": "ethan_nrg_ewc26_crowds",
+    "date": "2026-07-10",
+    "dateNote": "采访稿发表日",
+    "year": 2026,
+    "event": "2026 电竞世界杯 VALORANT",
+    "stage": "other",
+    "round": "淘汰赛",
+    "teams": [
+      "NRG",
+      "M8"
+    ],
+    "who": "Ethan",
+    "team": "NRG",
+    "when": "post",
+    "tone": "bold",
+    "tags": [
+      "any_win",
+      "pressure"
+    ],
+    "quote": "We love energy from crowds, whether it's good or bad.",
+    "cn": "观众的能量我们都爱，嘘声也算",
+    "result": "NRG 2-1 Gentle Mates，在对方主场观众前晋级八强",
+    "source": [
+      "https://www.hotspawn.com/valorant/news/nrg-ethan-interview-ewc-valorant"
+    ]
   }
 ]
