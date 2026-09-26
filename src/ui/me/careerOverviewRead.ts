@@ -3,6 +3,7 @@ import { performanceRating } from '../../engine/performance'
 import { isQualifier } from '../../engine/me/compclass'
 import type { GameState, Stats } from '../../engine/types'
 import { fmvpTotals } from '../../engine/me/fmvpRead'
+import { ivBest } from '../../engine/me/interview'
 
 /** A read-only view over the existing career ledger, never the trimmed match list. */
 export function careerOverview(state: GameState, scope: 'season' | 'career') {
@@ -29,5 +30,14 @@ export function careerOverview(state: GameState, scope: 'season' | 'career') {
     hasMaps, zeroDeaths: hasMaps && stats.deaths === 0,
     currentTitles, playedTitles: currentTitles.filter(t => t.started).length,
     benchTitles: currentTitles.filter(t => !t.started).length,
+    quote: quoteLine(state),
   }
+}
+
+/** The most famous thing said in a key match's interview (engine/me/interview.ts), with where and how it went. */
+function quoteLine(state: GameState): string | null {
+  const q = ivBest(state)
+  if (!q) return null
+  const where = /20\d\d/.test(q.about) ? q.about : `${q.year} ${q.about}`
+  return `「${q.line}」（${where}，${q.tag}）`
 }

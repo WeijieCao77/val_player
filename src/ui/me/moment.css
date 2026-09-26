@@ -104,6 +104,13 @@
 .modal-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ev-q { margin: 0 0 4px; padding-left: 12px; border-left: 3px solid var(--accent); font-size: var(--t-h2); font-weight: 650; line-height: 1.55; }
 .ev-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+/* 采访: the real line from the same point of the same event (engine/me/interview.ts momentLine) */
+.iv-real {
+  margin: 8px 0 4px; padding: 6px 10px; border-left: 2px solid var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  font-size: var(--t-small); line-height: 1.6; overflow-wrap: anywhere;
+}
+.iv-ctx { overflow-wrap: anywhere; }
 .cer-medal { display: block; width: 72px; height: 72px; margin: 4px auto 0; }
 .cer-medal svg { display: block; width: 100%; height: 100%; }
 .cer-medal.gold { color: var(--gold); filter: drop-shadow(0 0 12px color-mix(in srgb, var(--gold) 55%, transparent)); }

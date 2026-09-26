@@ -28,6 +28,8 @@ export default function CareerOverview() {
           <Stat k="决赛 MVP（FMVP）" v={view.fmvps.confirmed} />
         </div>
         <p className="career-overview-note">首杀差 {view.firstKillDiff} · 正式赛出场获胜 {view.wins} 场</p>
+        {/* the line the career is quoted by: a key match's interview (engine/me/interview.ts) */}
+        {view.quote && <p className="career-overview-note career-quote">🎙️ 生涯名言：{view.quote}</p>}
         {!!view.fmvps.unknown && <p className="career-overview-note">另有 {view.fmvps.unknown} 座奖杯未留存足够的决赛 MVP 记录，未计入已确认数量。</p>}
         {!view.hasMaps && <p className="career-overview-empty">{scope === 'career' ? '还没有正式赛出场数据。' : '本赛季尚无正式赛出场数据。'}替补未上场不会产生个人地图数据。</p>}
         {view.zeroDeaths && <p className="career-overview-note">目前死亡数为 0，K/D 暂不计算；击杀与助攻照常记录。</p>}

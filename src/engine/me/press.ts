@@ -1,6 +1,7 @@
 import type { GameState } from '../types'
 import { SEASON_DAYS } from '../calendar'
 import { mateLine } from './chatter'
+import { ivWeekLine } from './interview'
 
 /**
  * A line from the manager's desk, which a player's week has no use for.
@@ -79,6 +80,9 @@ export function weekReport(state: GameState): string[] {
   // and one of the five saying something about it, when something happened (me/chatter.ts)
   const said = mateLine(state)
   if (said) out.push(said)
+  // a key match's interview this week, the last thing said (me/interview.ts)
+  const iv = ivWeekLine(state)
+  if (iv && inWeek(iv.year, iv.day) && fresh(`🎙️ ${iv.text}`)) out.push(`🎙️ ${iv.text}`)
 
   // roster moves: who left, who was signed — my club's first, then the big ones
   const myTeam = me.phase === 'pro' ? state.teams[state.myTeam] : null

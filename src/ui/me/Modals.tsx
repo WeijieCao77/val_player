@@ -35,6 +35,7 @@ import { SeasonRewrites } from './Worldline'
 import { SHOWN } from '../../engine/me/rewrites'
 import { LookPicker } from './looks'
 import CeremonyModal from './Ceremony'
+import InterviewModal from './Interview'
 import HurtModal from './HurtModal'
 import { injuryStatus } from '../../engine/me/injury'
 import { absenceBlock } from '../../engine/me/absence'
@@ -61,6 +62,7 @@ export default function PendingModal({ item, onDone }: { item: PendingItem; onDo
     case 'hurt': return <HurtModal fixtureId={item.id!} onDone={onDone} />
     case 'igl': return <IglModal onDone={onDone} />
     case 'pitch': return <PitchModal replyId={item.id!} onDone={onDone} />
+    case 'interview': return <InterviewModal key={item.id!} id={item.id!} onDone={onDone} />
   }
   return null
 }
