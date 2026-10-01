@@ -395,7 +395,11 @@ export function cleanHall(raw: unknown): Hall {
   }
   if (typeof o.look === 'string' && o.look !== 'studio' && LOOK_BY_KEY[o.look]) h.look = o.look as LookKey
   // a card kept from before names nobody the author has since taken out of the game (engine/removedPlayers.ts)
-  scrubNames(h)
+  const chosenNames = [
+    ...h.cards.map((c) => c.name), ...Object.values(h.ach).map((a) => a.first.who),
+    ...Object.values(h.hx).map((m) => m.who), ...Object.values(h.looks).map((m) => m.who),
+  ]
+  scrubNames(h, [], chosenNames)
   return h
 }
 

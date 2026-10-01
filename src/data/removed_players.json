@@ -20,6 +20,133 @@
     {"year": 2026, "event": "2988", "eventName": "China Evolution Series 2026: Act 2", "team": "11328", "club": "FunPlus Phoenix"},
     {"year": 2026, "event": "2978", "eventName": "VCT 2026: China Stage 2", "team": "11328", "club": "FunPlus Phoenix"}
    ]
+  },
+  {
+   "vlr": "4710",
+   "ign": "YOU",
+   "reason": "按作者决定移出游戏",
+   "date": "2026-10-01",
+   "seats": [
+    {
+     "year": 2021,
+     "event": "465",
+     "eventName": "Huya PangHu Cup: Spring",
+     "team": "1211",
+     "club": "Totoro Gaming"
+    },
+    {
+     "year": 2021,
+     "event": "509",
+     "eventName": "Huya FMWH PangHu Cup: Summer",
+     "team": "1224",
+     "club": "Weibo Gaming"
+    },
+    {
+     "year": 2021,
+     "event": "651",
+     "eventName": "FGC Valorant Invitational",
+     "team": "1211",
+     "club": "Totoro Gaming"
+    },
+    {
+     "year": 2023,
+     "event": "1481",
+     "eventName": "FGC VALORANT Invitational 2023: Act 1 Qualifiers",
+     "team": "1211",
+     "club": "Totoro Gaming"
+    },
+    {
+     "year": 2023,
+     "event": "1525",
+     "eventName": "FGC VALORANT Invitational 2023: Act 1",
+     "team": "1211",
+     "club": "Totoro Gaming"
+    },
+    {
+     "year": 2023,
+     "event": "1610",
+     "eventName": "FGC VALORANT Invitational 2023: Act 2",
+     "team": "1211",
+     "club": "Totoro Gaming"
+    },
+    {
+     "year": 2023,
+     "event": "1664",
+     "eventName": "Champions Tour 2023: Champions China Qualifier",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2023,
+     "event": "1747",
+     "eventName": "China Evolution Series Act 1: Variation",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2023,
+     "event": "1825",
+     "eventName": "China Evolution Series Act 2: Selection",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2023,
+     "event": "1880",
+     "eventName": "China Evolution Series Act 3: Heritability",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2024,
+     "event": "1926",
+     "eventName": "Champions Tour 2024: China Kickoff",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2024,
+     "event": "2006",
+     "eventName": "Champions Tour 2024: China Stage 1",
+     "team": "12685",
+     "club": "Trace Esports"
+    },
+    {
+     "year": 2024,
+     "event": "2149",
+     "eventName": "Champions Tour 2024 China: Ascension",
+     "team": "15872",
+     "club": "ZY Gaming"
+    },
+    {
+     "year": 2024,
+     "event": "2234",
+     "eventName": "FGC Invitational 2024",
+     "team": "13581",
+     "club": "Xi Lai Gaming"
+    },
+    {
+     "year": 2025,
+     "event": "2275",
+     "eventName": "VCT 2025: China Kickoff",
+     "team": "13581",
+     "club": "Xi Lai Gaming"
+    },
+    {
+     "year": 2025,
+     "event": "2339",
+     "eventName": "China Evolution Series: Act 1",
+     "team": "13581",
+     "club": "Xi Lai Gaming"
+    },
+    {
+     "year": 2025,
+     "event": "2359",
+     "eventName": "VCT 2025: China Stage 1",
+     "team": "13581",
+     "club": "Xi Lai Gaming"
+    }
+   ]
   }
  ]
 }

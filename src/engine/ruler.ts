@@ -4,7 +4,9 @@ import world2021Raw from '../data/world_2021.json'
 import { clamp } from './rng'
 import { recomputeOverall, refreshValue } from './player'
 import { ATTR_KEYS } from './types'
-import type { GameState, Player, WorldState } from './types'
+import type { Attrs, GameState, Player, WorldState } from './types'
+import { overlayRating, overlayWorld } from './npcRoleCalibration'
+import { legacyRulerShift, legacyRegionalRulerShift } from './npcLegacyRuler'
 
 /**
  * The ruler a career's world measures its real players on.
@@ -65,13 +67,21 @@ export const K_SUB = K_TOP / SUB_RATIO ** 2
 /** the rounds of a full season at a club that plays its league through: what a winter past the book counts as */
 export const FULL_SEASON = 1500
 
-interface TRating { o: number; n: number; v: [number | null, number | null] }
+interface TRating { a: number[]; o: number; p: number; r: string; n: number; v: [number | null, number | null] }
 interface TClub { k: 1 | 2; d: number; r: string }
 interface TYear { clubs: Record<string, TClub>; rosters: Record<string, string[]>; ratings: Record<string, TRating> }
-const BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
+const RAW_BOOK = timelineRaw as unknown as { years: Record<string, TYear> }
+const BOOK = {
+  ...RAW_BOOK,
+  years: Object.fromEntries(Object.entries(RAW_BOOK.years).map(([y, Y]) => [y, {
+    ...Y,
+    ratings: Object.fromEntries(Object.entries(Y.ratings).map(([id, r]) => [id, overlayRating(Number(y), id, r)])),
+  }])),
+}
 const CIRCUIT = circuitRaw as unknown as Record<string, { region: string | null; stage?: string; rosters?: Record<string, string[]>; places?: [string, number][] }[]>
-interface W21Player { id: string; teamId: string | null; overall: number; vlr?: { rounds: number } | null; rounds?: number }
-const W21 = world2021Raw as unknown as { players: W21Player[]; teams: { id: string; tier: number }[] }
+interface W21Player { id: string; teamId: string | null; overall: number; attrs: Attrs; role: string; roles?: string[]; potential: number; vlr?: { rounds: number; rating: number | null; acs: number | null } | null; rounds?: number }
+const RAW_W21 = world2021Raw as unknown as { players: W21Player[]; teams: { id: string; tier: number }[] }
+const W21 = { ...RAW_W21, players: RAW_W21.players.map(p => overlayWorld(2021, p)) }
 
 interface Line { id: string; o: number; n: number; tier: 1 | 2 }
 
@@ -194,7 +204,7 @@ const quantile = (values: number[], q: number): number => {
  * Domestic rounds already count as top-tier rounds in the builders' worldwide percentiles.
  * More domestic rounds make that estimate certain without making its opponents comparable.
  * The diagnosed CN upper-tail excess is corrected only in a year whose own p90 exceeds
- * other top-tier lines: 2022/2024/2025 have no excess and receive no extra shift.
+ * other top-tier lines. Role-source corrections can change that year's measured excess.
  * No nationality is read. Imports whose source season was mostly at CN clubs are measured
  * on that source too; a Chinese national whose source was overseas is not in this cohort.
  * A roster entry at a genuine international top-four team conservatively protects its
@@ -414,7 +424,9 @@ export function rereadWorld(state: GameState): number {
     if (p.id === state.me?.id || !/^V\d+$/.test(p.id)) continue
     // Keep the pre-existing v1 -> v2 rank-preserving player migration on its old baseline.
     // The separate regional migration runs AFTER that and never moves the player himself.
-    const d = lastShift(state.year, p.id.slice(1)) - lastRegionalRulerShift(state.year, p.id.slice(1))
+    let sourceYear = Math.max(2021, state.year)
+    while (sourceYear > 2021 && !BOOK.years[String(sourceYear)]?.ratings[p.id.slice(1)]) sourceYear--
+    const d = legacyRulerShift(sourceYear, p.id.slice(1)) - legacyRegionalRulerShift(sourceYear, p.id.slice(1))
     if (!d) continue
     shiftPlayer(p, d)
     refreshValue(p)

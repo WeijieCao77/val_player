@@ -774,21 +774,31 @@ export function standingLine(state: GameState, where: 'week' | 'team'): string {
   const me = state.me
   const team = state.teams[state.myTeam]
   if (!me || !team) return ''
+  const absence = activeAbsence(state)
+  if (absence) return `${absence.label}期间暂停出场，归队后再确认名单。`
+  if ((state.players[me.id]?.injuredUntil ?? 0) > state.day) {
+    return me.injury?.play
+      ? '已选择带伤出场，具体出场以比赛名单为准。'
+      : '目前伤停，恢复后再确认出场名单。'
+  }
+  const seat = promiseSeat(state)
+  // Current availability and the named five take precedence over trial/contract status.
+  if (!team.starters.includes(me.id)) {
+    if (me.benchLock && me.benchLock > state.day) return `教练暂时把你换下来了，${me.benchLock - state.day} 天后重新考虑。`
+    if (me.trial) return `目前在替补席，试用期还剩 ${me.trial.left} 场。`
+    if (seat === 'bench') return `合同说好先打 ${PROMISE_FLOOR} 场替补，还剩 ${promiseFloorLeft(state)} 场。坐满了才谈竞争——训练赛、对位，从那时候起都算数。`
+    return where === 'team'
+      ? `再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场对位，教练给试用期。`
+      : '你还在替补席：训练赛、对位、正赛都能改变这一点。'
+  }
   if (me.trial) return `试用期，还剩 ${me.trial.left} 场。赢下比赛、贡献队内前二，或新版贡献评分达到 1.10，就算过。`
   // while the contract is still what decides, that is where I stand — and the sentence
   // says when it stops deciding, so the day it does is not a surprise
-  const seat = promiseSeat(state)
   if (seat === 'start') {
     return `合同承诺的首发：俱乐部接下来 ${promiseFloorLeft(state)} 场比赛写死是你的。这 ${PROMISE_FLOOR} 场打完，名单就归教练自己排了。`
   }
   if (seat === 'bench') {
-    return `合同说好先打 ${PROMISE_FLOOR} 场替补，还剩 ${promiseFloorLeft(state)} 场。坐满了才谈竞争——训练赛、对位，从那时候起都算数。`
-  }
-  if (!team.starters.includes(me.id)) {
-    if (me.benchLock && me.benchLock > state.day) return `教练暂时把你换下来了，${me.benchLock - state.day} 天后重新考虑。`
-    return where === 'team'
-      ? `再赢约 ${Math.max(1, Math.ceil(EDGE_NEED - me.edge))} 场对位，教练给试用期。`
-      : '你还在替补席：训练赛、对位、正赛都能改变这一点。'
+    return `本周已列入首发名单；合同约定的替补保底仍剩 ${promiseFloorLeft(state)} 场。`
   }
   if (me.proven) {
     return (me.graceMatches ?? 0) > 0

@@ -242,6 +242,16 @@ def pctiles(rows: list[dict], key: str, invert: bool = False) -> dict[str, float
     return out
 
 
+def role_pctiles(rows: list[dict], key: str = 'rating') -> dict[str, float]:
+    """Use a whole-pool fallback without overwriting other roles' results."""
+    out: dict[str, float] = {}
+    for role in sorted(set(r['role'] for r in rows)):
+        peers = [r for r in rows if r['role'] == role]
+        mapping = pctiles(peers if len(peers) >= 12 else rows, key)
+        out.update({p['id']: mapping[p['id']] for p in peers if p['id'] in mapping})
+    return out
+
+
 def age_on(birth: str | None, ref: date) -> int | None:
     birth = normalized_birth(birth)
     if not birth:
@@ -501,10 +511,7 @@ def main() -> int:
     P = {k: pctiles(rows, k) for k in ('acs', 'adr', 'hs', 'kpr', 'fkpr', 'kast', 'apr', 'kd')}
     P['fdpr'] = pctiles(rows, 'fdpr', invert=True)
     # rating scored within role (Val_Manager): duelists rate lower by the nature of entering
-    P['rating'] = {}
-    for role in set(r['role'] for r in rows):
-        peers = [r for r in rows if r['role'] == role]
-        P['rating'].update(pctiles(peers if len(peers) >= 12 else rows, 'rating'))
+    P['rating'] = role_pctiles(rows, 'rating')
     # clutch rate with a prior of 20 situations toward the pool mean
     tot_w = sum(line[p]['clw'] for p in in_world if p in line)
     tot_t = sum(line[p]['clt'] for p in in_world if p in line)

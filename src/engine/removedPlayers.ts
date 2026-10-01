@@ -46,9 +46,15 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * Their handles in a text, in any case, as a whole word: 「<handle> 加盟」 matches, a handle that
  * merely contains the letters does not. Null when nobody is on the list.
  */
-export const REMOVED_NAME: RegExp | null = PLAYERS.length
-  ? new RegExp(`(?<![A-Za-z0-9])(?:${PLAYERS.map((p) => escape(p.ign)).join('|')})(?![A-Za-z0-9])`, 'gi')
-  : null
+// Short handles may also be English words. Only their exact spelling identifies a
+// player in prose; longer handles keep the existing case-insensitive cleanup.
+const namePattern = (protectedNames: readonly string[] = []): RegExp | null => {
+  const protectedSet = new Set(protectedNames.map((n) => n.toLowerCase()))
+  const names = PLAYERS.filter((p) => !protectedSet.has(p.ign.toLowerCase())).map((p) =>
+    p.ign.length <= 3 ? escape(p.ign) : [...p.ign].map((c) => /[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : escape(c)).join(''))
+  return names.length ? new RegExp(`(?<![A-Za-z0-9_])(?:${names.join('|')})(?![A-Za-z0-9_])`, 'g') : null
+}
+export const REMOVED_NAME: RegExp | null = namePattern()
 
 /** Does this text name one of them. */
 export function namesRemoved(text: string): boolean {
@@ -69,9 +75,12 @@ export const unname = (text: string): string => (REMOVED_NAME ? text.replace(REM
  * text names him instead, since a line that was about him says nothing once he is not in it.
  * Records keep their shape: a box score still has ten lines, a trophy's roster still five names.
  */
-export function scrubNames(root: unknown, feeds: readonly unknown[] = []): { renamed: number; dropped: number } {
+export function scrubNames(root: unknown, feeds: readonly unknown[] = [], protectedNames: readonly string[] = []): { renamed: number; dropped: number } {
   const out = { renamed: 0, dropped: 0 }
-  if (!REMOVED_NAME) return out
+  const pattern = namePattern(protectedNames)
+  if (!pattern) return out
+  const matches = (text: string) => { pattern.lastIndex = 0; return pattern.test(text) }
+  const replace = (text: string) => text.replace(pattern, REMOVED_LABEL)
   const feedSet = new Set(feeds.filter((f) => Array.isArray(f)))
   const stack: unknown[] = [root]
   const seen = new Set<object>()
@@ -83,7 +92,7 @@ export function scrubNames(root: unknown, feeds: readonly unknown[] = []): { ren
       if (feedSet.has(node)) {
         for (let i = node.length - 1; i >= 0; i--) {
           const t = (node[i] as { text?: unknown } | null)?.text
-          if (typeof t === 'string' && namesRemoved(t)) {
+          if (typeof t === 'string' && matches(t)) {
             node.splice(i, 1)
             out.dropped++
           }
@@ -92,7 +101,7 @@ export function scrubNames(root: unknown, feeds: readonly unknown[] = []): { ren
       for (let i = 0; i < node.length; i++) {
         const v = node[i]
         if (typeof v === 'string') {
-          if (namesRemoved(v)) { node[i] = unname(v); out.renamed++ }
+          if (matches(v)) { node[i] = replace(v); out.renamed++ }
         } else if (v && typeof v === 'object') stack.push(v)
       }
       continue
@@ -100,15 +109,15 @@ export function scrubNames(root: unknown, feeds: readonly unknown[] = []): { ren
     const o = node as Record<string, unknown>
     for (const k of Object.keys(o)) {
       let key = k
-      if (namesRemoved(k)) {
-        key = unname(k)
+      if (matches(k)) {
+        key = replace(k)
         if (!(key in o)) o[key] = o[k]
         delete o[k]
         out.renamed++
       }
       const v = o[key]
       if (typeof v === 'string') {
-        if (namesRemoved(v)) { o[key] = unname(v); out.renamed++ }
+        if (matches(v)) { o[key] = replace(v); out.renamed++ }
       } else if (v && typeof v === 'object') stack.push(v)
     }
   }

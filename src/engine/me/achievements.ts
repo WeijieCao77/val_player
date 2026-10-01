@@ -161,8 +161,14 @@ function intlSameYear(s: GameState): boolean {
 }
 
 function skidTitle(s: GameState): boolean {
-  const years = new Set(M(s).titles.filter((t) => t.started).map((t) => t.year))
-  return [...years].some((y) => lossRun(starts(s).filter((m) => m.year === y)) >= 3)
+  // Titles have no date. Require the matching official final as chronology evidence;
+  // an older title with no retained final must not be paired with later defeats.
+  const matches = starts(s)
+  return M(s).titles.filter((t) => t.started).some((t) => {
+    const victory = matches.find((m) => m.year === t.year && m.won && isFinal(m.label) && m.comp === t.title)
+    if (!victory) return false
+    return lossRun(matches.filter((m) => m.year === victory.year && m.day < victory.day).sort((a, b) => a.day - b.day)) >= 3
+  })
 }
 
 /* ------------------------------------------------------------------ */

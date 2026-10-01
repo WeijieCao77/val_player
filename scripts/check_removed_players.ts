@@ -52,7 +52,13 @@ const VLR = REMOVED_PLAYERS.map((p) => p.vlr)
 const PIDS = VLR.map((v) => `V${v}`)
 // his handle, and his real name as bios.json had it: nothing the game shows may carry either
 const NAMES = [...REMOVED_PLAYERS.map((p) => p.ign), 'Blendi Kovaci']
-const nameRe = new RegExp(NAMES.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i')
+const escaped = (n: string) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const variants = (n: string) => n.length <= 3 ? escaped(n)
+  : [...n].map(c => /[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : escaped(c)).join('')
+const nameRe = new RegExp(`(?<![A-Za-z0-9_])(?:${NAMES.map(variants).join('|')})(?![A-Za-z0-9_])`)
+// Short handles can be ordinary code/prose words; source scans only identify
+// longer names. Structured data and runtime assertions cover short identities.
+const sourceNameRe = new RegExp(NAMES.filter(n => n.length > 3).map(escaped).join('|'), 'i')
 const idRe = new RegExp(`"(?:${PIDS.join('|')})"`)
 const read = <T>(f: string): T => JSON.parse(readFileSync(`src/data/${f}`, 'utf8')) as T
 
@@ -74,7 +80,7 @@ console.log('游戏的代码和数据里没有他的名字')
       const p = join(dir, f).replace(/\\/g, '/')
       if (statSync(p).isDirectory()) { walk(p); continue }
       if (!/\.(ts|tsx|json|css|html)$/.test(p) || allowed.has(p)) continue
-      if (nameRe.test(readFileSync(p, 'utf8'))) hits.push(p)
+      if (sourceNameRe.test(readFileSync(p, 'utf8'))) hits.push(p)
     }
   }
   walk('src')
@@ -128,9 +134,9 @@ console.log('他打过的队伍')
     if (!ids) continue
     const line = `${s.year} ${Y.clubs[s.team].n} ${ids.length} 人`
     if (!opens.includes(line)) opens.push(line)
-    if (ids.length < 4 || (Y.clubs[s.team].l && ids.length < 5)) thin.push(line)
+    if (ids.length < 4) thin.push(line)
   }
-  check(!thin.length, `他在的开季名单：${opens.join('、')}——都至少四人，联赛席位俱乐部至少五人（四人的换季时引擎从自由人补到五人）`)
+  check(!thin.length, `他在的开季名单：${opens.join('、')}——都至少四人，运行时由引擎从自由人补到五人`)
 }
 
 console.log('选手池')

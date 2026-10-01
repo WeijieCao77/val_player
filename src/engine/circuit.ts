@@ -1399,6 +1399,16 @@ function sameScene(a: CEvent, b: CEvent): boolean {
   return !sa || !sb || sa.some((r) => sb.includes(r))
 }
 
+/** A shared international result cannot send a foreign replacement into a local event.
+ * Named invitees remain eligible: the event's real field is stronger evidence than its host region. */
+function replacementEligible(state: GameState, ev: CEvent, teamId: string): boolean {
+  const team = state.teams[teamId]
+  if (!team) return false
+  const scope = scopeOf(ev)
+  return !scope || scope.includes(team.region) || scope.includes(regionIn(team.region, state.year))
+    || ev.seeds.some((v) => teamOf(state, ev, v) === teamId)
+}
+
 /**
  * Who a real seed's place goes to in this world.
  *
@@ -1444,7 +1454,7 @@ function legacySeeds(state: GameState, ev: CEvent): { seeds: (string | null)[]; 
     // only a side that is in by some other road blocks a place
     const own = new Set(list.map((x) => x.i))
     const taken = new Set<string>()
-    const blocked = (t: string | undefined) => !!t && (taken.has(t) || elsewhere.has(t) || out.some((o, at) => !own.has(at) && o === t))
+    const blocked = (t: string | undefined) => !!t && (!replacementEligible(state, ev, t) || taken.has(t) || elsewhere.has(t) || out.some((o, at) => !own.has(at) && o === t))
     const next = list.map(({ i, k }) => {
       const now = nextFinisher(state, ev, feeder.finished.slice(k), (t) => !blocked(t))
       if (now) taken.add(now)
@@ -1526,9 +1536,10 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
   const used = new Set<string>()
   // a club another league's stage has on these days takes no place here (playsElsewhere)
   let elsewhere: ReadonlySet<string> | undefined
+  const eligible = (t: string): boolean => !!state.teams[t] && !state.teams[t].dormant
+    && !used.has(t) && replacementEligible(state, ev, t) && !(elsewhere ??= playsElsewhere(state, ev)).has(t)
   const take = (i: number, t: string | null | undefined): boolean => {
-    if (!t || out[i] || used.has(t) || !state.teams[t] || state.teams[t].dormant) return false
-    if ((elsewhere ??= playsElsewhere(state, ev)).has(t)) return false
+    if (!t || out[i] || !eligible(t)) return false
     out[i] = t
     used.add(t)
     return true
@@ -1556,15 +1567,15 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
       if (r.kind === 'winner') take(i, c?.champion)
       else if (r.kind === 'top') {
         const inLeague = (t: string) => !r.league || regionIn(state.teams[t]?.region ?? 'Europe', year) === r.league
-        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => !used.has(t) && inLeague(t)))
+        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => eligible(t) && inLeague(t)))
       } else if (r.kind === 'rest') {
         direct ??= championsDirect(state)
         const through = direct
-        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => !used.has(t) && !through.has(t)))
+        take(i, nextFinisher(state, ev, c?.finished ?? [], (t) => eligible(t) && !through.has(t)))
       } else if (r.kind === 'points' && r.pool) {
         if (/Last Chance/i.test(ev.name)) direct ??= championsDirect(state)
         const through = direct
-        take(i, poolRanking(state, r.pool).find((t) => !used.has(t) && !through?.has(t)))
+        take(i, poolRanking(state, r.pool).find((t) => eligible(t) && !through?.has(t)))
       }
     }
   }
@@ -1584,7 +1595,7 @@ function projectedSeeds(state: GameState, ev: CEvent): { seeds: (string | null)[
           .sort((x, y) => y.circuit!.end - x.circuit!.end)[0]
       }
       if (!c?.champion) continue
-      take(i, nextFinisher(state, ev, c.finished.slice(f.k), (t) => !used.has(t) && !!state.teams[t] && !(elsewhere ??= playsElsewhere(state, ev)).has(t)))
+      take(i, nextFinisher(state, ev, c.finished.slice(f.k), eligible))
     }
   }
 

@@ -1,5 +1,6 @@
 import type { GameState } from '../types'
-import { REGIONAL_RULER, regionalRulerShiftForSample, rulerOn, shiftPlayer } from '../ruler'
+import { REGIONAL_RULER, rulerOn, shiftPlayer } from '../ruler'
+import { regionalRulerShiftForSample } from '../npcLegacyRuler'
 import { refreshValue } from '../player'
 import { pushLog } from './log'
 

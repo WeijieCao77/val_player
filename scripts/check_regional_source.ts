@@ -3,7 +3,8 @@ import raw from '../src/data/timeline.json'
 import { createCareer, emptyTalents } from '../src/engine/me/career'
 import { migrateRegionalRuler } from '../src/engine/me/regionalRulerMigrate'
 import { migratePlayerSave } from '../src/engine/me/save'
-import { regionalCalibration, regionalRulerShiftForSample, shiftPlayer } from '../src/engine/ruler'
+import { shiftPlayer } from '../src/engine/ruler'
+import { regionalRulerShiftForSample } from '../src/engine/npcLegacyRuler'
 import { openWorldAt, reachOf, syncYear } from '../src/engine/timeline'
 import { packState, unpackState } from '../src/engine/save'
 
@@ -19,14 +20,12 @@ assert.equal(regionalRulerShiftForSample(2026, id, undefined), 0)
 assert.equal(regionalRulerShiftForSample(2026, id, { ...newLine, rounds: newLine.rounds + 1 }), 0, 'three fields must all match')
 assert.equal(regionalRulerShiftForSample(2026, id, { ...newLine, rating: null }), 0)
 assert.equal(regionalRulerShiftForSample(2026, id, { ...newLine, acs: 0 }), 0)
-// In-memory malformed-history fixture only, after the real annual tables are cached.
-regionalCalibration(2025); regionalCalibration(2026)
+// In-memory malformed-history fixture; legacy numeric shifts are immutable.
 const previous = book.years[2025].ratings[id]
 try {
   book.years[2025].ratings[id] = { ...previous, n: newLine.rounds, v: [newLine.rating, newLine.acs] }
   assert.equal(regionalRulerShiftForSample(2026, id, newLine), 0, 'same fingerprint with conflicting yearly deltas is ambiguous')
 } finally { book.years[2025].ratings[id] = previous }
-regionalCalibration(2024)
 const previous24 = book.years[2024].ratings[id]
 try {
   book.years[2024].ratings[id] = { ...previous }
@@ -61,9 +60,18 @@ protectedState.myTeam = club.id
 protectedState.me!.phase = 'pro'
 teammate.vlr = oldLine
 assert.equal(reachOf(protectedState).club, club.id)
+assert.ok(!reachOf(protectedState).people.has(teammate.id), 'career protects the main player, not historical teammates')
+const careerState = structuredClone(protectedState)
+syncYear(careerState, 2026)
+assert.deepEqual(careerState.players[teammate.id].vlr, newLine, 'career teammate receives current historical sample')
+// Manager mode retains its whole squad. Restore the career only after the read,
+// so the migration below still exercises a real retained source fingerprint.
+const career = protectedState.me
+delete protectedState.me
 assert.ok(reachOf(protectedState).people.has(teammate.id))
 syncYear(protectedState, 2026)
-assert.deepEqual(teammate.vlr, oldLine, 'real reachOf protection retains 2025 sample through syncYear')
+assert.deepEqual(teammate.vlr, oldLine, 'manager reachOf protection retains 2025 sample through syncYear')
+protectedState.me = career
 const protectedBefore = JSON.stringify(teammate)
 delete protectedState.regionalRuler
 migrateRegionalRuler(protectedState)

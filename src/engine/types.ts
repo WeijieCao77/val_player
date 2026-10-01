@@ -218,6 +218,8 @@ export interface VlrLine {
 }
 
 export interface Player {
+  /** One conservative role-calibration baseline check has been performed. */
+  npcRoleCalibrationVersion?: number
   id: string
   ign: string
   teamId: string | null

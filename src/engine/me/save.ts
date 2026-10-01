@@ -7,6 +7,8 @@ import { adoptOldSave } from './saveInfo'
 import { OWNER, readSaveText, writeSaveTextGuarded, writeSaveTextNowGuarded } from './saveStore'
 import { migrateRuler } from './rulerMigrate'
 import { migrateRegionalRuler } from './regionalRulerMigrate'
+import { repairClubRegions } from '../timeline'
+import { migrateNpcRoleCalibration } from './npcRoleCalibrationMigrate'
 import { migrateRemoved, migrateStaff } from './staffMigrate'
 import { settleDetail } from './detail'
 import type { SaveMeta } from './saveMeta'
@@ -111,6 +113,7 @@ export function migratePlayerSave(state: GameState): GameState {
     repairPlayerCountries(state)
     repairPlayerBios(state)
     repairPlayerTeamNames(state)
+    repairClubRegions(state)
     // a title from before titles kept their club: the club, where the save can still say it (me/trophies.ts)
     stampTitleClubs(state)
   }
@@ -147,6 +150,7 @@ export function migratePlayerSave(state: GameState): GameState {
   // a career from before the rating ruler is read onto it once, the player by his rank (me/rulerMigrate.ts)
   if (state.me) migrateRuler(state)
   if (state.me) migrateRegionalRuler(state)
+  if (state.me) migrateNpcRoleCalibration(state)
   // a cup run from before its rounds had days: today's round, then a round a week (me/cups.ts resumeCup)
   if (state.me) resumeCup(state)
   // a week planned under the old board, where the hours settled on the seventh day: nothing of it is run,

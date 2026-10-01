@@ -5,7 +5,9 @@ import { migrateRegionalRuler } from '../src/engine/me/regionalRulerMigrate'
 import { migratePlayerSave } from '../src/engine/me/save'
 import { migrateRuler } from '../src/engine/me/rulerMigrate'
 import { openWorldAt, syncYear } from '../src/engine/timeline'
-import { REGIONAL_RULER, RULER, holdScale, lastRegionalRulerShift, regionalCalibration, regionalRulerShift, rulerClubRating, rulerShift, shiftPlayer } from '../src/engine/ruler'
+import { overlayRating } from '../src/engine/npcRoleCalibration'
+import { REGIONAL_RULER, RULER, holdScale, regionalCalibration, regionalRulerShift, rulerClubRating, rulerShift, shiftPlayer } from '../src/engine/ruler'
+import { regionalRulerShiftForSample as legacySampleShift } from '../src/engine/npcLegacyRuler'
 import { packState, unpackState } from '../src/engine/save'
 import type { GameState } from '../src/engine/types'
 
@@ -29,9 +31,14 @@ for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
     ok(!calibration.protectedIds.has(id), 'international top-four protection')
     ok(d >= -calibration.maxDiscount, 'no more than measured annual excess')
   }
-  if ([2021, 2022, 2024, 2025].includes(year)) assert.equal(calibration.shifts.size, 0, 'no evidence of same-year excess: no discount')
+  if ([2021, 2022, 2024].includes(year)) assert.equal(calibration.shifts.size, 0, 'no evidence of same-year excess: no discount')
+  if (year === 2025) {
+    assert.equal(calibration.maxDiscount, 2)
+    assert.equal(calibration.shifts.size, 22, 'the deleted database member alone leaves the former 23-member regional cohort')
+    assert.ok(!calibration.shifts.has('4710'))
+  }
   for (const ids of Object.values(book.years[String(year)]?.rosters ?? {})) {
-    const scores = ids.filter(id => book.years[String(year)].ratings[id]).map(id => book.years[String(year)].ratings[id].o + rulerShift(year, id)).sort((a, b) => b - a).slice(0, 5)
+    const scores = ids.filter(id => book.years[String(year)].ratings[id]).map(id => overlayRating(year, id, book.years[String(year)].ratings[id] as any).o + rulerShift(year, id)).sort((a, b) => b - a).slice(0, 5)
     if (scores.length) assert.equal(rulerClubRating(year, ids), Math.round(scores.reduce((a, b) => a + b, 0) / scores.length), 'club previews apply total ruler exactly once')
   }
 }
@@ -49,7 +56,7 @@ for (const year of [2023, 2024, 2026, 2029]) {
   assert.equal(migrateRegionalRuler(s), 0)
   assert.equal(JSON.stringify(people(s)), newWorld, 'fresh world never receives a second regional deduction')
   // Reconstruct an un-stamped, current-RULER save; growth is then added independently.
-  for (const p of Object.values(s.players)) if (/^V\d+$/.test(p.id)) shiftPlayer(p, -lastRegionalRulerShift(year, p.id.slice(1)))
+  for (const p of Object.values(s.players)) if (/^V\d+$/.test(p.id)) shiftPlayer(p, -legacySampleShift(year, p.id.slice(1), p.vlr))
   delete s.regionalRuler
   s.players[s.me!.id].nat = 'cn'
   const subject = s.players['V55085'] ?? Object.values(s.players).find(p => /^V\d+$/.test(p.id))!
@@ -58,7 +65,7 @@ for (const year of [2023, 2024, 2026, 2029]) {
   const own = JSON.stringify({ player: s.players[s.me!.id], talents: s.me!.talents, achievements: s.me!.achievements, titles: s.me!.titles, seasonStart: s.me!.seasonStart })
   const before = clone(people(s))
   const expected = clone(s)
-  for (const p of Object.values(expected.players)) if (p.id !== expected.me!.id && /^V\d+$/.test(p.id)) shiftPlayer(p, lastRegionalRulerShift(year, p.id.slice(1)))
+  for (const p of Object.values(expected.players)) if (p.id !== expected.me!.id && /^V\d+$/.test(p.id)) shiftPlayer(p, legacySampleShift(year, p.id.slice(1), p.vlr))
   migrateRegionalRuler(s)
   assert.deepEqual(people(s), people(expected), 'migration adds only the new delta and retains simulated growth')
   assert.equal(JSON.stringify({ player: s.players[s.me!.id], talents: s.me!.talents, achievements: s.me!.achievements, titles: s.me!.titles, seasonStart: s.me!.seasonStart }), own, 'player nationality, attributes, ceilings and achievements untouched')
@@ -70,7 +77,10 @@ for (const year of [2023, 2024, 2026, 2029]) {
   const loadOnce = JSON.stringify(people(loaded))
   migratePlayerSave(loaded)
   assert.equal(JSON.stringify(people(loaded)), loadOnce, 'real save roundtrip stamps and never repeats')
-  for (const [id, value] of Object.entries(before)) if (!/^V\d+$/.test(id) || !lastRegionalRulerShift(year, id.slice(1))) assert.deepEqual(clone(people(s)[id]), value, 'unaffected source cohorts unchanged')
+  for (const [id, value] of Object.entries(before)) {
+    const p = s.players[id]
+    if (!/^V\d+$/.test(id) || !legacySampleShift(year, id.slice(1), p?.vlr)) assert.deepEqual(clone(people(s)[id]), value, 'unaffected source cohorts unchanged')
+  }
   if (year === 2026) {
     const expectedWorld = fresh(2026)
     syncYear(s, 2026)

@@ -175,7 +175,10 @@ export function migrateRemoved(state: GameState): RemovedMove | null {
     if (me.duelLive && ids.has(me.duelLive.himId)) me.duelLive = undefined
   }
   // what the save remembers: his handle out of every record, and the news and log lines about him gone
-  const named = scrubNames(state, [state.news, me?.log])
+  // A player's chosen handle is not the identity of a removed professional.
+  // Ambiguous name-only records keep that handle; removal itself remains ID based.
+  const mineName = me && state.players[me.id]?.ign
+  const named = scrubNames(state, [state.news, me?.log], mineName ? [mineName] : [])
   out.renamed = named.renamed
   out.dropped = named.dropped
   const rng = new Rng(hashStr(`removed:${state.seed}:${state.year}:${state.day}`))

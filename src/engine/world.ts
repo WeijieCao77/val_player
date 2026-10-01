@@ -2,6 +2,7 @@ import { canonAgents } from './content'
 import raw from '../data/world.json'
 import raw2021 from '../data/world_2021.json'
 import { dossierOf } from './dossier'
+import { overlayWorld, NPC_ROLE_CALIBRATION_VERSION } from './npcRoleCalibration'
 import { Rng, clamp, hashStr } from './rng'
 import { AGENTS, MAPS, SPONSOR_NAMES } from './content'
 import { defaultTactics, emptyStats, ROLES } from './types'
@@ -225,7 +226,8 @@ export function createWorld(
   const opened = dateOf(year, 0)
   for (const rp of (year <= 2021 ? RAW_2021 : RAW).players) {
     if (offPool(rp.id, opened)) continue
-    players[rp.id] = playerFromRaw(rp, year, s)
+    players[rp.id] = playerFromRaw(overlayWorld(year <= 2021 ? 2021 : year, rp), year, s)
+    players[rp.id].npcRoleCalibrationVersion = NPC_ROLE_CALIBRATION_VERSION
   }
 
   // The rest of the professional scene: real players from below the simulated

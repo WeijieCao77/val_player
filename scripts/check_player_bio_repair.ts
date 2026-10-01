@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { repairPlayerBios } from '../src/engine/me/playerBioRepair'
 import fixesData from '../src/data/player_bio_fixes.json'
+import { REMOVED_PLAYERS } from '../src/engine/removedPlayers'
 import type { GameState, Player } from '../src/engine/types'
 
 type Fix = { playerIds: string[]; oldNames: (string | null)[]; oldBirths: (string | null)[]; name?: string | null; birth: string | null; estimated: boolean }
@@ -69,10 +70,39 @@ assert.equal(repairPlayerBios(j), 0, 'calendar day cannot change season-age on r
 j.year = 2022; juicy.age++
 assert.equal(repairPlayerBios(j), 0, 'normal annual aging remains correct')
 
-// Structural proof that this dataset migration changed biography fields only.
+// Apply only the author-approved identity removals to the expected baseline.
+// The actual data is never filtered here: extra roster/stat/club edits still fail.
+const removedVlrIds = new Set(REMOVED_PLAYERS.map(p => p.vlr))
+const removedIds = new Set(REMOVED_PLAYERS.map(p => `V${p.vlr}`))
+// The data cleanup uses Python's round (ties to even), not JavaScript's ties up.
+const roundBookRating = (n: number) => n % 1 === 0.5 ? Math.floor(n / 2) * 2 + (Math.floor(n) % 2 ? 2 : 0) : Math.round(n)
+const applyApprovedRemovals = (file: string, v: Record<string, any>) => {
+  if (file === 'timeline') {
+    for (const year of Object.values(v.years) as Record<string, any>[]) {
+      for (const [club, ids] of Object.entries(year.rosters) as [string, string[]][]) {
+        if (!ids.some(id => removedVlrIds.has(id))) continue
+        const left = ids.filter(id => !removedVlrIds.has(id))
+        year.rosters[club] = left
+        const top = left.filter(id => year.ratings[id]).map(id => year.ratings[id].o as number).sort((a, b) => b - a).slice(0, 5)
+        year.clubs[club].o = top.length ? roundBookRating(top.reduce((sum, n) => sum + n, 0) / top.length) : 50
+      }
+      for (const id of removedVlrIds) { delete year.ratings[id]; delete year.debuts[id] }
+    }
+    for (const id of removedVlrIds) delete v.last[id]
+  } else {
+    v.players = v.players.filter((p: { id: string }) => !removedIds.has(p.id))
+    for (const team of v.teams ?? []) {
+      for (const key of ['roster', 'starters']) if (team[key]) team[key] = team[key].filter((id: string) => !removedIds.has(id))
+      if (removedIds.has(team.igl)) team.igl = null
+    }
+  }
+}
+
+// Structural proof: biography changes and exact approved removals only.
 for (const file of ['world', 'world_2021', 'timeline', 'prospects']) {
   const before = JSON.parse(execFileSync('git', ['show', `HEAD:src/data/${file}.json`], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }))
   const after = JSON.parse(fs.readFileSync(`src/data/${file}.json`, 'utf8'))
+  applyApprovedRemovals(file, before)
   const clean = (v: typeof before): unknown => {
     const strip = (row: Record<string, unknown>, keys: string[]) => { for (const key of keys) delete row[key] }
     if (file === 'timeline') {

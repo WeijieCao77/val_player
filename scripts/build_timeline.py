@@ -210,10 +210,7 @@ def rate(year: int, ev_tier: dict[str, str], raw_stats: dict, pool: set[str], cl
         rows.append(r)
     P = {k: bw.pctiles(rows, k) for k in ('acs', 'adr', 'hs', 'kpr', 'fkpr', 'kast', 'apr', 'kd')}
     P['fdpr'] = bw.pctiles(rows, 'fdpr', invert=True)
-    P['rating'] = {}
-    for role in sorted(set(r['role'] for r in rows)):
-        peers = [r for r in rows if r['role'] == role]
-        P['rating'].update(bw.pctiles(peers if len(peers) >= 12 else rows, 'rating'))
+    P['rating'] = bw.role_pctiles(rows, 'rating')
     tot_w = sum(L['clw'] for L in line.values())
     tot_t = sum(L['clt'] for L in line.values())
     mean_cl = tot_w / tot_t if tot_t else 0.15

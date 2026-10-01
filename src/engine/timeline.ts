@@ -2,6 +2,7 @@ import raw from '../data/timeline.json'
 import lineageRaw from '../data/lineage.json'
 import { canonAgents } from './content'
 import { onTimeline, regionIn } from './era'
+import { overlayRating, NPC_ROLE_CALIBRATION_VERSION } from './npcRoleCalibration'
 import { realName } from './names'
 import { contractLength, expectedSalary, recomputeOverall, refreshValue } from './player'
 import { Rng, clamp, hashStr } from './rng'
@@ -379,7 +380,7 @@ const knownTo = (state: GameState, vlr: string, year: number): boolean =>
   !!state.players[`V${vlr}`] || !!nearest(year, (Y) => Y.debuts[vlr])
 
 /** Someone the book has met by this year, as the game holds him — made the first time he is needed. */
-function ensurePlayer(state: GameState, vlr: string, year: number, region: Region): Player | null {
+export function ensurePlayer(state: GameState, vlr: string, year: number, region: Region): Player | null {
   const id = `V${vlr}`
   if (state.players[id]) return state.players[id]
   // A man who had already gone to a staff is never made a player again (engine/staffStints.ts).
@@ -391,7 +392,7 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
   if (!found) return null
   const d = found.value
   const rated = nearest(year, (Y) => Y.ratings[vlr])
-  const r = rated?.value
+  const r = rated ? overlayRating(rated.year, vlr, rated.value) : undefined
   // the book's number, read on the ruler this world was built on (engine/ruler.ts)
   const shift = rated && rulerOn(state) ? rulerShift(rated.year, vlr) : 0
   const rng = new Rng(hashStr(`debut:${vlr}`) ^ state.seed)
@@ -409,6 +410,7 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
     loyalty: Math.round(clamp(rng.norm(60, 16), 15, 95)), ambition: Math.round(clamp(rng.norm(62, 15), 15, 98)),
   }
   const p = playerFromRaw(rp, year, state.seed)
+  p.npcRoleCalibrationVersion = NPC_ROLE_CALIBRATION_VERSION
   recomputeOverall(p)
   p.potential = Math.max(p.potential, p.overall)
   refreshValue(p)
@@ -417,7 +419,9 @@ function ensurePlayer(state: GameState, vlr: string, year: number, region: Regio
 }
 
 /** The year's numbers, laid over a man history kept out of the player's reach — moved by `shift` onto the world's ruler (engine/ruler.ts). */
-function applyRating(p: Player, r: TRating, shift = 0): void {
+function applyRating(p: Player, r: TRating, shift = 0, year?: number): void {
+  if (year != null) r = overlayRating(year, p.id, r)
+  p.npcRoleCalibrationVersion = NPC_ROLE_CALIBRATION_VERSION
   ATTRS.forEach((k, i) => { p.attrs[k] = r.a[i] != null ? clamp(r.a[i] + shift, 20, 99) : p.attrs[k] })
   const roles = r.r.split('|') as Role[]
   p.role = roles[0]
@@ -830,6 +834,20 @@ export interface YearSync {
   notes: string[]
 }
 
+/** Club relocation follows the calendar even while the player belongs to it.
+ * Also safe on old saves: only geography changes, never their results or rosters. */
+export function repairClubRegions(state: GameState, year = state.year): void {
+  const Y = BOOK.years[String(Math.min(year, LAST_BOOK))]
+  if (!Y || !isTimelineWorld(state)) return
+  const seats = seatsOf(state)
+  for (const t of Object.values(state.teams)) {
+    const book = bookClubOf(state, Y, t.id)
+    if (!book) continue
+    if (seats.some((s) => s.club === t.id && year >= s.from && s.league !== regionIn(book.r as Region, year))) continue
+    t.region = book.r as Region
+  }
+}
+
 /** Bring the world up to `year` as history had it, outside the player's reach. Run at the season turn. */
 export function syncYear(state: GameState, year: number): YearSync {
   const out: YearSync = { moved: 0, founded: [], renamed: [], folded: [], retire: [], notes: [] }
@@ -838,11 +856,12 @@ export function syncYear(state: GameState, year: number): YearSync {
   const { club: mine, people } = reachOf(state)
   const rng = new Rng(hashStr(`timeline:${state.seed}:${year}`))
   inherit(state, mine, year, LATE_START, out.notes)
+  repairClubRegions(state, year)
   if (year === 2023) judgeSeat(state, mine, Y, out.notes)
 
   for (const [vlr, r] of Object.entries(Y.ratings)) {
     const p = state.players[`V${vlr}`]
-    if (p && !people.has(p.id)) applyRating(p, r, rulerOn(state) ? rulerShift(year, vlr) : 0)
+    if (p && !people.has(p.id)) applyRating(p, r, rulerOn(state) ? rulerShift(year, vlr) : 0, year)
   }
 
   const active = new Set<string>()
@@ -976,6 +995,7 @@ export function syncEvent(state: GameState, rosters: Record<string, string[]>): 
   const founded: string[] = []
   if (!isTimelineWorld(state)) return founded
   const year = state.year
+  repairClubRegions(state, year)
   const Y = BOOK.years[String(year)]
   const { club: mine, people } = reachOf(state)
   const rng = new Rng(hashStr(`timeline-ev:${state.seed}:${year}:${state.day}`))
