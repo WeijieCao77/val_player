@@ -5,6 +5,7 @@ import { useNumbers } from './words'
 import { ConfirmCard } from './SaveCard'
 import { SECONDARY_ROLES, chooseSecondary, chooseSecondaryBlock, secondaryMastery, secondarySwitchBlock, secondaryTrainingBlock, switchSecondaryRole, trainSecondary, setSecondaryAuto } from '../../engine/me/secondaryRole'
 import type { Role, GameState } from '../../engine/types'
+import './secondary-toggle.css'
 
 type ConfirmAction =
   | { type: 'chooseRole'; role: Role }
@@ -151,13 +152,13 @@ export default function SecondaryRole() {
           </button>
           {trainWhy && <p className="tiny muted">{trainWhy}</p>}
           {mastery < 100 && (
-            <label className="row" style={{ gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <label className="secondary-auto-toggle">
               <input
                 type="checkbox"
                 checked={game.me?.positionTraining?.autoTrain === true}
                 onChange={(e) => toggleAuto(e.target.checked)}
               />
-              每周自动训练 <span className="tiny muted">推进或按推荐时执行</span>
+              <span className="secondary-auto-copy"><span>每周自动训练</span><span className="tiny muted">推进或按推荐时执行</span></span>
             </label>
           )}
           <details style={{ marginTop: 8 }}>

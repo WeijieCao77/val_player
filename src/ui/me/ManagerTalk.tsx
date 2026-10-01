@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react'
 import { useGame } from './ctx'
+import { ConfirmCard } from './SaveCard'
 import { useNumbers, trustLabel } from './words'
 import { SIGN_GATE } from '../../engine/me/clout'
 import { managerTalkBlock, managerTalkWait, talkToManager, MANAGER_TALK_AP, MANAGER_TALK_GAIN, MANAGER_TALK_WEEKS, MANAGER_TALK_CAP } from '../../engine/me/gmTrust'
@@ -11,14 +13,29 @@ export default function ManagerTalk() {
   const wait = managerTalkWait(game)
   const gmTrust = Math.round(me.gmTrust)
   const signReached = gmTrust >= SIGN_GATE.gm
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const pending = useRef<{ game: typeof game; team: string; week: number; year: number; id: string } | null>(null)
+  const closeConfirm = () => { pending.current = null; setConfirmOpen(false) }
 
   const handleTalk = () => {
+    if (pending.current) return
     const currentBlock = managerTalkBlock(game)
     if (currentBlock) {
       toast(currentBlock)
       return
     }
-    if (!window.confirm(`与经理沟通一次？本次将消耗 ${MANAGER_TALK_AP} 点行动且不可撤回，并锁定本周此前所有可撤回行动。`)) return
+    pending.current = { game, team: game.myTeam, week: me.week, year: game.year, id: me.id }
+    setConfirmOpen(true)
+  }
+
+  const confirmTalk = () => {
+    const captured = pending.current
+    if (!captured) return
+    closeConfirm()
+    if (captured.game !== game || captured.team !== game.myTeam || captured.week !== me.week || captured.year !== game.year || captured.id !== me.id) {
+      toast('生涯状态已变化，请重新确认沟通。')
+      return
+    }
     const afterConfirmBlock = managerTalkBlock(game)
     if (afterConfirmBlock) {
       toast(afterConfirmBlock)
@@ -60,6 +77,13 @@ export default function ManagerTalk() {
       </button>
       {block && <p className="tiny muted" style={{ margin: '6px 0 0' }}>{block}</p>}
       {wait > 0 && <p className="tiny muted" style={{ margin: '6px 0 0' }}>还需等待 {wait} 周才能再次沟通。</p>}
+      {confirmOpen && <ConfirmCard
+        title="与经理沟通一次？"
+        body={`本次将消耗 ${MANAGER_TALK_AP} 点行动且不可撤回，并锁定本周此前所有可撤回行动。`}
+        ok="确认沟通"
+        onOk={confirmTalk}
+        onCancel={closeConfirm}
+      />}
     </section>
   )
 }

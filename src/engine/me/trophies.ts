@@ -1,6 +1,7 @@
 import { eventOf, eventsOf } from '../circuit'
 import type { CEvent } from '../circuit'
 import { onTimeline, stageNameIn } from '../era'
+import { sameFutureCupName } from '../futureCupNames'
 import type { Competition, GameState } from '../types'
 import { compClass } from './compclass'
 import type { CompClass } from './compclass'
@@ -130,7 +131,7 @@ export interface Trophy {
 function compOf(state: GameState, year: number, title: string): Competition | null {
   if (year !== state.year) return null
   const me = state.me!
-  const won = Object.values(state.comps).filter((c) => c.name === title && !!c.champion)
+  const won = Object.values(state.comps).filter((c) => sameFutureCupName(year, c.name, title) && !!c.champion)
   return won.find((c) => !!state.teams[c.champion!]?.roster.includes(me.id))
     ?? won.find((c) => c.champion === state.myTeam)
     ?? null
@@ -140,7 +141,7 @@ function compOf(state: GameState, year: number, title: string): Competition | nu
 function eventFor(year: number, title: string, comp: Competition | null): CEvent | null {
   const booked = comp?.circuit && eventOf(comp.circuit.id)
   if (booked) return booked
-  const evs = eventsOf(year).filter((e) => e.cn === title)
+  const evs = eventsOf(year).filter((e) => sameFutureCupName(year, e.cn, title))
   return evs.length === 1 ? evs[0] : null
 }
 

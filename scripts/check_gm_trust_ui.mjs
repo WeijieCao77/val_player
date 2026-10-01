@@ -136,8 +136,7 @@ try {
     const errors = [];
     const blockedRequests = [];
     const dialogs = [];
-    let acceptDialog = false;
-    let pendingDialogResolvers = [];
+    const nativeDialogs = [];
 
     page.on('pageerror', e => errors.push(e.message));
 
@@ -151,32 +150,13 @@ try {
       return route.continue();
     });
 
-    page.on('dialog', async d => {
-      dialogs.push(d.message());
-      if (acceptDialog) await d.accept();
-      else await d.dismiss();
-      if (pendingDialogResolvers.length) {
-        const resolve = pendingDialogResolvers.shift();
-        resolve();
-      }
-    });
+    page.on('dialog', async d => { nativeDialogs.push(d.message()); await d.dismiss(); });
 
     await page.addInitScript(() => {
       localStorage.setItem('val_player.numbers', '0');
       indexedDB.open = () => { throw Error('No actual saves') };
       HTMLMediaElement.prototype.play = async () => {};
-      window.confirm = (() => {
-        const native = window.confirm.bind(window);
-        return (text) => {
-          const yes = native(text);
-          if (yes && window.injectApZero) {
-            window.game.me.ap = 0;
-            window.raceExpected = JSON.stringify(window.game);
-            window.injectApZero = false;
-          }
-          return yes;
-        };
-      })();
+
     });
 
     await page.goto(origin);
@@ -214,13 +194,35 @@ try {
 
     await managerSection.screenshot({ path: resolve(output, `manager-${width}-nums-on.png`) });
 
-    const talkButton = managerSection.getByRole('button', { name: '与经理沟通' });
+    const talkButton = managerSection.getByRole('button', { name: '与经理沟通', exact: true });
+    const dialog = page.getByRole('alertdialog');
+    const acceptTalk = async () => {
+      await talkButton.click();
+      await dialog.waitFor();
+      dialogs.push(await dialog.locator('p').innerText());
+      await page.evaluate(() => {
+        if (window.injectApZero) {
+          window.game.me.ap = 0;
+          window.raceExpected = JSON.stringify(window.game);
+          window.injectApZero = false;
+        }
+      });
+      await dialog.getByRole('button', { name: '确认沟通', exact: true }).evaluate(b => { b.click(); b.click(); });
+      await dialog.waitFor({ state: 'hidden' });
+    };
 
     // cancel flow
     const beforeCancel = await snapshot();
-    let dialogHandled = new Promise(resolve => pendingDialogResolvers.push(resolve));
     await talkButton.click();
-    await dialogHandled;
+    await dialog.waitFor();
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), '取消', 'cancel receives initial focus');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), '确认沟通', 'Tab remains in themed dialog');
+    dialogs.push(await dialog.locator('p').innerText());
+    await page.screenshot({ path: resolve(output, `manager-${width}-confirm.png`) });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), '与经理沟通', 'focus returns after Escape');
     const cancelSnapshot = await snapshot();
     assert.equal(cancelSnapshot, beforeCancel, 'cancel does not mutate');
     assert.equal(await page.evaluate(() => window.commits), 0, 'no commit after cancel');
@@ -230,10 +232,7 @@ try {
     assert.ok(lockedConfirmText.includes('锁定本周此前所有可撤回行动'), 'dialog explicitly warns about earlier actions');
 
     // enable accept for success
-    acceptDialog = true;
-    dialogHandled = new Promise(resolve => pendingDialogResolvers.push(resolve));
-    await talkButton.click();
-    await dialogHandled;
+    await acceptTalk();
 
     await page.waitForFunction(() => window.game.me.gmTrust === 63 && window.game.me.ap === (window.game.me.apMax - 2));
     assert.equal(await page.evaluate(() => window.commits), 1, 'commit once');
@@ -254,9 +253,7 @@ try {
     });
     await page.waitForFunction(() => window.api.managerTalkWait() === 0);
     await page.waitForFunction(() => !window.api.managerTalkBlock());
-    dialogHandled = new Promise(resolve => pendingDialogResolvers.push(resolve));
-    await talkButton.click();
-    await dialogHandled;
+    await acceptTalk();
 
     await page.waitForFunction(() => window.game.me.gmTrust === 80 && window.game.me.ap === (window.game.me.apMax - 2));
     assert.equal(await page.evaluate(() => window.commits), 2, 'commit second time');
@@ -295,9 +292,7 @@ try {
     assert.equal(beforeRaceCommits, 2, 'commits before race');
 
     await page.evaluate(() => { window.injectApZero = true; });
-    dialogHandled = new Promise(resolve => pendingDialogResolvers.push(resolve));
-    await talkButton.click();
-    await dialogHandled;
+    await acceptTalk();
 
     await page.waitForFunction(n => window.toasts.length === n + 1, beforeRaceToastCount);
 
@@ -313,6 +308,17 @@ try {
     assert.ok(blockReason, 'managerTalkBlock truthy after AP0');
     assert.deepEqual(lastToast, blockReason, 'toast matches managerTalkBlock(state)');
 
+    // A new week while the themed card is open invalidates this particular confirmation.
+    await page.evaluate(() => { window.game.me.ap = window.game.me.apMax; window.refresh(); });
+    await talkButton.click();
+    await dialog.waitFor();
+    await page.evaluate(() => { window.game.me.week++; window.refresh(); });
+    const staleWeek = await snapshot();
+    await dialog.getByRole('button', { name: '确认沟通', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(await snapshot(), staleWeek, 'a stale week cannot spend action points');
+    assert.equal(await page.evaluate(() => window.commits), 2, 'stale context never commits');
+
     // final success to 63
     await page.evaluate(() => {
       window.game.me.ap = window.game.me.apMax;
@@ -322,9 +328,7 @@ try {
     await page.evaluate(() => {
       window.game.players[window.game.me.id].age = 37;
     });
-    dialogHandled = new Promise(resolve => pendingDialogResolvers.push(resolve));
-    await talkButton.click();
-    await dialogHandled;
+    await acceptTalk();
 
     await page.waitForFunction(() => window.game.me.gmTrust === 63 && window.game.me.ap === (window.game.me.apMax - 2));
     assert.equal(await page.evaluate(() => window.commits), 3, 'third success');
@@ -347,6 +351,7 @@ try {
     assert.ok(managerOverflow.scrollWidth <= managerOverflow.clientWidth, `manager section no horizontal overflow at ${width}`);
     assert.ok(managerOverflow.right <= managerOverflow.innerWidth + 1, `manager section right within viewport at ${width}`);
 
+    assert.deepEqual(nativeDialogs, [], 'manager confirmation uses themed alertdialog, never a browser confirm');
     assert.deepEqual(errors, [], 'no page errors');
     assert.deepEqual(blockedRequests, [], 'no remote requests');
     await page.screenshot({ path: resolve(output, `manager-page-${width}.png`) });

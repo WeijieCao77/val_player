@@ -1,0 +1,3 @@
+.secondary-auto-toggle { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; cursor: pointer; }
+.secondary-auto-toggle > input[type=checkbox] { flex: 0 0 18px; width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; accent-color: var(--accent); }
+.secondary-auto-copy { display: flex; flex-direction: column; min-width: 0; gap: 2px; }

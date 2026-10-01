@@ -239,6 +239,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   // ---- 大师赛与冠军赛
   { key: 'title_masters', route: 'crown', name: '大师', desc: '随队夺得大师赛冠军', reward: { title: '大师赛冠军' }, cond: (s) => titlesIn(s, 'masters').length >= 1 },
   { key: 'title_champs', route: 'crown', name: '世界之巅', desc: '随队夺得冠军赛冠军', reward: { title: '世界冠军' }, cond: (s) => titlesIn(s, 'champions').length >= 1 },
+  { key: 'title_lockin', route: 'crown', name: '圣保罗之巅', desc: '随队夺得 LOCK//IN 圣保罗冠军', reward: { title: 'LOCK//IN 冠军' }, cond: (s) => titlesIn(s, 'lockin').length >= 1 },
   { key: 'double', route: 'crown', name: '双冠', desc: '同一年拿下大师赛和冠军赛', reward: { mental: 1 },
     cond: (s) => { const y = new Set(titlesIn(s, 'masters').map((t) => t.year)); return titlesIn(s, 'champions').some((t) => y.has(t.year)) } },
   { key: 'champs_back2back', route: 'crown', name: '蝉联', desc: '连续两年拿下冠军赛', reward: { title: '双料世界冠军' },

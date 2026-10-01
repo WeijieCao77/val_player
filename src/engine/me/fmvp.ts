@@ -1,4 +1,5 @@
 import { eventOf, eventsOf, isPlacementRound } from '../circuit'
+import { sameFutureCupName } from '../futureCupNames'
 import type { CEvent } from '../circuit'
 import type { GameState } from '../types'
 import type { MeMatchRecord } from './types'
@@ -25,7 +26,7 @@ export function isTitleFinal(s: GameState, r: MeMatchRecord): boolean {
     return !!end && f?.node === end.index
   }
   // An old record can still be checked against its year's actual tournament graph.
-  const events = eventsOf(r.year).filter(e => e.cn === r.comp)
+  const events = eventsOf(r.year).filter(e => sameFutureCupName(r.year, e.cn, r.comp))
   if (events.length === 1) {
     const end = decider(events[0])
     return !!end && finalLabel(r.label) && finalLabel(end.round) && r.label.replace(/^(?:KO|SW):\d+:/, '').trim().toLowerCase() === end.round.trim().toLowerCase()
@@ -43,7 +44,7 @@ export function fmvpEvidence(s: GameState, t: FmvpTitle): boolean | undefined {
   if (finals.length > 1) return undefined
   // A retained non-final is not evidence for an award, even if it was the last win.
   // The old reward key is usable only for an event with an identifiable real final.
-  const events = eventsOf(t.year).filter(e => e.cn === t.title)
+  const events = eventsOf(t.year).filter(e => sameFutureCupName(t.year, e.cn, t.title))
   if (!rows.length && events.length === 1 && decider(events[0]) && s.me!.bottleneck?.seen.includes(`fmvp:${t.year}:${t.title}`)) return true
   return undefined
 }

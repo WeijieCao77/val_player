@@ -347,10 +347,14 @@ export function runAction(state: GameState, key: MeAction): string {
       break
     case 'duo':
       // nobody picked, or the man has left: the evening goes to whoever I get on worst with
-      if (!me.duoWith || state.players[me.duoWith]?.teamId !== state.myTeam) me.duoWith = duoMate(state)?.id
-      if (me.duoWith && state.players[me.duoWith]?.teamId === state.myTeam) {
+      if (!me.duoWith || me.duoWith === me.id || state.players[me.duoWith]?.teamId !== state.myTeam) me.duoWith = duoMate(state)?.id
+      if (me.duoWith && me.duoWith !== me.id && state.players[me.duoWith]?.teamId === state.myTeam) {
         duoBonded(state, me.id, me.duoWith, 3 * traitMul(me, 'trust') * courseMul(me.courses, 'talk', 1.3))
         line = `和 ${state.players[me.duoWith].ign} 双排了一次，关系近了一点。`
+        // Light live practice, not ranked/专项训练: 0.15 weeks total versus
+        // ranked's 0.54; each combat share is lower even per action point.
+        // Use bump so age, injury, room and the no-banked-XP ceiling all apply.
+        for (const k of ['aim', 'reaction', 'clutch'] as const) bump(k, g * 0.05)
       } else line = '双排了一次。'
       bump('communication', g * 0.3)
       break

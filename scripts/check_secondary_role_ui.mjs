@@ -116,6 +116,13 @@ try{
 
     await page.evaluate(()=>{const m=window.game.me;m.week++;m.weekDay=0;m.ap=12;m.weekDone=[];m.plan={};delete m.trainWeek;m.positionTraining.autoTrain=false;window.refresh()})
     const auto=page.getByRole('checkbox')
+    const toggleGeometry=await auto.evaluate(el=>{
+      const box=el.getBoundingClientRect(),copy=el.nextElementSibling.getBoundingClientRect()
+      return {width:box.width,height:box.height,gap:copy.left-box.right,aligned:Math.abs(box.top-copy.top)<=4}
+    })
+    assert.equal(toggleGeometry.width,18,'checkbox keeps a compact fixed width')
+    assert.equal(toggleGeometry.height,18,'checkbox keeps a compact fixed height')
+    assert.ok(toggleGeometry.gap>=7&&toggleGeometry.gap<=9&&toggleGeometry.aligned,'checkbox sits immediately beside its wrapped label')
     await page.waitForFunction(()=>[...document.querySelectorAll('p')].some(p=>p.textContent.includes('副位置 ·')&&p.textContent.includes('先锋')))
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'compact scheduled row fits viewport')
     await page.screenshot({path:resolve(output,`${width}-auto-collapsed.png`)})

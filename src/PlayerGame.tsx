@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { GameCtx } from './ui/me/ctx'
+import { useDesktopNavWheel } from './ui/me/useDesktopNavWheel'
 import { autosave, checkSaveHeld, claimAutosave, exportCurrentBackup, flushAutosave, flushAutosaveNow, onSaveStorage } from './engine/me/save'
 import { setSaveNamespace } from './engine/save'
 import { dateLabel } from './engine/season'
@@ -188,6 +189,7 @@ export default function Career({ opened, onHome }: {
     countScreen(key)
     setScreen(key)
   }, [])
+  const navRef = useDesktopNavWheel(screen, goScreen)
 
   const start = useCallback((g: GameState) => {
     gameRef.current = g
@@ -503,7 +505,7 @@ export default function Career({ opened, onHome }: {
         </div>
 
         <div className="body">
-          <nav className={`nav${more ? ' more-open' : ''}`}>
+          <nav className={`nav${more ? ' more-open' : ''}`} ref={navRef} aria-label="生涯栏目">
             {(() => {
               const shown = SCREENS.filter((s) => !s.pro || pro)
               // a phone's tab bar holds the first four and 更多; the screen I am on takes the fourth place when it is one of the rest (破晓's rule)
@@ -512,7 +514,7 @@ export default function Career({ opened, onHome }: {
               return shown.map((s) => (
                 <div key={s.key} className={bar.has(s.key) ? 'nav-bar' : 'nav-rest'}>
                   {s.sep && <div className="nav-group">—</div>}
-                  <button className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => { goScreen(s.key); setMore(false) }}>{s.label}</button>
+                  <button data-screen={s.key} aria-current={screen === s.key ? 'page' : undefined} className={`nav-item ${screen === s.key ? 'active' : ''}`} onClick={() => { goScreen(s.key); setMore(false) }}>{s.label}</button>
                 </div>
               ))
             })()}

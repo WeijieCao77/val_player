@@ -1,4 +1,5 @@
 import { aheadHosts } from './hosts'
+import { FUTURE_CUP_NAME } from './futureCupNames'
 import { REGION_CN } from './types'
 import type { GameState, Region, StageKey } from './types'
 
@@ -316,7 +317,7 @@ function stagesAhead(year: number): StageDef[] {
   let hit = STAGES_AHEAD.get(year)
   if (!hit) {
     const host = aheadHosts(year)
-    const names: Partial<Record<StageKey, string>> = { masters1: `${host.masters1}大师赛`, stage1: '杯赛 1', masters2: `${host.masters2}大师赛`, stage2: '杯赛 2' }
+    const names: Partial<Record<StageKey, string>> = { masters1: `${host.masters1}大师赛`, stage1: FUTURE_CUP_NAME[1], masters2: `${host.masters2}大师赛`, stage2: FUTURE_CUP_NAME[2] }
     hit = STAGES_2026.map((s) => {
       const name = names[s.key]
       return name ? { ...s, name } : s

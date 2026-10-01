@@ -2,6 +2,7 @@ import raw from '../data/circuit.json'
 import type { CEvent, CNode, CUnit, Slot } from './circuit'
 import { WORLD_END } from './era'
 import { aheadHosts } from './hosts'
+import { FUTURE_CUP_NAME } from './futureCupNames'
 import type { Region, StageKey } from './types'
 
 /**
@@ -300,7 +301,7 @@ function make(year: number, key: string, d: Draft): CEvent {
 function openQualifier(year: number, p: OqPool, cup: 0 | 1 | 2): CEvent {
   return make(year, `oq${cup}:${p.key}`, {
     name: cup ? `VCT ${year}: ${p.en} Open Qualifier · Cup ${cup}` : `VCT ${year + 1}: ${p.en} Open Qualifier`,
-    cn: cup ? `杯赛 ${cup} 公开资格赛 · ${p.cn}` : `${year + 1} 揭幕赛公开资格赛 · ${p.cn}`,
+    cn: cup ? `${FUTURE_CUP_NAME[cup]}公开资格赛 · ${p.cn}` : `${year + 1} 揭幕赛公开资格赛 · ${p.cn}`,
     region: p.regions[0], layer: p.regions.length > 1 ? p.regions : null, stage: 'ascension',
     units: qualifierUnits(OQ_DAY[cup], true),
     plan: { kind: 'oq', league: p.league, pool: p.key, cup, seats: SNAKE.map((k) => pool(k)) },
@@ -325,12 +326,12 @@ function season(year: number): CEvent[] {
       const before = id(cup === 1 ? `kickoff:${L}` : `cup1:${L}`)
       if (L !== 'China') for (const p of OQ_POOLS) if (p.league === L) out.push(openQualifier(year, p, cup))
       out.push(make(year, `open${cup}:${L}`, {
-        name: `VCT ${year}: ${L} Open Playoffs ${cup}`, cn: `${LEAGUE_CN[L]} · 杯赛 ${cup} 公开季后赛`, region: L, layer: kickoff.layer, stage,
+        name: `VCT ${year}: ${L} Open Playoffs ${cup}`, cn: `${LEAGUE_CN[L]} · ${FUTURE_CUP_NAME[cup]}公开季后赛`, region: L, layer: kickoff.layer, stage,
         units: L === 'China' ? qualifierUnits(OPEN_DAYS[cup][0], false) : [openPlayoffs(OPEN_DAYS[cup])],
         plan: { kind: 'open', league: L, cup, seats: L === 'China' ? chinaOpenSeats(year, cup) : openSeats(year, L, before, cup) },
       }))
       out.push(make(year, `cup${cup}:${L}`, {
-        name: `VCT ${year}: ${L} Cup ${cup}`, cn: `${LEAGUE_CN[L]} · 杯赛 ${cup}`, region: L, layer: kickoff.layer, stage,
+        name: `VCT ${year}: ${L} Cup ${cup}`, cn: `${LEAGUE_CN[L]} · ${FUTURE_CUP_NAME[cup]}`, region: L, layer: kickoff.layer, stage,
         // 2026 Stage 1's format for both Cups, each on its own stage's days
         units: retime(stage1.units, window),
         plan: { kind: 'cup', league: L, cup, seats: cupSeats(L, before, id(`open${cup}:${L}`)) },
