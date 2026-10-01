@@ -13,6 +13,9 @@ import './moment.css'
  * The author's brief of 2026-09-19: 「在成就栏目加一个当局的展示栏，专门放冠军详情，就是本局玩家拿的冠军，比如大师赛
  * 冠军，赛段冠军之类的。然后按照重要程度排好，还有有个点击按钮可以点进去查看当时夺冠的情况以及配一段文字描述」.
  *
+ * For real-player scenarios, a 历史荣誉 section sits below the earned trophies; it is collapsed by default and
+ * shows the honours the player won before this simulation started, never counted as achievements here.
+ *
  * One card a trophy, in the game's own order (engine/me/trophies.ts: 冠军赛 > 大师赛 / LOCK//IN > 赛区冠军, one I
  * started in above one I watched, then the earlier year — the career-end card's wall ranks the same way). The look is
  * the 转播红 the big moments and the history ledger wear (moment.css, worldline.css).
@@ -38,6 +41,8 @@ export default function TrophyCase() {
   const list = useMemo(() => careerTrophies(game), [game])
   const [open, setOpen] = useState<string | null>(null)
   const shown = list.find((t) => t.key === open)
+  const scenario = me.scenario
+  const historical = scenario?.kind === 'real' ? scenario.historicalHonors : []
   return (
     <Panel title={list.length ? `本局奖杯 · ${list.length} 座` : '本局奖杯'}>
       {!list.length ? (
@@ -63,6 +68,22 @@ export default function TrophyCase() {
         </>
       )}
       {shown && <TrophyDetail t={shown} onClose={() => setOpen(null)} />}
+      {scenario?.kind === 'real' && (
+        <details className="trc-historical">
+          <summary>历史荣誉（本局开始前）</summary>
+          <p className="tiny faint">{scenario.historyNote}</p>
+          {scenario.profileEvidence && <p className="tiny faint">起点能力依据：{scenario.profileEvidence} 截至 {scenario.profileCutoff}；属性为游戏映射，不代表对真人的能力鉴定。</p>}
+          <ul className="trc-historical-list">
+            {historical.map((honor, i) => (
+              <li key={i} className="trc-historical-item">
+                <span className="trc-historical-ic" aria-hidden="true">🏆</span>
+                <span>{honor}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="tiny faint">以上为真实选手在模拟开始前已获得的荣誉，不记入本局成就，也不发放任何奖励。</p>
+        </details>
+      )}
     </Panel>
   )
 }

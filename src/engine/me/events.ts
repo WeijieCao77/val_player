@@ -217,8 +217,27 @@ export const eventOf = (id: string) => EVENTS.find((e) => e.id === id)
 /** the same thing does not happen twice in two months, drawn or hooked */
 const EVENT_COOLDOWN_DAYS = 56
 
+/**
+ * In a real-person scenario (me.scenario?.kind === 'real') the weekly draw may
+ * only offer events that are purely about training, competition or the coach's
+ * office. Family calls, private feuds, illness, rumours, marriage and children
+ * are off the table: the game must not invent a private life for a real person.
+ * Ordinary saves have no scenario and see no difference.
+ */
+const REAL_SCENARIO_ALLOWED_EVENTS = new Set([
+  'coach_talk',
+  'hot_week',
+  'cold_week',
+  'after_title',
+  'after_upset',
+  'after_skid',
+  'after_bench',
+  'patch',
+])
+
 function canFire(state: GameState, ev: EventDef): boolean {
   const me = state.me!
+  if (me.scenario?.kind === 'real' && !REAL_SCENARIO_ALLOWED_EVENTS.has(ev.id)) return false
   if (activeAbsence(state) && !ev.allowDuringAbsence) return false
   if ((FAMILY_VISIT_EVENTS as readonly string[]).includes(ev.id) && familyVisitBlocked(state)) return false
   if ((me.eventCounts[ev.id] ?? 0) >= ev.max) return false

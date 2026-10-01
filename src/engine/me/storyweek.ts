@@ -342,6 +342,7 @@ function chainTick(state: GameState, rng: Rng): boolean {
 /** Open a chain now: its first card goes in front of me. Also what the probe uses to force one. */
 export function openChain(state: GameState, id: string, rng: Rng, setup?: Partial<ChainLive> | null): boolean {
   const me = state.me!
+  if (me?.scenario?.kind === 'real') return false
   const def = CHAIN_BY_ID[id]
   if (!def || me.chain || me.pendingEvent) return false
   const s = setup ?? def.setup(state, rng)
@@ -381,6 +382,10 @@ function chainStart(state: GameState, rng: Rng): boolean {
 export function storyWeek(state: GameState): void {
   const me = state.me
   if (!me || me.phase === 'retired') return
+  // A real-person scenario must not open private-life chains: no 队内矛盾,
+  // no 风暴, no 合同年 / 外区邀约 personal turns. The weekly draw still runs
+  // (its gated events in me/events.ts) but the chain half steps aside.
+  if (me.scenario?.kind === 'real') return
   const rng = new Rng(hashStr(`story:${state.seed}:${state.year}:${state.day}:${me.week}`))
   if (me.chain && chainTick(state, rng)) return
   if (echoTick(state, rng)) return

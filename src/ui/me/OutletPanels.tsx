@@ -56,6 +56,8 @@ export default function OutletPanels() {
 
   const meet = o.meets.find((m) => m.year === year)
   const meetName = MEETS.find((m) => m.key === meet?.key)?.name
+  const isReal = me.scenario?.kind === 'real'
+  const breaks = isReal ? BREAKS.filter((b) => b.key !== 'family') : BREAKS
   const brk = o.breaks.find((b) => b.year === year)
   const brkName = BREAKS.find((b) => b.key === brk?.key)?.name
   const scholarWhy = scholarLocked(game)
@@ -87,10 +89,10 @@ export default function OutletPanels() {
         </Outlet>
         <Outlet
           name="休赛期"
-          note={brk ? `今年：${brkName}` : '队里这个赛季的比赛打完了、也不会再被抽进任何赛事时，放一次假。'}
-          lock={lockLine(BREAKS.map((b) => ({ name: b.name, why: breakLocked(game, b) })), ['今年的假已经放过了'])}
+          note={brk && breaks.some((b) => b.key === brk.key) ? `今年：${brkName}` : '队里这个赛季的比赛打完了、也不会再被抽进任何赛事时，放一次假。'}
+          lock={lockLine(breaks.map((b) => ({ name: b.name, why: breakLocked(game, b) })), ['今年的假已经放过了'])}
         >
-          {BREAKS.map((b) => {
+          {breaks.map((b) => {
             const why = breakLocked(game, b)
             const cost = breakPrice(game, b)
             return <button key={b.key} className="sm" style={wrapBtn} disabled={!!why} title={why ?? b.blurb} onClick={() => act(takeBreak(game, b.key))}>{b.name} {cost ? price(cost) : '免费'}</button>
@@ -108,8 +110,8 @@ export default function OutletPanels() {
         </Outlet>
         <p className="tiny faint" style={{ margin: '6px 0 0' }}>都不改变能力和比赛。办过的事，退役时写进你的结局。</p>
       </Panel>
-      <Panel title="家用与置办">
-        <Outlet
+      <Panel title={isReal ? '置办' : '家用与置办'}>
+        {!isReal && <Outlet
           first
           name="往家里寄钱"
           note={`现在：${FAMILY_TIERS[o.family]?.name ?? '不寄'}${o.family ? (me.phase === 'pro' ? ` · 每周 ${moneyFull(familyWeekly(game))}` : ' · 没有工资，先停着') : ''}${o.familySent ? ` · 一共寄了 ${price(o.familySent)}` : ''}`}
@@ -120,8 +122,9 @@ export default function OutletPanels() {
               {t.name}{t.share ? ` ${Math.round(t.share * 100)}%` : ''}
             </button>
           ))}
-        </Outlet>
+        </Outlet>}
         <Outlet
+          first={isReal}
           name="直播间"
           note={`现在：${STUDIO[o.studio]?.name}。直播额度 +15% / +30%，只在直播挣到顶时有用。`}
           lock={studioWhy === '已经是最好的了' ? null : studioWhy}

@@ -114,10 +114,14 @@ const abroadLine = (state: GameState, key: string): string[] => {
 export function retire(state: GameState, why: string, kind: RetireWhy = 'other'): void {
   const me = state.me!
   if (me.phase === 'retired') return
+  const real = me.scenario?.kind === 'real'
+  const scenarioPrefix = real ? `[${me.scenario!.key}] 本局模拟（游戏模拟，不代表真实情况）：` : ''
+  // Real-person endings must not invent a private life: no lifeLines/outletLines.
+  const lifeAndOutlet = real ? '' : `${lifeLines(state).join('')}${outletLines(state).join('')}`
   const e = endingFor(state)
   if (me.phase === 'pro') leaveClub(state, why)
   me.phase = 'retired'
-  me.ending = { key: e.key, title: e.title, text: `${e.text}${abroadLine(state, e.key).join('')}${lifeLines(state).join('')}${outletLines(state).join('')}${staffLines(state).join('')}`, year: state.year }
+  me.ending = { key: e.key, title: e.title, text: `${scenarioPrefix}${e.text}${abroadLine(state, e.key).join('')}${lifeAndOutlet}${staffLines(state).join('')}`, year: state.year }
   const marks = careerMarksFor(state)
   if (marks.length) me.ending.marks = marks
   queueEndingFeedback(state)

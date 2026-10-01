@@ -44,6 +44,7 @@ export default function Poster() {
   const [nums] = useNumbers()
   const me = game.me!
   const p = game.players[me.id]
+  const scenario = me.scenario
   const starts = me.seasons.reduce((s, x) => s + x.starts, 0)
   const matches = me.seasons.reduce((s, x) => s + x.matches, 0)
   const pro = me.seasons.filter((s) => s.tier > 0)
@@ -71,6 +72,11 @@ export default function Poster() {
       {look !== 'studio' && <div className="pm-deco" aria-hidden="true" />}
       {/* the head — brand, verdict, who — one block, so a look can set it apart (对开版 puts it on the dark half) */}
       <div className="pm-head">
+        {scenario?.kind === 'real' && (
+          <p className="pm-scenario-mark">
+            真实选手模拟 · 起点 {scenario.startYear} 年
+          </p>
+        )}
         <div className="pm-top">
           <span className="pm-mark">无畏契约 · 选手生涯</span>
           <span className="pm-span">{first}–{last}</span>

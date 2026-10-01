@@ -36,6 +36,12 @@ const LEAGUE_ORDER: Region[] = ['Americas', 'EMEA', 'Pacific', 'China']
  * (its main.ts screenCreate / the reroll button); only cards the chosen start can take are dealt.
  */
 const DEAL = 3
+/** Real-player starts the 2024/2023 covers offer: only the public card the player picks from, nothing more. */
+const REAL_CARDS = [
+  { key: 'zmjjkk-2024', name: 'ZmjjKK', date: '2024-01-01', team: 'EDward Gaming', region: 'China', role: '决斗者', age: 19, year: 2024 },
+  { key: 'demon1-2023', name: 'Demon1', date: '2023-01-19', team: 'Evil Geniuses', region: 'Americas', role: '决斗者', age: 20, year: 2023 },
+  { key: 'boaster-2023', name: 'Boaster', date: '2023-01-01', team: 'FNATIC', region: 'EMEA', role: '控场', age: 27, year: 2023 },
+] as const
 const fits = (key: string, start: StartPoint): boolean => !originOf(key).needsClub || start !== 'pre'
 const shuffled = <T,>(xs: T[]): T[] => {
   const out = xs.slice()
@@ -84,8 +90,11 @@ export default function NewCareer({
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [bad, setBad] = useState(false)
+  // 自创 or 真人: which entry the form shows (real cards have no talent/origin pick; the engine will overwrite)
+  const [mode, setMode] = useState<'自创' | '真人'>('自创')
   // 开始生涯 pressed: the career and the world it is made in are on their way
   const [starting, setStarting] = useState(false)
+  const [realKey, setRealKey] = useState<(typeof REAL_CARDS)[number]['key']>(REAL_CARDS[0].key)
   const [year, setYear] = useState<EntryYear>(2026)
   const [name, setName] = useState('')
   const [avatar, setAvatar] = useState<string>()
@@ -222,7 +231,7 @@ export default function NewCareer({
         : academies ? `这里有 ${pool} 支一线队的二队，开局进其中一支。`
           : `这里有 ${pool} 支${clubWord}俱乐部，开局进其中一支，弱队更愿意赌新人。`)
   // what is still missing, said on the button, in the order the page asks (破晓's 建档 button, main.ts viewCreate)
-  const blocked = avatarBusy ? '等待头像处理完成'
+  const blocked = mode === '真人' ? '' : avatarBusy ? '等待头像处理完成'
     : gate ? gate
     : !originKey ? '先选一个出身'
       : left !== 0 ? `还需分配 ${left} 点天赋`
@@ -266,27 +275,44 @@ export default function NewCareer({
   const presetOn = presets.find((x) => ATTR_KEYS.every((k) => x.t[k] === talents[k]))?.key
   const go = () => {
     if (blocked || starting) return
+    const card = REAL_CARDS.find((c) => c.key === realKey)
     const ign = name.trim() || 'Rookie'
     setStarting(true)
     // a frame for 「载入中…」 to show: the career, and the world it is made in, arrive with this press (App.tsx)
     window.setTimeout(() => {
-      onStart({ name: ign, region, role, talents, originKey, start, year, avatar }).then((ok) => {
+      onStart(mode === '真人'
+        ? { name: card!.name, region: card!.region, role: card!.role, talents: zeroTalents(), originKey: 'real', start: 't1', year: card!.year, scenario: card!.key }
+        : { name: ign, region, role, talents, originKey, start, year, avatar }).then((ok) => {
         if (!ok) { setStarting(false); return }
         // What was chosen on this screen, and nothing that was typed into it: the
         // IGN is the one free-text field in the whole game and it never leaves
         // (engine/me/telemetry.ts). The talent goes out as its shape — the most on
         // any one attribute, and how many got any — which is what 「天赋怎么点的」
         // asks and carries no text at all. Said once the career has opened.
-        track('career_start', {
-          year,
-          region,
-          role,
-          start,
-          origin: originKey,
-          talent_max: ATTR_KEYS.reduce((m, k) => Math.max(m, talents[k]), 0),
-          talent_spread: ATTR_KEYS.filter((k) => talents[k] > 0).length,
-          talent_points: TALENT_POINTS - left,
-        })
+        if (mode === '真人') {
+          // The real card's own opening year, and nothing that identifies the player beyond the public card.
+          track('career_start', {
+            year: card!.year,
+            region: card!.region,
+            role: card!.role,
+            start: 't1',
+            origin: 'real',
+            talent_max: 0,
+            talent_spread: 0,
+            talent_points: 0,
+          })
+        } else {
+          track('career_start', {
+            year,
+            region,
+            role,
+            start,
+            origin: originKey,
+            talent_max: ATTR_KEYS.reduce((m, k) => Math.max(m, talents[k]), 0),
+            talent_spread: ATTR_KEYS.filter((k) => talents[k] > 0).length,
+            talent_points: TALENT_POINTS - left,
+          })
+        }
       }, () => setStarting(false))
     }, 30)
   }
@@ -294,7 +320,7 @@ export default function NewCareer({
   return (
     <div className="newcareer">
       {cover}
-      <p className="muted" style={{ marginTop: 0 }}>{intro}</p>
+      <p className="muted" style={{ marginTop: 0 }}>{mode === '真人' ? '接管一位真实选手，从核查过的起点改写未来。此后的比赛、合同与生涯故事均为本局模拟。' : intro}</p>
       {again && <p className="nc-again">{again}</p>}
       <div className="row wrap nc-tools">
         {save && <button className="sm ghost" onClick={() => setView('home')}>← 回到存档</button>}
@@ -304,7 +330,31 @@ export default function NewCareer({
         <div className="right row"><ThemeToggle compact /></div>
       </div>
 
-      <Panel title="从哪一年开始" actions={<span className="tiny faint">同一条时间线，两个入口</span>}>
+      <Panel title="生涯剧本" actions={<span className="tiny faint">选择你的起点</span>}>
+        <div className="seg" style={{ marginBottom: 10 }}>
+          <button className={mode === '自创' ? 'on' : ''} onClick={() => setMode('自创')}>自创</button>
+          <button className={mode === '真人' ? 'on' : ''} onClick={() => setMode('真人')}>真人</button>
+        </div>
+        {mode === '真人' && (
+          <div className="start-grid" style={{ '--cols': 3 } as CSSProperties}>
+            {REAL_CARDS.map((c) => (
+              <button key={c.key} className={`start-card${realKey === c.key ? ' on' : ''}`} onClick={() => setRealKey(c.key)}>
+                <b>{c.name}</b>
+                <span>{c.date} · {c.team} · {c.role}{c.key === 'boaster-2023' ? '/指挥' : ''} · {c.age}岁</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === '真人' && (
+          <p className="tiny faint" style={{ marginTop: 8 }}>
+            接管后为本局模拟；能力与合同使用游戏估算。起点前荣誉尚未完整收录，与本局分开统计。
+          </p>
+        )}
+      </Panel>
+
+      {mode === '自创' && (
+      <>
+      <Panel title="从哪一年开始">
         {/* as many columns as there are years: two cards in the doors' three columns left a blank third (me.css --cols) */}
         <div className="start-grid" style={{ '--cols': ENTRY_YEARS.length } as CSSProperties}>
           {ENTRY_YEARS.map((y) => (
@@ -423,7 +473,11 @@ export default function NewCareer({
         <p className="tiny faint" style={{ margin: '6px 0 0' }}>{TALENT_TEAM_HINT}</p>
       </Panel>
 
+      </>
+      )}
+
       <div className="row nc-go" style={{ gap: 10, justifyContent: 'flex-end' }}>
+        {mode === '真人' && <span className="tiny faint">能力仅用开档前样本映射，Demon1 的入队前小样本按较低置信度处理，不预支后来赛果。到 2034 赛季结束最多 {2035 - REAL_CARDS.find(c => c.key === realKey)!.year} 个赛季；本局角色也可能提前退役。</span>}
         {save && confirmed && <span className="tiny faint">开始后覆盖上次的存档</span>}
         <button className="primary" onClick={go} onPointerEnter={onWarm} onFocus={onWarm} disabled={!!blocked || starting}>{starting ? '载入中…' : blocked || '开始生涯'}</button>
       </div>

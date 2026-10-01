@@ -104,7 +104,8 @@ export function refreshMyRounds(state: GameState): void {
   const me = state.me
   if (!me) return
   const p = state.players[me.id]
-  if (p) p.rounds = 400 + me.scrimRounds + p.career.rounds
+  const opening = me.scenario?.kind === 'real' ? (me.scenario.profileRounds ?? 0) : 400
+  if (p) p.rounds = opening + me.scrimRounds + p.career.rounds
 }
 
 /**

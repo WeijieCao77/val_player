@@ -62,7 +62,7 @@ const START = oneOf('pre', 'chal', 't1')
 /** 新生涯页能选的出身卡（engine/me/origins.ts ORIGINS）；殿堂解锁的那两张已经收回，建档时不会再出现 */
 const ORIGIN = oneOf(
   'netcafe', 'cs', 'streamer', 'radiant', 'rich', 'academy', 'campus',
-  'town', 'korea', 'late', 'exchild', 'grinder',
+  'town', 'korea', 'late', 'exchild', 'grinder', 'real',
 )
 const ENDING = oneOf(
   'breaker', 'dynasty', 'world', 'master', 'uncrowned', 'regional', 'ring',

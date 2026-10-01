@@ -97,6 +97,7 @@ export function familyWeekly(state: GameState, tier = readOut(state.me).family):
 
 export function familyLocked(state: GameState, tier: number): string | null {
   const me = state.me!
+  if (me.scenario?.kind === 'real') return '真实档里不走这条路'
   if (readOut(me).family === tier) return '现在就是这一档'
   if (tier > 0 && me.phase !== 'pro') return '有了职业合同再说'
   return null
@@ -118,7 +119,7 @@ export function outletWeek(state: GameState): void {
   const me = state.me!
   rentWeek(state)
   const o = me.out
-  if (!o?.family || me.phase !== 'pro') return
+  if (!o?.family || me.phase !== 'pro' || me.scenario?.kind === 'real') return
   const n = familyWeekly(state, o.family)
   if (!n || me.money < n) return
   addMoney(state, 'family', -n)
@@ -363,6 +364,7 @@ export function seasonLeft(state: GameState): 'playing' | 'maybe' | null {
 export function breakLocked(state: GameState, b: Break): string | null {
   const me = state.me!
   if (me.phase !== 'pro') return '有了职业合同再说'
+  if (me.scenario?.kind === 'real' && b.key === 'family') return '真实档里不走这条路'
   if (readOut(me).breaks.some((x) => x.year === state.year)) return '今年的假已经放过了'
   const left = seasonLeft(state)
   if (left === 'playing') return '队里这个赛季还有比赛'
@@ -486,7 +488,7 @@ export function outletSeason(state: GameState, year: number): void {
       pushLog(state, 'money', `合伙的网咖 ${year} 年分红 ${usd(n)}。`)
     }
   }
-  if (o.family && me.phase === 'pro') pushLog(state, 'info', rng.pick(FAMILY_NOTES))
+  if (o.family && me.phase === 'pro' && me.scenario?.kind !== 'real') pushLog(state, 'info', rng.pick(FAMILY_NOTES))
   if (o.scholar.includes(year)) pushLog(state, 'info', SCHOLAR_NOTES[Math.min(o.scholar.length, SCHOLAR_NOTES.length) - 1])
 }
 
@@ -548,7 +550,7 @@ export function outletRecap(state: GameState): string | null {
   if (!me?.ledger) return null
   const o = readOut(me)
   const parts: string[] = []
-  if (o.familySent) parts.push(`往家里寄了 ${big(o.familySent)}`)
+  if (o.familySent && me.scenario?.kind !== 'real') parts.push(`往家里寄了 ${big(o.familySent)}`)
   if (o.scholar.length) parts.push(`出了 ${o.scholar.length} 年奖学金`)
   if (me.flags.charityTotal) parts.push(`捐了 ${big(me.flags.charityTotal)}`)
   const met = o.meets.length

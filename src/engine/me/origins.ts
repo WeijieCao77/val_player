@@ -55,7 +55,8 @@ const RETIRED_ORIGINS: Origin[] = [
   { key: 'notebook', name: '老将的笔记本', blurb: '一位退役老将把十年的对位笔记留给了你。字很乱，内容很硬。', attrs: { clutch: 2, communication: 2 }, tac: 10, body: -3, money: 8000 },
 ]
 
-export const originOf = (key: string): Origin => ORIGINS.find((o) => o.key === key) ?? RETIRED_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]
+const REAL_ORIGIN: Origin = { key: 'real', name: '真实选手模拟', blurb: '从经过核查的职业起点接管；此后为本局模拟，不代表现实经历。' }
+export const originOf = (key: string): Origin => key === 'real' ? REAL_ORIGIN : ORIGINS.find((o) => o.key === key) ?? RETIRED_ORIGINS.find((o) => o.key === key) ?? ORIGINS[0]
 
 /**
  * A card's name on the server the career queues on (me/rank.ts serverAt): 「国服高分路人王」

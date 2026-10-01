@@ -96,6 +96,8 @@ export interface HallCard {
   /** achievement keys held at the end */
   ach: string[]
   at: string
+  /** real-player scenario key, when this career started from an approved real-player scenario */
+  scenario?: string
   /** 殿堂成就 this career completed */
   hx?: string[]
   /** said yes when the coach asked about staying on as staff (me/events_more.ts vet_staff) */
@@ -343,6 +345,7 @@ function cleanCard(x: unknown): HallCard | null {
   const rwFrom = rw ? int(rw.from) : 0
   const rwTop = rw ? str(rw.top, 200) : ''
   const rwMine = rw ? Math.max(0, Math.min(999, int(rw.mine))) : 0
+  const scenario = str(o.scenario, 24)
   return {
     id: str(o.id, 12), name: str(o.name, 24), role: str(o.role, 8), entry: int(o.entry),
     start: o.start === 'chal' || o.start === 't1' ? o.start : 'pre',
@@ -361,6 +364,7 @@ function cleanCard(x: unknown): HallCard | null {
     peak: int(o.peak), mvps: Math.max(0, int(o.mvps)),
     ach: [...new Set(list(o.ach).filter((k): k is string => typeof k === 'string' && !!ACH_BY_KEY[k]))],
     at: DAY.test(at) ? at : '',
+    ...(scenario ? { scenario } : {}),
     ...(hx.length ? { hx } : {}),
     ...(o.staff ? { staff: 1 as const } : {}),
     ...(rwN || rwTop ? { rw: { n: rwN, ...(rwFrom > 0 ? { from: rwFrom } : {}), ...(rwTop ? { top: rwTop } : {}), ...(rwMine ? { mine: rwMine } : {}) } } : {}),
@@ -481,6 +485,7 @@ function cardOf(state: GameState, id: string): HallCard {
   const rw = careerRewrites(me)
   // 「因为你」 kept in the seasons' rows: what opens the 另一条世界线 卡面 (LOOKS)
   const mine = me.seasons.reduce((n, s) => n + (s.rewrites ?? []).filter(becauseOfRow).length, 0)
+  const scenarioKey = me.scenario?.key ?? ''
   return {
     id, name: p?.ign ?? '', role: roleOf(state), entry, start: startOf(state), origin: me.originKey, home: me.region,
     from: entry, to: me.ending?.year ?? state.year, seasons: pro.length, clubs,
@@ -492,6 +497,7 @@ function cardOf(state: GameState, id: string): HallCard {
     mvps: p?.career?.mvps ?? 0,
     ach: me.achievements.filter((k) => !!ACH_BY_KEY[k]),
     at: today(),
+    ...(scenarioKey ? { scenario: scenarioKey } : {}),
     ...(me.flags.staffYes ? { staff: 1 as const } : {}),
     ...(rw ? { rw: { n: rw.retitled, ...(rw.from != null ? { from: rw.from } : {}), ...(rw.top ? { top: careerLine(rw.top) } : {}), ...(mine ? { mine } : {}) } } : {}),
   }

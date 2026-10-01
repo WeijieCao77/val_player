@@ -752,6 +752,8 @@ export interface GrowthWeekResult {
 }
 
 export interface MeState {
+  /** A fixed historical identity; omitted by ordinary careers and older saves. */
+  scenario?: import('./scenarios').RealCareerScenario
   /** One secondary position, independently trained; only the protagonist uses this metadata. */
   positionTraining?: import('./secondaryRole').PositionTraining
   qualifyAlerts?: import('./qualifyAlerts').QualifyAlertPrefs

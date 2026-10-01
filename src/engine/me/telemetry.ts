@@ -199,7 +199,7 @@ export const TELEMETRY_VALUES = {
     // the cards the new-career page offers (me/origins.ts ORIGINS); the two the hall used to unlock are not offered any more
     origin: oneOf([
       'netcafe', 'cs', 'streamer', 'radiant', 'rich', 'academy', 'campus',
-      'town', 'korea', 'late', 'exchild', 'grinder',
+      'town', 'korea', 'late', 'exchild', 'grinder', 'real',
     ]),
     talent_max: int(0, 100), talent_spread: int(0, 100), talent_points: int(0, 100),
   },

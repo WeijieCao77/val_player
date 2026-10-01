@@ -17,6 +17,15 @@ export interface ChangeEntry {
 export const CHANGELOG_ME: ChangeEntry[] = [
   {
     date: '2026-10-01',
+    title: '接管真实选手生涯：ZmjjKK、Demon1、Boaster',
+    changes: [
+      { kind: '新增', text: '<b>建档时可以选择真实选手生涯。</b>首批提供 2024 年元旦 EDward Gaming 的 ZmjjKK、2023 年 1 月 19 日加入 Evil Geniuses 的 Demon1，以及 2023 年元旦 FNATIC 的 Boaster。普通自建角色开局保留。' },
+      { kind: '新增', text: '<b>接手的是选手本人，不是同名新人。</b>Boaster 从控场兼指挥起步；Demon1 从轮换名单竞争上场。开局能力按接管前资料映射为游戏数值，不提前套用后来夺冠的表现，也不保证复刻历史成绩。' },
+      { kind: '新增', text: '<b>接管前荣誉与本局成绩分开。</b>已收录的历史荣誉单独展示，不赠送本局奖杯或成就；接管之后的成长、转会和比赛结果由这个存档决定。真实选手模式不套用虚构家庭剧情。' },
+    ],
+  },
+  {
+    date: '2026-10-01',
     title: '修正赛事参赛地区、历史俱乐部迁区、成就顺序和部分历史评分',
     changes: [
       { kind: '调整', text: '<b>按作者决定，将 YOU 从游戏的选手库与历史模式中移除。</b>旧存档会清理对应选手及名单残留，俱乐部按现有规则补人；玩家自定义的同名角色不会因此被删除。' },

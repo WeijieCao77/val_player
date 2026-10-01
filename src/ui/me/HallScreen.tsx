@@ -214,7 +214,7 @@ function CareerCard({ c, mine }: { c: HallCard; mine: boolean }) {
         <span className="hc-end">{c.ending.title}</span>
         {mine && <span className="tag">本局</span>}
       </div>
-      <div className="tiny muted">{REGION_CN[c.home as Region] ?? c.home} · {c.role} · {c.entry} {START_SHORT[c.start]}开局 · {originName(originOf(c.origin), serverAt(c.home as Region, c.entry, 0))}</div>
+      <div className="tiny muted">{REGION_CN[c.home as Region] ?? c.home} · {c.role} · {c.entry} {c.scenario ? '真实接管' : `${START_SHORT[c.start]}开局`} · {originName(originOf(c.origin), serverAt(c.home as Region, c.entry, 0))}</div>
       <div className="tiny muted hc-clubs">
         {c.from}–{c.to}{c.seasons ? ` · ${c.seasons} 季` : ' · 没打上职业'}{c.clubs.length ? ` · ${c.clubs.join(' → ')}` : ''}
       </div>

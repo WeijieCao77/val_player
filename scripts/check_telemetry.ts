@@ -443,7 +443,7 @@ console.log('\n值规则')
   const { THEMES } = await import('../src/ui/me/theme')
   const lists: [string, string, string, readonly string[]][] = [
     ['ending', 'key', '结局（engine/me/endings.ts ENDINGS_ME）', ENDINGS_ME.map((x) => x.key)],
-    ['career_start', 'origin', '出身卡（engine/me/origins.ts ORIGINS）', ORIGINS.map((o) => o.key)],
+    ['career_start', 'origin', '普通出身卡与真实生涯', [...ORIGINS.map((o) => o.key), 'real']],
     ['session_start', 'theme', '底色（ui/me/theme.ts THEMES）', THEMES.map((t) => t.key)],
     ['career_start', 'region', '赛区（engine/types.ts REGION_CN）', Object.keys(REGION_CN)],
     ['career_start', 'role', '位置（engine/types.ts ROLES）', ROLES],

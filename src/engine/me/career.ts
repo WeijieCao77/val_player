@@ -5,9 +5,10 @@ import RAW_2021 from '../../data/world_2021.json'
 import { autoStarters, createWorld } from '../world'
 import { RULER, REGIONAL_RULER, rulerShift, rulerTeamRating2021, shiftPlayer } from '../ruler'
 import { bookClubsAt, openWorldAt } from '../timeline'
+import { ensurePlayer, signForHistory } from '../timeline'
 import { realName } from '../names'
 import { arrive2026 } from '../today'
-import { setupSeason } from '../season'
+import { setupSeason, advanceDay } from '../season'
 import { REMOVED_STAMP } from '../removedPlayers'
 import { STAFF_STAMP } from '../staffStints'
 import { Rng, clamp, hashStr } from '../rng'
@@ -17,6 +18,9 @@ import { expectedSalary, recomputeOverall, refreshValue } from '../player'
 import { AP_SEASON } from './actions'
 import { AP_PRE, ladderLabel } from './prepro'
 import { fansCn } from './fans'
+import { REAL_SCENARIOS } from './scenarios'
+import { buildEarlyProfile, EARLY_PROFILE_VERSION } from './earlyProfiles'
+import type { RealScenarioCatalogEntry, RealCareerScenarioKey } from './scenarios'
 import type { MeState } from './types'
 import { beginWeek } from './week'
 import { pushLog } from './log'
@@ -26,9 +30,9 @@ import { makeDeal, joinClub } from './contract'
 import { MERGED_INTO, onTimeline, regionsOf, stageNameIn } from '../era'
 import type { EntryYear } from '../era'
 import { initLedger } from './money'
-import { SEASON_LOOSENS, ceilingPotential, ensureCeilings } from './bottleneck'
+import { SEASON_LOOSENS, ceilingPotential, ensureCeilings, splitCeilings } from './bottleneck'
 import { cupFor } from './cups'
-import { cny } from './moneyfmt'
+import { cny, money as fmtMoney } from './moneyfmt'
 import { CNY_FLAG } from './cnyMigrate'
 import { TALENT_MAX, buildAttrs, talentCeilings, zeroTalents } from './talent'
 import type { StartPoint } from './talent'
@@ -59,6 +63,7 @@ export const NAT_DEFAULT: Record<Region, string> = {
 }
 
 export interface CareerOpts {
+  scenario?: RealCareerScenarioKey
   avatar?: string
   name: string
   region: Region
@@ -71,7 +76,15 @@ export interface CareerOpts {
   seed?: number
   nat?: string
   /** where on the one timeline the career begins — 2021 or 2026, see engine/era.ts */
-  year?: EntryYear
+  year?: EntryYear | 2023 | 2024
+}
+
+/** Age at a year/day-of-year date (day 0 is January 1st), from a real birth date. */
+function ageAt(birth: string, year: number, day: number): number {
+  const [by, bm, bd] = birth.split('-').map(Number)
+  const birthdayThisYear = Date.UTC(year, bm - 1, bd)
+  const startDate = Date.UTC(year, 0, 1 + day)
+  return year - by - (startDate < birthdayThisYear ? 1 : 0)
 }
 
 export interface ClubChoice { id: string; name: string; tag: string; rating: number; roster: number; tier: number }
@@ -202,6 +215,189 @@ function createWorldAt(teamId: string, seed: number, year: number): GameState {
   return state
 }
 
+/** A real-player career: the historical player is the main character, not a clone. */
+function createRealCareer(rng: Rng, seed: number, scenario: RealScenarioCatalogEntry): GameState {
+  const teamId = scenario.teamId
+  const year = scenario.year
+  const state = createWorldAt(teamId, seed, year)
+  state.myTeam = ''
+
+  setupSeason(state)
+
+  const oldId = scenario.playerId
+  const p = state.players[oldId] ?? ensurePlayer(state, oldId.slice(1), year, state.teams[teamId].region)
+  if (!p) throw new Error(`真实生涯缺少球员 ${oldId}`)
+
+  if (scenario.key === 'demon1-2023') {
+    let guard = 0
+    while (state.day < scenario.day && guard < 1000) {
+      const before = state.day
+      advanceDay(state, { autoResolveDrawDecisions: true })
+      if (state.day <= before) {
+        guard++
+      } else {
+        guard = 0
+      }
+    }
+    if (state.day !== scenario.day) throw new Error('历史起点日程未能推进')
+    signForHistory(state, p, state.teams[teamId], year, rng)
+  }
+
+  const isStarter = state.teams[teamId]?.starters.includes(oldId) ?? false
+
+  // The historical player becomes the main character: keep the same object and id.
+  p.teamId = teamId
+  p.region = (state.teams[teamId]?.region as Region | undefined) ?? p.region
+  p.age = ageAt(scenario.birth, scenario.year, scenario.day)
+  p.birth = scenario.birth
+  p.ageEstimated = false
+  p.season = emptyStats()
+  p.career = emptyStats()
+  p.titles = []
+  // Opening evidence must precede takeover, never inherit the year's future statline.
+  const profile = buildEarlyProfile(scenario.key, p.age)
+  p.attrs = { ...profile.attrs }
+  p.role = profile.role
+  p.roles = [...profile.roles]
+  p.rolePro = Object.fromEntries(profile.roles.map((role) => [role, 100]))
+  p.flex = false
+  p.agentPool = [...profile.agents]
+  p.traits = []
+  p.stageBonus = 0
+  // Unknown evidence gets no proven-round credit; never inherit the takeover year's future sample.
+  p.rounds = profile.rounds ?? 0
+  delete p.vlr
+  recomputeOverall(p)
+  p.arrivedOverall = p.overall
+  p.caps = splitCeilings(p, profile.headroom)
+  for (const k of ATTR_KEYS) p.caps[k] = Math.min(99, Math.max(p.caps[k] ?? 0, p.attrs[k]))
+  recomputeOverall(p)
+  p.potential = ceilingPotential(p)
+  // The roster book estimates pay from a full-year rating. Re-estimate from this opening profile.
+  p.salary = expectedSalary(p, state.teams[teamId].tier === 1 ? 1 : 2)
+  if (p.contract) p.contract.salary = p.salary
+  refreshValue(p)
+
+  // Keep the historical id; do not rename it to ME_ID.
+  if (scenario.key === 'boaster-2023') {
+    p.isIgl = true
+    p.iglSource = 'appointed'
+    state.teams[teamId].igl = oldId
+  }
+  const me: MeState = {
+    id: oldId,
+    originKey: 'real',
+    phase: 'pro',
+    week: 0,
+    weekDay: 0,
+    ap: AP_SEASON,
+    apMax: AP_SEASON,
+    plan: {},
+    talents: zeroTalents(),
+    mental: 50,
+    body: 55,
+    tilt: 0,
+    edge: 0,
+    duelsThisWeek: 0,
+    scrimRounds: 0,
+    badStreak: 0,
+    proven: isStarter,
+    coachTrust: 50,
+    gmTrust: 50,
+    fans: 20,
+    heat: 10,
+    money: 20000,
+    upkeep: 0,
+    log: [],
+    matches: [],
+    weekNotes: [],
+    pending: [],
+    seasons: [],
+    seasonStart: { year: state.year, overall: p.overall, matches: 0, starts: 0, wins: 0, acsSum: 0 },
+    benchedStages: 0,
+    startedThisStage: 0,
+    playedThisStage: 0,
+    pre: { year: 1, ladder: 0, ladderPeak: 0, rise: 0, cups: [], scoutSeen: 0, invites: [], seen: [], tac: 0, mates: [], wasPro: false },
+    deals: [],
+    intents: [],
+    declined: [],
+    tenure: 0,
+    freeYears: 0,
+    region: p.region,
+    abroad: false,
+    stream: { cut: 0, thisStage: 0, total: 0 },
+    gear: {},
+    courses: [],
+    agentTier: 0,
+    relaxUsed: 0,
+    axes: { hard: 0, warm: 0, grind: 0, show: 0 },
+    traits: [],
+    eventCounts: {},
+    quests: [],
+    eventsSeen: 0,
+    auto: { buy: false, biz: false, daily: false, career: false },
+    autoNotes: [],
+    achievements: [],
+    titles: [],
+    flags: { [CNY_FLAG]: 1 },
+    entryYear: year,
+    scenario: {
+      kind: 'real',
+      key: scenario.key,
+      version: 1,
+      profileVersion: EARLY_PROFILE_VERSION,
+      profileEvidence: profile.evidence,
+      profileCutoff: profile.cutoff,
+      profileRounds: profile.rounds,
+      playerId: scenario.playerId,
+      startYear: scenario.year,
+      startDay: scenario.day,
+      startTeam: scenario.teamId,
+      historicalHonors: [...scenario.historicalHonors],
+      historyNote: scenario.historyNote,
+    },
+  }
+  state.staffSync = STAFF_STAMP
+  state.removedSync = REMOVED_STAMP
+  state.me = me
+  state.training[oldId] = 'rest'
+
+  repairPlayerCountries(state)
+  repairPlayerBios(state)
+  repairPlayerTeamNames(state)
+  ensureCeilings(state)
+  initLedger(state, stageNameIn(state.year, state.stage, onTimeline(state)))
+
+  state.myTeam = teamId
+  if (scenario.key === 'boaster-2023') {
+    me.igl = {
+      club: teamId,
+      weeks: 0,
+      asked: 0,
+      offers: 0,
+      declines: 0,
+      revokes: 0,
+      calledWeeks: 0,
+      since: {
+        year,
+        day: state.day,
+        week: 0,
+        igl: p.attrs.igl,
+        comm: p.attrs.communication,
+        trust: me.coachTrust,
+        weeks: 0,
+        n: 0,
+        w: 0,
+      },
+    }
+  }
+  normalizePositionTraining(state)
+  const salaryNote = p.salary > 0 ? `年薪 ${fmtMoney(p.salary, 'USD', year)}（游戏估算）` : '年薪估算未知'
+  pushLog(state, 'info', `${scenario.year} 年 1 月 ${scenario.day + 1} 日。你 ${p.age} 岁，${scenario.ign}。${scenario.description}（本作按当年名单模拟，综合 ${p.overall}，${salaryNote}，接管前荣誉不计入本局奖励。）`)
+  beginWeek(state)
+  return state
+}
+
 /**
  * A new career's world is measured on engine/ruler.ts: January 2021's people
  * move onto it before anything reads them, and every year of the roster book is
@@ -276,6 +472,11 @@ export function talentsOf(state: GameState): Record<keyof Attrs, number> {
 export function createCareer(o: CareerOpts): GameState {
   const seed = o.seed ?? (hashStr(o.name + o.region + o.role + o.originKey + String(Date.now())) >>> 0)
   const rng = new Rng(seed ^ CAREER_SALT)
+  if (o.scenario && o.scenario !== 'normal') {
+    const scenario = REAL_SCENARIOS.find((s) => s.key === o.scenario)
+    if (!scenario) throw new Error(`未知真实生涯: ${o.scenario}`)
+    return createRealCareer(rng, seed, scenario)
+  }
   const origin = originOf(o.originKey)
   const clubTier: 1 | 2 = o.start === 't1' ? 1 : 2
   const year = o.year ?? 2026

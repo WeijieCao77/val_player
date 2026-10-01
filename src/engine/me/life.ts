@@ -229,13 +229,21 @@ function yearTurn(state: GameState, life: LifeBook, out: string[]): void {
 export function lifeWeek(state: GameState, notes: string[]): void {
   const me = state.me
   if (!me || me.phase === 'retired') return
+  const real = !!me.scenario && me.scenario.kind === 'real'
+  const takeoverYear = real && me.scenario?.startYear ? me.scenario.startYear : null
   const life = book(state)
   const p = state.players[me.id]
   const team = me.phase === 'pro' ? state.teams[state.myTeam] : undefined
   // the season count, in my first week at a club that year: a year that turns while I am between clubs still gets it
   if (team) {
-    const n = proSeasonsBefore(state) + 1
-    if ((n === 1 || SEASON_MARKS.includes(n)) && once(life, `pro:${n}`)) notes.push(n === 1 ? '🎖 第一个职业赛季。' : `🎖 第 ${n} 个职业赛季。`)
+    const n = real && takeoverYear
+      ? Math.max(1, state.year - takeoverYear + 1)
+      : proSeasonsBefore(state) + 1
+    if ((n === 1 || SEASON_MARKS.includes(n)) && once(life, `pro:${n}`)) {
+      notes.push(n === 1
+        ? (real ? '🎖 本局第一个职业赛季。' : '🎖 第一个职业赛季。')
+        : (real ? `🎖 本局第 ${n} 个职业赛季。` : `🎖 第 ${n} 个职业赛季。`))
+    }
   }
   const mark = (marks: number[], v: number, key: string, line: (m: number) => string): void => {
     const hit = marks.filter((m) => v >= m && !life.seen.includes(`${key}:${m}`))
@@ -243,8 +251,8 @@ export function lifeWeek(state: GameState, notes: string[]): void {
     for (const m of hit) life.seen.push(`${key}:${m}`)
     notes.push(line(hit[hit.length - 1]))
   }
-  mark(MAP_MARKS, p.career.maps, 'maps', (m) => `🎖 职业生涯第 ${m} 张图。`)
-  mark(START_MARKS, startsOf(state), 'starts', (m) => `🎖 第 ${m} 场正赛首发。`)
+  mark(MAP_MARKS, p.career.maps, 'maps', (m) => real ? `🎖 本局第 ${m} 张图。` : `🎖 职业生涯第 ${m} 张图。`)
+  mark(START_MARKS, startsOf(state), 'starts', (m) => real ? `🎖 本局第 ${m} 场正赛首发。` : `🎖 第 ${m} 场正赛首发。`)
   if (!team) return
 
   // matches beside team-mates: the biggest mark reached this week, in one line
