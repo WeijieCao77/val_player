@@ -36,6 +36,8 @@ const LEAGUE_ORDER: Region[] = ['Americas', 'EMEA', 'Pacific', 'China']
  * (its main.ts screenCreate / the reroll button); only cards the chosen start can take are dealt.
  */
 const DEAL = 3
+// Keep existing real-career saves loadable while this entry is held back from new careers.
+const SHOW_REAL_CAREER_ENTRY = false
 /** Real-player starts the 2024/2023 covers offer: only the public card the player picks from, nothing more. */
 const REAL_CARDS = [
   { key: 'zmjjkk-2024', name: 'ZmjjKK', date: '2024-01-01', team: 'EDward Gaming', region: 'China', role: '决斗者', age: 19, year: 2024 },
@@ -330,7 +332,7 @@ export default function NewCareer({
         <div className="right row"><ThemeToggle compact /></div>
       </div>
 
-      <Panel title="生涯剧本" actions={<span className="tiny faint">选择你的起点</span>}>
+      {SHOW_REAL_CAREER_ENTRY && <Panel title="生涯剧本" actions={<span className="tiny faint">选择你的起点</span>}>
         <div className="seg" style={{ marginBottom: 10 }}>
           <button className={mode === '自创' ? 'on' : ''} onClick={() => setMode('自创')}>自创</button>
           <button className={mode === '真人' ? 'on' : ''} onClick={() => setMode('真人')}>真人</button>
@@ -350,7 +352,7 @@ export default function NewCareer({
             接管后为本局模拟；能力与合同使用游戏估算。起点前荣誉尚未完整收录，与本局分开统计。
           </p>
         )}
-      </Panel>
+      </Panel>}
 
       {mode === '自创' && (
       <>
